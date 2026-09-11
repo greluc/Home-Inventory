@@ -7,6 +7,7 @@ package de.greluc.homeinv.inventory.api;
 import de.greluc.homeinv.platform.CursorCodec;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * The full-text query {@code search} may ask of {@code inventory}.
@@ -23,11 +24,20 @@ public interface ItemSearchQuery {
    * @param text what to search for; blank means "everything", which is how an unfiltered list is
    *     paged through the same path rather than through a second one
    * @param language which of the two generated vectors to search, {@code de} or {@code en}
+   * @param locationIds restricts the result to items in these locations; empty means no
+   *     restriction. It is a list rather than a single id because "including the subtree"
+   *     (REQ-CORE-049) resolves to a set of locations in the {@code locations} block, and
+   *     {@code inventory} must not read that block's schema to work it out for itself
    * @param after where to resume, or empty for the first page
    * @param limit how many rows at most
    * @return the page, ordered by creation
    */
-  Page search(String text, String language, Optional<CursorCodec.Position> after, int limit);
+  Page search(
+      String text,
+      String language,
+      List<UUID> locationIds,
+      Optional<CursorCodec.Position> after,
+      int limit);
 
   /**
    * One page of results.

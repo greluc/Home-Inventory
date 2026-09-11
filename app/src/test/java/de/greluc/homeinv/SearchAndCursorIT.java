@@ -71,7 +71,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     do {
       final String current = cursor;
       SearchService.SearchResult result =
-          inTenant(tenant, () -> search.query(new SearchService.SearchRequest("", "de", current, 3)));
+          inTenant(tenant, () -> search.query(new SearchService.SearchRequest("", "de", List.of(), current, 3)));
       result.items().forEach(item -> seen.add(item.name()));
       cursor = result.nextCursor();
       pages++;
@@ -90,7 +90,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     }
 
     String cursor =
-        inTenant(tenant, () -> search.query(new SearchService.SearchRequest("", "de", null, 2)))
+        inTenant(tenant, () -> search.query(new SearchService.SearchRequest("", "de", List.of(), null, 2)))
             .nextCursor();
     assertThat(cursor).isNotNull();
 
@@ -101,7 +101,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
             () ->
                 inTenant(
                     tenant,
-                    () -> search.query(new SearchService.SearchRequest("", "de", tampered, 2))))
+                    () -> search.query(new SearchService.SearchRequest("", "de", List.of(), tampered, 2))))
         .isInstanceOf(InvalidCursorException.class);
   }
 
@@ -116,7 +116,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     String cursor =
         inTenant(
                 tenant,
-                () -> search.query(new SearchService.SearchRequest("Hammer", "de", null, 2)))
+                () -> search.query(new SearchService.SearchRequest("Hammer", "de", List.of(), null, 2)))
             .nextCursor();
     assertThat(cursor).isNotNull();
 
@@ -126,7 +126,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
             () ->
                 inTenant(
                     tenant,
-                    () -> search.query(new SearchService.SearchRequest("Zange", "de", cursor, 2))))
+                    () -> search.query(new SearchService.SearchRequest("Zange", "de", List.of(), cursor, 2))))
         .isInstanceOf(InvalidCursorException.class);
   }
 
@@ -143,7 +143,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
   }
 
   private List<String> namesOf(Fixture tenant, String text) {
-    return inTenant(tenant, () -> search.query(new SearchService.SearchRequest(text, "de", null, 50)))
+    return inTenant(tenant, () -> search.query(new SearchService.SearchRequest(text, "de", List.of(), null, 50)))
         .items()
         .stream()
         .map(de.greluc.homeinv.inventory.api.ItemView::name)

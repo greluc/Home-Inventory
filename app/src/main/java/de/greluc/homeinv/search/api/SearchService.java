@@ -6,6 +6,7 @@ package de.greluc.homeinv.search.api;
 
 import de.greluc.homeinv.inventory.api.ItemView;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Finding things.
@@ -30,10 +31,14 @@ public interface SearchService {
    *
    * @param text the query text; blank lists everything
    * @param language {@code de} or {@code en}, deciding which generated vector is searched
+   * @param locationIds restricts the result to items in these locations; {@code null} or empty
+   *     means the whole tenant. The cursor is bound to this list as well as to the text, so a
+   *     cursor from one location's page is refused on another's (REQ-SRCH-009)
    * @param cursor an opaque cursor from a previous result, or {@code null} for the first page
    * @param limit how many rows at most
    */
-  record SearchRequest(String text, String language, String cursor, int limit) {}
+  record SearchRequest(
+      String text, String language, List<UUID> locationIds, String cursor, int limit) {}
 
   /**
    * What was found.

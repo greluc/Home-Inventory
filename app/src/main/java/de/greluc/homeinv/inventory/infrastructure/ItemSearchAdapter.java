@@ -56,9 +56,15 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   private final JdbcClient jdbc;
 
   @Override
-  public Page search(String text, String language, Optional<CursorCodec.Position> after, int limit) {
+  public Page search(
+      String text,
+      String language,
+      List<UUID> locationIds,
+      Optional<CursorCodec.Position> after,
+      int limit) {
     UUID tenantId = TenantContext.require();
     boolean filtered = text != null && !text.isBlank();
+    boolean byLocation = locationIds != null && !locationIds.isEmpty();
     boolean resuming = after.isPresent();
 
     // Assembled from fixed fragments, never from input. The only variable parts
@@ -76,6 +82,11 @@ public class ItemSearchAdapter implements ItemSearchQuery {
             // The casts are required: PostgreSQL cannot infer parameter types
             // inside a row constructor comparison, and reports it as a grammar
             // error rather than as a type error.
+            // `= any(?)` and not an IN list built from the ids: the number of
+            // locations varies per request, and a generated IN list would be
+            // both a new prepared statement each time and the one place in this
+            // query where a value shapes the SQL.
+            + (byLocation ? "  and location_id = any(?)%n".formatted() : "")
             + (resuming ? "  and (created_at, id) > (?::timestamptz, ?::uuid)%n".formatted() : "")
             + """
             order by created_at, id
@@ -85,6 +96,9 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     var spec = jdbc.sql(sql).param(tenantId);
     if (filtered) {
       spec = spec.param(text);
+    }
+    if (byLocation) {
+      spec = spec.param(locationIds.toArray(UUID[]::new));
     }
     if (resuming) {
       // OffsetDateTime, for the same reason the reader uses it: the driver has no

@@ -7,6 +7,7 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.search.api.SearchService;
+import java.util.List;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -47,6 +48,7 @@ public class SearchController {
       @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
-    return search.query(new SearchService.SearchRequest(q, language, cursor, limit));
+    return search.query(
+        new SearchService.SearchRequest(q, language, List.of(), cursor, limit));
   }
 }

@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **Text arriving through the API is canonicalised.** Unicode NFC, control
+  characters removed, trimmed — so two spellings of the same name are one name,
+  and a right-to-left override cannot make a label read as something it is not.
+  A field the endpoint does not accept is refused with its name, rather than
+  silently dropped.
+
 - **Roles decide what a session may do.** Six built-in roles from a share-link
   `GUEST` up to `OWNER`, twelve permissions, and an endpoint that declares
   neither the permission it needs nor an explicit exemption fails the build.

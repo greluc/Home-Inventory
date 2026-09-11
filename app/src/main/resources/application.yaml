@@ -67,6 +67,18 @@ spring:
     schemas: flyway
     default-schema: flyway
 
+  jackson:
+    deserialization:
+      # An unknown field is a rejection, not something to ignore (REQ-SEC-029).
+      # Spring Boot turns this OFF by default, which is the friendly choice and
+      # the wrong one here: a client sending `tenantId` or `version` in a create
+      # request would have it silently dropped and would believe it was honoured.
+      # A 422 naming the field is the answer that lets them fix it.
+      fail-on-unknown-properties: true
+      # Same reasoning one level down: a null where the record declares a
+      # primitive is a client error, not a zero.
+      fail-on-null-for-primitives: true
+
   threads:
     virtual:
       enabled: true

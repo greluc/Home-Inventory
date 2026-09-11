@@ -9,8 +9,11 @@ import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.api.LocationService;
+import de.greluc.homeinv.search.api.SearchService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** The {@code /api/v1/locations} endpoints. An adapter; every rule lives in the service. */
@@ -35,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LocationController {
 
   private final LocationService locations;
+  private final SearchService search;
 
   /**
    * Creates a location.
@@ -86,15 +91,39 @@ public class LocationController {
   }
 
   /**
-   * The ids of a location and everything below it (REQ-CORE-049).
+   * The items in a location, optionally including everything below it (REQ-CORE-049).
    *
-   * @param id the location at the top of the subtree
-   * @return the ids, including the location itself
+   * <p>This replaced a {@code /subtree} endpoint that returned a bare list of location ids. That
+   * shape had two problems and neither was cosmetic: it answered a question nobody asked — the
+   * requirement is about <em>items</em> — and it returned an unbounded collection, which
+   * {@code REQ-NFR-010} forbids for every endpoint without exception.
+   *
+   * <p>The paging is the same cursor mechanism search uses, deliberately: one implementation, one
+   * discipline, and a cursor that is bound to the location filter as well as to the text, so a
+   * cursor from one location's page is refused on another's (REQ-SRCH-009).
+   *
+   * @param id the location
+   * @param includeSubtree whether items in locations below this one count as well
+   * @param cursor an opaque cursor from a previous page
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
    */
-  @GetMapping("/{id}/subtree")
-  @RequiresPermission(Permission.LOCATION_READ)
-  public List<UUID> subtree(@PathVariable UUID id) {
-    return locations.subtreeIds(id);
+  @GetMapping("/{id}/items")
+  @RequiresPermission(Permission.ITEM_READ)
+  public SearchService.SearchResult items(
+      @PathVariable UUID id,
+      @RequestParam(required = false, defaultValue = "false") boolean includeSubtree,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+
+    // The subtree is resolved HERE and not inside `inventory`, which must not
+    // read the `locations` schema to work out which locations are below which
+    // (REQ-NFR-021). `locations` answers the tree question; `inventory` answers
+    // the item question; the adapter puts the two together, which is the one
+    // thing an access adapter is for.
+    List<UUID> scope = includeSubtree ? locations.subtreeIds(id) : List.of(id);
+
+    return search.query(new SearchService.SearchRequest(null, "de", scope, cursor, limit));
   }
 
   /**

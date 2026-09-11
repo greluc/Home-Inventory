@@ -196,7 +196,7 @@ computed:
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
     value: 12
-    pattern: '(?:(\d+)|twelve)\s+(?:named\s+)?permissions?'
+    pattern: '(?:(\d+)|twelve)\s+(?:named\s+)?permissions?\b'
     notes: >
       The stage-0 catalogue. `AuthorizationRegistryTest` already proves the registry and the
       `Permission` enum name the same set on every build; this is the third copy — the number as it

@@ -21,12 +21,15 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import tools.jackson.databind.exc.UnrecognizedPropertyException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -44,6 +47,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 @Slf4j
 public class ApiExceptionHandler {
+
+  /** What may be echoed back as a field name. A JSON member name can be anything at all. */
+  private static final Pattern SAFE_FIELD_NAME = Pattern.compile("[A-Za-z0-9_.\\[\\]-]{1,64}");
 
   /**
    * Answers a lookup that found nothing.
@@ -342,6 +348,57 @@ public class ApiExceptionHandler {
   }
 
   /**
+   * Answers a query parameter or path variable that violates a constraint.
+   *
+   * <p>The counterpart to {@link #handleValidation}, for the arguments that are not a request body.
+   * Spring answers these {@code 400} by default, and that is the wrong half of the pair: a
+   * {@code limit} of 5000 against a documented maximum of 200 is well formed and out of range,
+   * which is a {@code 422} in every other case this API handles. Two statuses for one kind of
+   * mistake is a distinction a client has to learn for no reason (REQ-API-003).
+   *
+   * <p>The bound itself is not negotiable: a request for 5000 rows is refused rather than quietly
+   * reduced to 200, because a client that asks for 5000, receives 200 and is not told will page
+   * wrongly and never find out (REQ-NFR-010).
+   *
+   * @param exception the failure, carrying one result per offending argument
+   * @param request the request
+   * @return a {@code 422} problem detail carrying an {@code errors} array
+   */
+  @ExceptionHandler(HandlerMethodValidationException.class)
+  public ProblemDetail handleParameterValidation(
+      HandlerMethodValidationException exception, HttpServletRequest request) {
+    List<Map<String, String>> errors = new ArrayList<>();
+    exception
+        .getParameterValidationResults()
+        .forEach(
+            result ->
+                result
+                    .getResolvableErrors()
+                    .forEach(
+                        error ->
+                            errors.add(
+                                Map.of(
+                                    "field",
+                                    result.getMethodParameter().getParameterName() == null
+                                        ? "parameter"
+                                        : result.getMethodParameter().getParameterName(),
+                                    "message",
+                                    error.getDefaultMessage() == null
+                                        ? "invalid"
+                                        : error.getDefaultMessage()))));
+
+    ProblemDetail problem =
+        problem(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            ProblemTypes.VALIDATION_FAILED,
+            "Validation failed",
+            "A request parameter is well formed but outside its permitted range.",
+            request);
+    problem.setProperty("errors", errors);
+    return problem;
+  }
+
+  /**
    * Answers a domain invariant broken below the validation layer.
    *
    * <p>Reaching here means a rule the aggregate enforces was not also expressed as a bean
@@ -377,6 +434,26 @@ public class ApiExceptionHandler {
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ProblemDetail handleUnreadable(
       HttpMessageNotReadableException exception, HttpServletRequest request) {
+
+    // An unknown field is not a parse failure and must not be answered as one.
+    // The body was well-formed; it named something this endpoint does not accept,
+    // and REQ-SEC-029 makes that a rejection rather than something to ignore. A
+    // client sending `tenantId` or `version` in a create request needs to be told
+    // which word was refused, or they will believe it was honoured.
+    String unknown = unknownFieldOf(exception);
+    if (unknown != null) {
+      log.debug("Unknown field in request body: {}", unknown);
+      ProblemDetail problem =
+          problem(
+              HttpStatus.UNPROCESSABLE_ENTITY,
+              ProblemTypes.VALIDATION_FAILED,
+              "Validation failed",
+              "The request contains a field this endpoint does not accept.",
+              request);
+      problem.setProperty("errors", List.of(Map.of("field", unknown, "message", "unknown field")));
+      return problem;
+    }
+
     // The parser's own message can quote the payload. It is not echoed, because a
     // malformed body may contain whatever the sender put in it.
     log.debug("Unreadable request body", exception);
@@ -386,6 +463,25 @@ public class ApiExceptionHandler {
         "Malformed request",
         "The request body could not be parsed.",
         request);
+  }
+
+  /**
+   * The name of the unknown field, when that is why the body was refused.
+   *
+   * <p>The name is echoed back, and it came from the request — so it is checked against a narrow
+   * pattern first. A JSON member name can be any string at all, including one carrying terminal
+   * escape sequences or a few kilobytes of text, and a problem document is read by a person.
+   *
+   * @param exception the wrapper Spring threw
+   * @return the field name, or {@code null} when the cause was something else
+   */
+  private static String unknownFieldOf(HttpMessageNotReadableException exception) {
+    Throwable cause = exception.getCause();
+    if (!(cause instanceof UnrecognizedPropertyException unrecognised)) {
+      return null;
+    }
+    String name = unrecognised.getPropertyName();
+    return name != null && SAFE_FIELD_NAME.matcher(name).matches() ? name : "(unnamed)";
   }
 
   /**
