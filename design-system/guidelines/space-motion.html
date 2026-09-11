@@ -1,0 +1,19 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Motion" subtitle="Feedback only. All four collapse to 1ms under prefers-reduced-motion." -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Motion</title>
+<link rel="stylesheet" href="../styles.css">
+<style>body{padding:14px;background:var(--surface-base);font-size:12px}.g{display:grid;gap:8px}.r{display:flex;gap:8px;flex-wrap:wrap}.sw{flex:1 1 0;min-width:96px;display:grid;gap:4px}.ch{height:40px;border-radius:var(--radius-1);border:1px solid var(--border-subtle)}.n{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0}.v{font-size:11px;color:var(--text-secondary);font-weight:500}.x{font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:10px}.lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}.m{flex:1 1 0;min-width:120px;display:grid;gap:4px;padding:8px;border:1px solid var(--border-default);border-radius:var(--radius-1)}</style>
+</head>
+<body>
+<div class="r" style="gap:8px">
+<div class="m"><span class="v">80 ms instant</span><span class="n">--dur-instant</span><span class="x">Druck, Checkbox, Switch</span></div>
+<div class="m"><span class="v">120 ms fast</span><span class="n">--dur-fast</span><span class="x">Hover, Tooltip, Fokus</span></div>
+<div class="m"><span class="v">180 ms base</span><span class="n">--dur-base</span><span class="x">Popover, Toast, Aufklappen</span></div>
+<div class="m"><span class="v">240 ms slow</span><span class="n">--dur-slow</span><span class="x">Drawer, Sheet, Routenwechsel</span></div>
+<div class="m"><span class="v">cubic-bezier(.2,0,0,1)</span><span class="n">--ease-standard</span><span class="x">Eintritt und Bewegung</span></div>
+</div>
+</body>
+</html>

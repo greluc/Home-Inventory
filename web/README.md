@@ -34,8 +34,22 @@ of the reasons the server needs no money-formatting library
 
 ## The design system
 
-The brief that defines it is
+It lives in [`design-system/`](../design-system/README.md), it is **binding**, and
+it is a peer of this directory rather than a part of it — the same tokens have to
+drive the Compose apps ([ADR-0035](../docs/adr/0035-design-system.md)). The brief
+that produced it is
 [`docs/design/design-system-brief.md`](../docs/design/design-system-brief.md).
+
+Consume `design-system/styles.css`; it is the single entry point and contains
+nothing but `@import` lines. Never hand-edit the generated CSS under
+`design-system/tokens/` — change `tokens.json` and regenerate, or this client and
+the apps drift apart (REQ-NFR-073).
+
+The component sources there are React **18** and a specification of markup and
+behaviour, not a drop-in library; making them React 19 components is part of the
+first build.
+
+
 Two things in it are constraints rather than taste, and are easy to violate
 without noticing:
 

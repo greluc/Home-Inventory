@@ -37,7 +37,7 @@ like "nicely maintainable" deliberately do not appear.
 
 | # | Trigger | Expected reaction | Measure |
 |---|---|---|---|
-| D1 | Two devices edit the same item offline | A conflict record with both versions; nothing is lost | The property-based tests from [11 §11.9](11-offline-synchronization.md) |
+| D1 | Two devices edit the same item offline | A conflict record with both versions; nothing is lost | The property-based tests from [11 §11.9](11-offline-synchronisation.md) |
 | D2 | A database outage mid-write | No half state; event and data are either both present or both absent | A fault injection test |
 | D3 | A user deletes 500 items by accident | Fully recoverable within the trash retention period | An acceptance test |
 | D4 | Restoring from backup | Complete and consistent, RTO ≤ 2 h | Weekly, automated |

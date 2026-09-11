@@ -5,7 +5,7 @@
 ## Context
 
 The web frontend has to use the camera for QR and barcode scanning, work fully
-offline ([ADR-0014](0014-offline-synchronization.md)), be installable on a phone,
+offline ([ADR-0014](0014-offline-synchronisation.md)), be installable on a phone,
 and share a data model and protocol understanding with the KMP apps.
 
 ## Options

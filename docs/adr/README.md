@@ -35,7 +35,7 @@ Date: YYYY-MM-DD
 | [0011](0011-api-versioning.md) | The major version in the URL, additive minor versions | Accepted |
 | [0012](0012-web-frontend.md) | React with TypeScript and Vite as a PWA | Accepted |
 | [0013](0013-mobile-apps.md) | Kotlin Multiplatform and Compose Multiplatform | Accepted |
-| [0014](0014-offline-synchronization.md) | Full bidirectional sync with a three-way compare | Accepted, extended (O14) |
+| [0014](0014-offline-synchronisation.md) | Full bidirectional sync with a three-way compare | Accepted, extended (O14) |
 | [0015](0015-deployment.md) | Docker Compose primary, Helm maintained as an equal | Partially superseded by 0021, 0022 |
 | [0016](0016-identifiers.md) | UUIDv7 internally, a separate public short code | Partially superseded by 0030 |
 | [0017](0017-persistence-access.md) | Spring Data JPA for aggregates, JdbcClient for dynamic queries | Accepted |
@@ -56,3 +56,4 @@ Date: YYYY-MM-DD
 | [0032](0032-per-tenant-blob-addressing.md) | Blobs are content-addressed within a tenant, never across | Accepted |
 | [0033](0033-dark-as-default-appearance.md) | Dark is the default appearance, on every platform | Accepted |
 | [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted |
+| [0035](0035-design-system.md) | The delivered design system is binding, and `tokens.json` is its single source | Accepted |

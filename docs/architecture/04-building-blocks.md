@@ -348,7 +348,7 @@ attributes, quantities, relations, lifecycle.
 | Key notions | `ChangeLogEntry`, `SyncCursor`, `DeviceRegistration`, `ConflictRecord`, `Tombstone` |
 | Publishes | `SyncService.pull(cursor)`, `SyncService.push(batch)`, `ConflictQuery` |
 | Events | `DeviceRegistered`, `SyncConflictRecorded`, `DeviceWiped` |
-| Details | [11 Offline Synchronization](11-offline-synchronization.md) |
+| Details | [11 Offline Synchronisation](11-offline-synchronisation.md) |
 
 ---
 

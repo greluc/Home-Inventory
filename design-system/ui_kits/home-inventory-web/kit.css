@@ -1,0 +1,113 @@
+/* Chrome for the UI kit itself — not part of the design system. */
+html,body{height:100%}
+body{margin:0;background:var(--surface-sunken);overflow:hidden}
+.kitbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;height:auto;min-height:44px;padding:6px 12px;background:var(--surface-overlay);border-bottom:1px solid var(--border-default);font-size:12px}
+.kitbar__brand{display:inline-flex;align-items:center;gap:8px;font-weight:600;letter-spacing:-.01em;color:var(--text-primary)}
+.kitbar__sq{display:grid;place-items:center;width:22px;height:22px;background:var(--accent-solid);color:#fff;border-radius:var(--radius-1);font-size:11px;font-weight:600}
+.kitbar__sp{flex:1}
+.kitsel{height:28px;background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);color:var(--text-primary);font-size:12px;padding:0 8px}
+.kitseg{display:inline-flex;border:1px solid var(--border-control);border-radius:var(--radius-1);overflow:hidden}
+.kitseg button{height:28px;padding:0 10px;background:var(--surface-raised);border:0;border-right:1px solid var(--border-control);color:var(--text-muted);font-size:11px;cursor:pointer;white-space:nowrap}
+.kitseg button:last-child{border-right:0}
+.kitseg button[aria-pressed="true"]{background:var(--accent-tint);color:var(--accent-fg);font-weight:600}
+
+.stagewrap{height:calc(100vh - 46px);overflow:auto;display:grid;place-items:start center;padding:16px;background:var(--surface-sunken)}
+.stage{background:var(--surface-base);border:1px solid var(--border-default);border-radius:var(--radius-2);overflow:hidden;box-shadow:var(--elev-2);width:100%}
+
+/* ── The product itself ── */
+.app{display:flex;height:100%;min-height:0;background:var(--surface-base)}
+.app__main{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0}
+.app__body{flex:1;min-height:0;overflow:auto;padding:var(--space-200)}
+.app__body--flush{padding:0}
+.app[data-cls="compact"] .app__body{padding:var(--space-150)}
+/* minmax(0,1fr), not the implicit auto column: an auto grid column sizes to the
+   widest item's min-content, which lets a control row blow the stage open. */
+.stack{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-150);align-content:start}
+.toolbar{display:flex;align-items:center;gap:var(--space-100);flex-wrap:wrap}
+.muted{color:var(--text-muted);font-size:var(--fs-100)}
+.small{font-size:var(--fs-75)}
+.big{font-size:var(--fs-600);font-weight:600;letter-spacing:var(--ls-tight);font-variant-numeric:tabular-nums;margin:0}
+.sub{font-size:var(--fs-75);color:var(--text-muted);margin:4px 0 0;text-wrap:pretty}
+.cards3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-150)}
+.cards3 .hi-card__body{display:grid;gap:var(--space-100);align-content:start}
+
+.split{display:grid;gap:var(--space-200);align-items:start;min-height:0}
+.split--tree{grid-template-columns:minmax(var(--pane-tree-min),18rem) minmax(0,1fr)}
+.split--facets{grid-template-columns:minmax(var(--pane-tree-min),16rem) minmax(0,1fr)}
+.split--editor{grid-template-columns:minmax(0,1fr) minmax(0,22rem)}
+.pane{min-width:0}
+.pane--tree,.pane--facets{background:var(--surface-raised);border:1px solid var(--border-default);border-radius:var(--radius-2);padding-bottom:var(--space-100);max-height:70vh;overflow:auto}
+.pane__head{display:flex;align-items:center;gap:8px;padding:var(--space-100) var(--space-150);border-bottom:1px solid var(--border-subtle)}
+.pane__title{font-size:var(--fs-50);letter-spacing:var(--ls-caps);text-transform:uppercase;color:var(--text-muted);font-weight:600}
+.pane__head .hi-iconbtn{margin-left:auto}
+.treecard{max-height:220px;overflow:auto}
+.pane--preview{display:grid;gap:var(--space-100);align-content:start;justify-items:start;padding:var(--space-150);background:var(--surface-raised);border:1px solid var(--border-default);border-radius:var(--radius-2);overflow-x:auto}
+
+.ph{display:block;width:100%;height:100%;background:repeating-linear-gradient(135deg,var(--surface-hover) 0 6px,var(--surface-sunken) 6px 12px)}
+.ph--lg{border-radius:var(--radius-2)}
+.detail__top{display:flex;gap:var(--space-150);align-items:flex-start;flex-wrap:wrap}
+.detail__photo{flex:none;width:104px;height:104px;display:grid;place-items:center;background:var(--photo-placeholder);border-radius:var(--radius-2);box-shadow:var(--photo-edge);color:var(--text-disabled);overflow:hidden}
+.detail__name{font-size:var(--fs-500);font-weight:600;letter-spacing:var(--ls-tight);margin:0;text-wrap:pretty;overflow-wrap:anywhere}
+.app[data-cls="compact"] .detail__name{font-size:var(--fs-400)}
+
+.searchbar{display:flex;align-items:center;gap:var(--space-100);height:var(--tap-min);min-height:44px;padding:0 var(--space-150);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);color:var(--text-muted)}
+.searchbar input{flex:1;min-width:0;background:none;border:0;color:var(--text-primary);font-size:var(--fs-300)}
+.searchbar input:focus{outline:none}
+.savedlist{display:grid;gap:2px;padding:var(--space-050)}
+.saved{display:flex;align-items:center;gap:8px;width:100%;min-height:var(--tap-min);padding:0 var(--space-100);background:none;border:0;border-radius:var(--radius-1);color:var(--text-secondary);font-size:var(--fs-100);text-align:left;cursor:pointer}
+.saved:hover{background:var(--surface-hover);color:var(--text-primary)}
+.saved__n{margin-left:auto;color:var(--text-muted);font-variant-numeric:tabular-nums;font-size:var(--fs-75)}
+.facetgroup{display:grid;padding:0 var(--space-150) var(--space-100)}
+.facetgroup__t{font-size:var(--fs-50);letter-spacing:var(--ls-caps);text-transform:uppercase;color:var(--text-muted);font-weight:600;padding:var(--space-150) 0 var(--space-050)}
+
+.scanwrap{height:520px;max-width:420px;border:1px solid var(--border-default);border-radius:var(--radius-2);overflow:hidden}
+.scanwrap--full{max-width:none;height:600px}
+.notecols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-150)}
+.notes{display:grid;gap:var(--space-100);font-size:var(--fs-100);color:var(--text-secondary)}
+.notes li{display:flex;gap:var(--space-075);align-items:flex-start;text-wrap:pretty}
+.notes .hi-icon{flex:none;margin-top:3px;color:var(--text-muted)}
+
+.joblist{display:grid}
+.job{display:flex;align-items:center;gap:var(--space-100);min-height:var(--tap-min);padding:var(--space-100) var(--space-150);border-bottom:1px solid var(--border-subtle);font-size:var(--fs-100);flex-wrap:wrap}
+.job:last-child{border-bottom:0}
+
+.authwrap{display:grid;place-items:center;min-height:480px;padding:var(--space-300)}
+.authcard{width:min(24rem,100%);padding:var(--space-300);background:var(--surface-raised);border:1px solid var(--border-default);border-radius:var(--radius-2)}
+
+/* ── Harness-only width simulation ──────────────────────────────────────
+   The design system's breakpoints are real viewport media queries — that is
+   the contract shared with the Compose apps, and it is correct in the product.
+   Inside this kit the app runs in a stage narrower than the browser window, so
+   the media queries would report the WINDOW's width and the phone would render
+   the desktop layout. These rules re-apply the same decisions from the stage's
+   declared window size class. They exist in the harness only and are not part
+   of the shipped system. */
+.app[data-cls="compact"] .hi-conflict__options,
+.app[data-cls="medium"]  .hi-conflict__options{grid-template-columns:minmax(0,1fr)}
+.app[data-cls="compact"] .hi-form--split .hi-field,
+.app[data-cls="medium"]  .hi-form--split .hi-field{grid-template-columns:minmax(0,1fr);gap:var(--space-050)}
+.app[data-cls="compact"] .hi-form--split .hi-field__label,
+.app[data-cls="medium"]  .hi-form--split .hi-field__label{padding-top:0}
+.app[data-cls="compact"] .hi-bottomnav,
+.app[data-cls="medium"]  .hi-bottomnav{display:grid}
+.app[data-cls="expanded"] .hi-bottomnav,
+.app[data-cls="large"]    .hi-bottomnav{display:none}
+.app[data-cls="compact"] .hi-actionbar{justify-content:stretch;border-top:1px solid var(--border-default);background:var(--surface-raised);padding:var(--space-150)}
+.app[data-cls="compact"] .hi-actionbar--stack{flex-direction:column-reverse;align-items:stretch}
+.app[data-cls="compact"] .hi-filterbar{flex-wrap:wrap}
+.app[data-cls="compact"] .hi-drawer{top:auto;left:0;width:100%;max-height:88%;border-left:0;border-top:1px solid var(--border-default);border-radius:var(--radius-2) var(--radius-2) 0 0}
+.app[data-cls="compact"] .hi-drawer__grip{display:block;width:2.25rem;height:3px;border-radius:var(--radius-pill);background:var(--border-control);margin:var(--space-100) auto 0}
+
+/* Scanner fills the compact body rather than scrolling out of view. */
+.app[data-cls="compact"] .app__body{display:flex;flex-direction:column}
+.app[data-cls="compact"] .app__body > .stack{flex:1;min-height:0}
+.app[data-cls="compact"] .app__body > .stack:has(.scanwrap--full){grid-template-rows:auto minmax(0,1fr)}
+.app[data-cls="compact"] .scanwrap--full{flex:1;height:auto;min-height:400px;border:0;border-radius:0}
+.app[data-cls="compact"] .app__body--flush{padding:0}
+.app[data-cls="compact"] .app__body--flush > .stack{gap:0}
+.app[data-cls="compact"] .app__body--flush .toolbar{padding:var(--space-100) var(--space-150)}
+.kitseg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.kitseg::-webkit-scrollbar{display:none}
+
+.app[data-cls="compact"] .hi-scan__ctl--wide{flex:1 1 100%}
+.app[data-cls="compact"] .hi-scan__tally em{display:none}

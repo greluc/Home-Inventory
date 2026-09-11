@@ -16,7 +16,7 @@ or is it ordinary domain data?
 
 **Ordinary domain data** — in tenant-scoped tables, editable through the normal
 API, distributed to clients through the sync protocol (download only, see
-[ADR-0014](0014-offline-synchronization.md)), traceable in the audit log,
+[ADR-0014](0014-offline-synchronisation.md)), traceable in the audit log,
 included in the tenant export.
 
 From this follows the actual core of this decision:

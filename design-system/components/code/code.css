@@ -1,0 +1,23 @@
+/* Machine-readable codes and the label print preview. These are the one place
+   the theme stops. Dark modules on a light ground, in both themes, because an
+   inverted QR does not scan reliably and a printed label is dark-on-light
+   whatever the screen does.
+   The boundary is drawn on purpose: a 1px --code-frame edge plus a small gap,
+   so in dark mode the paper reads as "a picture of paper", not as a bug. */
+.hi-codeplate{display:inline-grid;gap:var(--space-100);justify-items:center;padding:var(--space-150);background:var(--code-paper);color:var(--code-ink);border:1px solid var(--code-frame);border-radius:var(--radius-1)}
+.hi-codeplate__glyph{display:grid;place-items:center;background:var(--code-quiet);color:var(--code-ink)}
+.hi-codeplate__caption{font-family:var(--font-mono);font-weight:500;letter-spacing:var(--ls-code);font-feature-settings:var(--num-slashed-zero);color:var(--code-caption);font-size:var(--fs-100);white-space:nowrap}
+.hi-codeplate--inline{padding:var(--space-075);gap:var(--space-050)}
+
+/* The explanatory strap that makes the exception legible rather than accidental. */
+.hi-paperstrap{display:flex;align-items:center;gap:var(--space-050);font-size:var(--fs-50);letter-spacing:var(--ls-caps);text-transform:uppercase;color:var(--text-muted)}
+
+/* Label preview. To scale: 1mm = var(--mm). Quiet zone is drawn, because too
+   small a quiet zone is the commonest reason a printed QR will not read. */
+.hi-labelprev{--mm:3.7795px;display:grid;gap:var(--space-100);justify-items:start}
+.hi-labelprev__sheet{position:relative;background:var(--code-paper);color:var(--code-ink);border:1px solid var(--code-frame);box-shadow:0 0 0 var(--space-050) var(--surface-sunken)}
+.hi-labelprev__el{position:absolute;overflow:hidden}
+.hi-labelprev__text{font-family:var(--font-sans);color:var(--code-ink);line-height:1.15;overflow-wrap:anywhere}
+.hi-labelprev__quiet{position:absolute;border:1px dashed rgba(10,10,10,.35)}
+.hi-labelprev__ruler{display:flex;align-items:center;gap:var(--space-050);font-size:var(--fs-50);color:var(--text-muted);font-variant-numeric:tabular-nums}
+.hi-labelprev__warn{display:flex;align-items:center;gap:var(--space-050);font-size:var(--fs-75);color:var(--state-warning-fg)}

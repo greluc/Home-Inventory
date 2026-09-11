@@ -231,7 +231,7 @@ features it was written to protect.** They are listed rather than quietly added:
 | Directive | Why it is needed |
 |---|---|
 | `frame-src {PLUGIN_UI_ORIGIN}` | `frame-src` falls back to `child-src` and then to `default-src`, which is `'none'`. Without this directive **no plugin UI panel can load at all** (`REQ-PLG-012`) — the feature was specified and the policy forbade it |
-| `connect-src … {MEDIA_ORIGIN}` | The service worker fetches media to populate the offline cache ([11 §11.6](11-offline-synchronization.md)). `<img>` loads are covered by `img-src`, but a `fetch()` is not — with `connect-src 'self'` alone, **offline images would never be cached** |
+| `connect-src … {MEDIA_ORIGIN}` | The service worker fetches media to populate the offline cache ([11 §11.6](11-offline-synchronisation.md)). `<img>` loads are covered by `img-src`, but a `fetch()` is not — with `connect-src 'self'` alone, **offline images would never be cached** |
 | `worker-src 'self' blob:` | The ZXing-WASM fallback runs in a web worker ([10 §10.3](10-identification-and-labels.md)); bundlers instantiate workers from a `blob:` URL |
 | `img-src … blob:` | Camera frames and locally captured photos are rendered from `blob:` URLs before upload |
 

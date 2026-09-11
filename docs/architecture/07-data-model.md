@@ -422,7 +422,7 @@ CREATE INDEX change_log_cursor ON sync.change_log (tenant_id, seq);
 |---|---|
 | Monotonic sequence | One sequence per tenant. The entry is created in the same transaction as the change. Uniqueness of `(tenant_id, seq)` is a property of the sequence, not of a constraint — see the note above. |
 | Entity types, reconciled **both ways** | `item`, `location`, `tag`, `tag_assignment`, `item_relation`, `attachment`, `maintenance_entry`, `loan`, `stocktake`, `code_binding` |
-| Entity types, **download only** | `item_type`, `item_type_version`, `field_definition`, `location_category`, `value_list`, `label_template` — configuration is never edited offline ([11 §11.2](11-offline-synchronization.md)) |
+| Entity types, **download only** | `item_type`, `item_type_version`, `field_definition`, `location_category`, `value_list`, `label_template` — configuration is never edited offline ([11 §11.2](11-offline-synchronisation.md)) |
 | Partitioning | Monthly. Old partitions are detached after the retention period. |
 | Retention | **Configurable per tenant** within fixed bounds: at least 30, at most 365 days, default 90. A device whose cursor is older is asked to perform a **full sync** — which is why tombstones must live at least as long. The UI states explicitly how long a device may stay offline at the chosen setting. |
 | Echo suppression | `device_id` prevents a device from receiving its own changes back. |

@@ -25,14 +25,19 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 400 numbered, testable requirements across
+- A requirements catalogue with 405 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 34 architecture decision records, each with its alternatives and consequences —
+- 35 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
   in its own process.
+- The design system, in [`design-system/`](design-system/), and it is **binding**:
+  one token set driving both the web client and the apps, dark as the default
+  appearance everywhere with light one click away, 48 components, self-hosted
+  IBM Plex and Lucide icons, and a measured contrast ratio for every colour pair
+  in both themes.
 - A verified starter catalogue of label geometries
   ([`docs/reference/label-media.yaml`](docs/reference/label-media.yaml)), with a
   per-format flag distinguishing measured geometries from calculated ones.

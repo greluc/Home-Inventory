@@ -59,7 +59,7 @@ already implied.
 
 The short cut is worth keeping: it is what makes offline catch-up idempotent, and
 it is the reason a photo sent twice from a flaky connection costs storage once
-([11 §11.6](../architecture/11-offline-synchronization.md)). The question is only
+([11 §11.6](../architecture/11-offline-synchronisation.md)). The question is only
 what namespace it consults.
 
 Cross-tenant deduplication saves storage in exactly one situation — several

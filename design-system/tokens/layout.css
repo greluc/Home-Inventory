@@ -1,0 +1,68 @@
+/* Breakpoints, radii, motion, z-index. The breakpoints are the contract with
+   the Compose apps: they are Material 3 window size classes, so web and native
+   cannot drift. Never type a pixel number into a media query — read it here. */
+:root{
+  /* Window size classes (dp == px at dpr 1) */
+  --bp-compact-max:599px; /* @kind spacing */
+  --bp-medium-min:600px;     /* small tablet portrait, large phone landscape */
+  --bp-medium-max:839px;
+  --bp-expanded-min:840px;   /* tablet landscape, laptop */
+  --bp-large-min:1200px;     /* desktop */
+  --bp-xlarge-min:1600px;    /* wide desktop — extra room goes to panes, not line length */
+
+  /* Where growth stops */
+  --layout-max:105rem;       /* 1680 — the table stops widening here */
+  --pane-list-min:20rem;     /* 320 — master pane floor in master–detail */
+  --pane-list-max:26rem;     /* 416 */
+  --pane-tree-min:15rem;     /* 240 */
+  --pane-detail-min:24rem;   /* 384 — below this the detail becomes a route */
+  --gutter-compact:var(--space-200);
+  --gutter-medium:var(--space-300);
+  --gutter-expanded:var(--space-300);
+
+  /* Fixed chrome */
+  --appbar-h:3rem;           /* 48 */
+  --bottombar-h:3.5rem;      /* 56 — phone nav */
+  --thumbzone-h:8.75rem;     /* 140 — bottom band a thumb reaches on a 375×812 phone */
+  --statusstrip-h:1.75rem;   /* 28 — offline / sync / degraded strip */
+
+  /* Radii. Square or barely rounded. Nothing bubbly. */
+  --radius-0:0;
+  --radius-1:2px;            /* controls: button, input, checkbox */
+  --radius-2:3px;            /* cards, panels, modals, photo tiles */
+  --radius-pill:999px;       /* ONLY: scan-mode selector, avatar, count bubble */
+
+  --border-w:1px; /* @kind spacing */
+  --border-w-emphasis:2px; /* @kind spacing */
+  --focus-ring-w:2px; /* @kind spacing */
+  --focus-ring-offset:1px; /* @kind spacing */
+
+  /* Motion. Feedback only. Nothing here exists to delight. */
+  --dur-instant:80ms; /* @kind other */
+  --dur-fast:120ms; /* @kind other */
+  --dur-base:180ms; /* @kind other */
+  --dur-slow:240ms; /* @kind other */
+  --ease-standard:cubic-bezier(.2,0,0,1); /* @kind other */
+  --ease-exit:cubic-bezier(.4,0,1,1); /* @kind other */
+  --ease-linear:linear; /* @kind other */
+
+  /* Layering */
+  --z-base:0; /* @kind other */
+  --z-sticky:10; /* @kind other */
+  --z-appbar:20; /* @kind other */
+  --z-drawer:40; /* @kind other */
+  --z-scrim:45; /* @kind other */
+  --z-modal:50; /* @kind other */
+  --z-popover:60; /* @kind other */
+  --z-toast:70; /* @kind other */
+  --z-scanner:80; /* @kind other */
+}
+
+@media (prefers-reduced-motion:reduce){
+  :root{
+    --dur-instant:1ms; /* @kind other */
+    --dur-fast:1ms; /* @kind other */
+    --dur-base:1ms; /* @kind other */
+    --dur-slow:1ms; /* @kind other */
+  }
+}

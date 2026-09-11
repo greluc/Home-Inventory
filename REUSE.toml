@@ -20,6 +20,7 @@ SPDX-PackageDownloadLocation = "https://github.com/greluc/Home-Inventory"
 path = [
   "app/**",
   "web/**",
+  "design-system/**",
   "deploy/**",
   "api/**",
   ".github/**",
@@ -64,6 +65,31 @@ path = ["CODE_OF_CONDUCT.md"]
 precedence = "override"
 SPDX-FileCopyrightText = "Organization for Ethical Source and Contributor Covenant contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# --- Third-party assets vendored into the design system ------------------------
+# These must come AFTER the `design-system/**` rule above: where several
+# annotations match a file, the last one wins. Without these two blocks the
+# AGPL default would swallow them and declare somebody else's permissively
+# licensed work as AGPL — a false statement, and the reason ADR-0000 A4 existed.
+
+[[annotations]]
+path = ["design-system/assets/fonts/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2017 IBM Corp. with Reserved Font Name \"Plex\""
+SPDX-License-Identifier = "OFL-1.1"
+
+# Lucide is a Feather fork and its licence file is genuinely two licences: ISC
+# for the set, MIT for the icons inherited from Feather. `assets/icons/
+# LUCIDE-LICENSE.txt` carries both verbatim, the Feather icon list included.
+
+[[annotations]]
+path = ["design-system/assets/icons/**"]
+precedence = "override"
+SPDX-FileCopyrightText = [
+  "Lucide Contributors",
+  "2013-present Cole Bemis",
+]
+SPDX-License-Identifier = "ISC AND MIT"
 
 # --- Project meta -----------------------------------------------------------
 

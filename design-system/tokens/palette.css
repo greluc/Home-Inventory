@@ -1,0 +1,30 @@
+/* Primitive palette. NEVER reference these at the point of use — always go
+   through a semantic alias in color.css. They exist so the two themes can be
+   authored from one set of measured values, and so the Compose generator has a
+   ramp to name. */
+:root{
+  /* Neutral — cool slate. Dark theme walks 900→50; light walks 0→900. */
+  --hi-n-1000:#0a0c0d; --hi-n-950:#0d0f11; --hi-n-900:#0f1214; --hi-n-850:#131619;
+  --hi-n-800:#1a1e22; --hi-n-750:#22272c; --hi-n-700:#262c31; --hi-n-600:#3a424a;
+  --hi-n-500:#6a737a; --hi-n-450:#6e777e; --hi-n-400:#7c858d; --hi-n-350:#8a939a;
+  --hi-n-300:#a3aeb8; --hi-n-250:#a8b0b6; --hi-n-200:#cbd1d6; --hi-n-150:#e1e4e7;
+  --hi-n-100:#edeff1; --hi-n-75:#f4f5f6; --hi-n-0:#ffffff;
+  --hi-n-ink:#16191c; --hi-n-ink-2:#4a5259; --hi-n-ink-3:#656e75; --hi-n-ink-4:#9aa2a9;
+  --hi-n-fg-1:#e8ebed;
+
+  /* Accent — the one accent colour. Cobalt. Primary action, links, focus,
+     determinate progress. Nothing else. */
+  --hi-a-700:#155ac0; --hi-a-650:#175fcc; --hi-a-600:#1a66d6; --hi-a-550:#1259c8;
+  --hi-a-500:#2a76e6; --hi-a-300:#5fa5ff; --hi-a-200:#7fb5ff;
+  --hi-a-tint-dark:#12233d; --hi-a-tint-light:#e7effb;
+
+  /* Semantic hues */
+  --hi-success-d:#4fc97a; --hi-success-l:#1a7f43; --hi-success-bg-d:#12291b; --hi-success-bg-l:#e6f4eb;
+  --hi-warning-d:#e0a32e; --hi-warning-l:#8a5a06; --hi-warning-bg-d:#2c2210; --hi-warning-bg-l:#fbf0da;
+  --hi-danger-d:#f1706a;  --hi-danger-l:#c0261f;  --hi-danger-bg-d:#2e1614;  --hi-danger-bg-l:#fceae9;
+  --hi-conflict-d:#b392f0; --hi-conflict-l:#6b3fc4; --hi-conflict-bg-d:#241c33; --hi-conflict-bg-l:#efe9fb;
+  --hi-degraded-d:#4fb6c9; --hi-degraded-l:#0f6a7a; --hi-degraded-bg-d:#10262b; --hi-degraded-bg-l:#e3f1f4;
+
+  /* Machine-readable codes. Deliberately OUTSIDE the theme — see color.css. */
+  --hi-paper:#ffffff; --hi-code-ink:#0a0a0a;
+}

@@ -288,7 +288,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-SYNC-013 | Property-based tests with n simulated devices show that no record disappears without a conflict record. | M | 3 | The test run is part of CI |
 | REQ-SYNC-014 | `/sync/pull` is filtered **per principal**, not merely per tenant: every entry passes the same authorization check as a REST read of that entity, including location-subtree scope. | M | 3 | A user scoped to one subtree receives no entry from outside it — verified against the raw `change_log`, not against the API response |
 | REQ-SYNC-015 | `sensitive` field values never appear in a sync payload or tombstone, by the same rule as REST and GraphQL. | M | 3 | A shared test across REST, GraphQL and sync asserts the field is **absent**, not masked |
-| REQ-SYNC-016 | A change to a numeric field carries its **intent** (`SET` or `ADJUST`); the client derives it from the interaction, never from a dialog. Two `ADJUST`s merge by summing deltas, two `SET`s conflict, a `SET` against an `ADJUST` takes the `SET` as base ([ADR-0014](../adr/0014-offline-synchronization.md)). | M | 3 | A stocktake correction concurrent with an offline withdrawal yields the counted value minus the withdrawal — **not** the withdrawal applied twice |
+| REQ-SYNC-016 | A change to a numeric field carries its **intent** (`SET` or `ADJUST`); the client derives it from the interaction, never from a dialog. Two `ADJUST`s merge by summing deltas, two `SET`s conflict, a `SET` against an `ADJUST` takes the `SET` as base ([ADR-0014](../adr/0014-offline-synchronisation.md)). | M | 3 | A stocktake correction concurrent with an offline withdrawal yields the counted value minus the withdrawal — **not** the withdrawal applied twice |
 
 ---
 

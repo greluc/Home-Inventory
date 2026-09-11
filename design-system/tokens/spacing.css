@@ -1,0 +1,59 @@
+/* One scale. 4px base with a 2px half-step, because compact density needs a
+   gap smaller than 4 between an icon and its label and nothing else. */
+:root{
+  --space-0:0;
+  --space-025:0.125rem;  /* 2 */
+  --space-050:0.25rem;   /* 4 */
+  --space-075:0.375rem;  /* 6 */
+  --space-100:0.5rem;    /* 8 */
+  --space-150:0.75rem;   /* 12 */
+  --space-200:1rem;      /* 16 */
+  --space-250:1.25rem;   /* 20 */
+  --space-300:1.5rem;    /* 24 */
+  --space-400:2rem;      /* 32 */
+  --space-500:2.5rem;    /* 40 */
+  --space-600:3rem;      /* 48 */
+  --space-800:4rem;      /* 64 */
+
+  /* ── Density. Two of them; compact is a real working mode, not a punishment.
+     Set [data-density] on <html> or on any scrollable region. ── */
+  --row-h:2.75rem;        /* 44 */
+  --row-pad-y:0.5rem;
+  --control-h:2.25rem;    /* 36 */
+  --control-pad-x:0.625rem;
+  --field-gap:0.75rem;
+  --group-gap:1.5rem;
+  --fs-body:var(--fs-200);
+  --lh-body:var(--lh-200);
+  --cell-pad-x:0.75rem;
+
+  /* Hit target. Driven by the POINTER, never by width — a tablet with a
+     keyboard is expanded-width and still touch. Overridden below. */
+  --tap-min:2.25rem;      /* 36 on a fine pointer */
+}
+
+[data-density="compact"]{
+  --row-h:2rem;           /* 32 — 20 rows where comfortable shows 14 */
+  --row-pad-y:0.25rem;
+  --control-h:1.75rem;    /* 28 */
+  --control-pad-x:0.5rem;
+  --field-gap:0.5rem;
+  --group-gap:1rem;
+  --fs-body:var(--fs-100);
+  --lh-body:var(--lh-100);
+  --cell-pad-x:0.5rem;
+}
+
+/* Coarse pointer wins over density, always. Compact stays compact in its
+   TYPE and its ROW RHYTHM; it does not shrink the thing you have to hit. */
+@media (pointer:coarse){
+  :root,[data-density="compact"]{
+    --tap-min:2.75rem;    /* 44 */
+    --control-h:2.75rem;
+    --row-h:2.75rem;
+  }
+  [data-density="compact"]{
+    --row-pad-y:0.375rem;
+    --cell-pad-x:0.625rem;
+  }
+}

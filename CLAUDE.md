@@ -132,7 +132,14 @@ Each of these is a decision with an ADR behind it. They look like details and ar
 12. **A label geometry counts as verified only when measured, not when calculated.** Size
     and count do not determine where the slack sits. See
     [`docs/reference/label-media.yaml`](docs/reference/label-media.yaml).
-13. **Money is an in-house value type, and no money library is added.** `BigDecimal` +
+13. **The design system is binding, not a reference.** Every user-visible surface
+    is built from `design-system/`; a screen that invents its own colours,
+    spacing or components is a defect. `design-system/tokens/tokens.json` is the
+    single source — the CSS and the Compose `Theme.kt` are generated from it and
+    never hand-edited. Dark is the default everywhere, light is opt-in, and
+    machine-readable codes plus label previews stay dark-on-light in both themes.
+    ([ADR-0035](docs/adr/0035-design-system.md), REQ-NFR-074…077)
+14. **Money is an in-house value type, and no money library is added.** `BigDecimal` +
     `java.util.Currency` in `platform`. Arithmetic across currencies throws; `double` and
     `float` are forbidden on the money path; every total is per currency. JavaMoney was
     evaluated and rejected — its conversion modules schedule background fetches to ECB and
@@ -148,11 +155,33 @@ Each of these is a decision with an ADR behind it. They look like details and ar
 - Field labels in tenant type definitions are multilingual data, not code.
 - The whole corpus is English as of 2026-09-11, file names included. **Do not
   introduce a German-language document** — a CI check enforces it (REQ-CON-012).
+- **The English is British English** (REQ-CON-014): *colour*, *behaviour*,
+  *licence* (noun; the verb stays *license*, so "licensed under" is correct),
+  *catalogue*, *centre*, *labelling*, *analyse*, *fulfil*. Verbs take **-ise**,
+  not -ize — *organise*, *recognise*, *synchronise*, *parameterise*,
+  *serialisation* — which is what the corpus already does; do not switch to the
+  Oxford -ize form. This holds for prose, comments, commit messages, PRs, issues
+  and user-visible strings alike.
+
+  **Two carve-outs, and they are not optional — "correcting" either one breaks
+  something:**
+
+  1. **Technical identifiers keep the spelling their technology uses.** The
+     building blocks and database schemas `catalog` and `labeling`, the
+     `Authorization` HTTP header and every permission string derived from it,
+     CSS `color` and `color-scheme`, the web manifest's `background_color` and
+     `theme_color`, Gradle's *version catalog*, `SPDX-License-Identifier`, the
+     `LICENSE` file name. These are names, not words. Renaming one breaks code,
+     a spec, or a tool.
+  2. **Verbatim third-party text is never edited.** `CODE_OF_CONDUCT.md` (the
+     Contributor Covenant), `LICENSE` and `LICENSES/**` contain American
+     spellings — *behaviors*, *honor*, *center*, *Organization* — and they stay.
+     Editing a licensed document to fit our style guide misrepresents it.
 
 ## Where things go
 
 ```
-api/ app/ cla/ deploy/ docs/ plugin-api/ plugin-sdk/ proto/ web/
+api/ app/ cla/ deploy/ design-system/ docs/ plugin-api/ plugin-sdk/ proto/ web/
 ```
 
 Every directory has a `README.md` stating what belongs there and which stage
@@ -165,6 +194,9 @@ negotiable:
 - **`deploy/services.yaml` is the source of truth** for the deployment topology.
   The Quadlet units and `compose.yaml` are generated from it; editing them by
   hand fails the drift check.
+- **`design-system/` is a peer of `web/` and `app/`, not a part of either** —
+  both consume it. Its `tokens/tokens.json` is the single source from which the
+  CSS and the Compose `Theme.kt` are generated.
 
 ## Build, run, test
 

@@ -7,6 +7,13 @@ is worth as much as the design when someone later asks "why is it like this".
 **How to use it:** paste everything below the line into Claude Design. It is
 written to stand on its own — Claude Design cannot see this repository.
 
+> **Delivered 2026-09-11.** The system this brief produced is in
+> [`design-system/`](../../design-system/) and is **binding**
+> ([ADR-0035](../adr/0035-design-system.md)). This document is kept as the record
+> of what was asked for — read it to understand *why* the system is as it is, and
+> read `design-system/README.md` for what it actually says. Where the two differ,
+> the delivered system is current and this brief is history.
+
 ---
 
 ## The brief

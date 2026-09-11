@@ -1,0 +1,51 @@
+/* Buttons. Exactly ONE filled primary per context; everything else is quiet.
+   Every variant is at least --tap-min tall, which a coarse pointer raises to
+   44px regardless of density or width. */
+.hi-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-075);min-height:var(--tap-min);height:var(--control-h);min-width:var(--tap-min);padding:0 var(--space-150);border:1px solid transparent;border-radius:var(--radius-1);font-size:var(--fs-body);font-weight:var(--fw-medium);line-height:1;letter-spacing:var(--ls-wide);text-decoration:none;cursor:pointer;white-space:nowrap;transition:background-color var(--dur-instant) var(--ease-standard),border-color var(--dur-instant) var(--ease-standard),color var(--dur-instant) var(--ease-standard)}
+.hi-btn:disabled,.hi-btn[aria-disabled="true"]{cursor:not-allowed;background:var(--surface-sunken);border-color:var(--border-subtle);color:var(--text-disabled)}
+
+.hi-btn--primary{background:var(--accent-solid);color:var(--text-on-accent)}
+.hi-btn--primary:hover:not(:disabled){background:var(--accent-solid-hover)}
+.hi-btn--primary:active:not(:disabled){background:var(--accent-solid-active)}
+
+.hi-btn--secondary{background:var(--surface-raised);border-color:var(--border-control);color:var(--text-primary)}
+.hi-btn--secondary:hover:not(:disabled){background:var(--surface-hover);border-color:var(--border-strong)}
+.hi-btn--secondary:active:not(:disabled){background:var(--surface-active)}
+
+.hi-btn--ghost{background:transparent;color:var(--text-secondary)}
+.hi-btn--ghost:hover:not(:disabled){background:var(--surface-hover);color:var(--text-primary)}
+.hi-btn--ghost:active:not(:disabled){background:var(--surface-active)}
+
+.hi-btn--danger{background:var(--state-danger-solid);color:#fff}
+.hi-btn--danger:hover:not(:disabled){filter:brightness(1.12)}
+.hi-btn--danger:active:not(:disabled){filter:brightness(.92)}
+
+.hi-btn--full{width:100%}
+.hi-btn--lg{height:3rem;font-size:var(--fs-300);padding:0 var(--space-250)}
+.hi-btn[data-busy="true"]{pointer-events:none}
+.hi-btn[data-busy="true"] .hi-icon{animation:hi-spin 900ms var(--ease-linear) infinite}
+@keyframes hi-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.hi-btn[data-busy="true"] .hi-icon{animation:none}}
+
+/* Icon-only. Always carries a visually-hidden label AND a tooltip; on a coarse
+   pointer the tooltip is unreachable, so the label is the real affordance. */
+.hi-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:var(--control-h);height:var(--control-h);min-width:var(--tap-min);min-height:var(--tap-min);padding:0;background:transparent;border:1px solid transparent;border-radius:var(--radius-1);color:var(--text-secondary);cursor:pointer;transition:background-color var(--dur-instant) var(--ease-standard),color var(--dur-instant) var(--ease-standard)}
+.hi-iconbtn:hover:not(:disabled){background:var(--surface-hover);color:var(--text-primary)}
+.hi-iconbtn:active:not(:disabled){background:var(--surface-active)}
+.hi-iconbtn:disabled{color:var(--text-disabled);cursor:not-allowed}
+.hi-iconbtn--outlined{border-color:var(--border-control);background:var(--surface-raised)}
+.hi-iconbtn[aria-pressed="true"],.hi-iconbtn[data-selected="true"]{background:var(--accent-tint);color:var(--accent-fg);box-shadow:inset 0 0 0 1px var(--accent-fg)}
+.hi-iconbtn--danger:hover:not(:disabled){background:var(--state-danger-bg);color:var(--state-danger-fg)}
+
+/* Action bar. On compact width it pins to the bottom inside the thumb zone,
+   safe-area aware; from medium up it sits inline, right-aligned. */
+.hi-actionbar{display:flex;align-items:center;gap:var(--space-100);padding:var(--space-150);background:var(--surface-raised);border-top:1px solid var(--border-default)}
+.hi-actionbar--sticky{position:sticky;bottom:0;z-index:var(--z-sticky);box-shadow:var(--elev-1);padding-bottom:calc(var(--space-150) + env(safe-area-inset-bottom,0px))}
+.hi-actionbar__spacer{flex:1 1 auto}
+.hi-actionbar > .hi-btn--primary{order:2}
+.hi-actionbar--stack{flex-direction:column-reverse;align-items:stretch}
+@media (min-width:600px){
+  .hi-actionbar{justify-content:flex-end;border-top:0;background:transparent;padding:var(--space-200) 0 0}
+  .hi-actionbar--sticky{position:static;box-shadow:none;padding-bottom:var(--space-200)}
+  .hi-actionbar--stack{flex-direction:row}
+}

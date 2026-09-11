@@ -1,0 +1,34 @@
+/* The base layer: resets and the few global defaults that every surface
+   inherits. Static CSS only — nothing here is injected at runtime. */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--surface-base);color:var(--text-primary);font-family:var(--font-sans);font-size:var(--fs-body);line-height:var(--lh-body);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+:lang(de){hyphens:auto;-webkit-hyphens:auto}
+h1,h2,h3,h4,p,figure,blockquote{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+img,svg,video,canvas{display:block;max-width:100%}
+button,input,select,textarea{font:inherit;color:inherit;letter-spacing:inherit}
+:where(a){color:var(--text-link);text-decoration-thickness:1px;text-underline-offset:2px}
+:where(a):hover{color:var(--accent-fg);text-decoration-thickness:2px}
+:where(a):visited{color:var(--text-link-visited)}
+:where(a):active{color:var(--accent-solid-active)}
+
+/* Focus. Two-tone so the ring survives on any ground — including on top of the
+   accent fill, where a single light ring would fall to 2.5:1. Never removed,
+   never colour-only: the ring is a 2px shape change. */
+:where(:focus-visible){outline:var(--focus-ring-w) solid var(--border-focus);outline-offset:var(--focus-ring-offset);box-shadow:0 0 0 calc(var(--focus-ring-w) + var(--focus-ring-offset)) var(--border-focus-offset)}
+:where(:focus:not(:focus-visible)){outline:none}
+
+::selection{background:var(--accent-tint);color:var(--text-primary)}
+::placeholder{color:var(--text-muted);opacity:1}
+
+/* Scrollbars follow color-scheme; this only narrows them in dense regions. */
+.hi-scroll-thin{scrollbar-width:thin;scrollbar-color:var(--border-control) transparent}
+
+/* The single permitted pattern fill: "no permission". It gives the state a
+   TEXTURE, which is what separates it from empty (nothing) and from error
+   (red). Never a row of dots — that leaks the length of the secret. */
+.hi-hatch{background-image:repeating-linear-gradient(135deg,var(--state-restricted-hatch) 0 1px,transparent 1px 6px)}
+
+/* Paper. The theme stops at this boundary. */
+.hi-paper{background:var(--code-paper);color:var(--code-ink);border:1px solid var(--code-frame)}

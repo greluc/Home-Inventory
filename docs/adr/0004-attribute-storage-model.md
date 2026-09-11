@@ -7,7 +7,7 @@
 Item types and location categories have fields **configured at runtime**. What is
 wanted is the storage model for the values. It must allow filtering, sorting and
 reporting over arbitrary fields, fit the full bidirectional offline sync
-([ADR-0014](0014-offline-synchronization.md)), and stay maintainable over years.
+([ADR-0014](0014-offline-synchronisation.md)), and stay maintainable over years.
 
 ## Options
 

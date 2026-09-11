@@ -1,0 +1,126 @@
+/* The field shell. Every field type shares it, which is what makes a form
+   generated from an unknown type definition look deliberate.
+   Label above on compact; two columns from 840px where the label column is
+   sized for Mindesthaltbarkeitsdatum, not for "Date". */
+.hi-field{display:grid;gap:var(--space-050);align-content:start}
+.hi-field__label{display:flex;align-items:baseline;gap:var(--space-075);font-size:var(--fs-100);font-weight:var(--fw-medium);color:var(--text-secondary);letter-spacing:var(--ls-wide);text-wrap:pretty;overflow-wrap:anywhere}
+.hi-field__req{color:var(--state-danger-fg);font-weight:var(--fw-regular)}
+.hi-field__opt{color:var(--text-muted);font-weight:var(--fw-regular);font-size:var(--fs-75)}
+.hi-field__help{font-size:var(--fs-75);line-height:var(--lh-75);color:var(--text-muted);text-wrap:pretty}
+.hi-field__msg{display:flex;align-items:flex-start;gap:var(--space-050);font-size:var(--fs-75);line-height:var(--lh-75);color:var(--state-danger-fg);text-wrap:pretty}
+.hi-field__msg .hi-icon{margin-top:1px}
+.hi-field--invalid .hi-input,.hi-field--invalid .hi-control{border-color:var(--state-danger-fg);box-shadow:inset 2px 0 0 0 var(--state-danger-fg)}
+.hi-field--readonly .hi-field__label{color:var(--text-muted)}
+
+/* Two-column from expanded width. The label column never grows past 16rem and
+   never shrinks below 11rem; the control column takes the rest up to the form
+   measure, so a 2560px screen does not produce a 2000px-wide text input. */
+@media (min-width:840px){
+  .hi-form--split .hi-field{grid-template-columns:minmax(var(--label-col-min),var(--label-col-max)) minmax(0,1fr);gap:var(--space-050) var(--space-200);align-items:start}
+  .hi-form--split .hi-field__label{grid-column:1;padding-top:calc((var(--control-h) - var(--lh-100)) / 2)}
+  .hi-form--split .hi-field__control{grid-column:2}
+  .hi-form--split .hi-field__help,.hi-form--split .hi-field__msg{grid-column:2}
+}
+
+.hi-form{display:grid;gap:var(--field-gap);max-width:var(--measure-form)}
+.hi-form--split{max-width:calc(var(--measure-form) + var(--label-col-max))}
+.hi-form--wide{max-width:none}
+
+/* Section. Collapsible; the 20-field type is 4 of these. */
+.hi-section{border:1px solid var(--border-default);border-radius:var(--radius-2);background:var(--surface-raised)}
+.hi-section + .hi-section{margin-top:var(--group-gap)}
+.hi-section__head{display:flex;align-items:center;gap:var(--space-100);width:100%;min-height:var(--tap-min);padding:var(--space-100) var(--space-150);background:transparent;border:0;border-bottom:1px solid var(--border-subtle);color:var(--text-primary);font-size:var(--fs-100);font-weight:var(--fw-semibold);letter-spacing:var(--ls-wide);text-align:left;cursor:pointer}
+.hi-section__head[aria-expanded="false"]{border-bottom-color:transparent}
+.hi-section__head:hover{background:var(--surface-hover)}
+.hi-section__count{margin-left:auto;font-weight:var(--fw-regular);color:var(--text-muted);font-variant-numeric:tabular-nums}
+.hi-section__body{display:grid;gap:var(--field-gap);padding:var(--space-150)}
+.hi-section__chev{transition:transform var(--dur-fast) var(--ease-standard)}
+.hi-section__head[aria-expanded="true"] .hi-section__chev{transform:rotate(90deg)}
+@media (prefers-reduced-motion:reduce){.hi-section__chev{transition:none}}
+
+/* The input well. Recessed, 1px --border-control (3.76:1 dark / 3.75:1 light). */
+.hi-input,.hi-control{display:flex;align-items:center;gap:var(--space-075);width:100%;min-height:var(--tap-min);height:var(--control-h);padding:0 var(--control-pad-x);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);color:var(--text-primary);font-size:var(--fs-body);line-height:1.2}
+textarea.hi-input{height:auto;min-height:calc(var(--control-h) * 2.4);padding:var(--space-100) var(--control-pad-x);line-height:var(--lh-200);resize:vertical}
+.hi-input:hover:not(:disabled):not([readonly]){border-color:var(--border-strong)}
+.hi-input:disabled{background:var(--surface-sunken);border-color:var(--border-subtle);color:var(--text-disabled);cursor:not-allowed}
+.hi-input[readonly]{background:transparent;border-color:transparent;border-bottom:1px dashed var(--border-default);padding-left:0;cursor:default}
+.hi-input--num{font-variant-numeric:var(--num-tabular);text-align:right}
+.hi-input--mono{font-family:var(--font-mono);letter-spacing:var(--ls-code);font-feature-settings:var(--num-slashed-zero)}
+.hi-input::-webkit-calendar-picker-indicator{filter:none;opacity:.7;cursor:pointer}
+
+/* Composite controls (money, quantity, reference, secret, file) — one well
+   with internal dividers, so the field reads as one thing. */
+.hi-combo{display:flex;align-items:stretch;width:100%;min-height:var(--tap-min);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);overflow:hidden}
+.hi-combo:focus-within{border-color:var(--border-focus)}
+.hi-combo > input,.hi-combo > select{flex:1 1 auto;min-width:0;height:var(--control-h);min-height:var(--tap-min);padding:0 var(--control-pad-x);background:transparent;border:0;color:var(--text-primary);font-size:var(--fs-body)}
+.hi-combo > input:focus,.hi-combo > select:focus{outline:none}
+.hi-combo__unit{flex:0 0 auto;display:flex;align-items:center;gap:var(--space-050);padding:0 var(--control-pad-x);background:var(--surface-sunken);border-left:1px solid var(--border-control);color:var(--text-secondary);font-size:var(--fs-100);white-space:nowrap}
+.hi-combo__unit select{background:transparent;border:0;color:inherit;font-size:inherit;min-height:var(--tap-min)}
+.hi-combo__prefix{flex:0 0 auto;display:flex;align-items:center;padding-left:var(--control-pad-x);color:var(--text-muted)}
+.hi-combo__num{font-variant-numeric:var(--num-tabular);text-align:right}
+.hi-combo[data-disabled="true"]{background:var(--surface-sunken);border-color:var(--border-subtle);color:var(--text-disabled)}
+
+/* Select and combo box */
+.hi-select{appearance:none;padding-right:calc(var(--control-pad-x) * 2 + 16px);background-image:none;cursor:pointer}
+.hi-selectwrap{position:relative;display:block}
+.hi-selectwrap > .hi-icon{position:absolute;right:var(--control-pad-x);top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-muted)}
+.hi-listbox{list-style:none;margin:0;padding:var(--space-050);background:var(--surface-overlay);border:1px solid var(--border-default);border-radius:var(--radius-2);box-shadow:var(--elev-2);max-height:16rem;overflow:auto}
+.hi-listbox__opt{display:flex;align-items:center;gap:var(--space-100);min-height:var(--tap-min);padding:var(--space-075) var(--space-100);border-radius:var(--radius-1);font-size:var(--fs-body);color:var(--text-primary);cursor:pointer}
+.hi-listbox__opt:hover{background:var(--surface-hover)}
+.hi-listbox__opt[aria-selected="true"]{background:var(--surface-selected);color:var(--text-primary);box-shadow:inset 2px 0 0 0 var(--accent-fg)}
+.hi-listbox__opt mark{background:var(--accent-tint);color:var(--accent-fg);font-weight:var(--fw-semibold)}
+.hi-listbox__empty{padding:var(--space-150);color:var(--text-muted);font-size:var(--fs-75)}
+
+/* Checkbox · radio · switch. Boundary is --border-control so the shape is
+   identifiable at 3:1; the check itself is an icon, not a colour change. */
+.hi-choice{display:flex;align-items:flex-start;gap:var(--space-100);min-height:var(--tap-min);padding:var(--space-050) 0;cursor:pointer;font-size:var(--fs-body);color:var(--text-primary)}
+.hi-choice__box{flex:none;display:grid;place-items:center;width:18px;height:18px;margin-top:calc((var(--lh-200) - 18px) / 2);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);color:transparent;transition:background-color var(--dur-instant) var(--ease-standard)}
+.hi-choice__box--radio{border-radius:var(--radius-pill)}
+.hi-choice input{position:absolute;opacity:0;width:0;height:0}
+.hi-choice input:checked + .hi-choice__box{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--text-on-accent)}
+.hi-choice input:indeterminate + .hi-choice__box{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--text-on-accent)}
+.hi-choice input:focus-visible + .hi-choice__box{outline:var(--focus-ring-w) solid var(--border-focus);outline-offset:var(--focus-ring-offset);box-shadow:0 0 0 3px var(--border-focus-offset)}
+.hi-choice input:disabled + .hi-choice__box{background:var(--surface-sunken);border-color:var(--border-subtle)}
+.hi-choice input:disabled ~ .hi-choice__text{color:var(--text-disabled)}
+.hi-choice__text{text-wrap:pretty;overflow-wrap:anywhere}
+.hi-choice__hint{display:block;font-size:var(--fs-75);color:var(--text-muted)}
+
+.hi-switch{display:flex;align-items:center;justify-content:space-between;gap:var(--space-200);min-height:var(--tap-min);cursor:pointer}
+.hi-switch__track{flex:none;position:relative;width:40px;height:22px;background:var(--surface-sunken);border:1px solid var(--border-control);border-radius:var(--radius-pill);transition:background-color var(--dur-instant) var(--ease-standard)}
+.hi-switch__knob{position:absolute;top:2px;left:2px;width:16px;height:16px;background:var(--text-secondary);border-radius:var(--radius-pill);transition:transform var(--dur-instant) var(--ease-standard),background-color var(--dur-instant) var(--ease-standard)}
+.hi-switch input{position:absolute;opacity:0;width:0;height:0}
+.hi-switch input:checked + .hi-switch__track{background:var(--accent-solid);border-color:var(--accent-solid)}
+.hi-switch input:checked + .hi-switch__track .hi-switch__knob{transform:translateX(18px);background:#fff}
+.hi-switch input:focus-visible + .hi-switch__track{outline:var(--focus-ring-w) solid var(--border-focus);outline-offset:var(--focus-ring-offset)}
+.hi-switch__state{font-size:var(--fs-75);color:var(--text-muted);font-variant-numeric:tabular-nums;min-width:3.5ch}
+@media (prefers-reduced-motion:reduce){.hi-switch__knob,.hi-choice__box{transition:none}}
+
+/* Tag input (multi-enum) */
+.hi-taginput{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-050);width:100%;min-height:var(--tap-min);padding:var(--space-050);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1)}
+.hi-taginput:focus-within{border-color:var(--border-focus)}
+.hi-taginput > input{flex:1 1 6rem;min-width:6rem;height:calc(var(--control-h) - 8px);background:transparent;border:0;color:var(--text-primary);font-size:var(--fs-body)}
+.hi-taginput > input:focus{outline:none}
+
+/* Reference picker */
+.hi-ref{display:flex;align-items:center;gap:var(--space-100);width:100%;min-height:var(--tap-min);padding:var(--space-050) var(--space-100);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);text-align:left;color:var(--text-primary);cursor:pointer}
+.hi-ref:hover{border-color:var(--border-strong)}
+.hi-ref__path{display:flex;align-items:center;gap:var(--space-050);min-width:0;font-size:var(--fs-75);color:var(--text-muted)}
+.hi-ref__leaf{color:var(--text-primary);font-size:var(--fs-body)}
+.hi-ref__empty{color:var(--text-muted)}
+
+/* Secret. Never a row of dots — the length of the secret is itself a leak. */
+.hi-secret{display:flex;align-items:center;gap:var(--space-100);width:100%;min-height:var(--tap-min);padding:0 var(--control-pad-x);background:var(--surface-input);border:1px dashed var(--border-control);border-radius:var(--radius-1);color:var(--text-muted);font-size:var(--fs-75)}
+.hi-secret--revealed{border-style:solid;color:var(--text-primary);font-family:var(--font-mono);font-size:var(--fs-body);letter-spacing:var(--ls-code)}
+.hi-secret__note{margin-left:auto;color:var(--text-muted);font-size:var(--fs-75);font-family:var(--font-sans);letter-spacing:0}
+
+/* File */
+.hi-file{display:grid;gap:var(--space-100)}
+.hi-file__drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-075);min-height:5.5rem;padding:var(--space-200);background:var(--surface-input);border:1px dashed var(--border-control);border-radius:var(--radius-2);color:var(--text-muted);font-size:var(--fs-75);text-align:center;cursor:pointer}
+.hi-file__drop:hover{border-color:var(--border-strong);color:var(--text-secondary)}
+.hi-file__item{display:flex;align-items:center;gap:var(--space-100);min-height:var(--tap-min);padding:var(--space-050) var(--space-100);background:var(--surface-sunken);border:1px solid var(--border-subtle);border-radius:var(--radius-1);font-size:var(--fs-100)}
+.hi-file__meta{margin-left:auto;color:var(--text-muted);font-size:var(--fs-75);font-variant-numeric:tabular-nums}
+
+/* Read-only and no-permission renderings of ANY field type. */
+.hi-readonly{min-height:var(--control-h);display:flex;align-items:center;color:var(--text-primary);font-size:var(--fs-body);text-wrap:pretty;overflow-wrap:anywhere}
+.hi-readonly--empty{color:var(--text-muted);font-style:normal}
+.hi-restricted{display:flex;align-items:center;gap:var(--space-075);min-height:var(--control-h);padding:0 var(--space-100);background:var(--state-restricted-bg);border:1px solid var(--border-subtle);border-radius:var(--radius-1);color:var(--state-restricted-fg);font-size:var(--fs-75)}

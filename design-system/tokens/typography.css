@@ -1,0 +1,41 @@
+/* IBM Plex Sans / IBM Plex Mono. Why: see readme.md → Visual foundations.
+   The short version — engineered for technical documentation, a genuinely
+   disambiguated 0/O and 1/l/I, tabular figures, and narrow-enough letterforms
+   that Benachrichtigungseinstellungen fits a 280px label column. */
+:root{
+  --font-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+
+  /* Size ramp. Line-heights are generous for German: a compound that wraps
+     mid-word needs the descender room. */
+  --fs-50:0.6875rem;  --lh-50:1rem;      /* 11/16 — column heads, micro meta */
+  --fs-75:0.75rem;    --lh-75:1.125rem;  /* 12/18 — badge, chip, helper text */
+  --fs-100:0.8125rem; --lh-100:1.25rem;  /* 13/20 — compact body, dense cell */
+  --fs-200:0.875rem;  --lh-200:1.375rem; /* 14/22 — body default */
+  --fs-300:1rem;      --lh-300:1.5rem;   /* 16/24 — touch input (no iOS zoom) */
+  --fs-400:1.125rem;  --lh-400:1.625rem; /* 18/26 — section title */
+  --fs-500:1.3125rem; --lh-500:1.75rem;  /* 21/28 — page title, compact width */
+  --fs-600:1.625rem;  --lh-600:2rem;     /* 26/32 — page title, expanded width */
+  --fs-700:2rem;      --lh-700:2.375rem; /* 32/38 — numeric display */
+
+  --fw-regular:400; /* @kind font */
+  --fw-medium:500; /* @kind font */
+  --fw-semibold:600; /* @kind font */
+
+  --ls-tight:-0.011em; /* @kind font */
+  --ls-normal:0; /* @kind font */
+  --ls-wide:0.02em; /* @kind font */
+  --ls-caps:0.06em; /* @kind font */
+  --ls-code:0.04em; /* @kind font */
+
+  /* Measure. German runs ~25% longer than English; a form field label column
+     that fits "Value" will not fit "Wiederbeschaffungswert". */
+  --measure-prose:68ch;
+  --measure-form:60ch;
+  --label-col-min:11rem;   /* 176px — fits Mindesthaltbarkeitsdatum at 14px */
+  --label-col-max:16rem;
+
+  /* Numerics. tnum everywhere a number sits in a column. */
+  --num-tabular:"tnum" 1,"lnum" 1; /* @kind other */
+  --num-slashed-zero:"zero" 1; /* @kind other */
+}

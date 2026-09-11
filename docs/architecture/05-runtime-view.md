@@ -281,7 +281,7 @@ sequenceDiagram
 
 **Demonstrates:** the principle "nothing is lost silently". A conflict is a
 stored record, not a discarded write. Details:
-[11 Offline Synchronization](11-offline-synchronization.md).
+[11 Offline Synchronisation](11-offline-synchronisation.md).
 
 ## 5.8 Calling an out-of-process plugin
 

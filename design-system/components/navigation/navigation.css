@@ -1,0 +1,42 @@
+/* Tabs. Selected = weight + colour + a 2px bar. Three signals, because Lucide
+   has no filled twin to swap to and colour alone is not allowed to carry it. */
+.hi-tabs{display:flex;gap:var(--space-025);border-bottom:1px solid var(--border-default);overflow-x:auto;scrollbar-width:none}
+.hi-tabs::-webkit-scrollbar{display:none}
+.hi-tab{display:inline-flex;align-items:center;gap:var(--space-075);min-height:var(--tap-min);padding:var(--space-100) var(--space-150);background:none;border:0;border-bottom:var(--border-w-emphasis) solid transparent;margin-bottom:-1px;color:var(--text-muted);font-size:var(--fs-100);font-weight:var(--fw-medium);letter-spacing:var(--ls-wide);white-space:nowrap;cursor:pointer}
+.hi-tab:hover{color:var(--text-primary);background:var(--surface-hover)}
+.hi-tab[aria-selected="true"]{color:var(--accent-fg);border-bottom-color:var(--accent-fg);font-weight:var(--fw-semibold)}
+
+/* Breadcrumb. Collapses from the middle on compact: first › … › last two. */
+.hi-crumbs{display:flex;align-items:center;gap:var(--space-050);min-width:0;font-size:var(--fs-75);color:var(--text-muted)}
+.hi-crumbs a,.hi-crumbs button{display:inline-flex;align-items:center;gap:var(--space-050);min-height:var(--tap-min);padding:0 var(--space-050);background:none;border:0;color:var(--text-muted);font:inherit;text-decoration:none;border-radius:var(--radius-1);cursor:pointer}
+.hi-crumbs a:hover,.hi-crumbs button:hover{color:var(--text-primary);background:var(--surface-hover);text-decoration:none}
+.hi-crumbs__sep{color:var(--text-disabled);flex:none}
+.hi-crumbs__cur{color:var(--text-primary);font-weight:var(--fw-medium);padding:0 var(--space-050);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Bottom bar — compact width only. Five slots max; the middle one is the scan
+   action, because it is the thing people are here to do. */
+.hi-bottomnav{position:sticky;bottom:0;z-index:var(--z-appbar);display:grid;grid-auto-flow:column;grid-auto-columns:1fr;align-items:stretch;height:calc(var(--bottombar-h) + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--surface-raised);border-top:1px solid var(--border-default)}
+@media (min-width:840px){.hi-bottomnav{display:none}}
+.hi-bottomnav__item{display:grid;place-items:center;gap:2px;min-height:var(--tap-min);padding:var(--space-050) 0;background:none;border:0;border-top:var(--border-w-emphasis) solid transparent;margin-top:-1px;color:var(--text-muted);font-size:var(--fs-50);letter-spacing:var(--ls-wide);cursor:pointer}
+.hi-bottomnav__item[aria-current="page"]{color:var(--accent-fg);border-top-color:var(--accent-fg);font-weight:var(--fw-semibold)}
+.hi-bottomnav__item--action{color:var(--text-on-accent)}
+.hi-bottomnav__action{display:grid;place-items:center;width:2.75rem;height:2.75rem;background:var(--accent-solid);border-radius:var(--radius-1);color:var(--text-on-accent)}
+
+/* App bar. 48px, sticky, holds the title and at most three actions. */
+.hi-appbar{position:sticky;top:0;z-index:var(--z-appbar);display:flex;align-items:center;gap:var(--space-100);height:var(--appbar-h);padding:0 var(--space-150);background:var(--surface-raised);border-bottom:1px solid var(--border-default)}
+.hi-appbar__title{font-size:var(--fs-200);font-weight:var(--fw-semibold);letter-spacing:var(--ls-tight);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hi-appbar__spacer{flex:1}
+
+/* Status strip — offline / degraded / conflict. Always above the content,
+   never a toast: these states persist, so their indicator has to as well. */
+.hi-statusstrip{display:flex;align-items:center;gap:var(--space-100);min-height:var(--statusstrip-h);padding:var(--space-050) var(--space-150);font-size:var(--fs-75);font-weight:var(--fw-medium);border-bottom:1px solid}
+.hi-statusstrip--offline{background:var(--state-offline-bg);border-bottom-color:var(--state-offline-border);color:var(--state-offline-fg)}
+.hi-statusstrip--degraded{background:var(--state-degraded-bg);border-bottom-color:var(--state-degraded-border);color:var(--state-degraded-fg)}
+.hi-statusstrip--conflict{background:var(--state-conflict-bg);border-bottom-color:var(--state-conflict-border);color:var(--state-conflict-fg)}
+
+/* Nav rail — medium width (600–839). Icons + short labels, 72px. */
+.hi-rail{display:none;flex-direction:column;align-items:stretch;gap:var(--space-025);width:4.5rem;padding:var(--space-100) var(--space-050);background:var(--surface-raised);border-right:1px solid var(--border-default)}
+@media (min-width:840px){.hi-rail{display:flex}}
+.hi-rail__item{display:grid;place-items:center;gap:2px;min-height:3.25rem;padding:var(--space-075) 0;background:none;border:0;border-radius:var(--radius-1);color:var(--text-muted);font-size:var(--fs-50);letter-spacing:var(--ls-wide);cursor:pointer}
+.hi-rail__item:hover{background:var(--surface-hover);color:var(--text-primary)}
+.hi-rail__item[aria-current="page"]{background:var(--accent-tint);color:var(--accent-fg);font-weight:var(--fw-semibold);box-shadow:inset 2px 0 0 0 var(--accent-fg)}

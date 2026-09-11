@@ -1,0 +1,190 @@
+/* Two themes, authored independently. Dark is :root — it is the shipped
+   default on every platform and is NOT derived from prefers-color-scheme.
+   Light is opt-in via [data-theme="light"] on <html>, written before first
+   paint by the blocking init script (see readme.md → Theme boot).
+
+   Every pair below carries its measured WCAG 2.x contrast ratio. AA needs
+   4.5:1 for text under 24px/19px-bold, 3:1 for large text, icons and the
+   boundary of any control whose shape identifies it (1.4.11). */
+
+:root{
+  color-scheme:dark;
+
+  /* ── Surfaces ───────────────────────────────────────────── */
+  --surface-sunken:var(--hi-n-950);      /* wells, code plates, scan chrome */
+  --surface-base:var(--hi-n-850);        /* the page */
+  --surface-raised:var(--hi-n-800);      /* cards, table head, side panels */
+  --surface-overlay:var(--hi-n-750);     /* modal, drawer, popover, menu */
+  --surface-input:var(--hi-n-900);       /* recessed field well */
+  --surface-hover:#1e2328;               /* row / item hover (fine pointer only) */
+  --surface-active:#252b31;              /* pressed */
+  --surface-selected:#152539;            /* multi-select row, active nav */
+  --surface-scrim:rgba(6,8,10,.68);      /* behind modal + drawer */
+
+  /* ── Text ───────────────────────────────────────────────── */
+  --text-primary:var(--hi-n-fg-1);       /* 15.17:1 on base · 14.00:1 on raised */
+  --text-secondary:var(--hi-n-250);      /* 8.26:1 on base · 7.63:1 on raised */
+  --text-muted:var(--hi-n-350);          /* 5.81:1 on base · 5.37:1 raised · 4.82:1 overlay */
+  --text-disabled:var(--hi-n-450);       /* 3.98:1 on base — 1.4.3 inactive-control exception */
+  --text-on-accent:#ffffff;              /* 5.36:1 on --accent-solid */
+  --text-link:var(--hi-a-300);           /* 7.19:1 on base */
+  --text-link-visited:#9d8cf5;           /* 6.05:1 on base */
+
+  /* ── Borders ────────────────────────────────────────────── */
+  --border-subtle:var(--hi-n-700);       /* 1.29:1 — row rules, dividers. Decorative. */
+  --border-default:var(--hi-n-600);      /* 1.78:1 — card and panel edges. Decorative. */
+  --border-control:var(--hi-n-500);      /* 3.76:1 on base — input, checkbox, switch track */
+  --border-strong:var(--hi-n-350);       /* 5.81:1 — hovered control, drag handle */
+  --border-focus:var(--hi-a-200);        /* 8.61:1 on base */
+  --border-focus-offset:var(--hi-n-1000);/* the dark half of the two-tone ring */
+
+  /* ── Accent (one colour, three jobs: primary action, focus, link) ── */
+  --accent-solid:var(--hi-a-600);        /* filled primary button — white text 5.36:1 */
+  --accent-solid-hover:var(--hi-a-500);
+  --accent-solid-active:var(--hi-a-700);
+  --accent-fg:var(--hi-a-300);           /* accent as ink: 7.19:1 on base */
+  --accent-tint:var(--hi-a-tint-dark);   /* selected-tab underlay, progress track fill */
+
+  /* ── Semantic states ────────────────────────────────────── */
+  --state-success-fg:var(--hi-success-d);   /* 8.62:1 base · 7.34:1 on its tint */
+  --state-success-bg:var(--hi-success-bg-d);
+  --state-success-border:#215c39;
+  --state-warning-fg:var(--hi-warning-d);   /* 8.17:1 base · 7.03:1 on its tint */
+  --state-warning-bg:var(--hi-warning-bg-d);
+  --state-warning-border:#6b5117;
+  --state-danger-fg:var(--hi-danger-d);     /* 6.28:1 base · 5.86:1 on its tint */
+  --state-danger-bg:var(--hi-danger-bg-d);
+  --state-danger-border:#7a2e2a;
+  --state-danger-solid:#b23a33;             /* destructive filled button, white 4.86:1 */
+  --state-conflict-fg:var(--hi-conflict-d); /* 7.17:1 base · 6.43:1 on its tint */
+  --state-conflict-bg:var(--hi-conflict-bg-d);
+  --state-conflict-border:#4b3a70;
+  --state-degraded-fg:var(--hi-degraded-d); /* 7.67:1 base · 6.65:1 on its tint */
+  --state-degraded-bg:var(--hi-degraded-bg-d);
+  --state-degraded-border:#215a66;
+  --state-offline-fg:var(--hi-n-300);       /* 8.05:1 base — hueless on purpose */
+  --state-offline-bg:#1c2126;
+  --state-offline-border:var(--hi-n-600);
+  --state-pending-fg:var(--text-muted);     /* pending upload is normal, not a warning */
+  --state-pending-bg:var(--surface-sunken);
+  --state-restricted-fg:var(--text-disabled);
+  --state-restricted-bg:#1a1d20;
+  --state-restricted-hatch:rgba(138,147,154,.14); /* @kind color */
+  --state-unassigned-fg:var(--text-secondary);    /* dashed border carries the meaning */
+
+  /* ── Diff colours (conflict resolution) ─────────────────── */
+  --diff-mine-fg:var(--hi-a-300);   --diff-mine-bg:#12233d;   --diff-mine-border:#25456e;
+  --diff-theirs-fg:var(--hi-success-d); --diff-theirs-bg:#12291b; --diff-theirs-border:#215c39;
+  --diff-base-fg:var(--text-muted); --diff-base-bg:var(--surface-sunken); --diff-base-border:var(--border-subtle);
+
+  /* ── Elevation (dark leans on surface value, not shadow) ── */
+  --elev-1:0 1px 0 0 rgba(0,0,0,.5);
+  --elev-2:0 10px 28px -6px rgba(0,0,0,.62), 0 0 0 1px rgba(0,0,0,.4);
+
+  /* ── Icon stroke, tuned for the bloom of light-on-dark ──── */
+  --icon-stroke-12:2.4; /* @kind other */
+  --icon-stroke-14:2.2; /* @kind other */
+  --icon-stroke-16:2; /* @kind other */
+  --icon-stroke-20:1.75; /* @kind other */
+  --icon-stroke-24:1.6; /* @kind other */
+  --icon-stroke-32:1.4; /* @kind other */
+  --icon-stroke-40:1.2; /* @kind other */
+
+  /* ── Photo treatment ────────────────────────────────────── */
+  --photo-placeholder:var(--hi-n-900);
+  --photo-edge:inset 0 0 0 1px rgba(232,235,237,.08); /* @kind shadow */
+}
+
+[data-theme="light"]{
+  color-scheme:light;
+
+  --surface-sunken:var(--hi-n-100);
+  --surface-base:var(--hi-n-75);
+  --surface-raised:var(--hi-n-0);
+  --surface-overlay:var(--hi-n-0);
+  --surface-input:var(--hi-n-0);
+  --surface-hover:#eceef0;
+  --surface-active:#e2e5e8;
+  --surface-selected:#e7effb;
+  --surface-scrim:rgba(22,25,28,.42);
+
+  --text-primary:var(--hi-n-ink);        /* 17.65:1 on raised · 16.17:1 on base */
+  --text-secondary:var(--hi-n-ink-2);    /* 7.95:1 on raised · 7.28:1 on base */
+  --text-muted:var(--hi-n-ink-3);        /* 5.20:1 raised · 4.76:1 base · 4.51:1 sunken */
+  --text-disabled:var(--hi-n-ink-4);     /* 2.59:1 — inactive-control exception */
+  --text-on-accent:#ffffff;              /* 5.92:1 on --accent-solid */
+  --text-link:var(--hi-a-550);           /* 6.39:1 on raised · 5.85:1 on base */
+  --text-link-visited:#5b3bb0;           /* 7.42:1 on raised */
+
+  --border-subtle:var(--hi-n-150);       /* 1.28:1 */
+  --border-default:var(--hi-n-200);      /* 1.62:1 */
+  --border-control:var(--hi-n-400);      /* 3.75:1 on raised · 3.44:1 on base */
+  --border-strong:var(--hi-n-ink-3);     /* 5.20:1 */
+  --border-focus:var(--hi-a-550);        /* 6.39:1 on raised */
+  --border-focus-offset:var(--hi-n-0);
+
+  --accent-solid:var(--hi-a-650);        /* white text 5.92:1 */
+  --accent-solid-hover:var(--hi-a-700);
+  --accent-solid-active:#114ba3;
+  --accent-fg:var(--hi-a-550);
+  --accent-tint:var(--hi-a-tint-light);
+
+  --state-success-fg:var(--hi-success-l);   /* 5.05:1 raised · 4.62:1 base */
+  --state-success-bg:var(--hi-success-bg-l);
+  --state-success-border:#a8d5ba;
+  --state-warning-fg:var(--hi-warning-l);   /* 5.92:1 raised · 5.43:1 base */
+  --state-warning-bg:var(--hi-warning-bg-l);
+  --state-warning-border:#e0c48a;
+  --state-danger-fg:var(--hi-danger-l);     /* 5.93:1 raised · 5.11:1 on its tint */
+  --state-danger-bg:var(--hi-danger-bg-l);
+  --state-danger-border:#eeb4b0;
+  --state-danger-solid:#b02019;             /* white 6.66:1 */
+  --state-conflict-fg:var(--hi-conflict-l); /* 6.70:1 raised */
+  --state-conflict-bg:var(--hi-conflict-bg-l);
+  --state-conflict-border:#c8b6ef;
+  --state-degraded-fg:var(--hi-degraded-l); /* 6.24:1 raised */
+  --state-degraded-bg:var(--hi-degraded-bg-l);
+  --state-degraded-border:#a3cfd7;
+  --state-offline-fg:var(--hi-n-ink-2);     /* 7.95:1 raised */
+  --state-offline-bg:var(--hi-n-100);
+  --state-offline-border:var(--hi-n-200);
+  --state-pending-fg:var(--text-muted);
+  --state-pending-bg:var(--surface-sunken);
+  --state-restricted-fg:#7c858d;            /* 3.75:1 — reads as "withheld", not "empty" */
+  --state-restricted-bg:var(--hi-n-100);
+  --state-restricted-hatch:rgba(74,82,89,.12);
+  --state-unassigned-fg:var(--text-secondary);
+
+  --diff-mine-fg:var(--hi-a-550);   --diff-mine-bg:#e7effb;   --diff-mine-border:#b6cef2;
+  --diff-theirs-fg:var(--hi-success-l); --diff-theirs-bg:#e6f4eb; --diff-theirs-border:#a8d5ba;
+  --diff-base-fg:var(--text-muted); --diff-base-bg:var(--hi-n-100); --diff-base-border:var(--hi-n-150);
+
+  --elev-1:0 1px 2px rgba(16,24,32,.08);
+  --elev-2:0 12px 32px -8px rgba(16,24,32,.20), 0 0 0 1px rgba(16,24,32,.06);
+
+  --icon-stroke-12:2.7; /* @kind other */
+  --icon-stroke-14:2.5; /* @kind other */
+  --icon-stroke-16:2.25; /* @kind other */
+  --icon-stroke-20:2; /* @kind other */
+  --icon-stroke-24:1.75; /* @kind other */
+  --icon-stroke-32:1.5; /* @kind other */
+  --icon-stroke-40:1.25; /* @kind other */
+
+  --photo-placeholder:var(--hi-n-100);
+  --photo-edge:inset 0 0 0 1px rgba(22,25,28,.10); /* @kind shadow */
+}
+
+/* ── The inviolable exception ──────────────────────────────────
+   Machine-readable codes and the label print preview are dark modules on a
+   light ground in BOTH themes. An inverted QR does not scan reliably, and the
+   preview is a picture of paper. These four tokens are declared once and are
+   never re-declared in a theme scope — that is the whole point. The boundary
+   between themed chrome and unthemed paper is drawn explicitly with
+   --code-frame, so it reads as an intentional edge rather than a bug. */
+:root,[data-theme="light"]{
+  --code-paper:var(--hi-paper);
+  --code-ink:var(--hi-code-ink);         /* 20.4:1 on paper, both themes */
+  --code-quiet:var(--hi-paper);
+  --code-frame:var(--hi-n-500);          /* the visible chrome↔paper boundary */
+  --code-caption:#3a424a;                /* 9.6:1 on paper — the human-readable code */
+}

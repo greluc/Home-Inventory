@@ -24,7 +24,7 @@ monotonic sequence per tenant, a **three-way compare** (base, local, server) wit
 **type-dependent resolution rules per field kind**, and a **conflict record** for
 everything not resolvable automatically. Configuration and permissions are only
 downloaded, never edited offline. In full:
-[11 Offline Synchronization](../architecture/11-offline-synchronization.md).
+[11 Offline Synchronisation](../architecture/11-offline-synchronisation.md).
 
 ## Why not CRDT
 

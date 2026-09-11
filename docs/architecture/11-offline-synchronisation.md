@@ -1,4 +1,4 @@
-# 11 — Offline Synchronization
+# 11 — Offline Synchronisation
 
 ## 11.1 The promise and its limits
 
@@ -15,7 +15,7 @@ first:
 | Creating, editing, moving, lending, stocktaking without a network | Automatic resolution of **every** conflict |
 | Taking photos offline and uploading them later | Offline search of the same quality as OpenSearch (locally: prefix and substring) |
 | No data loss — every discarded version stays retrievable | Offline changes to type definitions and permissions (deliberately online only) |
-| Reliable conflict detection | Convergence without any user decision (no CRDT — see [ADR-0014](../adr/0014-offline-synchronization.md)) |
+| Reliable conflict detection | Convergence without any user decision (no CRDT — see [ADR-0014](../adr/0014-offline-synchronisation.md)) |
 
 ## 11.2 What gets reconciled
 
@@ -171,7 +171,7 @@ version is the price local storage pays, and it is worth it.
 | Sets (tags, relations) | **Union** of additions, **union** of removals; a removal wins over a concurrent addition | That matches expectation; corresponds to a 2P-set |
 | Attachments (media) | Union — a photo is never lost through a conflict | |
 | Location | Both moved → **conflict**, with both paths offered | An item is in exactly one place; only a human can decide that |
-| Quantity (consumables) | Governed by `intent`. Two `ADJUST`s → **the deltas are summed** (`+3` and `−1` → `+2`). Two `SET`s → conflict, like any scalar. `SET` against `ADJUST` → the `SET` is taken as the base and the `ADJUST` applied on top | Counting operations are additive; a stocktake correction is not. Deriving this from the values alone is impossible — both look the same in an absolute payload, and guessing wrong makes a withdrawal count twice ([ADR-0014](../adr/0014-offline-synchronization.md)) |
+| Quantity (consumables) | Governed by `intent`. Two `ADJUST`s → **the deltas are summed** (`+3` and `−1` → `+2`). Two `SET`s → conflict, like any scalar. `SET` against `ADJUST` → the `SET` is taken as the base and the `ADJUST` applied on top | Counting operations are additive; a stocktake correction is not. Deriving this from the values alone is impossible — both look the same in an absolute payload, and guessing wrong makes a withdrawal count twice ([ADR-0014](../adr/0014-offline-synchronisation.md)) |
 | Append-only lists (maintenance entries, scans, stocktake results) | Union, sorted by time, deduplicated by ID | They are events, not states — conflict-free |
 | Lifecycle | A fixed precedence: `PURGED` > `DISPOSED`/`SOLD` > `TRASHED` > `ARCHIVED` > `LENT` > `ACTIVE` | A disposal should not lose to a concurrent edit |
 | `sensitive` fields (licence keys) | Always a **conflict**, never automatic | Silently overwritten secrets are not recoverable |

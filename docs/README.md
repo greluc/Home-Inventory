@@ -18,7 +18,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | the **API contract** | [08 API Contract](architecture/08-api-contract.md) |
 | the **plugin system** | [09 Extensibility](architecture/09-extensibility-and-plugins.md) |
 | **QR codes, scanning, printing** | [10 Identification](architecture/10-identification-and-labels.md) |
-| the **offline sync protocol** | [11 Offline Synchronization](architecture/11-offline-synchronization.md) |
+| the **offline sync protocol** | [11 Offline Synchronisation](architecture/11-offline-synchronisation.md) |
 | the **security concept** | [12 Security](architecture/12-security.md) |
 | **operations, backup, monitoring** | [13 Operations](architecture/13-operations-and-observability.md) |
 | **quality goals, risks, terms** | [14 Quality, Risks, Glossary](architecture/14-quality-risks-glossary.md) |
@@ -31,7 +31,8 @@ contradicts the implementation is a defect and gets corrected immediately.
 docs/
 ├── architecture/     arc42-oriented system description (01–14)
 ├── adr/              architecture decisions, numbered consecutively
-├── design/           the design system brief, and later the delivered system
+├── design/           the brief that produced the design system — the system
+│                  itself is at ../design-system/ (it is source, not docs)
 ├── reference/        reference data (label geometries)
 └── requirements/     a verifiable requirements catalogue with stable IDs
 ```
@@ -69,7 +70,7 @@ Each has its own ADR with rationale and alternatives.
 | 11 | API versioning | The major version in the URL, additive minors, a sunset policy | [0011](adr/0011-api-versioning.md) |
 | 12 | Web frontend | React + TypeScript + Vite as a PWA | [0012](adr/0012-web-frontend.md) |
 | 13 | Apps | Kotlin Multiplatform + Compose Multiplatform | [0013](adr/0013-mobile-apps.md) |
-| 14 | Offline | Full bidirectional sync | [0014](adr/0014-offline-synchronization.md) |
+| 14 | Offline | Full bidirectional sync | [0014](adr/0014-offline-synchronisation.md) |
 | 15 | Deployment | Podman/Quadlet **and** Docker/Compose, both rootless; Helm as an equal | [0015](adr/0015-deployment.md), [0021](adr/0021-podman-quadlet.md) |
 | 16 | Identifiers | UUIDv7 internally, a separate public code (10 characters + Damm) | [0016](adr/0016-identifiers.md), [0030](adr/0030-public-code-format.md) |
 | 17 | Persistence access | Spring Data JPA + `JdbcClient` for dynamic queries | [0017](adr/0017-persistence-access.md) |
@@ -88,6 +89,7 @@ Each has its own ADR with rationale and alternatives.
 | 31 | Audit chain | Per tenant, with an hourly instance-wide anchor | [0031](adr/0031-audit-chain-per-tenant.md) |
 | 33 | Appearance | Dark by default everywhere; light is opt-in | [0033](adr/0033-dark-as-default-appearance.md) |
 | 34 | Icons and assets | Lucide, self-hosted; no third-party host for anything | [0034](adr/0034-icon-set-and-no-third-party-hosts.md) |
+| 35 | Design system | Binding, not a reference; `tokens.json` is the single source for web and apps | [0035](adr/0035-design-system.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open**; what

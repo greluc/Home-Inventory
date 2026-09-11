@@ -1,0 +1,20 @@
+<!-- @dsCard group="Spacing" viewport="700x200" name="Breakpoints" subtitle="Material 3 window size classes — shared verbatim with the Compose apps" -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Breakpoints</title>
+<link rel="stylesheet" href="../styles.css">
+<style>body{padding:14px;background:var(--surface-base);font-size:12px}.g{display:grid;gap:8px}.r{display:flex;gap:8px;flex-wrap:wrap}.sw{flex:1 1 0;min-width:96px;display:grid;gap:4px}.ch{height:40px;border-radius:var(--radius-1);border:1px solid var(--border-subtle)}.n{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0}.v{font-size:11px;color:var(--text-secondary);font-weight:500}.x{font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:10px}.lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}.bp{flex:1 1 0;min-width:120px;display:grid;gap:4px;padding:8px;border:1px solid var(--border-default);border-radius:var(--radius-1);background:var(--surface-raised)}.bp b{font-size:12px;font-weight:600}</style>
+</head>
+<body>
+<div class="r" style="gap:8px">
+<div class="bp"><b>compact</b><span class="n">&lt; 600 px</span><span class="x">Telefon. Eine Spalte, Bottom-Bar, Aktion in der Daumenzone.</span></div>
+<div class="bp"><b>medium</b><span class="n">600 – 839</span><span class="x">Tablet hochkant. Liste + Bottom-Bar, Detail als Route.</span></div>
+<div class="bp"><b>expanded</b><span class="n">≥ 840 px</span><span class="x">Tablet quer, Laptop. Nav-Rail + Master–Detail.</span></div>
+<div class="bp"><b>large</b><span class="n">≥ 1200</span><span class="x">Baum + Liste + Detail, drei Spalten.</span></div>
+<div class="bp"><b>x-large</b><span class="n">≥ 1600</span><span class="x">Breite wird zu Panes, nicht zu Zeilenlänge.</span></div>
+</div>
+<p style="margin-top:10px;color:var(--text-muted);font-size:11px">Wachstum endet bei <span class="n">--layout-max 1680 px</span>. Eine über 2560 px gezogene Tabelle ist eine schlechtere Tabelle.</p>
+</body>
+</html>

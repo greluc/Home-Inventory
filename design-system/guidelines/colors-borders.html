@@ -1,0 +1,13 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Borders — decorative vs. load-bearing" subtitle="Only border.control has to clear 3:1 (WCAG 1.4.11)" -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Borders — decorative vs. load-bearing</title>
+<link rel="stylesheet" href="../styles.css">
+<style>body{padding:14px;background:var(--surface-base);font-size:12px}.g{display:grid;gap:8px}.r{display:flex;gap:8px;flex-wrap:wrap}.sw{flex:1 1 0;min-width:96px;display:grid;gap:4px}.ch{height:40px;border-radius:var(--radius-1);border:1px solid var(--border-subtle)}.n{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0}.v{font-size:11px;color:var(--text-secondary);font-weight:500}.x{font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:10px}.lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}</style>
+</head>
+<body>
+<div class="r"><div class="sw"><div class="ch" style="background:var(--border-subtle)"></div><span class="v">subtle · Trennlinie</span><span class="n">--border-subtle</span><span class="x">1.29 : 1 — dekorativ</span></div><div class="sw"><div class="ch" style="background:var(--border-default)"></div><span class="v">default · Kartenkante</span><span class="n">--border-default</span><span class="x">1.78 : 1 — dekorativ</span></div><div class="sw"><div class="ch" style="background:var(--border-control)"></div><span class="v">control · Eingabefeld</span><span class="n">--border-control</span><span class="x">3.76 : 1 ✓ 1.4.11</span></div><div class="sw"><div class="ch" style="background:var(--border-strong)"></div><span class="v">strong · Hover, Griff</span><span class="n">--border-strong</span><span class="x">5.81 : 1</span></div><div class="sw"><div class="ch" style="background:var(--border-focus)"></div><span class="v">focus</span><span class="n">--border-focus</span><span class="x">8.61 : 1</span></div></div>
+</body>
+</html>

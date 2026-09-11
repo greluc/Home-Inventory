@@ -1,0 +1,89 @@
+/* Badge · Tag · Chip. Three different jobs, deliberately three shapes.
+   Badge  = a count or a short status, attached to something else.
+   Tag    = a user-assigned label. Square. Removable in an input.
+   Chip   = a system state. Always icon + word — never colour alone. */
+.hi-badge{display:inline-flex;align-items:center;gap:var(--space-050);height:1.25rem;padding:0 var(--space-075);border:1px solid transparent;border-radius:var(--radius-1);font-size:var(--fs-50);font-weight:var(--fw-semibold);letter-spacing:var(--ls-caps);text-transform:uppercase;white-space:nowrap}
+.hi-badge--count{min-width:1.25rem;justify-content:center;border-radius:var(--radius-pill);background:var(--accent-solid);color:var(--text-on-accent);text-transform:none;letter-spacing:0;font-variant-numeric:tabular-nums}
+.hi-badge--neutral{background:var(--surface-sunken);border-color:var(--border-default);color:var(--text-secondary)}
+.hi-badge--success{background:var(--state-success-bg);border-color:var(--state-success-border);color:var(--state-success-fg)}
+.hi-badge--warning{background:var(--state-warning-bg);border-color:var(--state-warning-border);color:var(--state-warning-fg)}
+.hi-badge--danger{background:var(--state-danger-bg);border-color:var(--state-danger-border);color:var(--state-danger-fg)}
+.hi-badge--conflict{background:var(--state-conflict-bg);border-color:var(--state-conflict-border);color:var(--state-conflict-fg)}
+
+.hi-tag{display:inline-flex;align-items:center;gap:var(--space-050);max-width:14rem;height:1.5rem;padding:0 var(--space-075);background:var(--surface-sunken);border:1px solid var(--border-default);border-radius:var(--radius-1);font-size:var(--fs-75);color:var(--text-secondary);white-space:nowrap}
+.hi-tag--removable{padding-right:var(--space-025)}
+.hi-tag__x{display:grid;place-items:center;width:1.25rem;height:1.25rem;min-width:0;padding:0;background:transparent;border:0;border-radius:var(--radius-1);color:var(--text-muted);cursor:pointer}
+.hi-tag__x:hover{background:var(--state-danger-bg);color:var(--state-danger-fg)}
+@media (pointer:coarse){.hi-tag{height:2rem}.hi-tag__x{width:1.75rem;height:1.75rem}}
+
+.hi-chip{display:inline-flex;align-items:center;gap:var(--space-050);min-height:1.5rem;padding:0 var(--space-075);border:1px solid;border-radius:var(--radius-1);font-size:var(--fs-75);font-weight:var(--fw-medium);white-space:nowrap}
+.hi-chip--offline{background:var(--state-offline-bg);border-color:var(--state-offline-border);color:var(--state-offline-fg)}
+.hi-chip--pending{background:var(--state-pending-bg);border-color:var(--border-subtle);color:var(--state-pending-fg)}
+.hi-chip--conflict{background:var(--state-conflict-bg);border-color:var(--state-conflict-border);color:var(--state-conflict-fg)}
+.hi-chip--degraded{background:var(--state-degraded-bg);border-color:var(--state-degraded-border);color:var(--state-degraded-fg)}
+.hi-chip--success{background:var(--state-success-bg);border-color:var(--state-success-border);color:var(--state-success-fg)}
+.hi-chip--warning{background:var(--state-warning-bg);border-color:var(--state-warning-border);color:var(--state-warning-fg)}
+.hi-chip--danger{background:var(--state-danger-bg);border-color:var(--state-danger-border);color:var(--state-danger-fg)}
+.hi-chip--restricted{background:var(--state-restricted-bg);border-color:var(--border-subtle);color:var(--state-restricted-fg)}
+.hi-chip--unassigned{background:transparent;border-style:dashed;border-color:var(--border-control);color:var(--state-unassigned-fg)}
+.hi-chip--neutral{background:var(--surface-sunken);border-color:var(--border-default);color:var(--text-secondary)}
+
+/* Inline message. Sits in the flow, owns its own space, never floats. */
+.hi-msg{display:flex;gap:var(--space-100);padding:var(--space-100) var(--space-150);border:1px solid;border-left-width:3px;border-radius:var(--radius-2);font-size:var(--fs-100);line-height:var(--lh-100);text-wrap:pretty}
+.hi-msg__body{display:grid;gap:var(--space-050);min-width:0}
+.hi-msg__title{font-weight:var(--fw-semibold)}
+.hi-msg__actions{display:flex;flex-wrap:wrap;gap:var(--space-100);margin-top:var(--space-050)}
+.hi-msg .hi-icon{flex:none;margin-top:1px}
+.hi-msg--info{background:var(--surface-raised);border-color:var(--border-default);border-left-color:var(--border-strong);color:var(--text-secondary)}
+.hi-msg--success{background:var(--state-success-bg);border-color:var(--state-success-border);color:var(--state-success-fg)}
+.hi-msg--warning{background:var(--state-warning-bg);border-color:var(--state-warning-border);color:var(--state-warning-fg)}
+.hi-msg--danger{background:var(--state-danger-bg);border-color:var(--state-danger-border);color:var(--state-danger-fg)}
+.hi-msg--conflict{background:var(--state-conflict-bg);border-color:var(--state-conflict-border);color:var(--state-conflict-fg)}
+.hi-msg--degraded{background:var(--state-degraded-bg);border-color:var(--state-degraded-border);color:var(--state-degraded-fg)}
+.hi-msg--offline{background:var(--state-offline-bg);border-color:var(--state-offline-border);color:var(--state-offline-fg)}
+
+/* Toast. Bottom on compact (above the thumb zone, never under it), bottom-right
+   from medium up. Max three; the fourth replaces the oldest. */
+.hi-toaststack{position:fixed;z-index:var(--z-toast);display:flex;flex-direction:column;gap:var(--space-100);left:var(--space-200);right:var(--space-200);bottom:calc(var(--bottombar-h) + var(--space-200) + env(safe-area-inset-bottom,0px));pointer-events:none}
+@media (min-width:600px){.hi-toaststack{left:auto;right:var(--space-300);bottom:var(--space-300);width:24rem}}
+.hi-toast{display:flex;align-items:flex-start;gap:var(--space-100);padding:var(--space-150);background:var(--surface-overlay);border:1px solid var(--border-default);border-left:3px solid var(--border-strong);border-radius:var(--radius-2);box-shadow:var(--elev-2);color:var(--text-primary);font-size:var(--fs-100);pointer-events:auto;animation:hi-toast-in var(--dur-base) var(--ease-standard)}
+.hi-toast--success{border-left-color:var(--state-success-fg)}
+.hi-toast--danger{border-left-color:var(--state-danger-fg)}
+.hi-toast--conflict{border-left-color:var(--state-conflict-fg)}
+.hi-toast--offline{border-left-color:var(--state-offline-fg)}
+.hi-toast__body{display:grid;gap:var(--space-025);min-width:0;flex:1}
+.hi-toast__sub{color:var(--text-muted);font-size:var(--fs-75)}
+@keyframes hi-toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.hi-toast{animation:none}}
+
+/* Scrim, modal, drawer. Modal = a decision that blocks. Drawer = a task that
+   keeps its context. Below 600px every drawer is a bottom sheet. */
+.hi-scrim{position:fixed;inset:0;z-index:var(--z-scrim);background:var(--surface-scrim)}
+.hi-modal{position:fixed;z-index:var(--z-modal);left:50%;top:50%;transform:translate(-50%,-50%);width:min(34rem,calc(100vw - var(--space-400)));max-height:calc(100vh - var(--space-600));display:flex;flex-direction:column;background:var(--surface-overlay);border:1px solid var(--border-default);border-radius:var(--radius-2);box-shadow:var(--elev-2)}
+.hi-modal--wide{width:min(52rem,calc(100vw - var(--space-400)))}
+.hi-modal__head,.hi-drawer__head{display:flex;align-items:center;gap:var(--space-100);padding:var(--space-150);border-bottom:1px solid var(--border-subtle)}
+.hi-modal__title{font-size:var(--fs-400);font-weight:var(--fw-semibold);letter-spacing:var(--ls-tight);text-wrap:pretty;min-width:0}
+.hi-modal__body,.hi-drawer__body{padding:var(--space-150);overflow:auto;flex:1}
+.hi-modal__foot,.hi-drawer__foot{display:flex;justify-content:flex-end;gap:var(--space-100);padding:var(--space-150);border-top:1px solid var(--border-subtle)}
+@media (max-width:599px){
+  .hi-modal{left:0;top:auto;bottom:0;transform:none;width:100vw;max-width:none;border-radius:var(--radius-2) var(--radius-2) 0 0;border-bottom:0;max-height:88vh}
+  .hi-modal__foot{flex-direction:column-reverse;padding-bottom:calc(var(--space-150) + env(safe-area-inset-bottom,0px))}
+  .hi-modal__foot > .hi-btn{width:100%}
+}
+.hi-drawer{position:fixed;z-index:var(--z-drawer);top:0;right:0;bottom:0;width:min(28rem,90vw);display:flex;flex-direction:column;background:var(--surface-overlay);border-left:1px solid var(--border-default);box-shadow:var(--elev-2)}
+.hi-drawer__grip{display:none}
+@media (max-width:599px){
+  .hi-drawer{top:auto;left:0;width:100vw;max-height:88vh;border-left:0;border-top:1px solid var(--border-default);border-radius:var(--radius-2) var(--radius-2) 0 0}
+  .hi-drawer__grip{display:block;width:2.25rem;height:3px;border-radius:var(--radius-pill);background:var(--border-control);margin:var(--space-100) auto 0}
+}
+
+/* Tooltip. Fine pointer only — never the sole carrier of a function. */
+.hi-tooltip{position:absolute;z-index:var(--z-popover);max-width:18rem;padding:var(--space-075) var(--space-100);background:var(--surface-overlay);border:1px solid var(--border-default);border-radius:var(--radius-1);box-shadow:var(--elev-2);color:var(--text-primary);font-size:var(--fs-75);line-height:var(--lh-75);text-wrap:pretty}
+@media (hover:none){.hi-tooltip{display:none}}
+
+/* Empty state. One sentence saying what is missing, one action. No illustration. */
+.hi-empty{display:grid;justify-items:center;gap:var(--space-100);padding:var(--space-600) var(--space-200);text-align:center;color:var(--text-muted)}
+.hi-empty__icon{color:var(--text-disabled)}
+.hi-empty__title{font-size:var(--fs-400);font-weight:var(--fw-semibold);color:var(--text-secondary);letter-spacing:var(--ls-tight)}
+.hi-empty__body{max-width:34ch;font-size:var(--fs-100);text-wrap:pretty}
+.hi-empty--inline{padding:var(--space-300) var(--space-200)}

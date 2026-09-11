@@ -51,6 +51,7 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 | Operation | **Rootless**: Podman ≥ 5 + Quadlet *or* Docker + Compose v2 — both supported; the Helm chart is maintained as an equal |
 | Distributions | Debian ≥ 13 · Ubuntu ≥ 26.04 LTS · Fedora ≥ 43 · RHEL, CentOS Stream, Rocky Linux, AlmaLinux ≥ 9.5 resp. ≥ 10 |
 | Money | An in-house `Money` value type (`BigDecimal` + `java.util.Currency`) — no money library ([ADR-0025](docs/adr/0025-money-representation.md)) |
+| Design | A binding design system, dark by default, one token source for web and apps ([ADR-0035](docs/adr/0035-design-system.md)) |
 | Licence | AGPL-3.0-or-later (plugin API: Apache-2.0) |
 
 ## Repository layout
@@ -61,6 +62,7 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 ├── app/           the Spring Boot application (api + worker roles)
 ├── cla/           contributor licence agreements
 ├── deploy/        services.yaml (source of truth) → quadlet/ compose/ helm/
+├── design-system/ the binding design system — tokens, components, fonts, icons
 ├── docs/          architecture, decisions, requirements, reference data
 ├── plugin-api/    the ports a plugin implements — Apache-2.0, not AGPL
 ├── plugin-sdk/    Java and Python SDKs, and the contract test suite

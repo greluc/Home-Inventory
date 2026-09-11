@@ -1,0 +1,68 @@
+/* The scanner. Full-bleed camera, used one-handed in the dark, at arm's length.
+   Everything touchable lives in the bottom --thumbzone-h band. The overlay
+   ignores the light theme entirely: it is a camera viewfinder, and a white
+   viewfinder in a cellar is a torch pointed at your own face. */
+/* grid-template-columns is minmax(0,1fr), not the implicit auto: an auto grid
+   column sizes to its items' min-content, and the control row's min-content is
+   five 48px buttons plus a German phrase. Without this the whole viewfinder
+   grows past the phone. */
+.hi-scan{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);width:100%;height:100%;min-width:0;min-height:26rem;background:#000;color:#f2f4f5;overflow:hidden}
+.hi-scan__feed{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 40%,#1b1f22 0%,#0a0c0d 100%)}
+.hi-scan__top{position:relative;display:flex;align-items:center;gap:var(--space-100);min-width:0;padding:var(--space-150);padding-top:calc(var(--space-150) + env(safe-area-inset-top,0px))}
+.hi-scan__mid{position:relative;display:grid;place-items:center;min-width:0;padding:var(--space-200)}
+.hi-scan__bottom{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-150);min-width:0;min-height:var(--thumbzone-h);padding:var(--space-150);padding-bottom:calc(var(--space-200) + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,rgba(0,0,0,.82),rgba(0,0,0,0))}
+
+/* Framing indicator: four corners, never a full box — a box hides the code.
+   The middle track is minmax(0,1fr): with a plain 1fr its automatic minimum is
+   this square's min-content, which refuses to shrink and eats the thumb band. */
+.hi-scan__frame{position:relative;width:min(68vw,17rem);max-width:100%;max-height:100%;aspect-ratio:1}
+.hi-scan__corner{position:absolute;width:2.25rem;height:2.25rem;border:3px solid #f2f4f5}
+.hi-scan__corner:nth-child(1){top:0;left:0;border-right:0;border-bottom:0}
+.hi-scan__corner:nth-child(2){top:0;right:0;border-left:0;border-bottom:0}
+.hi-scan__corner:nth-child(3){bottom:0;left:0;border-right:0;border-top:0}
+.hi-scan__corner:nth-child(4){bottom:0;right:0;border-left:0;border-top:0}
+.hi-scan[data-result="success"] .hi-scan__corner{border-color:#4fc97a}
+.hi-scan[data-result="duplicate"] .hi-scan__corner{border-color:#e0a32e}
+.hi-scan[data-result="unknown"] .hi-scan__corner{border-color:#f1706a}
+.hi-scan[data-result="unassigned"] .hi-scan__corner{border-color:#5fa5ff;border-style:dashed}
+
+/* The scan line is feedback that the camera is live, not decoration. */
+.hi-scan__sweep{position:absolute;left:6%;right:6%;top:0;height:2px;background:rgba(242,244,245,.55);animation:hi-sweep 2.4s var(--ease-standard) infinite}
+@media (prefers-reduced-motion:reduce){.hi-scan__sweep{animation:none;top:50%;opacity:.35}}
+@keyframes hi-sweep{0%,100%{top:4%}50%{top:96%}}
+
+/* Result banner: big enough to read at arm's length without looking closely. */
+.hi-scan__result{display:flex;align-items:center;gap:var(--space-150);padding:var(--space-150);border:2px solid;border-radius:var(--radius-2);background:rgba(10,12,13,.9);font-size:var(--fs-300);font-weight:var(--fw-semibold);line-height:var(--lh-300)}
+.hi-scan__result[data-result="success"]{border-color:#4fc97a;color:#4fc97a}
+.hi-scan__result[data-result="duplicate"]{border-color:#e0a32e;color:#e0a32e}
+.hi-scan__result[data-result="unknown"]{border-color:#f1706a;color:#f1706a}
+.hi-scan__result[data-result="unassigned"]{border-color:#5fa5ff;color:#5fa5ff}
+.hi-scan__result small{display:block;font-size:var(--fs-100);font-weight:var(--fw-regular);color:#c3c9cd;letter-spacing:0}
+.hi-scan__code{font-family:var(--font-mono);letter-spacing:var(--ls-code);font-feature-settings:var(--num-slashed-zero)}
+
+/* Mode selector — the one place a pill is allowed.
+   The scanner is a touch surface by definition: there is no fine-pointer way to
+   hold a camera at a label. So every control here is 44px unconditionally and
+   does NOT read --tap-min, which follows the pointer media query and would drop
+   to 36px on a touch laptop running the PWA in a window.
+   align-self/min-height are load-bearing: the row is an overflow:auto scroll
+   container, which makes it a grid item free to shrink below its content — left
+   alone it collapses to a few pixels and scrolls the pills out of sight. */
+.hi-scan__modes{display:flex;align-self:start;align-items:stretch;min-width:0;height:3.25rem;min-height:3.25rem;gap:var(--space-050);padding:var(--space-050);background:rgba(10,12,13,.72);border:1px solid rgba(242,244,245,.22);border-radius:var(--radius-pill);overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.hi-scan__modes::-webkit-scrollbar{display:none}
+.hi-scan__mode{flex:none;display:inline-flex;align-items:center;min-height:2.75rem;padding:0 var(--space-150);background:none;border:0;border-radius:var(--radius-pill);color:#c3c9cd;font-size:var(--fs-100);font-weight:var(--fw-medium);white-space:nowrap;cursor:pointer}
+.hi-scan__mode[aria-pressed="true"]{background:#f2f4f5;color:#0a0c0d;font-weight:var(--fw-semibold)}
+
+/* Wraps, because the confirming action of a mode can be a long German phrase
+   and the four toggles are 48px each. Below ~420px the action takes its own
+   full-width row inside the thumb band — easier one-handed than a squeezed
+   row, and every toggle stays reachable. */
+.hi-scan__controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-100);min-width:0}
+.hi-scan__ctl{display:grid;place-items:center;width:3rem;height:3rem;background:rgba(10,12,13,.72);border:1px solid rgba(242,244,245,.28);border-radius:var(--radius-1);color:#f2f4f5;cursor:pointer}
+.hi-scan__ctl[aria-pressed="true"]{background:#f2f4f5;color:#0a0c0d;border-color:#f2f4f5}
+.hi-scan__ctl--wide{width:auto;min-width:0;flex:1 1 12rem;justify-content:center;padding:0 var(--space-200);gap:var(--space-075);display:inline-flex;align-items:center;font-size:var(--fs-200);font-weight:var(--fw-medium);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hi-scan__tally{margin-left:auto;display:flex;align-items:center;gap:var(--space-075);padding:0 var(--space-100);height:2rem;min-width:0;flex:0 1 auto;overflow:hidden;background:rgba(10,12,13,.72);border:1px solid rgba(242,244,245,.22);border-radius:var(--radius-1);font-size:var(--fs-100);font-variant-numeric:tabular-nums}
+.hi-scan__tally span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Under 420px the tally is the count alone — the word costs more than it says. */
+@media (max-width:420px){.hi-scan__tally em{display:none}}
+.hi-scan__hint{font-size:var(--fs-75);color:#a7aeb3;text-align:center}

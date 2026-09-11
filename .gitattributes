@@ -28,6 +28,7 @@
 *.toml      text
 *.xml       text
 *.html      text diff=html
+*.svg       text
 *.css       text
 *.sh        text eol=lf
 *.container text eol=lf

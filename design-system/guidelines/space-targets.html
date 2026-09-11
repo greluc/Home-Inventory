@@ -1,0 +1,18 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Hit targets" subtitle="Size follows the pointer, never the width" -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Hit targets</title>
+<link rel="stylesheet" href="../styles.css">
+<style>body{padding:14px;background:var(--surface-base);font-size:12px}.g{display:grid;gap:8px}.r{display:flex;gap:8px;flex-wrap:wrap}.sw{flex:1 1 0;min-width:96px;display:grid;gap:4px}.ch{height:40px;border-radius:var(--radius-1);border:1px solid var(--border-subtle)}.n{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0}.v{font-size:11px;color:var(--text-secondary);font-weight:500}.x{font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:10px}.lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);font-weight:600}.t{display:grid;place-items:center;background:var(--surface-raised);border:1px dashed var(--border-control);color:var(--text-secondary);font-size:11px;border-radius:var(--radius-1)}</style>
+</head>
+<body>
+<div class="r" style="gap:16px;align-items:flex-end">
+<div class="g" style="gap:4px"><div class="t" style="width:36px;height:36px">36</div><span class="x">pointer: fine</span></div>
+<div class="g" style="gap:4px"><div class="t" style="width:44px;height:44px">44</div><span class="x">pointer: coarse — Minimum</span></div>
+<div class="g" style="gap:4px"><div class="t" style="width:48px;height:48px">48</div><span class="x">Scanner, Daumenzone</span></div>
+<p style="flex:1 1 240px;margin:0;color:var(--text-muted);font-size:11px;line-height:1.55">Ein Tablet mit Tastatur ist <em>expanded</em> und trotzdem Touch. Ein Touch-Laptop ist beides gleichzeitig. Deshalb: <span class="n">--tap-min</span> hängt an <span class="n">pointer</span>, <span class="n">--row-h</span> an der Dichte. Und nichts Wichtiges darf hover-only sein — unter <span class="n">hover:none</span> verschwindet der Tooltip vollständig, die Funktion nie.</p>
+</div>
+</body>
+</html>
