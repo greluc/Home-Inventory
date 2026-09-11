@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Defaults that hold in every profile. Anything environment-specific comes from
+# HOMEINV_* variables, and anything secret from a file the container mounts —
+# never from a value in this file, because this file is public (CLAUDE.md).
+
+spring:
+  application:
+    name: home-inv
+
+  datasource:
+    url: ${HOMEINV_DB_URL:jdbc:postgresql://localhost:5432/homeinv}
+    username: ${HOMEINV_DB_USER:homeinv_app}
+    # No default. A missing secret must abort startup with a clear message
+    # rather than fall back to something that works and is wrong.
+    password: ${HOMEINV_DB_PASSWORD}
+    hikari:
+      # The application role holds no DDL rights and no BYPASSRLS; the pool
+      # must never be configured with the migrator's credentials.
+      pool-name: homeinv-app
+      maximum-pool-size: ${HOMEINV_DB_POOL_MAX:10}
+      # A connection returning to the pool must not carry a tenant. SET LOCAL is
+      # transaction-scoped and discarded at commit, so this is belt and braces —
+      # but the test that proves it (REQ-SEC-005) is worth keeping honest.
+      auto-commit: false
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema. Hibernate must never touch it: `update` against a
+      # role with no DDL rights fails at startup, and against one with them it
+      # would silently diverge from the migrations.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        # Batch writes, but keep ordering so the optimistic-lock version checks
+        # stay meaningful.
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: false # The application never migrates; the one-shot `migrate` service does (ADR-0041).
+
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+  # No server-side error page: every error leaves through the RFC 9457 handler,
+  # and a whitelabel page would be a second, undocumented error format.
+  error:
+    whitelabel:
+      enabled: false
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never # Health details name internal hosts; operators read metrics.
+
+logging:
+  # JSON lines with traceId, tenantId and actorId (REQ-NFR-041). The structured
+  # encoder is configured per profile; this keeps the fields present either way.
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{tenantId:-},%X{actorId:-}]"
+
+homeinv:
+  # The base URL that ends up printed on labels. It is the only configuration
+  # value that writes itself into the physical world, and a later change breaks
+  # every label already printed (CLAUDE.md rule 9).
+  public-base-url: ${HOMEINV_PUBLIC_BASE_URL:http://localhost:8080}
