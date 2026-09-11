@@ -210,9 +210,9 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 
 | | |
 |---|---|
-| Schema | `authorization` |
-| Key notions | `Role` (system and tenant-owned), `Permission`, `PolicyDecision`, `Scope` |
-| Publishes | `AccessControl.require(action, resource)`, `PermissionCatalog`, `@RequiresPermission` |
+| Schema | `authorization` — **from stage 1**. Stage 0 has none and creates none: the six built-in roles and their grants are code, and an empty schema passes every check while documenting nothing (the same rule `V1__extensions_schemas_grants.sql` follows). The registry is [`docs/reference/permissions.yaml`](../reference/permissions.yaml), compared against the code on every build |
+| Key notions | `Role` (built-in from stage 0, tenant-owned from stage 1), `Permission`, `PolicyDecision`, `Scope` |
+| Publishes | `AccessControl.require(permission)` and `require(permission, resource)`, `Permission`, `Role`, `@RequiresPermission`, `@PublicEndpoint` |
 | Events | `RoleAssigned`, `RoleDefinitionChanged`, `AccessDenied` (for audit) |
 | Permission model | `<block>:<resource>:<action>` — e.g. `inventory:item:create`, `catalog:type:update`, `labeling:job:print`. Field-level visibility through `field-visibility` rules per role (e.g. purchase price only for `ADMIN`). |
 | Built-in roles | `OWNER`, `ADMIN`, `MEMBER`, `CONTRIBUTOR`, `VIEWER`, `GUEST` — tenant-owned roles extend, they do not replace |

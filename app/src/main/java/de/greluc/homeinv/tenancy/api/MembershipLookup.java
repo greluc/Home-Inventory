@@ -18,15 +18,28 @@ import java.util.UUID;
 public interface MembershipLookup {
 
   /**
-   * The tenant a user acts for when they log in.
+   * A membership: the tenant, and the role held in it.
+   *
+   * <p>The role travels with the tenant because both are read at login, in the one moment there is
+   * no tenant context to read them with (07 §7.5). Re-reading the role per request would mean
+   * reading {@code tenancy.membership} under the caller's own policies, which is a second path to
+   * the same fact and one more place for the two to disagree.
+   *
+   * @param tenantId the tenant the session acts for
+   * @param role the membership's role, as stored - one of the six in the table's check constraint
+   */
+  record Membership(UUID tenantId, String role) {}
+
+  /**
+   * The membership a user acts under when they log in.
    *
    * <p>Stage 0 has exactly one per user. Stage 1 lets a user belong to several and switch between
    * them without re-authenticating (REQ-TEN-003); this then returns the one to start in, and
    * everything else stays as it is.
    *
    * @param userId the person
-   * @return their tenant, or empty when they belong to none - which is a data problem, not a
+   * @return their membership, or empty when they belong to none - which is a data problem, not a
    *     legitimate state
    */
-  Optional<UUID> primaryTenantOf(UUID userId);
+  Optional<Membership> primaryMembershipOf(UUID userId);
 }

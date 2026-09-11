@@ -10,16 +10,37 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
+import org.springframework.lang.NonNull;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * The servlet-level pieces that sit in front of everything else.
  */
 @Configuration(proxyBeanMethods = false)
-public class WebLayerConfiguration {
+@RequiredArgsConstructor
+public class WebLayerConfiguration implements WebMvcConfigurer {
+
+  private final PermissionInterceptor permissionInterceptor;
+
+  /**
+   * Puts the permission check in front of every handler.
+   *
+   * <p>No path exclusions. An endpoint that needs none says so with
+   * {@code @PublicEndpoint} and a written reason; a list of excluded paths here would be a second
+   * place to say it, and the second place is the one that drifts (REQ-SEC-023).
+   *
+   * @param registry the registry Spring MVC offers
+   */
+  @Override
+  public void addInterceptors(@NonNull InterceptorRegistry registry) {
+    registry.addInterceptor(permissionInterceptor);
+  }
 
   /**
    * Registers the forwarded-header filter ahead of every other filter.

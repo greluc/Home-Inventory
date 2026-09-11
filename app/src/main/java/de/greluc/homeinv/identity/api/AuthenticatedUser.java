@@ -25,7 +25,8 @@ import java.util.UUID;
  *     switch without re-authenticating (REQ-TEN-003), which changes this value and nothing else
  * @param email the address the user logged in with, kept for logging and for the UI to show
  */
-public record AuthenticatedUser(UUID userId, UUID tenantId, String email) implements Serializable {
+public record AuthenticatedUser(UUID userId, UUID tenantId, String email, String role)
+    implements Serializable {
 
   /** The session is serialised into Valkey; a changed shape must not silently deserialise wrong. */
   private static final long serialVersionUID = 1L;

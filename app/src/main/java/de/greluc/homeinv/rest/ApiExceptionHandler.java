@@ -14,6 +14,7 @@ import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.platform.InvalidCursorException;
+import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -61,6 +62,31 @@ public class ApiExceptionHandler {
         ProblemTypes.NOT_FOUND,
         "Not found",
         "No such " + exception.getResource() + " is visible to you.",
+        request);
+  }
+
+  /**
+   * Answers a caller whose role does not hold the permission the operation needs.
+   *
+   * <p>A {@code 403} here is only ever about a permission, never about a resource the caller cannot
+   * see: a resource in another tenant is a {@code 404}, because a {@code 403} confirms it exists
+   * (REQ-SEC-025). The detail names no resource for the same reason.
+   *
+   * @param exception the denial, naming the permission
+   * @param request the request
+   * @return a {@code 403} problem detail
+   */
+  @ExceptionHandler(AccessDeniedException.class)
+  public ProblemDetail handleAccessDenied(
+      AccessDeniedException exception, HttpServletRequest request) {
+    // At WARN: a denial is either an attack or a misconfigured role, and both are
+    // worth seeing. The caller is already in the MDC of every line (REQ-NFR-041).
+    log.warn("Forbidden: {}", exception.getMessage());
+    return problem(
+        HttpStatus.FORBIDDEN,
+        ProblemTypes.FORBIDDEN,
+        "Forbidden",
+        "Your role does not permit this operation.",
         request);
   }
 

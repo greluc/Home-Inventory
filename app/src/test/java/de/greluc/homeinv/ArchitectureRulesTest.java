@@ -7,12 +7,35 @@ package de.greluc.homeinv;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import de.greluc.homeinv.authorization.api.PublicEndpoint;
+import de.greluc.homeinv.authorization.api.RequiresPermission;
+import de.greluc.homeinv.authorization.api.Role;
+import jakarta.persistence.Entity;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.lang.annotation.Annotation;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The rules that are not style preferences ({@code CLAUDE.md}, "The rules CI enforces here").
@@ -24,6 +47,16 @@ import org.junit.jupiter.api.Test;
  */
 @DisplayName("The architecture rules")
 class ArchitectureRulesTest {
+
+  /** Every annotation that turns a method into an HTTP handler. */
+  private static final List<Class<? extends Annotation>> MAPPINGS =
+      List.of(
+          RequestMapping.class,
+          GetMapping.class,
+          PostMapping.class,
+          PutMapping.class,
+          PatchMapping.class,
+          DeleteMapping.class);
 
   private static final JavaClasses CLASSES =
       new ClassFileImporter()
@@ -118,5 +151,136 @@ class ArchitectureRulesTest {
             "an access adapter translates and decides nothing; reaching a repository is how it "
                 + "starts deciding (REQ-SEC-022, ADR-0010)")
         .check(CLASSES);
+  }
+
+  @Test
+  @DisplayName("refuse an endpoint that says nothing about who may reach it")
+  void everyEndpointDeclaresItsAccess() {
+    // REQ-SEC-023, and the reason it is a BUILD failure rather than a runtime
+    // one: the default is deny, so a forgotten annotation is caught before it
+    // ships rather than as a 500 the first time somebody calls the endpoint.
+    // PermissionInterceptor refuses the same case at runtime; this is the half
+    // that fails in the pull request.
+    List<String> undeclared = new ArrayList<>();
+
+    for (JavaClass controller : CLASSES) {
+      if (!controller.getPackageName().startsWith("de.greluc.homeinv.rest")) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(RestController.class)) {
+        continue;
+      }
+      for (JavaMethod method : controller.getMethods()) {
+        boolean isHandler =
+            MAPPINGS.stream().anyMatch(mapping -> method.isAnnotatedWith(mapping));
+        if (!isHandler) {
+          continue;
+        }
+        boolean declared =
+            method.isAnnotatedWith(RequiresPermission.class)
+                || method.isAnnotatedWith(PublicEndpoint.class);
+        if (!declared) {
+          undeclared.add(controller.getSimpleName() + "." + method.getName());
+        }
+      }
+    }
+
+    assertThat(undeclared)
+        .as(
+            "every handler carries @RequiresPermission or an explicit @PublicEndpoint with a "
+                + "written reason; the default is deny (REQ-SEC-023)")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("let only the authorization block answer whether somebody may")
+  void onlyAuthorizationDecides() {
+    // REQ-SEC-022 and ADR-0010: REST, GraphQL and gRPC are adapters that decide
+    // nothing. They may DECLARE what is needed - the annotation is in the access
+    // layer by design - but the evaluation happens in one place, so that a second
+    // surface cannot grow a second set of rules.
+    noClasses()
+        .that()
+        .resideOutsideOfPackages("de.greluc.homeinv.authorization..")
+        .should()
+        .callMethodWhere(
+            com.tngtech.archunit.base.DescribedPredicate.describe(
+                "reads a role's permissions directly",
+                target ->
+                    target.getTarget().getOwner().getFullName().equals(Role.class.getName())
+                        && target.getTarget().getName().equals("permissions")))
+        .because(
+            "\"may this caller do this\" is answered in one place; reading the grant set "
+                + "elsewhere is how a second answer appears (REQ-SEC-022, ADR-0010)")
+        .check(CLASSES);
+  }
+
+  @Test
+  @DisplayName("let no request type be bound onto an entity")
+  void requestsAreNotBoundOntoEntities() {
+    // REQ-SEC-030. A controller that binds a request body onto an entity accepts
+    // whatever fields that entity happens to have - including `version`,
+    // `tenantId` and `deletedAt`, none of which a client may set. A dedicated
+    // input type per use case is the only shape where the accepted fields are
+    // visible in the signature.
+    noClasses()
+        .that()
+        .resideInAPackage("de.greluc.homeinv.rest..")
+        .should()
+        .dependOnClassesThat()
+        .areAnnotatedWith(Entity.class)
+        .because(
+            "a request bound onto an entity accepts every column it has, version and tenant "
+                + "included (REQ-SEC-030)")
+        .check(CLASSES);
+  }
+
+  @Test
+  @DisplayName("keep SQL out of string concatenation")
+  void sqlIsNeverConcatenated() {
+    // REQ-SEC-031. Dynamic SQL goes through a checked builder whose field and
+    // sort names come from an allowlist derived from `field_definition` - never
+    // from user input. Anywhere else, a `+` joining a query to something that is
+    // not a literal is an injection waiting for a value that came from a request.
+    //
+    // ArchUnit reads bytecode, where concatenation has already become an
+    // invokedynamic and the literals are gone, so this reads the sources - the
+    // only place the evidence survives.
+    List<String> offenders = new ArrayList<>();
+
+    // A query split across lines for readability is two literals joined by `+`,
+    // and that is not what this rule is about. Adjacent literals are merged
+    // first, so what remains is a literal joined to an *expression* - which is
+    // the only shape a value can enter through.
+    Pattern adjacentLiterals = Pattern.compile("\"\\s*\\+\\s*\"", Pattern.DOTALL);
+    Pattern injectable =
+        Pattern.compile(
+            "\"[^\"]*\\b(select|insert\\s+into|update|delete\\s+from)\\b[^\"]*\"\\s*\\+",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String merged = adjacentLiterals.matcher(Files.readString(file)).replaceAll("");
+                  if (injectable.matcher(merged).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "SQL is parameterised; a query joined to an expression is an injection waiting for a "
+                + "value that came from a request (REQ-SEC-031)")
+        .isEmpty();
   }
 }

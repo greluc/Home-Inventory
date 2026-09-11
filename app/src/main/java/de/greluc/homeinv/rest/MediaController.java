@@ -4,6 +4,9 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.Permission;
+import de.greluc.homeinv.authorization.api.PublicEndpoint;
+import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.media.api.MediaService;
 import de.greluc.homeinv.media.api.MediaUrlSigner;
@@ -60,6 +63,7 @@ public class MediaController {
    * @throws IOException when the upload cannot be read or stored
    */
   @PostMapping("/api/v1/media")
+  @RequiresPermission(Permission.MEDIA_CREATE)
   public ResponseEntity<MediaView> upload(
       @RequestParam("file") MultipartFile file,
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
@@ -82,6 +86,7 @@ public class MediaController {
    * @return the attachments, primary image first
    */
   @GetMapping("/api/v1/media")
+  @RequiresPermission(Permission.MEDIA_READ)
   public List<MediaView> list(
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId) {
@@ -98,6 +103,7 @@ public class MediaController {
    * @return an empty {@code 204}
    */
   @DeleteMapping("/api/v1/media/{mediaObjectId}")
+  @RequiresPermission(Permission.MEDIA_DELETE)
   public ResponseEntity<Void> detach(
       @PathVariable UUID mediaObjectId,
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
@@ -128,6 +134,13 @@ public class MediaController {
    * @throws IOException when the blob cannot be read
    */
   @GetMapping("/media/{tenantId}/{sha256}/{variant}")
+  @PublicEndpoint(
+      reason =
+          "Authorised by the signature in the URL and by nothing else (REQ-MED-010). A "
+              + "browser following an <img src> to the media hostname sends no session "
+              + "cookie, and SameSite=Strict withholds it even towards our own. The "
+              + "signature is bound to the tenant, the object and an expiry, and an "
+              + "invalid one is answered 404.")
   public ResponseEntity<InputStreamResource> serve(
       @PathVariable UUID tenantId,
       @PathVariable @Pattern(regexp = "[0-9a-f]{64}") String sha256,

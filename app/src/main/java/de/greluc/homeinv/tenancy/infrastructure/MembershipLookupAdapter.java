@@ -32,19 +32,24 @@ public class MembershipLookupAdapter implements MembershipLookup {
   // LIMIT 1, not `.optional()` on the whole result: the function returns every
   // membership in order, and `optional()` throws when there is more than one row.
   // At stage 0 that never happens, which is exactly why it would be found later.
-  private static final String QUERY = "select tenant_id from tenancy.tenants_of_user(?) limit 1";
+  private static final String QUERY =
+      "select tenant_id, role from tenancy.tenants_of_user(?) limit 1";
 
   private final JdbcClient jdbc;
 
   /**
    * {@inheritDoc}
    *
-   * <p>Returns the oldest live membership's tenant, which the function orders by creation. At stage
-   * 0 there is exactly one. When stage 1 lets a user belong to several, this becomes "the one to
-   * start the session in" and the switch (REQ-TEN-003) changes it afterwards.
+   * <p>Returns the oldest live membership, which the function orders by creation. At stage 0 there
+   * is exactly one. When stage 1 lets a user belong to several, this becomes "the one to start the
+   * session in" and the switch (REQ-TEN-003) changes it afterwards.
    */
   @Override
-  public Optional<UUID> primaryTenantOf(UUID userId) {
-    return jdbc.sql(QUERY).param(userId).query(UUID.class).optional();
+  public Optional<Membership> primaryMembershipOf(UUID userId) {
+    return jdbc
+        .sql(QUERY)
+        .param(userId)
+        .query((rs, rowNum) -> new Membership(rs.getObject(1, UUID.class), rs.getString(2)))
+        .optional();
   }
 }

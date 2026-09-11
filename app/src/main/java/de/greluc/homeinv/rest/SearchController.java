@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.Permission;
+import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.search.api.SearchService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
@@ -39,6 +41,7 @@ public class SearchController {
    * @return the matching items and a cursor for the next page, or none when this was the last
    */
   @GetMapping
+  @RequiresPermission(Permission.SEARCH_QUERY)
   public SearchService.SearchResult search(
       @RequestParam(required = false) @Size(max = 500) String q,
       @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,

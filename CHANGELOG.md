@@ -21,6 +21,10 @@ commit".
 
 ### Added
 
+- **Roles decide what a session may do.** Six built-in roles from a share-link
+  `GUEST` up to `OWNER`, twelve permissions, and an endpoint that declares
+  neither the permission it needs nor an explicit exemption fails the build.
+
 - **`/livez` and `/readyz`**, on a management listener bound to the internal
   segment. Liveness consults nothing external, so a database outage does not
   become a restart loop; readiness consults the database *and* the schema

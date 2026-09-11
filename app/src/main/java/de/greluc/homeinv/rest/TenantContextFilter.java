@@ -5,6 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
+import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -50,9 +51,19 @@ public class TenantContextFilter extends OncePerRequestFilter {
       try {
         MDC.put("tenantId", user.tenantId().toString());
         MDC.put("actorId", user.userId().toString());
-        TenantContext.runAs(user.tenantId(), () -> proceed(request, response, chain));
+        // Two contexts, and they answer different questions. TenantContext is the
+        // value the transaction manager pushes into `app.tenant_id` so every RLS
+        // policy has something to compare against; CallerContext is the identity
+        // the application layer asks "may they". Both are set here because both
+        // are facts about this one request, and both are cleared in the same
+        // `finally` because either one left behind would be inherited by whoever
+        // runs on this thread next.
+        CallerContext.runAs(
+            new CallerContext.Caller(user.userId(), user.tenantId(), user.role()),
+            () -> TenantContext.runAs(user.tenantId(), () -> proceed(request, response, chain)));
       } finally {
         TenantContext.clear();
+        CallerContext.clear();
         MDC.remove("tenantId");
         MDC.remove("actorId");
       }

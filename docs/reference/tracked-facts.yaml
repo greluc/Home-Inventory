@@ -193,6 +193,16 @@ computed:
       sub-counts are not tracked separately because they are stated together with the
       total in both places, and a mismatch in one is a mismatch in the sum.
 
+  - id: permissionCount
+    compute: "length of `permissions` in docs/reference/permissions.yaml"
+    value: 12
+    pattern: '(?:(\d+)|twelve)\s+(?:named\s+)?permissions?'
+    notes: >
+      The stage-0 catalogue. `AuthorizationRegistryTest` already proves the registry and the
+      `Permission` enum name the same set on every build; this is the third copy — the number as it
+      appears in prose — and it is tracked on the same principle as the rest: a fact stated twice is
+      checked, not trusted.
+
   - id: pluginHealthStates
     compute: "length of `states` in docs/reference/plugin-health-states.yaml"
     value: 10

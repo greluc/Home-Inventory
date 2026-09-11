@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.Permission;
+import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.api.LocationService;
@@ -42,6 +44,7 @@ public class LocationController {
    * @return the new location
    */
   @PostMapping
+  @RequiresPermission(Permission.LOCATION_CREATE)
   public ResponseEntity<LocationView> create(
       @Valid @RequestBody CreateLocationRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
@@ -60,6 +63,7 @@ public class LocationController {
    * @return the location
    */
   @GetMapping("/{id}")
+  @RequiresPermission(Permission.LOCATION_READ)
   public LocationView get(@PathVariable UUID id) {
     return locations.get(id);
   }
@@ -73,6 +77,7 @@ public class LocationController {
    * @return the renamed location
    */
   @PutMapping("/{id}")
+  @RequiresPermission(Permission.LOCATION_UPDATE)
   public LocationView rename(
       @PathVariable UUID id,
       @Valid @RequestBody RenameLocationRequest request,
@@ -87,6 +92,7 @@ public class LocationController {
    * @return the ids, including the location itself
    */
   @GetMapping("/{id}/subtree")
+  @RequiresPermission(Permission.LOCATION_READ)
   public List<UUID> subtree(@PathVariable UUID id) {
     return locations.subtreeIds(id);
   }
@@ -99,6 +105,7 @@ public class LocationController {
    * @return an empty 204
    */
   @DeleteMapping("/{id}")
+  @RequiresPermission(Permission.LOCATION_DELETE)
   public ResponseEntity<Void> delete(
       @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     locations.delete(id, user.userId());

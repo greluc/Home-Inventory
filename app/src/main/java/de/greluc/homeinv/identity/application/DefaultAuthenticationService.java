@@ -121,9 +121,9 @@ public class DefaultAuthenticationService implements AuthenticationService {
     }
 
     AppUser user = found.get();
-    UUID tenantId =
+    MembershipLookup.Membership membership =
         memberships
-            .primaryTenantOf(user.getId())
+            .primaryMembershipOf(user.getId())
             .orElseThrow(
                 () -> {
                   // A user with no membership cannot act, and saying so precisely
@@ -136,8 +136,13 @@ public class DefaultAuthenticationService implements AuthenticationService {
     rehashIfCostRaised(user, password);
     rateLimiter.recordSuccess(email, clientIp);
 
-    log.info("User {} logged in for tenant {}", user.getId(), tenantId);
-    return new AuthenticatedUser(user.getId(), tenantId, user.getEmail());
+    log.info(
+        "User {} logged in for tenant {} as {}",
+        user.getId(),
+        membership.tenantId(),
+        membership.role());
+    return new AuthenticatedUser(
+        user.getId(), membership.tenantId(), user.getEmail(), membership.role());
   }
 
   /**

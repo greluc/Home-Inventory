@@ -1,0 +1,134 @@
+# Home Inventory — the permission catalogue and the built-in role ladder
+#
+# THE REGISTRY FOR `<block>:<resource>:<action>` (04 §4.3, REQ-SEC-022…025).
+#
+# Why this file exists and is not merely documentation:
+#
+#   * a permission id ends up in a tenant-owned role definition (stage 1), in an
+#     audit entry, and in the log line of every denial. All three outlive the Java
+#     constant that produced them, so the ID is DATA and is written down where
+#     data lives;
+#   * `AuthorizationRegistryTest` compares this file against
+#     `de.greluc.homeinv.authorization.api.Permission` and `…api.Role` on every
+#     build. A permission added in code and not here fails, and so does the
+#     reverse — the same drift mechanism `problem-types.yaml` uses for the RFC
+#     9457 tokens.
+#
+# THE LADDER IS A FLOOR, NOT THE FINAL WORD. Stage 1 adds tenant-owned roles that
+# EXTEND these (04 §4.3); they grant combinations of the same permissions. A
+# tenant never defines a new permission — that would be a tenant defining what
+# the application does, which is the line ADR-0020 draws.
+
+schemaVersion: 1
+updated: 2026-09-12
+
+# ---------------------------------------------------------------------------
+# PERMISSIONS
+#
+# `<block>:<resource>:<action>`. The block segment is the building block that
+# owns the resource, which is what makes the id readable without a lookup: a
+# reviewer seeing `inventory:item:delete` in an audit entry knows where to look.
+# ---------------------------------------------------------------------------
+permissions:
+  - id: inventory:item:read
+    since: 0
+    description: Read one item, or list them.
+  - id: inventory:item:create
+    since: 0
+    description: Create an item.
+  - id: inventory:item:update
+    since: 0
+    description: Change an item's fields.
+  - id: inventory:item:delete
+    since: 0
+    description: >
+      Delete an item. Two-stage from stage 1 (REQ-CORE-009), which is what makes
+      granting it to MEMBER reasonable rather than reckless.
+
+  - id: locations:location:read
+    since: 0
+    description: Read a location and its subtree.
+  - id: locations:location:create
+    since: 0
+    description: Create a location.
+  - id: locations:location:update
+    since: 0
+    description: Rename or move a location.
+  - id: locations:location:delete
+    since: 0
+    description: >
+      Delete a location. Refused while it still holds anything, so this cannot
+      orphan an item.
+
+  - id: search:index:query
+    since: 0
+    description: >
+      Search across the tenant's items. Deliberately separate from
+      `inventory:item:read`: reading a list you were pointed at and finding
+      anything in the tenant are different capabilities, because a search surface
+      is also an enumeration surface.
+
+  - id: media:object:read
+    since: 0
+    description: Read a media object's metadata and obtain a signed URL for it.
+  - id: media:object:create
+    since: 0
+    description: Upload a media object and attach it.
+  - id: media:object:delete
+    since: 0
+    description: Detach or delete a media object.
+
+# ---------------------------------------------------------------------------
+# BUILT-IN ROLES
+#
+# The same six the `tenancy.membership` check constraint allows. Stage 0 only
+# ever WRITES `OWNER` — the person who created the instance — but the whole
+# ladder is defined at once, because a permission set that arrives one role at a
+# time is one nobody ever reviews as a whole.
+# ---------------------------------------------------------------------------
+roles:
+  - name: GUEST
+    rationale: A share link. Reads what it was pointed at and cannot go looking.
+    grants:
+      - inventory:item:read
+      - locations:location:read
+      - media:object:read
+
+  - name: VIEWER
+    rationale: >
+      Adds search. That is the difference between being shown things and being
+      able to find them, and it is a deliberate step rather than an oversight.
+    grants:
+      - inventory:item:read
+      - locations:location:read
+      - media:object:read
+      - search:index:query
+
+  - name: CONTRIBUTOR
+    rationale: >
+      Somebody helping with a stocktake. May add and may correct; may delete
+      nothing, so a misunderstanding costs a duplicate rather than a loss.
+    grants:
+      - inventory:item:read
+      - inventory:item:create
+      - inventory:item:update
+      - locations:location:read
+      - locations:location:create
+      - locations:location:update
+      - media:object:read
+      - media:object:create
+      - search:index:query
+
+  - name: MEMBER
+    rationale: Everything a person working with the inventory needs.
+    grants: all
+
+  - name: ADMIN
+    rationale: >
+      Everything stage 0 defines. Diverges from OWNER in stage 1, where tenant
+      deletion, role granting and the plugin capability model appear.
+    grants: all
+
+  - name: OWNER
+    rationale: The person the tenant belongs to.
+    grants: all

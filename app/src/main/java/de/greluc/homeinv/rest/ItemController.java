@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.Permission;
+import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.api.ItemService;
@@ -59,6 +61,7 @@ public class ItemController {
    * @return the created or already-present item
    */
   @PostMapping
+  @RequiresPermission(Permission.ITEM_CREATE)
   public ResponseEntity<ItemView> create(
       @Valid @RequestBody CreateItemRequest request, @AuthenticationPrincipal AuthenticatedUser user) {
     ItemService.CreateResult result =
@@ -88,6 +91,7 @@ public class ItemController {
    * @return the item
    */
   @GetMapping("/{id}")
+  @RequiresPermission(Permission.ITEM_READ)
   public ItemView get(@PathVariable UUID id) {
     return items.get(id);
   }
@@ -101,6 +105,7 @@ public class ItemController {
    * @return the changed item
    */
   @PutMapping("/{id}")
+  @RequiresPermission(Permission.ITEM_UPDATE)
   public ItemView update(
       @PathVariable UUID id,
       @Valid @RequestBody UpdateItemRequest request,
@@ -127,6 +132,7 @@ public class ItemController {
    * @return an empty {@code 204}
    */
   @DeleteMapping("/{id}")
+  @RequiresPermission(Permission.ITEM_DELETE)
   public ResponseEntity<Void> delete(
       @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     items.delete(id, user.userId());

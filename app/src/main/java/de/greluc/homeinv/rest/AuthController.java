@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.AuthenticationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,6 +59,11 @@ public class AuthController {
    * @return who the caller now is
    */
   @PostMapping("/login")
+  @PublicEndpoint(
+      reason =
+          "It establishes the session every other permission is evaluated against. "
+              + "Requiring one to obtain one is circular. Protected instead by the "
+              + "per-account and per-address throttle of REQ-SEC-014.")
   public SessionView login(
       @Valid @RequestBody LoginRequest request,
       HttpServletRequest httpRequest,
@@ -83,7 +89,7 @@ public class AuthController {
     SecurityContextHolder.setContext(context);
     securityContextRepository.saveContext(context, httpRequest, httpResponse);
 
-    return new SessionView(user.userId(), user.tenantId(), user.email());
+    return new SessionView(user.userId(), user.tenantId(), user.email(), user.role());
   }
 
   /**
@@ -96,6 +102,11 @@ public class AuthController {
    * @return an empty {@code 204}
    */
   @PostMapping("/logout")
+  @PublicEndpoint(
+      reason =
+          "Ending a session needs no permission, and a caller whose session already "
+              + "expired must still get a clean answer rather than a 401 they can do "
+              + "nothing about.")
   public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
     HttpSession session = httpRequest.getSession(false);
     if (session != null) {
@@ -112,8 +123,13 @@ public class AuthController {
    * @return the session view
    */
   @GetMapping("/me")
+  @PublicEndpoint(
+      reason =
+          "It reports on the session rather than on tenant data, and the filter chain "
+              + "has already refused an unauthenticated caller with 401. There is no "
+              + "role low enough to be denied knowing who it is.")
   public SessionView me(@AuthenticationPrincipal AuthenticatedUser user) {
-    return new SessionView(user.userId(), user.tenantId(), user.email());
+    return new SessionView(user.userId(), user.tenantId(), user.email(), user.role());
   }
 
   /**
@@ -148,6 +164,9 @@ public class AuthController {
    * @param userId the person
    * @param tenantId the tenant this session acts for
    * @param email the address they logged in with
+   * @param role the membership's role. Returned so the client can decide what to *offer*; it never
+   *     decides what is allowed, which happens in the application layer on every request
+   *     (REQ-SEC-022). A UI that shows a button nobody may press teaches people to ignore errors.
    */
-  public record SessionView(UUID userId, UUID tenantId, String email) {}
+  public record SessionView(UUID userId, UUID tenantId, String email, String role) {}
 }
