@@ -27,6 +27,11 @@ dependencies {
 
     implementation(libs.spring.modulith.starter.core)
     implementation(libs.spring.modulith.starter.jpa)
+    // The worker generates media derivatives from an event `api` publishes, and
+    // the two are separate processes (ADR-0051). The outbox in
+    // `outbox.event_publication` is the source of truth; AMQP is the delivery.
+    implementation(libs.spring.boot.starter.amqp)
+    implementation(libs.spring.modulith.events.amqp)
     runtimeOnly(libs.spring.modulith.actuator)
     runtimeOnly(libs.spring.modulith.observability)
 
@@ -46,6 +51,7 @@ dependencies {
     testImplementation(libs.spring.modulith.starter.test)
     testImplementation(libs.testcontainers.junit)
     testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.rabbitmq)
     testImplementation(libs.archunit.junit5)
 }
 

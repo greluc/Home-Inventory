@@ -70,9 +70,23 @@ public abstract class AbstractIntegrationTest {
   protected static final GenericContainer<?> VALKEY =
       new GenericContainer<>(DockerImageName.parse("valkey/valkey:8-alpine")).withExposedPorts(6379);
 
+  /**
+   * RabbitMQ, where media events travel from {@code api} to {@code worker}.
+   *
+   * <p>A real broker rather than a stub, for the same reason PostgreSQL is real: the thing worth
+   * proving is that an event published in one process arrives in another, and a stub proves that a
+   * stub works. It is in the base class because the exchange is declared at context startup, and a
+   * context that cannot reach a broker starts anyway and then fails at the first publish — which
+   * would make every media test fail for a reason that has nothing to do with media.
+   */
+  @SuppressWarnings("resource")
+  protected static final GenericContainer<?> RABBITMQ =
+      new GenericContainer<>(DockerImageName.parse("rabbitmq:4-alpine")).withExposedPorts(5672);
+
   static {
     POSTGRES.start();
     VALKEY.start();
+    RABBITMQ.start();
   }
 
   @Autowired private WebApplicationContext webApplicationContext;
@@ -107,5 +121,7 @@ public abstract class AbstractIntegrationTest {
     registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
     registry.add("spring.data.redis.host", VALKEY::getHost);
     registry.add("spring.data.redis.port", () -> VALKEY.getMappedPort(6379));
+    registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
+    registry.add("spring.rabbitmq.port", () -> RABBITMQ.getMappedPort(5672));
   }
 }

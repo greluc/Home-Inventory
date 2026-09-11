@@ -5,6 +5,7 @@
 package de.greluc.homeinv.media.application;
 
 import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.media.api.MediaObjectStored;
 import de.greluc.homeinv.media.api.MediaService;
 import de.greluc.homeinv.media.api.MediaUrlSigner;
 import de.greluc.homeinv.media.api.MediaView;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +59,7 @@ public class DefaultMediaService implements MediaService {
   private final BlobStore blobs;
   private final MediaUrlSigner signer;
   private final MediaHostCheck mediaHost;
+  private final ApplicationEventPublisher events;
   private final Clock clock;
 
   @Override
@@ -112,6 +115,20 @@ public class DefaultMediaService implements MediaService {
                       actor,
                       now));
             });
+
+    if (object.getDerivedAt() == null) {
+      // Published inside the transaction, delivered after it commits. Spring
+      // Modulith writes it to `outbox.event_publication` first, so a broker that
+      // is down delays the thumbnails and loses nothing — and a transaction that
+      // rolls back publishes nothing, rather than asking a worker to derive
+      // variants of an object that does not exist (REQ-NFR-013).
+      //
+      // Skipped for an object that already has its derivatives: a second upload
+      // of the same photo finds the first record, and asking for the same work
+      // again would be work the consumer would discard anyway.
+      events.publishEvent(
+          new MediaObjectStored(tenantId, object.getId(), object.getSha256()));
+    }
 
     log.debug("Stored media {} for {} {}", object.getId(), targetKind, targetId);
     return toView(object);

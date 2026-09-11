@@ -177,6 +177,26 @@ public class MediaObject {
   }
 
   /**
+   * Records the derivatives the worker produced.
+   *
+   * <p>A method rather than setters, because the three fields are one fact and setting two of them
+   * is a state the rest of this class would have to cope with. {@code derivedAt} is set whatever the
+   * other two are: an object with no derivatives — a PDF, or an image the encoder could not read —
+   * is finished, and without the timestamp the worker would claim it again on every redelivery for
+   * the life of the object.
+   *
+   * @param thumbSha256 the 200-pixel variant's content address, or {@code null} when there is none
+   * @param previewSha256 the 1024-pixel variant's content address, or {@code null}
+   * @param now when the derivation ran
+   */
+  public void recordDerivatives(String thumbSha256, String previewSha256, Instant now) {
+    this.thumbSha256 = thumbSha256;
+    this.previewSha256 = previewSha256;
+    this.derivedAt = now;
+    this.updatedAt = now;
+  }
+
+  /**
    * Notes one more reference from an attachment.
    *
    * @param now the moment of the change

@@ -79,6 +79,16 @@ spring:
       # primitive is a client error, not a zero.
       fail-on-null-for-primitives: true
 
+  # The broker. `api` publishes media events onto it and `worker` consumes them
+  # (ADR-0051). The outbox in `outbox.event_publication` is the source of truth;
+  # this is only the delivery, so a broker outage delays thumbnails and loses
+  # nothing.
+  rabbitmq:
+    host: ${HOMEINV_MQ_HOST:localhost}
+    port: ${HOMEINV_MQ_PORT:5672}
+    username: ${HOMEINV_MQ_USER:homeinv}
+    password: ${homeinv.secret.mq-password:}
+
   threads:
     virtual:
       enabled: true

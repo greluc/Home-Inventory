@@ -21,6 +21,11 @@ commit".
 
 ### Added
 
+- **Thumbnails and previews are generated in the background**, by the `worker`
+  role over the broker, so photographing something on a phone does not wait for
+  three image encodes. A variant that has not been produced is simply not offered,
+  rather than offered as a broken link.
+
 - **An uploaded image is re-encoded before it is stored**, to AVIF, with every
   metadata block removed — so an embedded payload never reaches the store and GPS
   coordinates never reach anyone. Media is served from its own hostname through

@@ -30,6 +30,7 @@ spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
 spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
 spring-boot-starter-session-data-redis = { module = "org.springframework.session:spring-session-data-redis" }
 
@@ -38,6 +39,9 @@ spring-modulith-starter-core = { module = "org.springframework.modulith:spring-m
 spring-modulith-starter-jpa = { module = "org.springframework.modulith:spring-modulith-starter-jpa" }
 spring-modulith-actuator = { module = "org.springframework.modulith:spring-modulith-actuator" }
 spring-modulith-observability = { module = "org.springframework.modulith:spring-modulith-observability" }
+# Externalises a domain event onto RabbitMQ. The outbox in `event_publication`
+# is the source of truth; this is the delivery (ADR-0051, REQ-NFR-013).
+spring-modulith-events-amqp = { module = "org.springframework.modulith:spring-modulith-events-amqp" }
 
 # Spring Boot 4 split its auto-configurations into per-technology modules:
 # `flyway-core` gives you the library, this gives you Boot's integration. Without
@@ -61,6 +65,7 @@ testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version
 # coordinates resolve to nothing rather than to an old version.
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-rabbitmq = { module = "org.testcontainers:testcontainers-rabbitmq" }
 
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 

@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The `worker` role: the same image as `api`, consuming events instead of
+# serving requests (04 §4.1).
+#
+# The same artifact on purpose. A worker built separately drifts from the API it
+# shares a data model with, and the first sign of it is a consumer writing a row
+# the serving side cannot read.
+
+server:
+  # Bound to loopback, not switched off. The worker serves no REST surface and
+  # publishes no port — but Spring Boot's management listener is a CHILD of the
+  # main web context, so turning the main server off takes /livez and /readyz
+  # with it, and the health check the service matrix names would have nothing to
+  # ask. Loopback is the narrowest binding that keeps them.
+  address: 127.0.0.1
+
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        # One message at a time per consumer. Each one is two AVIF encodes, and
+        # prefetching a batch would mean a worker holding work it cannot start
+        # while another sits idle — the opposite of what competing consumers are
+        # for.
+        prefetch: 1
+        acknowledge-mode: auto
+        retry:
+          # The consumer already swallows what it cannot do and records the
+          # attempt, so a retry here would repeat a failure that is not
+          # transient. Broker-level redelivery still happens on a lost
+          # connection, which is the case that IS transient.
+          enabled: false
