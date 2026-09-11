@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.domain;
 
+import de.greluc.homeinv.inventory.api.ItemKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

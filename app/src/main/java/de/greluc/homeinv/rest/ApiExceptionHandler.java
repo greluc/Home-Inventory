@@ -4,11 +4,11 @@
  */
 package de.greluc.homeinv.rest;
 
-import de.greluc.homeinv.identity.application.InvalidCredentialsException;
-import de.greluc.homeinv.identity.application.TooManyAttemptsException;
-import de.greluc.homeinv.inventory.application.ItemAlreadyExistsException;
-import de.greluc.homeinv.locations.application.LocationNotEmptyException;
-import de.greluc.homeinv.locations.domain.TooDeepException;
+import de.greluc.homeinv.identity.api.InvalidCredentialsException;
+import de.greluc.homeinv.identity.api.TooManyAttemptsException;
+import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
+import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;

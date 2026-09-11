@@ -2,10 +2,14 @@
  * SPDX-FileCopyrightText: Lucas Greuloch
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-package de.greluc.homeinv.inventory.domain;
+package de.greluc.homeinv.inventory.api;
 
 /**
  * Whether an item exists in the physical world.
+ *
+ * <p>In the published package, not in {@code domain}: it appears in
+ * {@link ItemService.CreateItemCommand}, and a type in a published signature is published
+ * whether or not it was meant to be.
  *
  * <p>The distinction is not cosmetic: it decides whether the item must have a location, whether it
  * can carry a printed code, and whether a stocktake can find it. The database carries the same two

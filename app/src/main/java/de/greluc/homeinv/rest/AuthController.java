@@ -5,7 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
-import de.greluc.homeinv.identity.application.AuthenticationService;
+import de.greluc.homeinv.identity.api.AuthenticationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;

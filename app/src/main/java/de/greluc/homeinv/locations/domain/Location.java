@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.platform.LtreeType;
 import org.hibernate.annotations.Type;
 import java.time.Instant;

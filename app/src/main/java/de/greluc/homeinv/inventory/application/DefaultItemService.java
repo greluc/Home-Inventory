@@ -5,9 +5,11 @@
 package de.greluc.homeinv.inventory.application;
 
 import de.greluc.homeinv.catalog.api.CatalogProvisioning;
+import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
+import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.domain.Item;
-import de.greluc.homeinv.inventory.domain.ItemKind;
+import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.infrastructure.ItemRepository;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
@@ -25,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The use cases for items: create, read, change, delete.
  *
+ * <p>The interface is {@link ItemService} in the published package; this is the implementation.
+ *
  * <p>This is where the transaction boundary is and where authorization decisions belong. The REST
  * layer above it decides nothing (ADR-0010, REQ-SEC-022…028) — it translates HTTP into a call and a
  * result back into HTTP, and an endpoint that made its own decision would be a second place to keep
@@ -37,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ItemService {
+public class DefaultItemService implements ItemService {
 
   private final ItemRepository items;
   private final CatalogProvisioning catalog;
@@ -59,6 +63,7 @@ public class ItemService {
    * @throws IllegalArgumentException when an invariant of {@link Item#create} is violated
    */
   @Transactional
+  @Override
   public CreateResult create(CreateItemCommand command, UUID actor) {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
@@ -125,15 +130,6 @@ public class ItemService {
   }
 
   /**
-   * The outcome of a creation.
-   *
-   * @param item the item, whether just created or found already present
-   * @param created {@code true} when this call created it, which decides {@code 201} versus
-   *     {@code 200}
-   */
-  public record CreateResult(ItemView item, boolean created) {}
-
-  /**
    * Reads one item.
    *
    * @param id the item
@@ -143,9 +139,10 @@ public class ItemService {
    *     confirm the existence of a foreign id (REQ-SEC-016).
    */
   @Transactional(readOnly = true)
+  @Override
   public ItemView get(UUID id) {
     UUID tenantId = TenantContext.require();
-    return items.findLive(tenantId, id).map(ItemService::toView).orElseThrow(() -> new NotFoundException("item", id));
+    return items.findLive(tenantId, id).map(DefaultItemService::toView).orElseThrow(() -> new NotFoundException("item", id));
   }
 
   /**
@@ -164,6 +161,7 @@ public class ItemService {
    * @throws NotFoundException when the tenant has no such live item
    */
   @Transactional
+  @Override
   public ItemView update(UUID id, UpdateItemCommand command, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
@@ -191,6 +189,7 @@ public class ItemService {
    * @throws NotFoundException when the tenant never had such an item
    */
   @Transactional
+  @Override
   public void delete(UUID id, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
@@ -218,38 +217,4 @@ public class ItemService {
         item.getVersion());
   }
 
-  /**
-   * What is needed to create an item.
-   *
-   * @param id the client's chosen id, or {@code null} to have one generated
-   * @param itemTypeVersionId the type version, or {@code null} to use the tenant's built-in type,
-   *     which is what every stage-0 client does because there is no type system to choose from
-   * @param name the name; must not be blank
-   * @param description free text, may be {@code null}
-   * @param kind physical or digital
-   * @param locationId required for a physical item
-   * @param quantity how many; {@code null} means one
-   * @param quantityUnit the unit, may be {@code null}
-   */
-  public record CreateItemCommand(
-      UUID id,
-      UUID itemTypeVersionId,
-      String name,
-      String description,
-      ItemKind kind,
-      UUID locationId,
-      BigDecimal quantity,
-      String quantityUnit) {}
-
-  /**
-   * What may be changed about an item. {@code kind} is absent on purpose — see {@link Item#update}.
-   *
-   * @param name the new name; must not be blank
-   * @param description the new description, may be {@code null}
-   * @param locationId the new location; required while the item is physical
-   * @param quantity the new quantity; {@code null} means one
-   * @param quantityUnit the new unit, may be {@code null}
-   */
-  public record UpdateItemCommand(
-      String name, String description, UUID locationId, BigDecimal quantity, String quantityUnit) {}
 }

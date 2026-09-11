@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: Lucas Greuloch
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-package de.greluc.homeinv.locations.application;
+package de.greluc.homeinv.locations.api;
 
 import java.util.UUID;
 import lombok.Getter;

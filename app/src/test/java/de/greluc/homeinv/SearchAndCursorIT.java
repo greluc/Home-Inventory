@@ -9,8 +9,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
-import de.greluc.homeinv.inventory.application.ItemService;
-import de.greluc.homeinv.inventory.domain.ItemKind;
+import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.search.api.SearchService;

@@ -6,7 +6,7 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.locations.api.LocationView;
-import de.greluc.homeinv.locations.application.LocationService;
+import de.greluc.homeinv.locations.api.LocationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

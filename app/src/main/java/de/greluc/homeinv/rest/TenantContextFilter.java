@@ -2,9 +2,10 @@
  * SPDX-FileCopyrightText: Lucas Greuloch
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-package de.greluc.homeinv.platform;
+package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
+import de.greluc.homeinv.platform.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * security context - never from a header, a path segment or a parameter (REQ-SEC-004). A tenant the
  * caller could choose would make the row-level security policies agree with the application's
  * mistake instead of catching it.
+ *
+ * <p>It lives in the access layer rather than in {@code platform}, and that was not a preference:
+ * reading {@code AuthenticatedUser} makes this class depend on {@code identity}, and the shared
+ * kernel must depend on no block at all. In {@code platform} it closed a cycle
+ * identity -> tenancy -> platform -> identity, which the modularity test found on its first run.
  *
  * <p>The clearing in the {@code finally} block is the point of the class as much as the setting is.
  * Threads are pooled; one handed back with a tenant still attached would serve the next request as

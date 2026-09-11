@@ -5,6 +5,8 @@
 package de.greluc.homeinv.locations.application;
 
 import de.greluc.homeinv.inventory.api.ItemLocationUsage;
+import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.domain.Location;
 import de.greluc.homeinv.locations.infrastructure.LocationRepository;
@@ -37,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class LocationService {
+public class DefaultLocationService implements LocationService {
 
   private final LocationRepository locations;
   private final LocationTreeQueries tree;
@@ -51,10 +53,11 @@ public class LocationService {
    * @param actor the authenticated user
    * @return the new location
    * @throws NotFoundException when a named parent is not visible to this tenant
-   * @throws de.greluc.homeinv.locations.domain.TooDeepException when the tree would exceed its
+   * @throws de.greluc.homeinv.locations.api.TooDeepException when the tree would exceed its
    *     depth limit
    */
   @Transactional
+  @Override
   public LocationView create(CreateLocationCommand command, UUID actor) {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
@@ -86,6 +89,7 @@ public class LocationService {
    * @throws NotFoundException when the tenant has no such live location
    */
   @Transactional(readOnly = true)
+  @Override
   public LocationView get(UUID id) {
     UUID tenantId = TenantContext.require();
     Location location =
@@ -103,6 +107,7 @@ public class LocationService {
    * @throws NotFoundException when the tenant has no such live location
    */
   @Transactional
+  @Override
   public LocationView rename(UUID id, String name, UUID actor) {
     UUID tenantId = TenantContext.require();
     Location location =
@@ -124,6 +129,7 @@ public class LocationService {
    * @throws LocationNotEmptyException when a place or an item is still inside it
    */
   @Transactional
+  @Override
   public void delete(UUID id, UUID actor) {
     UUID tenantId = TenantContext.require();
     Location location =
@@ -151,6 +157,7 @@ public class LocationService {
    * @throws NotFoundException when the tenant has no such live location
    */
   @Transactional(readOnly = true)
+  @Override
   public List<UUID> subtreeIds(UUID id) {
     UUID tenantId = TenantContext.require();
     locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
@@ -173,13 +180,4 @@ public class LocationService {
         tree.ancestorNames(location.getTenantId(), location.getId()));
   }
 
-  /**
-   * What is needed to create a location.
-   *
-   * @param id the client's chosen id, or {@code null} to have one generated
-   * @param categoryId the category, from the tenant's seeded set
-   * @param parentId the parent, or {@code null} to create a root
-   * @param name the name; must not be blank
-   */
-  public record CreateLocationCommand(UUID id, UUID categoryId, UUID parentId, String name) {}
 }

@@ -5,6 +5,9 @@
 package de.greluc.homeinv.identity.application;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
+import de.greluc.homeinv.identity.api.AuthenticationService;
+import de.greluc.homeinv.identity.api.InvalidCredentialsException;
+import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.tenancy.api.MembershipLookup;
@@ -37,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @Slf4j
-public class AuthenticationService {
+public class DefaultAuthenticationService implements AuthenticationService {
 
   /**
    * An Argon2id hash of a value nobody knows, used to spend the same work on an unknown address as
@@ -64,7 +67,7 @@ public class AuthenticationService {
    * @param rateLimiter the login throttle
    * @param clock the clock use cases read time from
    */
-  public AuthenticationService(
+  public DefaultAuthenticationService(
       AppUserRepository users,
       MembershipLookup memberships,
       PasswordEncoder passwordEncoder,
@@ -88,6 +91,7 @@ public class AuthenticationService {
    * @throws TooManyAttemptsException when the throttle requires a wait, carrying how long
    * @throws InvalidCredentialsException for every other failure, indistinguishably
    */
+  @Override
   @Transactional
   public AuthenticatedUser login(String email, String password, String clientIp) {
     Duration wait = rateLimiter.retryAfter(email, clientIp);

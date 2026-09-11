@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: Lucas Greuloch
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-package de.greluc.homeinv.identity.application;
+package de.greluc.homeinv.identity.api;
 
 import java.time.Duration;
 import lombok.Getter;

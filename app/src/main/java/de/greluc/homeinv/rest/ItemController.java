@@ -6,8 +6,8 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.inventory.api.ItemView;
-import de.greluc.homeinv.inventory.application.ItemService;
-import de.greluc.homeinv.inventory.domain.ItemKind;
+import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.ItemKind;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
