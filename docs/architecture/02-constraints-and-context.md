@@ -232,13 +232,15 @@ Markdown, and since `pages.yml` the workflows directory is live.
 - **A6** — emitting the generated `freshclam.conf` from the service matrix. The
   expected output is already fixed as a CI fixture at
   [`deploy/expected/clamav-freshclam.conf`](../../deploy/expected/clamav-freshclam.conf).
-- **A4b** and **A7** — the two documentation gates, fully specified in
+- **A4b**, **A12** and **A7** — the three documentation gates, fully specified in
   [`.github/workflows/README.md`](../../.github/workflows/README.md): the ADR back-link
-  check and the unbacked-claim check. They read Markdown and need no build, and the
-  workflows directory now exists, so **nothing blocks them**. A4b's rule was run by hand on
-  2026-09-11 and the nine omissions it found are closed — including the back-links missing
-  from [ADR-0026](../adr/0026-core-outbound-via-plugins.md) — so the gate opens clean
-  rather than with a backlog.
+  check, the restated-fact check and the unbacked-claim check. They read text and need no
+  build, and the workflows directory now exists, so **nothing blocks them**. A4b and A12
+  were both run by hand on 2026-09-11 and their findings closed — nine missing back-links,
+  and four numbers a second document had got wrong — so both open clean rather than with a
+  backlog. A7 is the one that needs a baseline, because it greps emphatic prose rather
+  than arithmetic; [`tracked-facts.yaml`](../reference/tracked-facts.yaml) says why the
+  other two do not.
 
 **A2 is closed.** The Brother DK figures came from Brother's raster reference; the Dymo
 ones do not exist — that series carries the printable area as per-roll runtime data, not

@@ -27,6 +27,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | the **project website** | [`website/`](../website/), with the pre-render request in [design/](design/website-prerender-request.md) |
 | the **error and degradation tokens** clients branch on | [`problem-types.yaml`](reference/problem-types.yaml) · [`degraded-reasons.yaml`](reference/degraded-reasons.yaml) |
 | the **plugin states** an operator sees | [`plugin-health-states.yaml`](reference/plugin-health-states.yaml) |
+| which **numbers and spellings are checked** rather than trusted | [`tracked-facts.yaml`](reference/tracked-facts.yaml) |
 
 ## Layout
 
@@ -37,8 +38,9 @@ docs/
 ├── design/           the briefs behind the design system and the website — the system
 │                  itself is at ../design-system/ (it is source, not docs)
 ├── reference/        reference data: label geometries, plugin health states,
-│                  the `problem.type`
-│                  registry, the `degradedReason` registry
+│                  the `problem.type` registry, the `degradedReason`
+│                  registry, and the tracked facts and retired spellings
+│                  a second document must not get wrong
 └── requirements/     a verifiable requirements catalogue with stable IDs
 ```
 
@@ -122,11 +124,11 @@ requirement.
 What remains there is outstanding **work**, of two kinds. **A5** (running the connectivity
 suite under rootless Podman and `kind`) and **A6** (emitting the generated `freshclam.conf`
 from the service matrix) need a stack to start and a generator to run, and neither exists
-yet. The two documentation gates — the ADR back-link check (**A4b**) and the
-unbacked-claim check (**A7**), both specified in
+yet. The three documentation gates — the ADR back-link check (**A4b**), the restated-fact
+check (**A12**) and the unbacked-claim check (**A7**), all specified in
 [`.github/workflows/README.md`](../.github/workflows/README.md) — **need nothing**: they
-read Markdown, and since `pages.yml` this directory is live. A4b's rule has been run by
-hand and its findings closed, so it opens clean. A5 is **not** an
+read text, and since `pages.yml` that directory is live. A4b's and A12's rules have both
+been run by hand and their findings closed, so both open clean. A5 is **not** an
 unverified assumption: it was measured under Docker, found false, and the topology was
 corrected ([ADR-0042](adr/0042-edge-is-not-internal.md)); what is outstanding is
 confirming the corrected shape on the other two runtimes. **A2 is closed**, for Dymo as

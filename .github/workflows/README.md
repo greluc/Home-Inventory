@@ -40,14 +40,21 @@ These come from the requirements catalogue, not from habit. Each fails the build
 | **Licensing** | No AGPL-incompatible dependency in the core; only permissive ones in the plugin API |
 | **DCO + CLA** | Every commit signed off; the contributor has signed |
 | **ADR back-links** | Every ADR named in another's `Amends:` carries the reciprocal note — see below |
+| **Restated facts** | Every number a second document repeats is recomputed; every retired spelling fails — see below |
 | **Unbacked claims** | A hardening claim with no named verification next to it — see below |
 
-## Two checks over the documentation, and why they are gates
+## Three checks over the documentation, and why they are gates
 
-Both run on Markdown alone. They need no build, no container and no code, so
-they are the **first** two workflows this directory gets — they are the only
-gates that can run today, and each one exists because a review found what it
-would have caught.
+All three run on text alone — Markdown, YAML, HTML, JSON. They need no build, no
+container and no application code, so they are the **first** gates this directory gets
+beyond `pages.yml`, and each one exists because a review found what it would have caught.
+
+Two of them ship **strict**, the third with a **baseline**, and the difference is not a
+matter of taste. A4b and A12 compare things that either match or do not — a reciprocal
+link is present or absent, a recomputed number equals its restatement or does not — so
+they have no false positives and both were run by hand until the corpus passed them. A7
+greps ten thousand lines of deliberately emphatic prose for words like *enforced*, which
+is a judgement, so it needs a baseline or it is switched off by week two.
 
 ### 1. The ADR back-link check (A4b)
 
@@ -73,7 +80,62 @@ CSP that is not the one in force. The relation is hand-maintained, and a
 hand-maintained index is the thing that silently goes stale — which is risk
 **R16** stated precisely.
 
-### 2. The unbacked-claim check (A7)
+### 2. The restated-fact check (A12)
+
+**Rule.** Read [`docs/reference/tracked-facts.yaml`](../../docs/reference/tracked-facts.yaml)
+and assert two things over the scope it declares:
+
+1. **Computed facts.** Each entry carries the expression that derives it from the
+   repository and a pattern that finds restatements of it. Recompute; then every capture
+   of that pattern in scope must equal the computed value. The patterns name the **unit**
+   — `48 decision records`, not `48` — which is what keeps this free of false positives
+   without a file allowlist, and a file allowlist would be its own drift: the next
+   document to restate a fact would not be on it.
+2. **Retired literals.** Spellings a decision replaced. `forbidden` entries must not
+   appear at all; `named` entries are withdrawn but still named on purpose by the
+   documents that record the withdrawal, so each carries the paths where that is the
+   point and fails on a **new** path.
+
+`docs/adr/**` is out of scope by construction. An ADR is the record of what was once
+decided — `README.md` in that directory says it is never rewritten — so a superseded
+spelling inside one is the point rather than a defect. One structural exemption beats
+several dozen per-file ones, and it is the exemption that cannot be abused: an ADR states
+history, it does not instruct.
+
+**Why it is a gate and not a nicety.** Because every instance below was already in the
+repository, and none of them needed judgement to find — only arithmetic that nothing was
+doing:
+
+- the two profile memory sums were stated **four times with three different values**, one
+  of them the superseded convention that folded three plugins into one total and not the
+  other;
+- the requirement count read **415** in two files after it was 419;
+- **"44 decision records"** went out on the published front page and in two meta
+  descriptions, one day after there were 48 — the website restates the corpus and nothing
+  diffs it;
+- **"48 components"** sat in ADR-0035 and the CHANGELOG and matched nothing countable:
+  there are 47 modules exporting 55 components;
+- the printed public code appeared as **`7Q2-M4X-9KD`** in 13 design-system files and 5
+  website locations — the spelling ADR-0030 replaced, in the one identifier this product
+  prints onto physical labels, while that ADR's own consequence claimed the corpus now
+  carried one string "everywhere".
+
+**It ships strict, with no baseline** — and that is the difference from the check below.
+A computed fact either equals its restatement or does not; a retired literal is by
+definition a string nobody should be writing. Both have **no false positives by
+construction**. The rule was run against the corpus before it was written down: 254 files,
+zero failures, and three deliberately injected defects — a wrong count, a retired literal,
+a withdrawn header on a page not on its allowlist — each caught. A gate that opens with a
+backlog teaches people to ignore it.
+
+**What it deliberately does not do** is verify restated *prose*. That a marketing
+paragraph still describes the architecture correctly is not mechanically decidable. The
+structural answer to that half is a rule rather than a gate: **a secondary artefact links
+instead of restating wherever it can**. What cannot be linked — a marketing page needs its
+own sentences — is exactly what the numbers and identifiers above cover, because those are
+the part of a restatement that goes stale silently.
+
+### 3. The unbacked-claim check (A7)
 
 **Rule.** [14 §14.3](../../docs/architecture/14-quality-risks-glossary.md) already
 writes the rule — *"a property with no test is a claim"* — and its own early

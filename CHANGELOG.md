@@ -25,19 +25,25 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 421 numbered, testable requirements across
+- A requirements catalogue with 422 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 48 architecture decision records, each with its alternatives and consequences —
+- 49 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
   in its own process.
 - The design system, in [`design-system/`](design-system/), and it is **binding**:
   one token set driving both the web client and the apps, dark as the default
-  appearance everywhere with light one click away, 48 components, self-hosted
+  appearance everywhere with light one click away, 47 component modules, self-hosted
   IBM Plex and Lucide icons, and a measured contrast ratio for every colour pair
   in both themes.
+- **A gate that keeps repeated numbers honest.** Counts and identifiers get written into
+  several documents at once — the architecture chapters, the requirements catalogue, the
+  changelog, the published website — and nothing compared them. Four were already wrong,
+  including a decision count that went out on the front page one day after it changed. The
+  numbers now have one source that is recomputed from the repository, superseded spellings
+  cannot come back, and both are checked rather than trusted.
 - **Two registries that clients can program against**, alongside the label
   catalogue: the stable error codes an API response can carry, and the tokens that
   say a result was served in a degraded mode. Both were referred to as documented

@@ -7,8 +7,15 @@
 [`docs/design/design-system-brief.md`](../design/design-system-brief.md) was
 written as a brief for Claude Design. The result was delivered on 2026-09-11 and
 is now in [`design-system/`](../../design-system/): a W3C DTCG token set for both
-themes, 48 components across nine groups, 22 specimen cards, self-hosted IBM Plex
-and 121 Lucide SVGs, and roughly 30 KB of written rules.
+themes, **47 component modules** across nine groups exporting **55 components**, 22
+specimen cards, self-hosted IBM Plex and 121 Lucide SVGs, and roughly 30 KB of written
+rules.
+
+*This read "48 components" until 2026-09-11, which is neither figure and matches nothing
+countable. Eight modules carry a companion export — `ToastStack`, `BulkBar`, `PhotoGrid`,
+`RadioGroup`, `SkeletonRows`, `NavRail`, `ConflictProgress`, `ActionBarSpacer` — so 47 + 8
+= 55, and a sentence now has to say which of the two it means. Both are tracked facts in
+[`tracked-facts.yaml`](../reference/tracked-facts.yaml).*
 
 It does not decide the things the brief already decided. Dark as the default
 appearance is [ADR-0033](0033-dark-as-default-appearance.md); Lucide and the

@@ -1,0 +1,367 @@
+# Home Inventory — tracked facts and retired literals
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR FACTS THAT GET RESTATED.
+#
+# The corpus already computes what it can: `tokens.json` drives the CSS and the contrast
+# ratios (REQ-NFR-075/077), `deploy/services.yaml` drives the Quadlet units and
+# `compose.yaml` (REQ-NFR-063), the build drives the CSP hashes (REQ-SEC-060). Every one
+# of those exists because two hand-maintained copies of one fact diverge — not if, but
+# when.
+#
+# Prose was the gap. A number written into a sentence has no generator, and the sentences
+# that carry them sit in four places at once: the architecture chapters, the requirements
+# catalogue, CLAUDE.md, the CHANGELOG, the design-system README and — since the website
+# landed — five published HTML pages that nobody diffs against anything.
+#
+# THE EVIDENCE THAT THIS IS NOT HYPOTHETICAL, all found on 2026-09-11:
+#
+#   * the `minimal` and `standard` memory reservations were stated four times with three
+#     different values, one of them the superseded convention that folded three plugins
+#     into one total and not the other;
+#   * the requirement count read 415 in two files after it was 419;
+#   * "44 decision records" was published on the front page and in two meta descriptions
+#     one day after there were 48;
+#   * "48 components" is in ADR-0035 and the CHANGELOG and matches nothing countable —
+#     there are 47 modules exporting 55 components;
+#   * the printed public code appeared as `7Q2-M4X-9KD` in 13 design-system files and 5
+#     website locations, a year-zero spelling ADR-0030 replaced and whose own consequence
+#     claims it is now `7Q2M-4X9K-D2F` "everywhere".
+#
+# None of those needed judgement to find. They needed arithmetic, and nothing was doing it.
+#
+# ---------------------------------------------------------------------------
+# SCOPE, AND WHY `docs/adr/**` IS OUT OF IT
+#
+# The check reads: docs/architecture, docs/requirements, docs/reference, docs/design,
+# design-system, website, deploy, .github, and the Markdown files at the repository root.
+#
+# It does NOT read `docs/adr/**`. An ADR is the record of what was once decided
+# (adr/README.md: "An ADR is never rewritten when the decision changes"), so a superseded
+# spelling inside one is the point rather than a defect — ADR-0016 deliberately keeps
+# `7Q2-M4X-9KD` and "40 bits of randomness" under a header saying both are superseded.
+# One structural exemption beats several dozen per-file ones, and it is the exemption that
+# cannot be abused: an ADR states history, it does not instruct.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS SHIPS STRICT, WHERE A7 SHIPS WITH A BASELINE
+#
+# The unbacked-claim check (A7) greps ten thousand lines of deliberately emphatic prose
+# for words like "enforced", so it needs a baseline or it produces noise on day one and is
+# switched off by week two.
+#
+# This check has **no false positives by construction**. A computed fact either equals its
+# restatement or does not; a retired literal is by definition a string nobody should be
+# writing. It was run before being written down and the corpus passes it, so it starts
+# strict and stays strict. A gate that opens with a backlog teaches people to ignore it.
+# ---------------------------------------------------------------------------
+
+schemaVersion: 1
+updated: 2026-09-11
+
+scope:
+  include:
+    - docs/architecture/**
+    - docs/requirements/**
+    - docs/reference/**
+    - docs/design/**
+    - design-system/**
+    - website/**
+    - deploy/**
+    - .github/**
+    - "*.md"
+    - docs/README.md
+  exclude:
+    - docs/adr/**          # the record of history — see the note above
+    - LICENSES/**          # verbatim third-party text (REQ-CON-014)
+    - LICENSE
+    - CODE_OF_CONDUCT.md
+    - design-system/assets/**
+  fileTypes: [md, yaml, yml, html, jsx, js, ts, json, css]
+
+# ---------------------------------------------------------------------------
+# 1. COMPUTED FACTS
+#
+# `compute` is what the check evaluates against the repository. `pattern` is what it then
+# searches for in scope; every capture group 1 must equal the computed value.
+#
+# The patterns name the UNIT, not just the number — "48 decision records", not "48" —
+# which is what keeps this free of false positives without a file allowlist. A file
+# allowlist would be its own drift: the next document to restate a fact would not be on it.
+# ---------------------------------------------------------------------------
+computed:
+
+  - id: adrCount
+    compute: "count of docs/adr/[0-9]{4}-*.md"
+    value: 49
+    pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
+    notes: >
+      Includes ADR-0000, which is a record like any other — it holds the decided points
+      O1–O26 and the outstanding work. Counting it out would make the number disagree
+      with the index in docs/adr/README.md, which lists it.
+
+  - id: requirementTotal
+    compute: "count of lines matching ^| REQ-<AREA>-<nnn> across docs/requirements/0[123]-*.md"
+    value: 422
+    pattern: '(\d+)\s+(?:numbered|testable)[^.\n]{0,48}requirements?'
+    notes: >
+      Withdrawn requirements stay in place and keep counting (requirements/README.md:
+      "a dropped requirement is marked `Withdrawn` and stays"), so this is the number of
+      rows, not the number of live obligations. There are none withdrawn today.
+
+  - id: requirementsPerArea
+    compute: "the same lines, grouped by area"
+    value:
+      CORE: 42
+      MED: 13
+      IDENT: 18
+      LBL: 14
+      ENR: 9
+      SRCH: 11
+      LIFE: 17
+      TEN: 11
+      AUTH: 11
+      API: 12
+      PLG: 15
+      SYNC: 16
+      NOTI: 9
+      PORT: 8
+      NFR: 79
+      CON: 15
+      SEC: 107
+      PRIV: 15
+    pattern: '\b([A-Z]{3,6})\s+(\d+)\b'
+    appliesTo: [docs/requirements/README.md]
+    notes: >
+      The only fact with a file restriction, and it earns it: the pattern is two words
+      wide and would match prose anywhere else. The count table in requirements/README.md
+      is the one place that states all eighteen, and it is the place the catalogue calls
+      its own source.
+
+  - id: architectureChapters
+    compute: "count of docs/architecture/*.md"
+    value: 14
+    pattern: '(?:(\d+)|[Ff]ourteen)\s+(?:arc42[- ])?architecture\s+chapters?|(\d+)\s+arc42'
+
+  - id: componentModules
+    compute: "count of design-system/components/*/*.jsx"
+    value: 47
+    pattern: '(\d+)\s+component\s+modules?'
+    context: 'design[- ]system|tokens\.json|components/'
+    notes: >
+      NOT the number of exported components, which is 55: eight modules carry a companion
+      export — ToastStack, BulkBar, PhotoGrid, RadioGroup, SkeletonRows, NavRail,
+      ConflictProgress, ActionBarSpacer. ADR-0035 and the CHANGELOG said "48 components",
+      which is neither figure and matches nothing countable. Both numbers are tracked, so
+      a sentence has to say which one it means.
+
+  - id: componentExports
+    compute: "distinct PascalCase exports across design-system/components/*/*.jsx"
+    value: 55
+    pattern: '(\d+)\s+components?\b(?!\s+modules)'
+    context: 'design[- ]system|tokens\.json|components/'
+    notes: >
+      `context` earns its place here: "19 components" in web/README.md is the web client's
+      own planned surface and has nothing to do with this number. A count of components is
+      only this fact when the sentence is about the design system, and the check requires
+      that within 80 characters either side.
+
+  - id: componentGroups
+    compute: "count of directories under design-system/components/"
+    value: 9
+    pattern: '(?:(\d+)|nine)\s+component\s+groups?'
+    notes: >
+      The word "component" is required. Without it the pattern matched "4 groups" of form
+      fields in two unrelated documents — a count of groups is only this fact when it says
+      which groups.
+
+  - id: specimenCards
+    compute: "count of design-system/guidelines/*.html"
+    value: 22
+    pattern: '(\d+)\s+specimen\s+cards?'
+
+  - id: lucideIcons
+    compute: "count of design-system/assets/icons/*.svg"
+    value: 121
+    pattern: '(\d+)\s+Lucide\s+(?:SVGs?|icons?)'
+
+  - id: buildingBlocks
+    compute: "rows of the block catalogue in 04 §4.3"
+    value: 18
+    pattern: '(?:(\d+)|eighteen)\s+building\s+blocks?'
+    notes: >
+      Eight consistency-critical, eight supporting, two base (03 §3.4, 04 §4.2). The three
+      sub-counts are not tracked separately because they are stated together with the
+      total in both places, and a mismatch in one is a mismatch in the sum.
+
+  - id: pluginHealthStates
+    compute: "length of `states` in docs/reference/plugin-health-states.yaml"
+    value: 10
+    pattern: '(?:(\d+)|ten)\s+(?:named\s+|operator-facing\s+)*(?:plugin\s+)?health\s+states?'
+    notes: >
+      Nothing in scope restates this yet — the count lives in the registry and in
+      ADR-0048, which is out of scope by design. It is tracked anyway, on the same
+      principle that published the `problem.type` tokens before the OpenAPI document: a
+      fact is cheaper to record before it is repeated than after. Two further states are
+      on that registry's `excluded` list and are deliberately not part of the ten.
+
+  - id: profileMemory
+    compute: "sums of memoryReservation / memoryLimit per profile in deploy/services.yaml, excluding lifecycle: oneShot and counting no plugin"
+    value:
+      minimalReservation: "3.5"
+      minimalLimit: "7.2"
+      standardReservation: "5.2"
+      standardLimit: "9.7"
+    pattern: '(?:≈|about)\s*\*{0,2}(\d+\.\d)\s*GB'
+    convention: >
+      A TRACKED memory figure is written with `≈` (or "about"); every other GB figure in
+      the corpus is written plainly — a service's own limit (1.5 GB), the per-plugin adder
+      (0.2–0.4 GB), a table estimate (2.5 GB). The corpus already followed that by habit
+      and it is stated here so the check can rely on it. It has a second, deliberate
+      effect: a SUPERSEDED figure quoted inside a correction note is written without the
+      marker, so quoting "3.4 GB and 5.4 GB, against ≈ 3.5 GB" does not trip the gate —
+      which is what lets a document explain its own history without being punished for it.
+    notes: >
+      The conventions are the trap, not the arithmetic. `migrate` is one-shot and is not in
+      the sum; plugins are the separate per-plugin adder of REQ-NFR-009 and are not in it
+      either. The superseded figure 5.4 folded three first-party plugins into the
+      reservation total while leaving them out of the limit total, which is how one number
+      came to have four values. The check compares against all four tracked values and
+      fails on a GB figure that matches none of them.
+
+  - id: contrastRatios
+    compute: "WCAG 2.x contrast recomputed from design-system/tokens/tokens.json"
+    value: "see the token set"
+    pattern: null
+    delegatesTo: REQ-NFR-077
+    notes: >
+      Already a gate of its own; listed here so the inventory of computed facts is
+      complete and nobody adds a second, divergent implementation of it.
+
+# ---------------------------------------------------------------------------
+# 2. RETIRED LITERALS
+#
+# Spellings a decision replaced. Two classes, because they need different rules.
+#
+#   forbidden — must not appear anywhere in scope. Every one of these is at ZERO
+#               occurrences today, which is why the check can be strict rather than
+#               baselined.
+#   named     — withdrawn, and still named on purpose in the places that document the
+#               withdrawal. Those paths are listed; a NEW path fails.
+#
+# A decision that replaces a spelling adds a row here in the same unit of work. That is
+# the same obligation as adding an ADR, and for the same reason: the replacement is only
+# real once the old form cannot come back.
+# ---------------------------------------------------------------------------
+retired:
+
+  forbidden:
+    - literal: "7Q2-M4X-9KD"
+      replacedBy: "7Q2M-4X9K-D2F"
+      by: ADR-0030
+      why: >
+        The eight-payload-character form with a Crockford modulo-37 check character. It
+        survived in 13 design-system files and 5 website locations while ADR-0030's own
+        consequence claimed the corpus now carried one string "everywhere". It is the
+        identifier this product prints onto physical labels, so a superseded spelling in
+        a published page is the worst place for it.
+
+    - literal: "sha256/<hash>"
+      replacedBy: "sha256/<tenantId>/<hash>"
+      by: ADR-0032
+      why: >
+        Global content addressing. The tenant segment is what stops the blob path being
+        an existence oracle across the tenant boundary and what stops a second tenant
+        inheriting the first one's malware verdict.
+
+    - literal: "OPENSEARCH_INITIAL_ADMIN_PASSWORD_FILE"
+      replacedBy: "OPENSEARCH_INITIAL_ADMIN_PASSWORD"
+      by: ADR-0044
+      why: >
+        A variable the image does not read. It looked like compliance with the *_FILE
+        rule and was the reason the security plugin would have started with no admin
+        password at all.
+
+    - pattern: 'search_vector(?![_a-z])'
+      replacedBy: "search_vector_de / search_vector_en"
+      by: ADR-0047
+      why: "The single `simple` vector, which does no stemming."
+
+    - pattern: "8 payload characters|40 bits of randomness"
+      replacedBy: "10 payload characters / 50 bits"
+      by: ADR-0030
+      why: >
+        The superseded entropy figures. At 40 bits the collision probability at 10^6
+        issued codes is 36 %, which is a routine event described as "hopeless".
+
+    - pattern: "nonce-\\{r\\}|'nonce-"
+      replacedBy: "'sha256-<hash>'"
+      by: ADR-0038
+      why: >
+        A nonce is per-response and nothing that serves a built static bundle can mint
+        one. The policy authorises inline content by hash.
+
+    - pattern: '\b415\b(?=[^%\d]{0,30}(requirement|numbered|testable))'
+      replacedBy: "the computed requirementTotal"
+      by: "this file"
+      why: >
+        The superseded requirement count, kept as a literal as well as a computed fact
+        because it is the value most likely to be copied forward into a new document.
+
+  named:
+    - pattern: "Cross-Origin-Embedder-Policy|\\bCOEP\\b"
+      by: ADR-0040
+      allowedIn:
+        - docs/architecture/04-building-blocks.md
+        - docs/architecture/06-deployment-view.md
+        - docs/architecture/09-extensibility-and-plugins.md
+        - docs/architecture/12-security.md
+        - docs/requirements/01-functional.md
+        - docs/requirements/03-security-and-privacy.md
+        - docs/README.md
+        - deploy/services.yaml
+        - .github/workflows/README.md
+      why: >
+        The header is deliberately NOT sent, and REQ-SEC-061 fails CI if it reappears —
+        so the corpus has to name it in order to say so. It survived two withdrawals
+        because ADR-0040's `Amends:` line named four of the six places it reached; this
+        allowlist is the other half of that lesson, and a tenth path means somebody
+        reintroduced the header rather than described its absence.
+
+    - pattern: "`Warning: ?(199|299)`|`Warning` header"
+      by: ADR-0039
+      allowedIn:
+        - docs/architecture/05-runtime-view.md
+        - docs/architecture/08-api-contract.md
+        - docs/requirements/01-functional.md
+        - docs/reference/degraded-reasons.yaml
+        - docs/README.md
+      why: >
+        Obsoleted by RFC 9111 §5.5 in 2022 and replaced by `meta.degraded`. It was dropped
+        in one paragraph of 08 §8.3 and reinstated nine lines below it, which is exactly
+        the failure this class of entry exists to catch.
+
+    - pattern: "`plugins` segment|`plugins` network"
+      by: ADR-0037
+      allowedIn:
+        - docs/architecture/06-deployment-view.md
+        - docs/architecture/09-extensibility-and-plugins.md
+        - docs/architecture/13-operations-and-observability.md
+      why: >
+        The single shared segment on which any plugin could reach clamd, both management
+        ports and another plugin's forwarding port. The three chapters name it to explain
+        what replaced it.
+
+# ---------------------------------------------------------------------------
+# 3. WHAT THIS CHECK DELIBERATELY DOES NOT DO
+#
+# It does not verify restated PROSE — that a website paragraph still describes the
+# architecture correctly is not mechanically decidable, and pretending otherwise would
+# produce a check that is either useless or noisy.
+#
+# The structural answer to that half is a rule, not a gate: **a secondary artefact links
+# rather than restates wherever it can**. The website, the root README and the
+# design-system README point at `docs/` for anything they would otherwise have to keep in
+# step. What they cannot link — a marketing page needs its own sentences — is what this
+# file's computed facts and retired literals cover, because numbers and identifiers are
+# the part of a restatement that goes stale silently.
+# ---------------------------------------------------------------------------
