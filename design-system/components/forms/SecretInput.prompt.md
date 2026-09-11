@@ -1,4 +1,4 @@
-The `secret` field type. Dashed well + key icon + the words "Wert verborgen" — never dots.
+The `secret` field type. Dashed well + key icon + the words of `hiddenLabel` — never dots.
 
 ```jsx
 <SecretInput onReveal={promptSecondFactor} />

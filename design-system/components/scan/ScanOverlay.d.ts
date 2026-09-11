@@ -33,7 +33,33 @@ export interface ScanOverlayProps {
   /** Running count for continuous mode. */
   tally?: number;
   onClose?: () => void;
-  /** The mode's confirming action, e.g. "4 Artikel ablegen" in MOVE. */
+  /** The mode's confirming action, e.g. "Place 4 items" in MOVE. */
   primaryAction?: React.ReactNode;
+  /** Overrides for the user-visible strings. The defaults in `SCAN_LABELS` are English; the client
+   *  passes the translated set from its resource bundle, because no display text is hard-coded in a
+   *  design-system component (REQ-NFR-032). Partial objects are merged, including the two nested maps. */
+  labels?: ScanLabels;
 }
+
+export interface ScanLabels {
+  close?: string;
+  ready?: string;
+  /** The noun after the running count in continuous mode. */
+  captured?: string;
+  hint?: string;
+  modeGroup?: string;
+  torchOn?: string;
+  torchOff?: string;
+  continuous?: string;
+  sound?: string;
+  haptics?: string;
+  result?: Partial<Record<ScanResult, string>>;
+  mode?: Partial<Record<ScanMode, string>>;
+}
+
+/** The English defaults, exported so a client can translate from a known key set. */
+export declare const SCAN_LABELS: Required<{
+  [K in keyof ScanLabels]: K extends "result" ? Record<ScanResult, string>
+    : K extends "mode" ? Record<ScanMode, string> : string
+}>;
 export declare function ScanOverlay(props: ScanOverlayProps): JSX.Element;

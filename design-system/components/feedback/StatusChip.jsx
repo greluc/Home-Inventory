@@ -1,17 +1,19 @@
 import React from "react";
 import { Icon } from "../foundation/Icon.jsx";
 
+/** Icon and English default label per status. The `label` prop overrides it, which is how the
+ *  client renders the translated text from its resource bundle (REQ-NFR-032). */
 export const STATUS = {
   offline:    { icon: "cloud-off",     label: "Offline" },
-  pending:    { icon: "cloud-upload",  label: "Upload ausstehend" },
-  conflict:   { icon: "git-merge",     label: "Konflikt" },
-  degraded:   { icon: "gauge",         label: "Eingeschränkte Suche" },
-  restricted: { icon: "lock",          label: "Keine Berechtigung" },
-  unassigned: { icon: "tag",           label: "Noch nicht zugeordnet" },
-  success:    { icon: "circle-check",  label: "Synchron" },
-  warning:    { icon: "triangle-alert",label: "Achtung" },
-  danger:     { icon: "circle-x",      label: "Fehler" },
-  neutral:    { icon: "info",          label: "Hinweis" },
+  pending:    { icon: "cloud-upload",  label: "Upload pending" },
+  conflict:   { icon: "git-merge",     label: "Conflict" },
+  degraded:   { icon: "gauge",         label: "Degraded search" },
+  restricted: { icon: "lock",          label: "No permission" },
+  unassigned: { icon: "tag",           label: "Not yet assigned" },
+  success:    { icon: "circle-check",  label: "In sync" },
+  warning:    { icon: "triangle-alert",label: "Attention" },
+  danger:     { icon: "circle-x",      label: "Error" },
+  neutral:    { icon: "info",          label: "Notice" },
 };
 
 export function StatusChip({ status = "neutral", label, count, size = 14, className = "", ...rest }) {

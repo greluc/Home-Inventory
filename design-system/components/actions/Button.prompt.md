@@ -1,9 +1,9 @@
 The action control. Exactly one `primary` per context; everything else is `secondary` or `ghost`.
 
 \`\`\`jsx
-<Button variant="primary" icon="save">Änderungen speichern</Button>
-<Button variant="ghost" icon="undo-2">Verwerfen</Button>
-<Button variant="danger" icon="trash">Endgültig löschen</Button>
+<Button variant="primary" icon="save">Save changes</Button>
+<Button variant="ghost" icon="undo-2">Discard</Button>
+<Button variant="danger" icon="trash">Delete permanently</Button>
 \`\`\`
 
 - Coarse pointer forces 44px height whatever the density says.

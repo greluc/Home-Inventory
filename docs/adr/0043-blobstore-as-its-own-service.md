@@ -1,6 +1,11 @@
 # ADR-0043 — The filesystem `BlobStore` gets its own in-deployment service
 
 **Status:** Accepted · **Date:** 2026-09-11
+
+> **Amended by [ADR-0044](0044-internal-is-not-a-trust-boundary.md):** the service speaks
+> **gRPC over mTLS with a pinned fingerprint**, like every other implementation of the
+> same `BlobStore` contract. As first written it had no authentication at all — its access
+> control was that its port sat on `internal` — on a service holding every tenant's media.
 **Amends:** [04 §4.1](../architecture/04-building-blocks.md),
 [06 §6.7](../architecture/06-deployment-view.md),
 [06 §6.10](../architecture/06-deployment-view.md),

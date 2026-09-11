@@ -4,10 +4,16 @@
 export interface SecretInputProps {
   value?: string;
   revealed?: boolean;
-  /** false on the web client: IndexedDB is not encrypted, so the value is fetched on demand and the control says "nicht auf diesem Gerät gespeichert". */
+  /** false on the web client: IndexedDB is not encrypted, so the value is fetched on demand and the
+   *  control says so through `notStoredLabel` rather than failing. */
   storedLocally?: boolean;
   onReveal?: () => void;
   onHide?: () => void;
   disabled?: boolean;
+  /** The four user-visible strings, English defaults; the client passes the translated text (REQ-NFR-032). */
+  hideLabel?: string;
+  revealLabel?: string;
+  hiddenLabel?: string;
+  notStoredLabel?: string;
 }
 export declare function SecretInput(props: SecretInputProps): JSX.Element;

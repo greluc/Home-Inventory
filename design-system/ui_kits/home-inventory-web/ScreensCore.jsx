@@ -37,8 +37,8 @@ function FormScreen({ cls, state, set }) {
 
 const SCAN_CASES = [
   { key: "idle", result: undefined, code: undefined, detail: undefined, label: "Bereit" },
-  { key: "success", result: "success", code: "7Q2-M4X-9KD", detail: "Akku-Bohrschrauber GSB 18V-55 → Kiste 4", label: "Erfolg" },
-  { key: "duplicate", result: "duplicate", code: "7Q2-M4X-9KD", detail: "vor 2 Sekunden schon erfasst — übersprungen", label: "Doppelt (entprellt)" },
+  { key: "success", result: "success", code: "7Q2M-4X9K-D2F", detail: "Akku-Bohrschrauber GSB 18V-55 → Kiste 4", label: "Erfolg" },
+  { key: "duplicate", result: "duplicate", code: "7Q2M-4X9K-D2F", detail: "vor 2 Sekunden schon erfasst — übersprungen", label: "Doppelt (entprellt)" },
   { key: "unknown", result: "unknown", code: "4006381333931", detail: "EAN gehört zu keinem Artikel · als neuen Artikel anlegen?", label: "Unbekannt" },
   { key: "unassigned", result: "unassigned", code: "M1R-6HJ-4TN", detail: "Etikett gedruckt am 03.09., noch keinem Artikel zugeordnet", label: "Nicht zugeordnet" },
 ];

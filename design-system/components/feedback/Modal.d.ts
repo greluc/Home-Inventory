@@ -10,6 +10,8 @@ export interface ModalProps {
   wide?: boolean;
   onClose?: () => void;
   footer?: ReactNode;
+  /** Accessible name of the close button. English default; the client passes the translated string (REQ-NFR-032). */
+  closeLabel?: string;
   children: ReactNode;
 }
 export declare function Modal(props: ModalProps): JSX.Element;

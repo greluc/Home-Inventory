@@ -64,7 +64,7 @@ touches.
 Docs-as-code, exactly like the Basetool repos:
 
 - **Requirements** live in [`docs/requirements/`](docs/requirements/README.md) as
-  `REQ-<AREA>-NNN` (415 of them). IDs are stable and never reused; a dropped requirement
+  `REQ-<AREA>-NNN` (419 of them). IDs are stable and never reused; a dropped requirement
   is marked `Withdrawn`, not deleted. The count is kept current in
   [`docs/requirements/README.md`](docs/requirements/README.md) — that table is the
   source, this line follows it.
@@ -119,38 +119,45 @@ Each of these is a decision with an ADR behind it. They look like details and ar
    ([ADR-0042](docs/adr/0042-edge-is-not-internal.md), REQ-SEC-102). Do not restore the
    older, wider claim that "the core reaches nothing" — it had two counterexamples in its
    own topology.
-6. **In-process plugins are off by default and are not sandboxable.** Java 25 has no
+6. **`internal` is a network, not a trust boundary.** Every store inside the deployment
+   authenticates its caller — PostgreSQL by role password, Valkey by ACL, RabbitMQ by
+   user, OpenSearch by client user over TLS, `blobstore` by mTLS with a pinned
+   fingerprint. `web` sits on a two-member `frontend` segment with `api` and is **not** on
+   `internal`: the ingress needs the API and no datastore. Reachability is never
+   authorisation, inside the deployment as much as outside it
+   ([ADR-0044](docs/adr/0044-internal-is-not-a-trust-boundary.md), REQ-SEC-104/105).
+7. **In-process plugins are off by default and are not sandboxable.** Java 25 has no
    `SecurityManager`; a classloader separates namespaces, not privileges. Third-party code
    runs out-of-process over gRPC/mTLS, period.
    ([ADR-0006](docs/adr/0006-plugin-runtime.md))
-7. **The type system must not become a programming language.** No formula fields, no
+8. **The type system must not become a programming language.** No formula fields, no
    scripting in label templates, no rules with database or network access. Anything beyond
    declarative field definitions is a plugin.
    ([ADR-0020](docs/adr/0020-configuration-as-data.md), REQ-CORE-031)
-8. **Attribute storage is variant D**: JSONB is the source of truth, `item_attr_index` is
+9. **Attribute storage is variant D**: JSONB is the source of truth, `item_attr_index` is
    an application-maintained side table. **No DDL at runtime, ever** — the app role does
    not even have the rights for it.
    ([ADR-0004](docs/adr/0004-attribute-storage-model.md))
-9. **`HOMEINV_PUBLIC_BASE_URL` is printed onto physical labels.** It is the only
+10. **`HOMEINV_PUBLIC_BASE_URL` is printed onto physical labels.** It is the only
    configuration value that writes itself into the physical world, and printed labels
    cannot be recalled. Never change its handling without reading
    [`10 §10.2.1`](docs/architecture/10-identification-and-labels.md) first.
-10. **Derived stores may fail, never lie.** OpenSearch, `item_attr_index`, thumbnails and
+11. **Derived stores may fail, never lie.** OpenSearch, `item_attr_index`, thumbnails and
     caches are derived and rebuildable; search results are always re-loaded from
     PostgreSQL so a stale index cannot leak across a tenant boundary.
-11. **Nothing is lost silently.** Deletion is two-stage, sync conflicts are stored records
+12. **Nothing is lost silently.** Deletion is two-stage, sync conflicts are stored records
     rather than discarded writes, and the audit log is append-only with a hash chain.
-12. **A label geometry counts as verified only when measured, not when calculated.** Size
+13. **A label geometry counts as verified only when measured, not when calculated.** Size
     and count do not determine where the slack sits. See
     [`docs/reference/label-media.yaml`](docs/reference/label-media.yaml).
-13. **The design system is binding, not a reference.** Every user-visible surface
+14. **The design system is binding, not a reference.** Every user-visible surface
     is built from `design-system/`; a screen that invents its own colours,
     spacing or components is a defect. `design-system/tokens/tokens.json` is the
     single source — the CSS and the Compose `Theme.kt` are generated from it and
     never hand-edited. Dark is the default everywhere, light is opt-in, and
     machine-readable codes plus label previews stay dark-on-light in both themes.
     ([ADR-0035](docs/adr/0035-design-system.md), REQ-NFR-074…077)
-14. **Money is an in-house value type, and no money library is added.** `BigDecimal` +
+15. **Money is an in-house value type, and no money library is added.** `BigDecimal` +
     `java.util.Currency` in `platform`. Arithmetic across currencies throws; `double` and
     `float` are forbidden on the money path; every total is per currency. JavaMoney was
     evaluated and rejected — its conversion modules schedule background fetches to ECB and

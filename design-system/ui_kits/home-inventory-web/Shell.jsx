@@ -10,42 +10,45 @@ const NAV = [
 ];
 
 const WIDTHS = [
-  { key: "phone", label: "Telefon 390", w: 390, h: 780, cls: "compact" },
-  { key: "tabletP", label: "Tablet hoch 834", w: 834, h: 900, cls: "medium" },
-  { key: "tabletL", label: "Tablet quer 1194", w: 1194, h: 834, cls: "expanded" },
+  { key: "phone", label: "Phone 390", w: 390, h: 780, cls: "compact" },
+  { key: "tabletP", label: "Tablet portrait 834", w: 834, h: 900, cls: "medium" },
+  { key: "tabletL", label: "Tablet landscape 1194", w: 1194, h: 834, cls: "expanded" },
   { key: "desktop", label: "Desktop", w: null, h: 900, cls: "large" },
 ];
 
-/* The chrome around the prototype — not part of the product. */
+/* The chrome around the prototype — not part of the product, and therefore English. Everything
+   BELOW it renders the simulated product UI, whose German is the deliberate width fixture
+   (REQ-CON-012, REQ-CON-014, closed carve-out list). */
 function KitBar({ width, setWidth, theme, setTheme, density, setDensity, offline, setOffline, screen, setScreen, screens }) {
   return (
     <div className="kitbar">
       <span className="kitbar__brand"><span className="kitbar__sq">HI</span>Home Inventory — UI-Kit</span>
-      <select className="kitsel" value={screen} onChange={(e) => setScreen(e.target.value)} aria-label="Ansicht">
+      <select className="kitsel" value={screen} onChange={(e) => setScreen(e.target.value)} aria-label="Screen">
         {screens.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
       </select>
-      <span className="kitseg" role="group" aria-label="Gerätebreite">
+      <span className="kitseg" role="group" aria-label="Device width">
         {WIDTHS.map((w) => (
           <button key={w.key} type="button" aria-pressed={width.key === w.key} onClick={() => setWidth(w)}>{w.label}</button>
         ))}
       </span>
       <span className="kitbar__sp" />
       <span className="kitseg">
-        <button type="button" aria-pressed={density === "comfortable"} onClick={() => setDensity("comfortable")}>Komfortabel</button>
-        <button type="button" aria-pressed={density === "compact"} onClick={() => setDensity("compact")}>Kompakt</button>
+        <button type="button" aria-pressed={density === "comfortable"} onClick={() => setDensity("comfortable")}>Comfortable</button>
+        <button type="button" aria-pressed={density === "compact"} onClick={() => setDensity("compact")}>Compact</button>
       </span>
       <span className="kitseg">
         <button type="button" aria-pressed={offline} onClick={() => setOffline(!offline)}>Offline</button>
       </span>
       <span className="kitseg">
-        <button type="button" aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>Dunkel</button>
-        <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>Hell</button>
+        <button type="button" aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>Dark</button>
+        <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>Light</button>
       </span>
     </div>
   );
 }
 
-/* The product shell: app bar, status strip, navigation per width class. */
+/* The product shell: app bar, status strip, navigation per width class. Its strings are German
+   because this is the simulated product, not the harness — see the note above. */
 function AppShell({ cls, nav, setNav, title, crumbs, actions, offline, conflicts = 2, degraded, children, noPad, theme, setTheme }) {
   const compact = cls === "compact";
   const medium = cls === "medium";

@@ -2,9 +2,15 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 **Amends:** [ADR-0027](0027-egress-enforcement.md),
+[ADR-0026](0026-core-outbound-via-plugins.md),
 [09 §9.5](../architecture/09-extensibility-and-plugins.md),
 [13 §13.3](../architecture/13-operations-and-observability.md),
 [`deploy/services.yaml`](../../deploy/services.yaml)
+
+> **[ADR-0026](0026-core-outbound-via-plugins.md) was added to this line on 2026-09-11**:
+> its *"What stays in the core"* table still placed the datastores on a `plugins` segment
+> that this ADR removed. A missing back-link, same as the one in
+> [ADR-0042](0042-edge-is-not-internal.md).
 
 ## Context
 

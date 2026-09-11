@@ -91,9 +91,11 @@ and does not need a routed path outward.
 
 ### 2. Plugins reach only their declared hosts — through an egress proxy
 
-One `egress-proxy` container in the `plugins` segment. Plugin containers get no
-gateway of their own; their only route outward is the proxy, handed to them as
-`HTTPS_PROXY`/`HTTP_PROXY` by the generated unit.
+One `egress-proxy` container, with **one interface per plugin segment**. Plugin
+containers get no gateway of their own; their only route outward is the proxy, handed to
+them as `HTTPS_PROXY`/`HTTP_PROXY` by the generated unit. *(This read "in the `plugins`
+segment" — a single shared one — until
+[ADR-0037](0037-per-plugin-network-segments.md) replaced it with one segment per plugin.)*
 
 | Property | Value |
 |---|---|
@@ -102,7 +104,7 @@ gateway of their own; their only route outward is the proxy, handed to them as
 | Protocol | HTTP and `CONNECT`, which covers every HTTPS target. Non-HTTP targets go through the TCP mode in §3 |
 | On a denied host | The connection is refused and logged with plugin ID, target and time — the log is the source for the UI view `REQ-ENR-009` requires |
 | Reload | On a capability grant or revocation, without restarting plugins |
-| CI test | A plugin attempts a host it did not declare and must fail; a core container attempts any external host and must fail |
+| CI test | A plugin attempts a host it did not declare and must fail; **`api` and `worker`** attempt any external host and must fail. *(This row said "a core container" until 2026-09-11; `web` and `egress-proxy` are core containers that reach out by design — [ADR-0042](0042-edge-is-not-internal.md), `REQ-SEC-102`.)* |
 
 ### 3. Non-HTTP targets: the proxy also forwards TCP
 
@@ -169,8 +171,13 @@ from a proxy access log it is a record of what happened.
   within reach of one container.
 - **`REQ-SEC-055` gains an implementable acceptance criterion** and stops being a
   requirement that no runtime can satisfy.
-- **The core's "no outbound" property becomes a CI test, not a claim**: every core
-  container, every external host, expected result *refused*.
+- **The core's "no outbound" property becomes a CI test, not a claim**: **`api` and
+  `worker`**, every external host, expected result *refused*. Two containers are
+  deliberately outside that list and are named rather than glossed — `web`, because a
+  published port requires a non-internal segment, and `egress-proxy`, because that is its
+  function ([ADR-0042](0042-edge-is-not-internal.md), `REQ-SEC-102`). *This line read
+  "every core container" until 2026-09-11, and a failing test with a wrong expectation is
+  one that gets weakened until it passes.*
 - Plugin authors must tolerate a proxy in the environment. The SDKs set it up for
   them; the contract test suite verifies that a plugin honours `HTTPS_PROXY`
   rather than opening raw sockets.

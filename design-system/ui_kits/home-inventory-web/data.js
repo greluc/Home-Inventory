@@ -1,5 +1,11 @@
-/* Mock data for the UI kit. German strings throughout, deliberately including
-   the long compounds the real product ships. */
+/* Mock data for the UI kit. German throughout, and deliberately so: these are the long compounds
+   the shipped German UI actually produces, and they are the width fixture that
+   `guidelines/type-german.html`, `components/data/Table.d.ts` and REQ-NFR-071 all lean on.
+   Translating them would remove exactly what the screens exist to prove.
+
+   This file and `guidelines/type-german.html` are the TWO entries on the closed carve-out list of
+   REQ-CON-012 / REQ-CON-014; everything else in the corpus is English. A third German fixture
+   needs a row there and a sentence saying why English will not do. */
 const LOCATIONS = [
   { id: "h", name: "Haus Lindenstraße", kind: "building", count: 1284, children: [
     { id: "k", name: "Keller", kind: "room", count: 412, children: [
@@ -20,7 +26,7 @@ const LOCATIONS = [
 ];
 
 const ITEMS = [
-  { id: "i1", name: "Akku-Bohrschrauber GSB 18V-55 Professional", code: "7Q2-M4X-9KD", path: "Keller › Regal B › Kiste 4", loc: "Kiste 4", type: "Elektrowerkzeug", value: 189.99, warranty: "2028-04-30", photo: true, status: null, qty: 1 },
+  { id: "i1", name: "Akku-Bohrschrauber GSB 18V-55 Professional", code: "7Q2M-4X9K-D2F", path: "Keller › Regal B › Kiste 4", loc: "Kiste 4", type: "Elektrowerkzeug", value: 189.99, warranty: "2028-04-30", photo: true, status: null, qty: 1 },
   { id: "i2", name: "Schlagbohrmaschinen-Zubehörset mit Transportkoffer", code: "J4T-8PN-2WQ", path: "Werkstatt › Schrank 1", loc: "Schrank 1", type: "Zubehör", value: 64.5, warranty: "2027-01-15", photo: true, status: "conflict", qty: 1 },
   { id: "i3", name: "Aluminium-Stehleiter 8 Stufen", code: "B9C-K3D-7VX", path: "Garage", loc: "Garage", type: "Werkzeug", value: 120.0, warranty: null, photo: false, status: null, qty: 1 },
   { id: "i4", name: "Kabeltrommel 25 m", code: "M1R-6HJ-4TN", path: "Keller › Regal A", loc: "Regal A", type: "Elektrik", value: 39.9, warranty: "2026-11-02", photo: true, status: "pending", qty: 2 },

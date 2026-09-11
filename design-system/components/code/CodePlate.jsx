@@ -16,7 +16,7 @@ function pattern(seed, n) {
   return cells;
 }
 
-export function CodePlate({ code = "7Q2-M4X-9KD", size = 128, modules = 21, caption = true, inline = false, symbology = "QR" }) {
+export function CodePlate({ code = "7Q2M-4X9K-D2F", size = 128, modules = 21, caption = true, inline = false, symbology = "QR" }) {
   const cells = React.useMemo(() => pattern(code + symbology, modules), [code, symbology, modules]);
   const quiet = 4;
   const total = modules + quiet * 2;

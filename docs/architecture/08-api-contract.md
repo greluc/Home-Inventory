@@ -31,7 +31,7 @@ forbids database and repository access from the access blocks.
 | Specification first | `api/openapi.yaml` is the source. Server stubs, the TypeScript client, the Kotlin client and the documentation are **generated** from it. Hand-written clients do not exist. |
 | Resources, not actions | `/items`, `/locations`, `/item-types`. Where an operation is not a resource, it becomes one: `/print-jobs`, `/stocktakes`, `/import-jobs`, `/scans`. |
 | Predictability | The same pagination, the same filter syntax, the same error format, the same sort parameters **everywhere**. |
-| No surprises in the status code | `200/201/202/204` · `400` syntax · `401` not authenticated · `403` authenticated but not permitted · `404` not present **or not visible** · `409` conflict · `412` precondition failed · `422` domain-invalid · `429` rate limit · `503` degraded |
+| No surprises in the status code | `200/201/202/204` · `400` syntax · `401` not authenticated · `403` authenticated but not permitted · `404` not present **or not visible** · `409` conflict · `412` precondition failed · **`413` payload too large** · `422` domain-invalid · `428` precondition required · `429` rate limit · `503` degraded. *`413` and `428` were missing from this list while [`problem-types.yaml`](../reference/problem-types.yaml) needed both — `428` from the ETag rule below, and `413` from the limits in the security table, which is why that condition sat in the registry's `pending` list with no status code (O24).*
 
 ### Resource overview
 

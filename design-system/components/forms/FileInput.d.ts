@@ -13,5 +13,11 @@ export interface FileInputProps {
   readOnly?: boolean;
   disabled?: boolean;
   onRemove?: (file: AttachedFile) => void;
+  /** User-visible strings. English defaults; the client passes the translated text from its
+   *  resource bundle, because no display text is hard-coded in a component (REQ-NFR-032). */
+  localOnlyLabel?: string;
+  emptyLabel?: string;
+  dropLabel?: string;
+  removeLabel?: (name: string) => string;
 }
 export declare function FileInput(props: FileInputProps): JSX.Element;

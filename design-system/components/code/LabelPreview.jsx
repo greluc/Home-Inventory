@@ -4,7 +4,10 @@ import { CodePlate } from "./CodePlate.jsx";
 
 export function LabelPreview({
   media = { vendor: "Avery Zweckform", articleNumber: "3474", width: 70, height: 37, verified: true },
-  scale = 1, lines = [], code = "7Q2-M4X-9KD", moduleMm = 0.5, showQuiet = true,
+  scale = 1, lines = [], code = "7Q2M-4X9K-D2F", moduleMm = 0.5, showQuiet = true,
+  previewLabel = "Print preview", toScaleLabel = "to scale", moduleSizeLabel = "module size",
+  unverifiedWarning = "Dimensions not verified — print the calibration sheet before a bulk run.",
+  moduleTooSmallWarning = "Module size below 0.33 mm — unreliable with phone cameras.",
 }) {
   const mm = 3.7795 * scale;
   const w = media.width * mm, h = media.height * mm;
@@ -14,7 +17,7 @@ export function LabelPreview({
     <div className="hi-labelprev" style={{ ["--mm"]: mm + "px" }}>
       <div className="hi-paperstrap">
         <Icon name="printer" size={14} />
-        <span>Druckvorschau · maßstabsgetreu · {media.width} × {media.height} mm</span>
+        <span>{previewLabel} · {toScaleLabel} · {media.width} × {media.height} mm</span>
       </div>
       <div className="hi-labelprev__sheet" style={{ width: w, height: h }}>
         <div className="hi-labelprev__el" style={{ left: 4 * scale, top: (h - qr) / 2, width: qr, height: qr }}>
@@ -30,13 +33,13 @@ export function LabelPreview({
       </div>
       <div className="hi-labelprev__ruler">
         <Icon name="ruler" size={14} />
-        <span>{media.vendor} {media.articleNumber} · Modulgröße {moduleMm.toFixed(2)} mm</span>
+        <span>{media.vendor} {media.articleNumber} · {moduleSizeLabel} {moduleMm.toFixed(2)} mm</span>
       </div>
       {!media.verified ? (
-        <p className="hi-labelprev__warn"><Icon name="triangle-alert" size={14} />Maße nicht verifiziert — vor dem Seriendruck Kalibrierbogen drucken.</p>
+        <p className="hi-labelprev__warn"><Icon name="triangle-alert" size={14} />{unverifiedWarning}</p>
       ) : null}
       {tooSmall ? (
-        <p className="hi-labelprev__warn"><Icon name="triangle-alert" size={14} />Modulgröße unter 0,33 mm — mit Handykameras unzuverlässig.</p>
+        <p className="hi-labelprev__warn"><Icon name="triangle-alert" size={14} />{moduleTooSmallWarning}</p>
       ) : null}
     </div>
   );

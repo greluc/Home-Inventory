@@ -1,7 +1,7 @@
 import React from "react";
 import { Icon } from "../foundation/Icon.jsx";
 
-export function TagInput({ values = [], placeholder = "Hinzufügen…", readOnly, disabled, onRemove, id }) {
+export function TagInput({ values = [], placeholder = "Add…", readOnly, disabled, onRemove, id }) {
   if (readOnly) {
     if (!values.length) return <div className="hi-readonly hi-readonly--empty">—</div>;
     return (

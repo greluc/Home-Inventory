@@ -246,7 +246,7 @@ homeinv-plugin init --port MetadataResolver --lang java --id com.example.mpn
 ./gradlew pluginContractTest
 
 # 4. Test locally against a running instance
-homeinv-plugin dev --core https://localhost:8443 --tenant dev
+homeinv-plugin dev --core localhost:8080 --tenant dev
 
 # 5. Build, sign, ship
 docker build -t example/mpn:1.0.0 . && cosign sign example/mpn:1.0.0

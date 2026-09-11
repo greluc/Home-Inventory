@@ -41,7 +41,7 @@ screenshot, because there is no UI to screenshot yet.
 |---|---|
 | **<https://github.com/greluc/Home-Inventory>** — branch `main`, commit tree `eb37ee5f278c` | the whole brief and every domain fact below |
 | `docs/design/design-system-brief.md` | the design brief itself — the postures, the three device classes, the four hard surfaces, the tone rules, the hard constraints |
-| `docs/architecture/10-identification-and-labels.md` | the public-code format (Crockford Base32, 8+1 chars, `7Q2-M4X-9KD`), the QR payload, the six scan modes, `LabelMedia` geometry, the `verified` flag, the print-job state machine |
+| `docs/architecture/10-identification-and-labels.md` | the public-code format (Crockford Base32, 10 payload characters plus a Damm check symbol, `7Q2M-4X9K-D2F`), the QR payload, the six scan modes, `LabelMedia` geometry, the `verified` flag, the print-job state machine |
 | `docs/architecture/11-offline-synchronisation.md` | push/pull, `APPLIED · MERGED · CONFLICT · REJECTED · DUPLICATE`, the three-way compare, the per-field-kind merge rules, the conflict record, the device list, the media upload queue |
 | `web/README.md` | the CSP and no-CDN constraints, the pre-paint theme script, Lucide from `lucide-static`, the codes-are-exempt rule |
 | `app/README.md`, root `README.md` | product naming (`home-inv`), the module set, the technology stack |
@@ -101,24 +101,24 @@ way out. Two words of diagnosis beat one word of sympathy.
 
 | Say | Not |
 |---|---|
-| Offline — Änderungen werden lokal gespeichert und beim nächsten Netz abgeglichen. | Ups! Keine Verbindung 😕 |
-| Dieses Feld ist für deine Rolle nicht sichtbar. | `••••••••••••` |
-| 2 Artikel warten auf eine Entscheidung. | Synchronisierungsfehler aufgetreten! |
-| Modulgröße unter 0,33 mm — mit Handykameras unzuverlässig. | Achtung: mögliches Problem beim Druck |
-| Noch 3 Felder | Bitte alle Felder ausfüllen |
+| Offline — changes are stored locally and reconciled at the next connection. | Oops! No connection 😕 |
+| This field is not visible to your role. | `••••••••••••` |
+| 2 items are waiting for a decision. | A synchronisation error occurred! |
+| Module size below 0.33 mm — unreliable with phone cameras. | Warning: possible printing problem |
+| 3 fields left | Please fill in all fields |
 
-**Numbers are facts, so show them.** `3 211 Artikel`, not "viele". `88` in a tree
-row. `7 von 12` on an upload. Never `99+` — this is an inventory tool; the count
+**Numbers are facts, so show them.** `3 211 items`, not "many". `88` in a tree
+row. `7 of 12` on an upload. Never `99+` — this is an inventory tool; the count
 *is* the content. Thin space as the thousands separator in German, comma as the
 decimal mark, `Intl.NumberFormat` in the client (never formatted on the server).
 
 **Empty, no-results, error, restricted are four different sentences.** They are
 the states people hit most and the ones most systems write once:
 
-- *empty* — "Noch keine Artikel an diesem Ort" + the action that fixes it
-- *no results* — "Keine Treffer" + "Filter zurücksetzen", and it names how many filters are active
+- *empty* — "No items in this location yet" + the action that fixes it
+- *no results* — "No matches" + "Clear filters", and it names how many filters are active
 - *error* — what failed and whether a retry is worth it
-- *restricted* — "Keine Berechtigung für dieses Feld", with a hatch, never a masked value
+- *restricted* — "No permission for this field", with a hatch, never a masked value
 
 **German is the sizing language, English the second.** Layout is checked against
 `Wiederbeschaffungswert`, `Lagerortkategorie`, `Mindesthaltbarkeitsdatum`,
@@ -348,7 +348,7 @@ entirely under a coarse pointer, so nothing load-bearing may live in one.
 | **Generated form** | two columns, label 11–16 rem | one column, sections open | one column, sections collapsed except the first, action bar pinned in the thumb zone |
 | **Location tree** | left pane beside contents | tree collapsed above contents | tree is its own route; contents reached by tapping |
 | **Item detail** | right pane beside the list | route | route |
-| **Conflict** | three option cards in a row per field | row per field | **stack of three full-width cards per field**, one field at a time, with an "x von y entschieden" counter |
+| **Conflict** | three option cards in a row per field | row per field | **stack of three full-width cards per field**, one field at a time, with an "x of y decided" counter |
 | **Scanner** | same overlay, centred at 420 px | full width | full bleed; every interactive control in the bottom band — 44 px mode pills, 48 px toggles, result banner above them |
 | **Filters** | persistent left facet pane | drawer | bottom sheet |
 
@@ -427,10 +427,10 @@ hatch is what squares that.
 
 Three tiers, by what is recoverable:
 
-1. **Undoable** (move, tag, archive) — do it, then a toast with *Rückgängig*.
+1. **Undoable** (move, tag, archive) — do it, then a toast with *Undo*.
    No dialog.
 2. **Recoverable** (delete to trash, deregister a device) — a modal naming the
-   object and the count: *"3 Artikel löschen?"*, danger button, cancel is ghost.
+   object and the count: *"Delete 3 items?"*, danger button, cancel is ghost.
 3. **Irreversible** (purge, remote wipe, change the base URL after printing) — a
    modal that requires **typing the object's name**, plus a re-authentication if
    the action touches a `secret`. The danger button stays disabled until the
@@ -488,11 +488,11 @@ because an inverted code does not scan reliably and the preview is a picture of
 paper.
 
 The boundary is drawn on purpose: a 1 px `--code-frame` edge, a small gap, and —
-on the print preview — a "Druckvorschau · maßstabsgetreu" strap above it. Without
+on the print preview — a "Print preview · to scale" strap above it. Without
 that, paper-white in dark mode reads as a rendering bug.
 
 The human-readable caption beneath every code is not decoration either: a label
-must still work when the scan fails. You can read and type `7Q2-M4X-9KD`; you
+must still work when the scan fails. You can read and type `7Q2M-4X9K-D2F`; you
 cannot read and type a UUID.
 
 ### Contrast rules

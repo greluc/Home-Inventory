@@ -18,5 +18,7 @@ export interface FieldProps extends Omit<HTMLAttributes<HTMLDivElement>, "childr
   restricted?: boolean;
   /** Either an element or a render prop receiving { id, describedBy, invalid }. */
   children: ReactNode | ((a: { id: string; describedBy?: string; invalid: boolean }) => ReactNode);
+  /** The text on the restricted plate. English default; the client translates (REQ-NFR-032). */
+  restrictedLabel?: string;
 }
 export declare function Field(props: FieldProps): JSX.Element;

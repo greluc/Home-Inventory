@@ -117,7 +117,7 @@ function LabelsScreen({ cls, state, set }) {
           </Card>
         </div>
         <aside className="pane pane--preview">
-          <LabelPreview scale={compact ? 1.05 : 1.22} code="7Q2-M4X-9KD"
+          <LabelPreview scale={compact ? 1.05 : 1.22} code="7Q2M-4X9K-D2F"
             media={{ vendor: "Avery Zweckform", articleNumber: "3474", width: 70, height: 37, verified: true }}
             lines={[{ text: "Akku-Bohrschrauber GSB 18V-55 Professional", bold: true, size: 3.1, wrap: true }, { text: "Keller › Regal B › Kiste 4", size: 2.5 }]} />
           <p className="muted small">Die Vorschau behält ihren Papiergrund auch im Dunkelmodus. Sie ist ein Bild von etwas Gedrucktem, keine Oberfläche.</p>

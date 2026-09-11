@@ -121,7 +121,7 @@ sequenceDiagram
     participant INV as inventory
 
     U->>W: point the camera at the label
-    W->>W: BarcodeDetector (native) or ZXing fallback
+    W->>W: BarcodeDetector where available,<br/>ZXing-WASM otherwise (always on iOS)
     W->>R: POST /api/v1/scans (rawValue, symbology, sessionId)
     R->>ID: resolve(rawScan)
     ID->>PR: lookup(CodeFormat, tenant) → by priority
@@ -386,7 +386,7 @@ proposes.
 | Phase | Flow |
 |---|---|
 | **Migration** | A **one-shot `migrate` service** runs first and exits: the same image as `api` and `worker` with `SPRING_PROFILES_ACTIVE=migrate`, on `internal` only, holding `db-migration-password` and **nothing else in the stack holding it** ([ADR-0041](../adr/0041-migration-as-its-own-service.md)). Flyway runs under `homeinv_migrator`. Under Quadlet it is `Type=oneshot` with `Requires=`/`After=` from `api` and `worker`; under Compose a `service_completed_successfully` dependency; under Kubernetes the pre-upgrade `Job` that already existed |
-| **Startup** (`api`, `worker`) | Validate configuration (**abort on a missing secret, never a silent default**) → **validate** the schema version and **refuse to start** if it is not the one this build expects → verify the Modulith structure → bind ports and adapters (the API on `internal`, where `web` reaches it — `api` is not on `edge` and publishes nothing ([ADR-0042](../adr/0042-edge-is-not-internal.md)); the management listener on `internal` only, [13 §13.3](13-operations-and-observability.md)) → load the plugin registry and probe reachability (does **not** block) → `/readyz` turns true only after a full database connection and a schema that validates |
+| **Startup** (`api`, `worker`) | Validate configuration (**abort on a missing secret, never a silent default**) → **validate** the schema version and **refuse to start** if it is not the one this build expects → verify the Modulith structure → bind ports and adapters (the API on the two-member `frontend` segment, where `web` reaches it and no datastore does — `api` is not on `edge` and publishes nothing ([ADR-0042](../adr/0042-edge-is-not-internal.md), [ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)); the management listener on `internal` only, [13 §13.3](13-operations-and-observability.md)) → load the plugin registry and probe reachability (does **not** block) → `/readyz` turns true only after a full database connection and a schema that validates |
 | **Why validation and not migration** | The application connects only as `homeinv_app`, which has no DDL rights ([07 §7.5](07-data-model.md)). Migrating from inside a long-running, internet-facing process would mean mounting `homeinv_migrator` — the one role that can rewrite an RLS policy — for that process's whole life. Validating instead keeps the guarantee that mattered: a skipped migration stops the rollout at `/readyz` rather than appearing later as a missing column at request time |
 | **Shutdown** | `/readyz` to false (the proxy takes the instance out of rotation) → grace period → let in-flight requests drain (max 30 s) → deregister RabbitMQ consumers, finish the message in hand → close connections |
 | **Migration with multiple instances** | Migrations must be backward compatible (expand, then switch, then clean up — across three releases). A migration that drops a column must not ship in the same release as the code that stops writing it. |

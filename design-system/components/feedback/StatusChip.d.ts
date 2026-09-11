@@ -9,9 +9,10 @@ export type StatusKind =
  */
 export interface StatusChipProps {
   status?: StatusKind;
-  /** Overrides the German default label. Keep it short — this sits in a 32px table row. */
+  /** Overrides the English default from `STATUS`. This is how the client renders the translated
+   *  text (REQ-NFR-032). Keep it short — this sits in a 32px table row. */
   label?: string;
-  /** Appended after a middot, tabular. "Konflikt · 3". */
+  /** Appended after a middot, tabular. "Conflict · 3". */
   count?: number;
   size?: 12 | 14 | 16;
 }

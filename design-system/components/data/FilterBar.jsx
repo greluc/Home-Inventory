@@ -15,10 +15,10 @@ export function FilterBar({ facets = [], onToggle, trailing }) {
     </div>
   );
 }
-export function BulkBar({ count, children }) {
+export function BulkBar({ count, children, selectedLabel = "selected" }) {
   return (
     <div className="hi-bulkbar">
-      <span className="hi-bulkbar__n">{count} ausgewählt</span>
+      <span className="hi-bulkbar__n">{count} {selectedLabel}</span>
       <span style={{ marginLeft: "auto", display: "flex", gap: "var(--space-100)", flexWrap: "wrap" }}>{children}</span>
     </div>
   );

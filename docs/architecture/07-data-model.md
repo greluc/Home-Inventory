@@ -38,7 +38,7 @@
    | Kind | Tables | Why the columns would be meaningless |
    |---|---|---|
    | **Derived** | `inventory.item_attr_index` | A projection of `item.attributes`, rebuilt wholesale by `REINDEX_ATTRIBUTES`. It has no version of its own — the row it mirrors does — and no author but the application |
-   | **Append-only records of an event** | `sync.change_log`, `audit.audit_entry`, `audit.chain_anchor`, `identification.label_base_url_usage` | Nothing updates them, so `version`, `updated_at` and `updated_by` would be dead columns. `occurred_at` and the actor are already in the row, under the names the record uses |
+   | **Append-only records of an event** | `sync.change_log`, `audit.audit_entry`, `audit.chain_anchor`, `audit.chain_truncation` ([ADR-0046](../adr/0046-truncatable-audit-chain.md)), `identification.label_base_url_usage` | Nothing updates them, so `version`, `updated_at` and `updated_by` would be dead columns. `occurred_at` and the actor are already in the row, under the names the record uses |
    | **Infrastructure** | `outbox.event_publication`, `idempotency.processed_request`, `crypto.tenant_data_key` | Owned by a mechanism, not by a block's domain model. A data key is issued and retired, never edited |
    | **Issued, never edited** | `identification.public_code`, `identification.code_binding` | A code is drawn, printed and bound; nobody edits one. `public_code` has no `tenant_id` at all (see rule 2), so it has no `updated_by` that could mean anything, and `code_binding` is **historised** — a reassignment appends a row rather than updating one, which is what preserves the binding history (`REQ-IDENT-004`). Both were on rule 2's closed list and on neither of rule 4's, so rule 4 demanded `version` and four audit columns from tables with no tenant and no editing user |
 
@@ -96,7 +96,8 @@ runtime. Rationale and alternatives in
 ```sql
 CREATE TABLE catalog.item_type (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
-    tenant_id       uuid NOT NULL REFERENCES tenancy.tenant(id),
+    tenant_id       uuid NOT NULL,                    -- see the note under 7.5 on why
+                                                      -- this is NOT a foreign key
     key             text NOT NULL,                    -- 'book', 'power-tool'
     parent_id       uuid,
     kind            text NOT NULL CHECK (kind IN ('PHYSICAL','DIGITAL')),
@@ -169,9 +170,20 @@ CREATE TABLE inventory.item (
     quantity_unit       text,
     lifecycle_state     text NOT NULL DEFAULT 'ACTIVE',
     attributes          jsonb NOT NULL DEFAULT '{}'::jsonb,
-    search_vector       tsvector                         -- fallback search; GENERATED,
-                        GENERATED ALWAYS AS (                -- so it cannot drift from
-                            to_tsvector('simple',            -- the row it describes
+    -- Fallback search, GENERATED so it cannot drift from the row it describes. TWO
+    -- columns, one per shipped UI language: 'simple' does no stemming at all, and this
+    -- is the ONLY full-text mechanism at stage 0 and the permanent one in the `minimal`
+    -- profile (ADR-0047). A per-tenant configuration is not available — to_tsvector is
+    -- immutable only with a literal regconfig, and a non-immutable expression cannot be
+    -- a generated column.
+    search_vector_de    tsvector
+                        GENERATED ALWAYS AS (
+                            to_tsvector('german',
+                                coalesce(name,'') || ' ' || coalesce(description,''))
+                        ) STORED,
+    search_vector_en    tsvector
+                        GENERATED ALWAYS AS (
+                            to_tsvector('english',
                                 coalesce(name,'') || ' ' || coalesce(description,''))
                         ) STORED,
     created_at          timestamptz NOT NULL DEFAULT now(),
@@ -196,7 +208,8 @@ CREATE INDEX item_attributes_gin ON inventory.item
     USING gin (attributes jsonb_path_ops);
 CREATE INDEX item_tenant_updated ON inventory.item (tenant_id, updated_at DESC)
     WHERE deleted_at IS NULL;
-CREATE INDEX item_search_fts ON inventory.item USING gin (search_vector);
+CREATE INDEX item_search_fts_de ON inventory.item USING gin (search_vector_de);
+CREATE INDEX item_search_fts_en ON inventory.item USING gin (search_vector_en);
 ```
 
 ### The index side table
@@ -248,6 +261,7 @@ CREATE INDEX iai_unit ON inventory.item_attr_index (tenant_id, field_key, unit_v
 | How much write cost | A `DELETE`+`INSERT` of that item's rows — typically 3–8 rows, not 50. |
 | On a field definition change | `FieldSearchabilityChanged` triggers a background run that re-projects the affected items. No DDL, no lock, cancellable at any time. |
 | Rebuild | A `REINDEX_ATTRIBUTES` administrative run, entirely from `item.attributes` — through the same code path as a normal write, so there is no second truth. |
+| **Soft deletion** | Setting `deleted_at` **removes** the item's rows from the side table, in the same transaction; restoring the item rebuilds them. The `ON DELETE CASCADE` above fires only on a *final* removal, which is a separate, later operation (`REQ-CORE-009`), so without this rule a trashed item would keep answering attribute filters for the whole retention period. The alternative — keeping the rows and joining back to `item` in every query — was rejected: `REQ-CORE-013` calls this path *transactionally exact*, and a correctness property that depends on every future query remembering a filter is not that ([ADR-0004](../adr/0004-attribute-storage-model.md)) |
 | Consistency proof | A nightly reconciliation compares samples between `attributes` and `item_attr_index` and reports deviations as a metric. |
 | Relation to OpenSearch | OpenSearch serves full text and facets; `item_attr_index` serves **transactionally exact** filters, sorting and reporting, plus search in the `minimal` profile and during an OpenSearch outage. |
 
@@ -365,7 +379,7 @@ CREATE POLICY tenant_isolation ON inventory.item
 
 | Point | Rule |
 |---|---|
-| Roles | `homeinv_app` (the application): **no** `BYPASSRLS`, **no** table ownership, **no** DDL rights · `homeinv_migrator`: owner, active only at startup · `homeinv_readonly`: for reporting |
+| Roles | `homeinv_app` (the application): **no** `BYPASSRLS`, **no** table ownership, **no** DDL rights · `homeinv_migrator`: owner, active only in the one-shot `migrate` service ([ADR-0041](../adr/0041-migration-as-its-own-service.md)) · `homeinv_readonly`: for reporting · **`homeinv_housekeeping`**: `DELETE` on the retention-governed tables and nothing else — no DDL, no `BYPASSRLS`, no ownership. It exists because `REQ-SEC-069` denies the application `DELETE` on the audit log and `REQ-PRIV-010` still requires a retention period to be enforced ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
 | Setting the context | `SET LOCAL app.tenant_id` at the start of every transaction, from the authenticated context — never from a request parameter |
 | Connection pool | `SET LOCAL` is transaction-scoped and is discarded automatically when the connection returns. A test ensures no connection goes back into the pool with a tenant still set. |
 | Missing context | `nullif(current_setting(..., true), '')` yields `NULL` → the policy fails → **zero rows**. A forgotten context yields empty results, not foreign data — on a fresh connection *and* on a pooled one that has already served a tenant, which is the case the plain cast got wrong (see the note above). |
@@ -411,6 +425,7 @@ and every other reference between aggregates.
 | Point | Rule |
 |---|---|
 | Every referenced table | carries `UNIQUE (tenant_id, id)` in addition to its primary key |
+| **`tenant_id` itself is not a foreign key** | It is a discriminator, not a reference between aggregates. Declaring `REFERENCES tenancy.tenant(id)` on it would put a cross-schema foreign key in **every** table of **every** block — sixteen blocks reaching into `tenancy` — which is the rule in [04 §4.5](04-building-blocks.md) turned inside out, and would need sixteen entries on the exception list in [7.9](#79-migrations) rather than three. `catalog.item_type` carried one until 2026-09-11 and no other table did; the migration check would have failed the build on this chapter's own DDL. Tenant existence is enforced by the application and by RLS, and a row whose `tenant_id` names no tenant is invisible to every policy — which is the same outcome the constraint would have produced |
 | Every foreign key between aggregates | is composite: `(tenant_id, <ref>_id)`, never `<ref>_id` alone |
 | Proof | The isolation test is extended: it is not enough that tenant A cannot **read** tenant B's rows — tenant A must also be unable to **create a reference** to one. A single-column foreign key between two tenant-scoped tables fails the build, checked over the migration files. |
 
@@ -454,8 +469,8 @@ CREATE INDEX change_log_cursor ON sync.change_log (tenant_id, seq);
 | Monotonic sequence | One sequence per tenant. The entry is created in the same transaction as the change. Uniqueness of `(tenant_id, seq)` is a property of the sequence, not of a constraint — see the note above. |
 | Entity types, reconciled **both ways** | `item`, `location`, `tag`, `tag_assignment`, `item_relation`, `attachment`, `maintenance_entry`, `loan`, `stocktake`, `code_binding` |
 | Entity types, **download only** | `item_type`, `item_type_version`, `field_definition`, `location_category`, `value_list`, `label_template` — configuration is never edited offline ([11 §11.2](11-offline-synchronisation.md)) |
-| Partitioning | Monthly. Old partitions are detached after the retention period. |
-| Retention | **Configurable per tenant** within fixed bounds: at least 30, at most 365 days, default 90. A device whose cursor is older is asked to perform a **full sync** — which is why tombstones must live at least as long. The UI states explicitly how long a device may stay offline at the chosen setting. |
+| Partitioning | Monthly, **instance-wide**. A partition is detached only once **every** tenant's retention has elapsed for its whole range — i.e. at the instance maximum. Detach is bulk reclamation, not retention enforcement, and no tenant's guarantee depends on it ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
+| Retention | **Configurable per tenant** within fixed bounds: at least 30, at most 365 days, default 90. Enforced by a **daily row deletion** under `homeinv_housekeeping`, inside live partitions — not by detach, which is instance-wide and would give a tenant choosing 30 days whatever the most conservative tenant on the instance chose. A device whose cursor is older is asked to perform a **full sync** — which is why tombstones must live at least as long. The UI states explicitly how long a device may stay offline at the chosen setting. |
 | Echo suppression | `device_id` prevents a device from receiving its own changes back. |
 | Size | By far the fastest-growing table. Its size is monitored as a metric. |
 
@@ -492,7 +507,8 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | `identification.label_base_url_usage` | Which base URLs have ever been printed onto labels | The source for the "labels with the old base" report ([10 §10.2.1](10-identification-and-labels.md)) |
 | `media.media_object` | Blob metadata | `sha256` with `UNIQUE(tenant_id, sha256)`, `ref_count` per tenant. The blob path carries the tenant (`sha256/<tenantId>/<hash>`), so metadata and storage are scoped the same way — they were not before, and the mismatch is what made the dedup short cut leak ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)) |
 | `audit.audit_entry` | Append-only log | Partitioned monthly; `prev_hash`/`entry_hash` form a chain **per tenant**, so a write locks only against that tenant's other writes and a tenant can verify its own chain under its own RLS context ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)). The application role has only `INSERT` and `SELECT` |
-| `audit.chain_anchor` | Hourly Merkle root over all tenants | Instance-wide, no `tenant_id` — see the exception list in [7.1](#71-ground-rules). The per-tenant chains prove internal consistency; the anchor is what a rewrite cannot reproduce, because it spans every tenant and chains to its own predecessor. Never pruned: ~9 000 rows a year, and pruning would discard exactly the evidence |
+| `audit.chain_anchor` | Hourly Merkle root over all tenants | Instance-wide, no `tenant_id` — see the exception list in [7.1](#71-ground-rules). The per-tenant chains prove internal consistency; the anchor is what a rewrite cannot reproduce, because it spans every tenant and chains to its own predecessor. Never pruned: ~9 000 rows a year, and pruning would discard exactly the evidence. Carries `pruned boolean`: a window whose entries a retention run has removed keeps its anchor and its place in the anchor chain, and the verification run stops expecting a recomputation over contents that are gone ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
+| `audit.chain_truncation` | Where a tenant's verifiable chain begins | Append-only. `(tenant_id, truncated_at)`, plus the `oldest_seq` and `oldest_hash` still retained, the count removed, and `reason` — `retention` or `tenant-erasure`. Verification starts here instead of at genesis. Without it, honouring `REQ-PRIV-010`'s per-tenant audit retention and being attacked produce identical evidence, and the instance raises its own tampering alert daily ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
 | `audit.revision_record` | Domain history | JSONB snapshot per version, restore possible |
 | `inventory.item_relation` | Relations | `relation_type` (`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR`, `RELATED`), directed, `CHECK` against self-reference |
 | `inventory.loan` | Lending | Borrower (internal or free text), handed out, due back, returned |
@@ -509,7 +525,7 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | Tool | Flyway, numbered SQL scripts, one script per change |
 | Executing role | `homeinv_migrator` — the application role **never** has DDL rights |
 | Location | `src/main/resources/db/migration/<schema>/V<n>__<description>.sql` — one directory per building block |
-| CI checks | Migration against a copy of a realistic data set · no lock held longer than 5 s · backward compatibility with the previous code version · every new table has RLS and `tenant_id` (checked automatically) · every new domain table has `version` and the four audit columns ([7.1](#71-ground-rules), rule 4) · **no single-column foreign key between two tenant-scoped tables** — references are composite on `(tenant_id, id)` ([7.5](#75-tenant-isolation-row-level-security)) · no statement in one block's migration names another block's schema ([04 §4.5](04-building-blocks.md)) — **with the one documented exception**: the composite, tenant-qualified foreign keys of [7.3](#73-the-attribute-model-variant-d) and [7.5](#75-tenant-isolation-row-level-security) (`inventory.item` → `locations.location` and → `catalog.item_type_version`, `locations.location` → `catalog.location_category`). The check reads that list the way the RLS check reads the instance-wide list in [7.1](#71-ground-rules): an FK **on the exception list** passes, anything else naming a foreign schema fails, and a new entry needs a row there. Stated absolutely — as this cell was until 2026-09-11 — the check would have failed the build on the very DDL that makes tenant isolation survive a foreign-key check |
+| CI checks | Migration against a copy of a realistic data set · no lock held longer than 5 s · backward compatibility with the previous code version · every new table has RLS and `tenant_id` (checked automatically) · every new domain table has `version` and the four audit columns ([7.1](#71-ground-rules), rule 4) · **no single-column foreign key between two tenant-scoped tables** — references are composite on `(tenant_id, id)` ([7.5](#75-tenant-isolation-row-level-security)) · **`tenant_id` carries no foreign key of its own** ([7.5](#75-tenant-isolation-row-level-security)) · every new table that persists state has a backup row in [06 §6.13](06-deployment-view.md) · no statement in one block's migration names another block's schema ([04 §4.5](04-building-blocks.md)) — **with the one documented exception**: the composite, tenant-qualified foreign keys of [7.3](#73-the-attribute-model-variant-d) and [7.5](#75-tenant-isolation-row-level-security) (`inventory.item` → `locations.location` and → `catalog.item_type_version`, `locations.location` → `catalog.location_category`). The check reads that list the way the RLS check reads the instance-wide list in [7.1](#71-ground-rules): an FK **on the exception list** passes, anything else naming a foreign schema fails, and a new entry needs a row there. Stated absolutely — as this cell was until 2026-09-11 — the check would have failed the build on the very DDL that makes tenant isolation survive a foreign-key check |
 | Forbidden | Destructive changes in the same release as the corresponding code change (the three-step from [06 §6.12](06-deployment-view.md)) |
 | Test data | Separate from migrations, never inside `V*` scripts |
 
@@ -517,11 +533,12 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 
 | Subject | Assumption | Size |
 |---|---|---|
-| `item` | 1 M rows, attributes ⌀ 2 KB | ~2.5 GB |
+| `item` | 1 M rows, attributes ⌀ 2 KB | ~2.5 GB, **plus ~300 MB** for the two `tsvector` columns and their GIN indexes ([ADR-0047](../adr/0047-bilingual-search-vectors.md)) — about 12 %, for the difference between a search that stems and one that matches prefixes |
 | `item_attr_index` | ⌀ 6 rows per item | ~600 MB including indexes |
 | `change_log` | 90 days, 5 000 changes/day | ~1.5 GB |
 | `audit_entry` | 1 year | ~2 GB |
-| Media | 1 M items, 30 % with photos, ⌀ 2 MB + derivatives | ~700 GB → **lives in Nextcloud, not in the database** |
+| Media | 1 M items, 30 % with photos, ⌀ 2 MB + derivatives | ~700 GB → **lives in the `BlobStore`, not in the database** |
+| WAL archive | 15-minute segments plus write bursts, pruned to the newest verified base backup | a few GB, bounded by the pruning run — and monitored, because a full archive volume stops PostgreSQL writing ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | OpenSearch | 1 M documents | ~3 GB |
 
 From this follow the sizing in [06 §6.7](06-deployment-view.md) and the decision

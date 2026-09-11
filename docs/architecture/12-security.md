@@ -69,7 +69,7 @@ is gone and the claim is now the one that holds.
 |---|---|
 | ① Zone 0 → 1 | TLS 1.3, HSTS, rate limiting, payload limits, basic WAF rules |
 | ② Zone 1 → 2 | Authentication, CSRF, origin check, schema validation, **authorization**, setting the tenant context |
-| ③ Zone 2 → 3 | A dedicated DB role without DDL and without `BYPASSRLS`, RLS active, parameterised queries only |
+| ③ Zone 2 → 3 | A dedicated DB role without DDL and without `BYPASSRLS`, RLS active, parameterised queries only. **Every store in zone 3 authenticates its caller** — PostgreSQL by password per role, Valkey by ACL user, RabbitMQ by user, OpenSearch by client user over TLS, and `blobstore` by mTLS with a pinned fingerprint. Until 2026-09-11 only PostgreSQL did; the rest treated *"reachable from `internal`"* as authorisation ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)) |
 | ④ Zone 2 ↔ 4 | mTLS, capability check **per call**, deadline, payload limit, bulkhead, circuit breaker. **Zone 4 is not one room.** Each plugin has its own network segment holding only itself, `api`, `worker` and the proxy ([ADR-0037](../adr/0037-per-plugin-network-segments.md)), so a plugin reaches no other plugin, no scanner and no management endpoint — those bind to `internal`. Until 2026-09-11 every plugin shared one segment with `clamd` and with both core roles' port 8090, which put per-tenant metrics and the fail-closed scanner within reach of code holding no capability at all |
 | ⑤ Zone 4 → 5 | The **only** way out of the deployment, in **every** profile ([ADR-0036](../adr/0036-scanner-egress.md)). Outbound goes through the egress proxy, which applies the granting plugin's manifest allowlist — plus one fixed deployment entry for the malware scanner's signature mirror, which has no manifest — and logs every attempt, permitted or refused ([ADR-0027](../adr/0027-egress-enforcement.md)). The caller is identified by the segment interface the connection arrived on, not by a claimed source address. Credentials for the target — the Nextcloud app password with access to exactly one folder, SMTP and OIDC secrets — belong to the plugin, not to the core, which narrows what a core compromise yields |
 
@@ -86,6 +86,18 @@ left to reach: object storage, mail, federated login, webhooks and push all beca
 plugins. The property is verified rather than asserted — a CI test takes them,
 tries every external host, and expects a refusal.
 
+**`internal` is a network, not a trust boundary.** That sentence is new, and its absence
+was the gap. The chapter was exhaustive about the outward boundary — one egress proxy, one
+segment per plugin, a management listener bound rather than merely unpublished — and said
+nothing about what a compromised member of `internal` could reach. Two things followed from
+that silence: no store but PostgreSQL held a credential, and `web` — the single container
+with a published port — was a full member, able to open `postgres:5432`, `valkey:6379`
+(every session), `opensearch:9200`, `rabbitmq:5672`, `blobstore:8100` and `:8090` on both
+core roles. `web` now sits on a two-member `frontend` segment with `api` alone, and every
+store authenticates ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md),
+`REQ-SEC-104`, `REQ-SEC-105`). The connectivity suite asserts it, because a segment flag is
+a claim and a refused connection is evidence.
+
 **Two containers do have a route out, and naming them is part of the claim**
 ([ADR-0042](../adr/0042-edge-is-not-internal.md)). A published port requires a
 non-internal segment — measured, not assumed — so `web`, the ingress, has one; and
@@ -93,7 +105,8 @@ non-internal segment — measured, not assumed — so `web`, the ingress, has on
 Neither holds data, a database credential, an encryption key or domain logic.
 This section previously said "the core" reached nothing, which was a claim with
 two counterexamples in its own topology; the narrower sentence is the one that is
-true and the one a test can check (`REQ-SEC-102`).
+true and the one a test can check (`REQ-SEC-102`). **And what `web` *holds* was never the
+whole question** — what it could *reach* is the paragraph above.
 
 That is what confines **SSRF** to Zone 4. Webhook delivery is the one place where a
 tenant supplies the URL, and it now happens inside a container that holds no data,
@@ -205,6 +218,7 @@ The riskiest input in the system.
 |---|---|
 | Passwords | Argon2id, never reversible |
 | Tokens in the database | Stored only as a SHA-256 hash |
+| Signed URLs and cursors | A dedicated key, `HOMEINV_URL_SIGNING_KEY_FILE`, separate from the JWT signing key. `REQ-MED-010` requires short-lived signed media URLs from stage 0 and [08 §8.2](08-api-contract.md) an opaque **signed** cursor; neither named a key until 2026-09-11, and the only key in the matrix was an identity key. A URL signature must not be forgeable by anything that can mint a session token ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)) |
 | `sensitive` fields (licence keys, credentials of digital goods) | **Envelope encryption**: a data key per tenant, encrypted with a master key from the environment. AES-256-GCM with additional authenticated data (tenant + field + item) — an encrypted value cannot be moved into another record. See [ADR-0019](../adr/0019-sensitive-field-encryption.md). |
 | Plugin settings of type `secret` | Encrypted likewise; a plugin reads only its own |
 | Nextcloud access | An app password with access to exactly one folder, never the main password |
@@ -226,7 +240,7 @@ Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-{bootstra
   frame-src {PLUGIN_UI_ORIGIN}; worker-src 'self' blob:;
   manifest-src 'self'; media-src 'self' {MEDIA_ORIGIN};
   frame-ancestors 'none'; base-uri 'none'; form-action 'self';
-  object-src 'none'; require-trusted-types-for 'script'
+  object-src 'none'; require-trusted-types-for 'script'; trusted-types default
 Strict-Transport-Security: max-age=63072000; includeSubDomains
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
@@ -270,6 +284,15 @@ Cross-Origin-Resource-Policy: same-site
 > oversight. **The CI header comparison fails if COEP appears**, for the same
 > reason. The trigger for reversing this is written into ADR-0040: the first thing
 > that wants threaded WASM.
+
+> **`trusted-types default` is not decoration beside `require-trusted-types-for`.** On its
+> own the enforcement directive requires DOM XSS sinks to take a `TrustedType` and leaves
+> **policy creation unrestricted** — anything that achieves script execution can mint its
+> own policy and satisfy the check. The allowlist names the single policy this bundle
+> creates. It is the same argument as hashes over nonces
+> ([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md)): authorise what is known, not
+> whatever presents itself. The directive was absent until 2026-09-11, and `REQ-SEC-060`
+> now expects both.
 
 `{MEDIA_ORIGIN}` and `{PLUGIN_UI_ORIGIN}` are substituted at startup from
 `HOMEINV_MEDIA_BASE_URL` and `HOMEINV_PLUGIN_UI_BASE_URL`. They are the

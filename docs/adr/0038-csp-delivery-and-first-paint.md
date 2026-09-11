@@ -71,6 +71,14 @@ script-src 'self' 'sha256-<bootstrap>';
 style-src  'self' 'sha256-<critical>';
 ```
 
+> **`require-trusted-types-for 'script'` needs a `trusted-types` directive beside it**
+> (added 2026-09-11). On its own it enforces that DOM XSS sinks take a `TrustedType` —
+> and leaves **policy creation unrestricted**, so anything that achieves script execution
+> can mint its own policy and pass the check. The policy therefore also carries
+> `trusted-types default`, naming the one policy this bundle creates. It is the same
+> argument as the hash over the nonce: name what is authorised rather than authorise
+> whatever turns up.
+
 Both hashes are emitted by the build and written into the served policy by the
 same build. A CI check recomputes them from the built bundle and fails if the
 policy and the bundle disagree — the same drift mechanism as

@@ -137,6 +137,23 @@ assigned:
       - "13 §13.6, one-plugin row, REQ-API-012"
 
 # ---------------------------------------------------------------------------
+# THE BOUNDARY AGAINST problem-types.yaml, decided 2026-09-11 as open point O25
+#
+# A `degradedReason` means the request DID what it said, less well. A problem type
+# means it did NOT. Applied to a failing plugin, which was the ambiguous case:
+#
+#   * the action itself cannot be performed — printing to a printer plugin, delivering
+#     through a channel plugin, storing through a BlobStore plugin — is
+#     `plugin-unavailable`, 503, in problem-types.yaml. Nothing happened;
+#   * the action succeeded and something derived from it is poorer — no enrichment
+#     proposals, an upload queued locally instead of stored remotely — is a 200 here.
+#
+# Stated that way the two registries stop overlapping, and `scan-unavailable` is the
+# same shape from the other side: ADR-0024 makes a missing scanner a refusal rather
+# than a degradation, which is why it is a problem type and appears in `excluded` below.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # DELIBERATELY NOT TOKENS — levels from 13 §13.6 that a client cannot observe as
 # a degraded `200`, listed so nobody adds them here later by symmetry.
 # ---------------------------------------------------------------------------

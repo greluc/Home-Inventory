@@ -8,6 +8,18 @@ as a core channel that avoids third-party infrastructure. It does not.
 **Resolves:** the contradiction recorded as the central finding of the 2026-09-11
 architecture review.
 
+> **Amended by [ADR-0037](0037-per-plugin-network-segments.md)**: there is no shared
+> `plugins` segment any more. Each plugin has its own, and `clamd` sits on `scanner`.
+> The *"What stays in the core"* table below is corrected in place.
+>
+> **Amended by [ADR-0042](0042-edge-is-not-internal.md)**: the consequence below read
+> *"**no** core container reaches **any** external host, verified in CI"*, and that is
+> false of two of them by design — `web` publishes the single host port and
+> `egress-proxy` is the chokepoint. The test is against `api` and `worker`
+> (`REQ-PRIV-003`, `REQ-SEC-102`). It is corrected in place, and it survived here
+> because ADR-0042's `Amends:` line did not name this ADR — the missing back-link that
+> **A4b** exists to catch.
+
 ## Context
 
 `REQ-PRIV-003`, [12 §12.2](../architecture/12-security.md),
@@ -72,7 +84,7 @@ library while shipping five outbound features of its own is not credible.
 | Stays | Why |
 |---|---|
 | `BlobStore` adapter `filesystem` | Opens no socket. Remains the default and the only storage a `minimal` installation needs |
-| PostgreSQL, Valkey, OpenSearch, RabbitMQ, ClamAV | Parts of the deployment, on the `internal` resp. `plugins` segment. "No outbound route" means no route **out of the deployment**, and this ADR says so explicitly so the distinction is not re-litigated later |
+| PostgreSQL, Valkey, OpenSearch, RabbitMQ, ClamAV | Parts of the deployment, on `internal` resp. `scanner` ([ADR-0037](0037-per-plugin-network-segments.md) — this row said "the `plugins` segment", which no longer exists). "No outbound route" means no route **out of the deployment**, and this ADR says so explicitly so the distinction is not re-litigated later. Being *inside* the deployment does not make them unauthenticated: every one of them holds a credential since [ADR-0044](0044-internal-is-not-a-trust-boundary.md) |
 
 ### What follows for webhooks
 
@@ -107,8 +119,11 @@ invitation without the SMTP plugin running. That cost is paid in
 - **The plugin runtime moves to stage 1.** SMTP is needed for invitations
   (`REQ-TEN-004`), password reset (`REQ-SEC-018`) and security notifications
   (`REQ-NOTI-004`), all stage 1. See [ADR-0028](0028-plugin-runtime-stage-1.md).
-- **`REQ-NOTI-007` becomes satisfiable**, and its acceptance test becomes the
-  general one: *no* core container reaches *any* external host, verified in CI.
+- **`REQ-NOTI-007` becomes satisfiable**, and its acceptance test becomes the one
+  against **`api` and `worker`**: neither reaches any external host, verified in CI.
+  *(This read "no core container … any external host" until 2026-09-11, which is a test
+  with two members whose expected result is wrong — `web` and `egress-proxy` reach out by
+  design, [ADR-0042](0042-edge-is-not-internal.md), `REQ-SEC-102`.)*
 - **SSRF enters the threat model** as a Zone 4 risk in
   [12 §12.3](../architecture/12-security.md), not as an accepted Zone 2 exposure.
 - **Boundary ⑥ (Zone 2 → 5) disappears** from the trust boundary diagram in

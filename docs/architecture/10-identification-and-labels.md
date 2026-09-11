@@ -197,8 +197,8 @@ graph TB
 
 | Aspect | Implementation |
 |---|---|
-| Preferred | The `BarcodeDetector` API (Chromium, Android, Safari 17+) — hardware-accelerated, easy on the battery |
-| Fallback | ZXing-WASM in a web worker so the UI stays responsive |
+| Preferred **where it exists** | The `BarcodeDetector` API — hardware-accelerated, easy on the battery. Available in **Chromium on Android, ChromeOS and macOS**. **Not in Safari, and therefore on no iOS browser**, because they all use WebKit; and not in Chromium on Windows or Linux |
+| Fallback — **and the primary path on iOS** | ZXing-WASM in a web worker so the UI stays responsive. This row said *"fallback"* and the row above claimed Safari 17+ until 2026-09-11; the API is not implemented in WebKit at all. On iPhone and iPad — the device class [01 §1.3](01-introduction-and-goals.md) builds Q6 around — WASM is the **only** browser scanning path, which makes its performance a first-class target rather than a contingency (`REQ-IDENT-006`, risk **R17**) |
 | Prerequisite | A secure context (HTTPS) — without TLS there is no camera access. Stated explicitly in the documentation, because it is the most common stumbling block for self-hosters. |
 | Continuous mode | A sustained scan mode: several codes in a row without restarting the camera; audible and haptic feedback; debouncing against duplicate capture (a 2 s lock per code) |
 | Lighting | Torch control through `MediaStreamTrack` where available — cellars and cupboards are the normal case |

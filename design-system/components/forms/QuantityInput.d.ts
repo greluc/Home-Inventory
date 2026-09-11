@@ -4,7 +4,11 @@ import type { InputHTMLAttributes } from "react";
 export interface QuantityInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "value"> {
   value?: number | string;
   unit?: string;
+  /** The symbols offered in the attached selector. The defaults are placeholders — the real list
+   *  comes from the field definition, which is tenant configuration, not design-system data. */
   units?: string[];
   readOnly?: boolean;
+  /** Accessible name of the unit selector. English default; the client passes the translated string (REQ-NFR-032). */
+  unitLabel?: string;
 }
 export declare function QuantityInput(props: QuantityInputProps): JSX.Element;

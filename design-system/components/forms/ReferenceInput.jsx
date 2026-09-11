@@ -1,7 +1,7 @@
 import React from "react";
 import { Icon } from "../foundation/Icon.jsx";
 
-export function ReferenceInput({ kind = "location", path = [], label, placeholder = "Ort wählen…", readOnly, disabled, onPick, onClear }) {
+export function ReferenceInput({ kind = "location", path = [], label, placeholder = "Select…", readOnly, disabled, onPick, onClear, clearLabel = "Remove link" }) {
   const icon = kind === "location" ? "map-pin" : "package";
   if (readOnly) {
     if (!label) return <div className="hi-readonly hi-readonly--empty">—</div>;
@@ -25,7 +25,7 @@ export function ReferenceInput({ kind = "location", path = [], label, placeholde
         <Icon name="chevron-right" size={16} style={{ marginLeft: "auto", color: "var(--text-muted)" }} />
       </button>
       {label && !disabled ? (
-        <button type="button" className="hi-iconbtn" aria-label="Verknüpfung entfernen" onClick={onClear}><Icon name="x" size={16} /></button>
+        <button type="button" className="hi-iconbtn" aria-label={clearLabel} onClick={onClear}><Icon name="x" size={16} /></button>
       ) : null}
     </div>
   );

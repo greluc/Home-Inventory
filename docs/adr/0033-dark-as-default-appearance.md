@@ -1,6 +1,11 @@
 # ADR-0033 — Dark is the default appearance, on every platform
 
 **Status:** Accepted · **Date:** 2026-09-11
+
+> **Amended by [ADR-0038](0038-csp-delivery-and-first-paint.md)**: the no-flash condition
+> below is met by a `localStorage` mirror of the profile value, read by a hash-authorised
+> inline bootstrap before first paint — not by a third cookie. Back-link added 2026-09-11
+> (**A4b**).
 **Records:** `REQ-NFR-040`, which was decided and implemented in the design brief
 without an ADR. Written now so the reasoning survives the first time someone asks
 why the system ignores the operating system setting.

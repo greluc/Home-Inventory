@@ -2,6 +2,11 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 
+> **Amended by [ADR-0047](0047-bilingual-search-vectors.md):** the PostgreSQL fallback
+> adapter indexes into **two** generated `tsvector` columns, `'german'` and `'english'`,
+> not one `'simple'` column. `simple` does no stemming at all, and it was the only
+> full-text mechanism at stage 0 and the permanent one in the `minimal` profile.
+>
 > **Amended by [ADR-0039](0039-degraded-response-signalling.md):** the fallback is
 > signalled by `meta.degraded` in the response envelope, not by `Warning: 199` —
 > that header was obsoleted by RFC 9111 §5.5 in 2022. The two mentions below are

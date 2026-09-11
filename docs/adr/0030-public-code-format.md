@@ -143,8 +143,11 @@ already larger for another reason.
   [10 §10.1](../architecture/10-identification-and-labels.md) claimed. The same
   measurement inverts the old argument: a URL carrying the UUID in its *path*
   instead (≈ 62 characters) would be a **version 4** symbol — smaller than what
-  this design prints. Reasons 2 and 3 carry the decision on their own, exactly as
-  they did after O12.
+  this design prints. Reasons 1 and 2 — human readability and decoupling — carry the
+  decision on their own, exactly as they did after O12. *(This said "Reasons 2 and 3"
+  until 2026-09-11, which was the pre-withdrawal numbering;
+  [10 §10.1](../architecture/10-identification-and-labels.md) renumbered them when the
+  other two were struck.)*
 - **The starter catalogue is unaffected.** Its smallest format, Avery Zweckform
   3667 at 48.5 × 16.9 mm, yields 0.376 mm per module — above the floor. The
   correction lands in the prose and in the preview warning, not in

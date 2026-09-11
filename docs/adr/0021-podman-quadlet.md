@@ -2,8 +2,16 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 **Amends:** [ADR-0015](0015-deployment.md), the *Podman* row — classified there as
-"not maintained separately". The remaining decisions of ADR-0015 stand, except
-where [ADR-0022](0022-rootless.md) tightens them.
+"not maintained separately".
+
+The remaining decisions of ADR-0015 stand, except where
+[ADR-0022](0022-rootless.md) tightens them — a statement about ADR-0015, not a second
+entry on the `Amends:` line above, which is why it sits outside it.
+
+> **Amended by [ADR-0027](0027-egress-enforcement.md)**: one service is added to the
+> topology, the `egress-proxy`. Back-link added 2026-09-11 — it was the reciprocal of an
+> `Amends:` that had been declared for months and never recorded here, which is the gate
+> **A4b** exists to catch.
 
 ## Context
 

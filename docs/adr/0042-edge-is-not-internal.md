@@ -3,8 +3,21 @@
 **Status:** Accepted · **Date:** 2026-09-11
 **Resolves:** A5 in [ADR-0000](0000-open-points.md) — **by measurement, and against the assumption**
 **Amends:** [ADR-0027 §1](0027-egress-enforcement.md),
+[ADR-0026](0026-core-outbound-via-plugins.md),
 [06 §6.7](../architecture/06-deployment-view.md),
-[`deploy/services.yaml`](../../deploy/services.yaml), `REQ-PRIV-003`
+[`deploy/services.yaml`](../../deploy/services.yaml), `REQ-PRIV-003`, `REQ-NOTI-007`
+
+> **[ADR-0026](0026-core-outbound-via-plugins.md) and `REQ-NOTI-007` were added to this
+> line on 2026-09-11.** Both carried the *"every core container"* wording this ADR
+> corrects, and both were missed because the list was hand-maintained — the identical
+> failure [ADR-0040](0040-no-cross-origin-isolation.md) had with `COEP`, and the reason
+> **A4b** is a gate.
+>
+> **Amended by [ADR-0044](0044-internal-is-not-a-trust-boundary.md):** `web` is no longer
+> on `internal`. The claim below that it "holds no data, a credential or domain logic" was
+> true of what it holds and said nothing about what it could reach — every datastore port
+> on the segment, plus `:8090` on both core roles. It now sits on a two-member `frontend`
+> segment with `api` alone.
 
 ## Context
 
@@ -58,7 +71,7 @@ discovered the first time `plugin-smtp` tried to send an invitation.
 |---|---|---|
 | Keep `edge` internal | No change | Measured: the application would not be reachable at all |
 | A separate `ingress` container, dual-homed | Keeps `web` static | A fifth core container for a job `web` is already shaped to do |
-| **`web` becomes the ingress**: dual-homed on `edge` and `internal`, publishing the one port and proxying to `api` | **Removes** a published port rather than adding a container · `api` and `worker` end up with **no** published port and no `edge` membership, which is stricter than today · the host firewall goes from two rules to one · `web` already serves the security headers ([ADR-0038](0038-csp-delivery-and-first-paint.md)), so the edge is one place | One more hop behind the operator's reverse proxy · `web` is on the request path for the API, not only for static files · `web` has an outbound route |
+| **`web` becomes the ingress**: dual-homed on `edge` and `internal` — *since [ADR-0044](0044-internal-is-not-a-trust-boundary.md), on `edge` and the two-member `frontend` segment instead* — publishing the one port and proxying to `api` | **Removes** a published port rather than adding a container · `api` and `worker` end up with **no** published port and no `edge` membership, which is stricter than today · the host firewall goes from two rules to one · `web` already serves the security headers ([ADR-0038](0038-csp-delivery-and-first-paint.md)), so the edge is one place | One more hop behind the operator's reverse proxy · `web` is on the request path for the API, not only for static files · `web` has an outbound route |
 | Host networking | Sidesteps the bridge entirely | Forbidden: rootless, and `network_mode: host` is on the `forbidden` list (`REQ-SEC-084`) |
 
 ## Decision

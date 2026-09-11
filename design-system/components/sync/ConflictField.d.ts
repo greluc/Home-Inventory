@@ -17,13 +17,27 @@ export interface ConflictFieldModel {
  * One field of a conflict, decided on its own. This is the surface users meet at the worst
  * moment, so the layout is the design problem: three versions side by side is a desktop idea.
  * Below 840px each field is a stack of three full-width option cards — the whole card is the
- * target, not a 20px radio — with a "3 von 7 Feldern entschieden" counter above. From 840px the
+ * target, not a 20px radio — with a "3 of 7 fields decided" counter above. From 840px the
  * same three options become a row. Nothing is ever auto-chosen for the user; the discarded
  * version stays retrievable for 90 days.
  */
+export interface ConflictLabels {
+  base?: string; mine?: string; theirs?: string;
+  /** Shown in place of an empty value, so "no value" cannot be mistaken for "not loaded". */
+  empty?: string;
+  progressOf?: string; progressFields?: string;
+}
+
 export interface ConflictFieldProps {
   field: ConflictFieldModel;
   onChoose: (key: string, side: "base" | "mine" | "theirs") => void;
+  /** Overrides for the user-visible strings; the defaults in `CONFLICT_LABELS` are English
+   *  and the client passes the translated set (REQ-NFR-032). */
+  labels?: ConflictLabels;
 }
 export declare function ConflictField(props: ConflictFieldProps): JSX.Element;
-export declare function ConflictProgress(props: { resolved?: number; total?: number }): JSX.Element;
+export declare function ConflictProgress(props: {
+  resolved?: number; total?: number; labels?: ConflictLabels;
+}): JSX.Element;
+/** The English defaults, exported so a client can translate from a known key set. */
+export declare const CONFLICT_LABELS: Required<ConflictLabels>;

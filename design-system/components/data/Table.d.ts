@@ -15,7 +15,7 @@ export interface Column<R = any> {
 /**
  * The dense list, table view. Sticky head, row height from the density token, hit targets from
  * the pointer token, and a name column that truncates with ellipsis rather than wrapping —
- * "Akku-Schlagbohrschrauber-Set mit Ladegerät" must not make its row two lines tall in a
+ * "Cordless impact driver set with charger" must not make its row two lines tall in a
  * thousand-row list. The full name is in the row's title attribute and in the detail pane.
  * Below 840px do not render this: switch to the two-line RowList instead.
  */

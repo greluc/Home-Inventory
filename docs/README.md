@@ -103,14 +103,27 @@ Each has its own ADR with rationale and alternatives.
 | 41 | Migration | Its own one-shot service on every runtime; no long-running process holds DDL rights | [0041](adr/0041-migration-as-its-own-service.md) |
 | 42 | Inbound topology | `edge` is not internal; `web` is the ingress and the only publisher | [0042](adr/0042-edge-is-not-internal.md) |
 | 43 | Default media store | The filesystem `BlobStore` gets its own in-deployment service, so `api` and `worker` stay stateless | [0043](adr/0043-blobstore-as-its-own-service.md) |
+| 44 | Inside the deployment | `internal` is a network, not a trust boundary: every datastore authenticates, and `web` sits on a two-member segment with `api` | [0044](adr/0044-internal-is-not-a-trust-boundary.md) |
+| 45 | Recovery point | The WAL archive is its own volume — without it RPO ≤ 15 min is the last daily dump | [0045](adr/0045-wal-archive-volume.md) |
+| 46 | Audit retention | The chain is truncatable and the truncation is recorded, so retention and tampering stop looking alike | [0046](adr/0046-truncatable-audit-chain.md) |
+| 47 | Fallback full text | Two generated `tsvector` columns, German and English — `simple` does no stemming | [0047](adr/0047-bilingual-search-vectors.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open** — the
-review pass of 2026-09-11 raised five (O18–O22) and writing the `problem.type`
-registry raised a sixth (O23); all six were decided the same day. What remains
-there is outstanding *work* — the Dymo printable areas (A2), running the
-connectivity suite under rootless Podman and `kind` (A5), and emitting the
-generated `freshclam.conf` from the service matrix (A6). A5 is **not** an
-unverified assumption: it was measured under Docker, found false, and the
-topology was corrected ([ADR-0042](adr/0042-edge-is-not-internal.md)); what is
-outstanding is confirming the corrected shape on the other two runtimes.
+review passes of 2026-09-11 raised nine (O18–O26), and all nine were decided the same day.
+The last three were the conditions [`problem-types.yaml`](reference/problem-types.yaml)
+had left `pending`, which is an open decision wearing a different hat: one of them,
+the status code for an oversized payload, was load-bearing for a **stage-0**
+requirement.
+
+What remains there is outstanding **work**, and every item of it waits on a CI workflow or
+a build that does not exist yet — this repository has no code. Three things: running the
+connectivity suite under rootless Podman and `kind` (**A5**), emitting the generated
+`freshclam.conf` from the service matrix (**A6**), and the two documentation gates
+specified in [`.github/workflows/README.md`](../.github/workflows/README.md) — the ADR
+back-link check (**A4b**) and the unbacked-claim check (**A7**). A5 is **not** an
+unverified assumption: it was measured under Docker, found false, and the topology was
+corrected ([ADR-0042](adr/0042-edge-is-not-internal.md)); what is outstanding is
+confirming the corrected shape on the other two runtimes. **A2 is closed**, for Dymo as
+well as Brother — Dymo publishes no per-label printable area at all, which is an answer
+rather than a gap.

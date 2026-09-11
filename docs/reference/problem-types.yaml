@@ -221,27 +221,78 @@ assigned:
       why it is a problem type and not a `degradedReason`.
     sources: ["ADR-0024: scanner unreachable → `503`", "REQ-SEC-092, REQ-MED-013"]
 
+  - token: payload-too-large
+    status: 413
+    since: 0
+    summary: >
+      The request body exceeds the JSON limit, or a bulk operation exceeds its entry
+      limit.
+    carries:
+      - "the limit that was exceeded, so a client can chunk rather than guess"
+    notes: >
+      DECIDED 2026-09-11 as open point O24. 08 §8.2's status list did not include 413 and
+      nothing else named one, so this sat in `pending` — while REQ-NFR-078 (stage 0)
+      requires an oversized body to be rejected by `api` as application/problem+json and
+      NOT by `web` as an nginx HTML page. A requirement due at stage 0 cannot depend on an
+      undecided status code. 413 is RFC 9110 §15.5.14 and the only defensible answer; the
+      status list in 08 §8.2 now carries it.
+    sources:
+      - "08 §8.2 security table: JSON max. 1 MB, bulk operations max. 500 entries"
+      - "REQ-SEC-065, REQ-NFR-078, RFC 9110 §15.5.14"
+
+  - token: plugin-unavailable
+    status: 503
+    since: 1
+    summary: >
+      A plugin the requested ACTION depends on cannot be reached — its circuit is open,
+      its deadline expired, or it is disabled.
+    notes: >
+      DECIDED 2026-09-11 as open point O25, and the decision is the boundary rather than
+      the code. The registry noted that both a problem type and a `degradedReason` were
+      defensible, and they are — for different cases:
+
+        * the ACTION cannot be performed (print to a printer plugin, deliver through a
+          channel plugin, store through a BlobStore plugin) -> this token, 503. Nothing
+          happened, and the client must be told so;
+        * the action SUCCEEDED and something derived from it is poorer (no enrichment
+          proposals, an upload queued rather than stored remotely) -> a 200 with
+          meta.degraded and the matching degradedReason in degraded-reasons.yaml.
+
+      Stated that way the two registries stop overlapping: a problem type means the
+      request did not do what it said; a degradedReason means it did, less well. The
+      `scan-unavailable` entry above is the same shape, and is the reason ADR-0024 makes
+      it a refusal rather than a degradation.
+    sources:
+      - "05 §5.8: the circuit breaker fails immediately and visibly instead of piling up"
+      - "13 §13.6, one-plugin row; ADR-0006, REQ-PLG-007"
+
+  - token: tenant-inaccessible
+    status: 403
+    since: 1
+    summary: >
+      The tenant is suspended, or pending deletion within its grace period. One token for
+      both states, deliberately.
+    notes: >
+      DECIDED 2026-09-11 as open point O26. Two tokens would tell a caller which of the
+      two states a tenant is in, and that is an existence-and-status oracle over a
+      boundary the rest of the design closes carefully (REQ-SEC-025, REQ-IDENT-014, and
+      the `not-found` entry above, which must not be split for the same reason). A member
+      of the tenant learns the state from the administration UI, where they are already
+      authenticated and entitled to it; the API says only that the tenant cannot be acted
+      on.
+
+      403 rather than 404: the caller is a member and the tenant's existence is not a
+      secret from them. 503 was rejected — suspension is not a transient condition and
+      Retry-After would be a lie.
+    sources:
+      - "04 §4.3 `tenancy`: Tenant states; 05 §5.9: access blocked immediately"
+      - "REQ-TEN-011, REQ-SEC-082"
+
 # ---------------------------------------------------------------------------
 # NOT REGISTERED YET — conditions the corpus describes without fixing a status
-# code. They are listed so the gap is visible rather than discovered by the first
-# client author, and NOT given a token, because inventing a status code here
-# would make a contract out of a guess.
+# code. The list is EMPTY as of 2026-09-11: the three entries that stood here were
+# decided as O24, O25 and O26 and moved into `assigned` above. It stays as a
+# section, because the next condition someone writes down without a status code
+# belongs here rather than in a worked example.
 # ---------------------------------------------------------------------------
-pending:
-
-  - condition: "A payload exceeds the JSON or bulk limit"
-    whatIsFixed: "the limits — JSON ≤ 1 MB, bulk ≤ 500 entries (REQ-SEC-065, 08 §8.2)"
-    whatIsMissing: "the status code. 08 §8.2's status list does not include `413`, and nothing else names one"
-
-  - condition: "A plugin the requested function depends on is unavailable (circuit open)"
-    whatIsFixed: >
-      the behaviour — "fail immediately and visibly instead of piling up"
-      (05 §5.8), "only the function depending on it, visibly marked" (13 §13.6)
-    whatIsMissing: >
-      whether this surfaces as a problem type or as a `degradedReason` in a `200`.
-      Both are defensible: a print job that cannot reach its printer is a failure,
-      while an enrichment that cannot reach a resolver is a degradation
-
-  - condition: "A tenant is suspended or pending deletion"
-    whatIsFixed: "the states (04 §4.3 `tenancy`, 05 §5.9: access blocked immediately)"
-    whatIsMissing: "the status code and whether the response distinguishes the two states"
+pending: []

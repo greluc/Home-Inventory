@@ -1,7 +1,7 @@
 import React from "react";
 import { Icon } from "../foundation/Icon.jsx";
 
-export function Select({ options = [], value, placeholder = "Bitte wählen", readOnly, disabled, className = "", ...rest }) {
+export function Select({ options = [], value, placeholder = "Please choose", readOnly, disabled, className = "", ...rest }) {
   if (readOnly) {
     const hit = options.find((o) => (o.value ?? o) === value);
     const label = hit ? (hit.label ?? hit) : null;

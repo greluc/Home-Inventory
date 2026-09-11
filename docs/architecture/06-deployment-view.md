@@ -222,25 +222,38 @@ daemon disappears entirely.
 ```
 ~/.config/containers/systemd/     (user homeinv)
 ├── homeinv-edge.network
+├── homeinv-egress.network
+├── homeinv-frontend.network       (web + api only, ADR-0044)
 ├── homeinv-internal.network
 ├── homeinv-scanner.network
 ├── homeinv-plugin-<id>.network    (one per installed plugin, ADR-0037)
 ├── homeinv-blobdata.volume
 ├── homeinv-pgdata.volume
+├── homeinv-pgwal.volume           (the WAL archive, ADR-0045)
 ├── homeinv-osdata.volume
 ├── homeinv-mqdata.volume
+├── homeinv-kvdata.volume
+├── homeinv-cvddata.volume
 ├── homeinv-postgres.container
 ├── homeinv-valkey.container
 ├── homeinv-blobstore.container
 ├── homeinv-rabbitmq.container
 ├── homeinv-opensearch.container
 ├── homeinv-clamav.container
+├── homeinv-egress-proxy.container  (every profile, ADR-0036)
 ├── homeinv-migrate.container       (Type=oneshot; api and worker Require= it)
 ├── homeinv-api.container
 ├── homeinv-worker.container
 ├── homeinv-web.container
 └── plugins/…                     (one .container file per plugin)
 ```
+
+> **This listing was incomplete until 2026-09-11**, and incompletely in a way that
+> mattered: it omitted `homeinv-egress.network`, `homeinv-egress-proxy.container` — the
+> container [ADR-0036](../adr/0036-scanner-egress.md) runs in *every* profile — and the
+> `kvdata` and `cvddata` volumes that [`deploy/services.yaml`](../../deploy/services.yaml)
+> declares. A file listing is how a reader checks what the generator emits, so a listing
+> that is short by four is a drift check nobody can perform by eye.
 
 ```ini
 # homeinv-api.container
@@ -261,11 +274,13 @@ ContainerName=homeinv-api
 AutoUpdate=disabled                              # digest-pinned, no auto-update
 
 Network=homeinv-internal.network                 # NOT edge: api publishes nothing and
-                                                 # is reached through web (ADR-0042)
+Network=homeinv-frontend.network                 # is reached through web over the
+                                                 # two-member frontend segment
+                                                 # (ADR-0042, ADR-0044)
 Network=homeinv-plugin-smtp.network              # one per installed plugin (ADR-0037);
                                                  # generated, never hand-listed
                                                  # No PublishPort at all. 8080 is reached by
-                                                 # web over `internal`; 8090 (management)
+                                                 # web over `frontend`; 8090 (management)
                                                  # binds to the internal address — 13 §13.3
 
 Environment=SPRING_PROFILES_ACTIVE=api,standard
@@ -377,11 +392,11 @@ logging:
 
 | Service | Image | RAM (reservation/limit) | Persistence | Networks |
 |---|---|---|---|---|
-| `web` (**the ingress**) | own, `nginx-unprivileged` | 64 / 256 MB | none | edge, internal |
-| `api` | own, distroless JRE 25 | 768 MB / 1.5 GB | none | internal, every `plugin-<id>` |
+| `web` (**the ingress**) | own, `nginx-unprivileged` | 64 / 256 MB | none | edge, **frontend** ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)) |
+| `api` | own, distroless JRE 25 | 768 MB / 1.5 GB | none | internal, frontend, every `plugin-<id>` |
 | `worker` | **the same image** | 512 MB / 1.5 GB | none | internal, scanner, every `plugin-<id>` |
 | `migrate` | **the same image**, one-shot | 256 / 512 MB *while running* | none | internal |
-| `postgres` | `postgres:18-alpine` | 1 / 2 GB | volume `pgdata` | internal |
+| `postgres` | `postgres:18-alpine` | 1 / 2 GB | volumes `pgdata`, **`pgwal`** ([ADR-0045](../adr/0045-wal-archive-volume.md)) | internal |
 | `opensearch` | `opensearchproject/opensearch:3` | 1.5 / 2 GB | volume `osdata` | internal |
 | `rabbitmq` | `rabbitmq:4-management-alpine` | 256 / 512 MB | volume `mqdata` | internal |
 | `valkey` | `valkey/valkey:8-alpine` | 128 / 256 MB | volume (AOF) | internal |
@@ -442,7 +457,8 @@ Applies equally to Podman (`netavark`) and Docker:
 |---|---|---|
 | `edge` | **`web` only** — the one container with a published port | **yes, and it has to be.** See the measurement below |
 | `egress` | **`egress-proxy` only** — the route the chokepoint needs | **yes, and it has to be** |
-| `internal` | database, search, broker, cache, **`blobstore`**, `api`, `worker`, `web`, `migrate` — **and the only segment the management listener binds to** ([13 §13.3](13-operations-and-observability.md)) | **no** (`internal: true` resp. `Internal=true`) |
+| `frontend` | **`web` and `api`, and nothing else** ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)). It carries the `web` → `api` hop of [ADR-0042](../adr/0042-edge-is-not-internal.md) | **no** (`internal: true`) |
+| `internal` | database, search, broker, cache, **`blobstore`**, `api`, `worker`, `migrate` — **and the only segment the management listener binds to** ([13 §13.3](13-operations-and-observability.md)). **`web` is not a member**, and every service on it authenticates its callers: reachability is not authorisation ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)) | **no** (`internal: true` resp. `Internal=true`) |
 | `scanner` | `clamav`, `worker`, `egress-proxy` | **only through `egress-proxy`**, and only to the signature mirror ([ADR-0036](../adr/0036-scanner-egress.md)). `api` is deliberately absent: the scan runs in the worker, never in the request path |
 | `plugin-<id>` — **one per installed plugin** | that plugin, `api`, `worker`, `egress-proxy`. Nothing else, and never a second plugin | **only through `egress-proxy`**, and only to the hosts the granting plugin's manifest declared ([ADR-0027](../adr/0027-egress-enforcement.md)). Plugin containers get no gateway of their own |
 
@@ -471,7 +487,7 @@ container. Exactly two containers therefore sit on a non-internal segment, and
 
 - **`web`** — the ingress. It publishes the single host port, serves the bundle
   and the security headers, and proxies `/api`, `/graphql`, `/c/`, `/.well-known`
-  and the SSE stream to `api` over `internal`. `api` publishes nothing and is not
+  and the SSE stream to `api` over `frontend`. `api` publishes nothing and is not
   on `edge` at all, which is stricter than the shape this replaced.
 - **`egress-proxy`** — which until the same pass sat only on internal segments and
   so could not make the one call it exists to make. That was the identical defect
@@ -514,6 +530,14 @@ Six properties, all verified in CI by a connectivity test rather than asserted:
   exceptions from becoming a habit (`REQ-SEC-102`).
 - **Exactly one host port is published in the whole deployment.** It was two until
   `api` stopped publishing.
+- **`web` reaches `api` and nothing else.** From the `frontend` segment, `postgres`,
+  `valkey`, `rabbitmq`, `opensearch`, `blobstore` and `:8090` on both core roles must all
+  refuse. This assertion did not exist until 2026-09-11, and until then `web` — the one
+  container an attacker meets first — was a full member of `internal` with every one of
+  those ports open to it ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)).
+  `REQ-SEC-102`'s "holds no data, no credential, no domain logic" was true of what it
+  *holds* and silent about what it could *reach* — the same distinction
+  [ADR-0037](../adr/0037-per-plugin-network-segments.md) drew for plugins.
 
 ### The `web` → `api` hop, and what it must not do
 
@@ -524,7 +548,7 @@ differently. Five rules, all checkable (`REQ-NFR-078`, `REQ-SEC-103`):
 
 | Rule | Why it is not a detail |
 |---|---|
-| **`web` terminates no TLS.** It speaks HTTP to `api` over `internal`; the operator's reverse proxy terminates TLS in front of it | Consistent with `REQ-NFR-061`. Two TLS terminations in one delivery would mean two certificate lifecycles for one hostname |
+| **`web` terminates no TLS.** It speaks HTTP to `api` over `frontend`; the operator's reverse proxy terminates TLS in front of it | Consistent with `REQ-NFR-061`. Two TLS terminations in one delivery would mean two certificate lifecycles for one hostname |
 | **`web`'s body limit is not below the API's.** The rejection of an oversized request must come from `api` | `REQ-API-003` puts RFC 9457 on **every** HTTP surface. A limit enforced at `web` returns an nginx HTML error page, and the client that was promised `application/problem+json` gets markup it cannot parse |
 | **`web`'s read timeout exceeds the API's 30 s ceiling** ([08 §8.2](08-api-contract.md)) | Same failure one layer up: `web` would emit its own `504` instead of the API's handled response, and long operations already return `202` plus a job resource rather than holding a connection |
 | **Response buffering is off for the SSE stream** | `REQ-API-011` is live updating. A buffering proxy holds events until the buffer fills, so the feature appears to work in development and silently stops working in the deployment — which is the class of defect this chapter keeps finding |
@@ -539,7 +563,7 @@ client → operator's reverse proxy → web → api
 ```
 
 `HOMEINV_TRUSTED_PROXIES` must therefore contain **both** the operator's proxy
-and `web`'s address on `internal`, and `web` must **append** to `X-Forwarded-For`
+and `web`'s address on `frontend`, and `web` must **append** to `X-Forwarded-For`
 rather than overwrite it. Get it wrong in either direction and one of two things
 happens, neither loud:
 
@@ -593,7 +617,7 @@ graph TB
     end
     BR --> RP
     RP -->|"the ONLY published port"| WEB
-    WEB -->|"/api /graphql /c/ SSE<br/>over internal"| APP
+    WEB -->|"/api /graphql /c/ SSE<br/>over frontend"| APP
     APP --> PG & KV & OS & MQ & BS
     WRK --> PG & OS & MQ & CAV & BS
     APP -.->|mTLS| PH1 & PH2 & PH3
@@ -608,6 +632,13 @@ Compared with the previous revision of this diagram, two arrows are gone:
 `APP --> NC` and `WRK --> NC`. They contradicted the sentence above them and were
 the visible half of the finding that produced
 [ADR-0026](../adr/0026-core-outbound-via-plugins.md).
+
+**A segment the diagram cannot draw:** `frontend` holds `web` and `api`, and a Mermaid
+node belongs to one subgraph, so it lives on the `WEB --> APP` edge label instead. It is
+the whole of that segment — the ingress reaches the API and nothing else
+([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)). `web` is **not** in the
+`internal` box any more, and that is the visible half of the finding: the one container
+with a published port used to sit beside every datastore in it.
 
 Four things changed again on 2026-09-11:
 
@@ -683,8 +714,8 @@ about 3 GB.
 
 | Profile | `search` | Events | Media | Plugins | RAM (reserved) | Purpose |
 |---|---|---|---|---|---|---|
-| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ~3.4 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
-| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ~5.4 GB | **The profile of this installation** |
+| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ≈ 3.5 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
+| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ≈ 5.2 GB (+ 64 MB per plugin) | **The profile of this installation** |
 | `ha` | OpenSearch cluster | RabbitMQ cluster | S3 via plugin | as `standard` | ≥ 16 GB | Kubernetes, multiple instances |
 
 > **`minimal` opens exactly one connection outside the deployment, and it is the
@@ -702,6 +733,15 @@ about 3 GB.
 > which such an installation typically does not need. Every outbound connection it
 > does make passes the same proxy and the same access log as everywhere else.
 
+> **These two figures disagreed with the rest of the corpus until 2026-09-11.** They read
+> 3.4 GB and 5.4 GB, against ≈ 3.5 GB and ≈ 5.2 GB in [6.7](#67-services-and-sizing),
+> `REQ-NFR-009` and [`deploy/services.yaml`](../../deploy/services.yaml) — and 5.4 was
+> precisely the superseded convention that folded three first-party plugins into the
+> reservation total while leaving them out of the limit total. `REQ-NFR-009` measures
+> against the computed sums, so the computed sums are what this table shows. A fourth
+> figure, "roughly 2.5–3 GB", lived in [ADR-0024](../adr/0024-malware-scan.md) and is
+> corrected there.
+
 Moving `minimal` → `standard` is a configuration change plus an index build — no
 data loss, no migration.
 
@@ -716,6 +756,16 @@ data loss, no migration.
 3. Secrets are passed as **files** (`*_FILE` convention) — as a `podman secret`
    with `type=mount`, a Docker secret or a Kubernetes secret. Never on the command
    line, never as an environment variable holding the value itself.
+
+   **One exception, and the list is closed** ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md),
+   `REQ-NFR-054`), in the shape [07 §7.1](07-data-model.md) uses for instance-wide tables:
+
+   | Variable | Why the rule cannot be kept |
+   |---|---|
+   | `OPENSEARCH_INITIAL_ADMIN_PASSWORD` | The OpenSearch image reads this variable and implements **no** `_FILE` variant — that convention belongs to the Docker Official Images, not to every image. The matrix declared `…_FILE`, which the image ignores, so the security plugin would have started with **no** admin password while `DISABLE_INSTALL_DEMO_CONFIG` also denied it certificates, and the health check called `https://`. The generator reads the secret file and injects the value. A wrapper image was rejected for the reason [ADR-0036](../adr/0036-scanner-egress.md) rejected one for ClamAV |
+
+   A second entry needs a row here and a sentence saying why that image cannot read a
+   file. That is deliberately more friction than shipping a variable nothing reads.
 4. At startup the application logs a **configuration overview with masked
    secrets**.
 5. If `HOMEINV_PUBLIC_BASE_URL` differs from a base already printed onto labels,
@@ -735,7 +785,12 @@ data loss, no migration.
 | `HOMEINV_MEDIA_BASE_URL` | yes | **A dedicated hostname** for serving media. Prefer a subdomain of the application host: media responses send `Cross-Origin-Resource-Policy: same-site` to stop foreign sites embedding tenant media, and from a **different registrable domain** that same header blocks our own pages — such a host must send `cross-origin` instead, or every image silently fails to load. CORP is enforced independently of `Cross-Origin-Embedder-Policy`, which this deployment does not send at all ([12 §12.9](12-security.md), [ADR-0040](../adr/0040-no-cross-origin-isolation.md)). A startup check warns when the two hosts are not same-site |
 | `HOMEINV_PLUGIN_UI_BASE_URL` | no | A wildcard hostname for plugin UI panels, one subdomain per plugin ID (`<plugin-id>.plugins.inv.example.org`). Required only when a plugin with `ui:panel` is installed; without it the capability cannot be granted, and the administration UI says why (`REQ-PLG-012`) |
 | `HOMEINV_BLOBSTORE_TYPE` | no (`filesystem`) | `filesystem` / `s3` / `nextcloud` |
-| `HOMEINV_TRUSTED_PROXIES` | yes | CIDR list; `X-Forwarded-*` is honoured only from here |
+| `HOMEINV_URL_SIGNING_KEY_FILE` | yes | Signs the short-lived media URLs of `REQ-MED-010` and the opaque pagination cursors of [08 §8.2](08-api-contract.md). Both were specified as **signed** from stage 0 and neither named a key. Deliberately separate from the JWT key: a URL signature must not be forgeable by anything that can mint a session token ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)) |
+| `HOMEINV_VALKEY_USER`, `_PASSWORD_FILE` | yes | Valkey ACL user; `default` is disabled |
+| `HOMEINV_MQ_USER`, `_PASSWORD_FILE` | yes in `standard`/`ha` | RabbitMQ user. There was none, and `guest` is loopback-only — the generated stack could not connect at all |
+| `HOMEINV_SEARCH_USER`, `_PASSWORD_FILE` | yes in `standard`/`ha` | The core's OpenSearch client user, distinct from the admin account |
+| `HOMEINV_BLOBSTORE_FINGERPRINT` | yes | The pinned certificate fingerprint of the in-deployment `blobstore`, checked on every connection — the same mechanism a plugin registration uses (`REQ-SEC-056`). [ADR-0043](../adr/0043-blobstore-as-its-own-service.md) gave that service every tenant's media and no authentication |
+| `HOMEINV_TRUSTED_PROXIES` | yes | CIDR list; `X-Forwarded-*` is honoured only from here. **Both hops**: the operator's reverse proxy **and** `web`'s address on `frontend` (`REQ-SEC-103`) |
 | `HOMEINV_REGISTRATION_MODE` | no (`invite_only`) | `invite_only` / `open` / `closed` |
 | `HOMEINV_PROFILE` | no (`standard`) | see 6.10 |
 
@@ -761,13 +816,15 @@ data loss, no migration.
 
 | Subject | Method | Frequency | Verification |
 |---|---|---|---|
-| PostgreSQL | `pg_dump --format=custom` **inside the container** (not over the volume) plus WAL archiving | daily full, WAL continuous | weekly automated restore into a throwaway container, then a consistency check |
+| PostgreSQL | `pg_dump --format=custom` **inside the container** (not over the volume) plus WAL archiving into the **`pgwal` volume** ([ADR-0045](../adr/0045-wal-archive-volume.md)) | daily full, WAL continuous (`archive_timeout` 900 s, so an idle instance still closes a segment inside the objective) | weekly automated restore into a throwaway container **with an archive replay to a point in time**, then a consistency check. A restore that only replays the dump proves the RTO and says nothing about the RPO |
+| WAL archive (`pgwal`) | Exported through the runtime with the dump and restored with it. Segments older than the newest verified base backup are pruned daily; the volume's fill level is a metric and an alert, because a full archive volume stops PostgreSQL writing | daily | part of the weekly point-in-time restore above. **This row did not exist until 2026-09-11** — [6.13](#613-backup-and-restore) promised continuous WAL archiving and `REQ-NFR-014` turned it into RPO ≤ 15 min, with no volume, no `archive_command` and no target anywhere ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | Volumes generally | Export through the runtime (`podman volume export`, for Docker through a helper container) — **never** by copying directly out of the storage directory, because the files belong to the `subuid` range and ownership is lost on restore | daily | weekly spot check |
 | Blobs (`blobstore`, the default) | Volume `blobdata` exported through the runtime, plus a manifest reconciliation (every referenced hash exists). **This row did not exist until 2026-09-11** — the default media store had no volume and no backup at all ([ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | daily | weekly automated restore, with the reconciliation as the check |
 | Blobs (Nextcloud or S3, where configured) | Backed up through Nextcloud resp. the object store; plus the same manifest reconciliation | daily | weekly spot check |
 | OpenSearch | **no backup** — rebuildable from PostgreSQL | — | rebuild rehearsed quarterly |
 | RabbitMQ | No message backup; the outbox is the truth | — | — |
-| Valkey | No backup (cache and sessions only; loss means re-login) | — | — |
+| Valkey (`kvdata`) | No backup (cache, sessions and rate-limit counters only; loss means re-login and, for an in-flight OIDC login, a retry) | — | — |
+| ClamAV signatures (`cvddata`) | **No backup** — `freshclam` refetches them, and a restored signature set would be stale by definition. The row exists because [`deploy/services.yaml`](../../deploy/services.yaml) requires every persisted volume to have one, and this one was simply absent | — | The daily `freshclam` run is the verification; the 48-hour staleness alert is the failure signal |
 | Quadlet units / `compose.yaml` | **Versioned in the repository**, not only on the host | on change | part of the deployment |
 | Configuration and secrets | Separate from the data backup, encrypted, stored in a different place | on change | annually |
 

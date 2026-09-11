@@ -29,7 +29,11 @@ These come from the requirements catalogue, not from habit. Each fails the build
 | **Secrets** | `gitleaks` |
 | **Supply chain** | Dependency and container scanning; high or critical fails |
 | **SAST** | CodeQL, SpotBugs with `find-sec-bugs`, ESLint security |
-| **Headers** | The served CSP compared against an expected string |
+| **Headers** | The served CSP compared against an expected string — including that `trusted-types` is present and `COEP` is absent |
+| **Datastore auth** | Every store in the deployment refuses an unauthenticated connection, and `web` reaches `api` and nothing else (REQ-SEC-104/105) |
+| **Recovery point** | The weekly restore rehearsal recovers to a timestamp **between** two dumps, which is the only thing that tests REQ-NFR-014 |
+| **Design-system adherence** | `adherence.oxlintrc.json` at `error`, plus the token drift check and the contrast recomputation (REQ-NFR-075/076/077) |
+| **Language** | No German-language document outside the two-entry carve-out of REQ-CON-012 |
 | **Licensing** | No AGPL-incompatible dependency in the core; only permissive ones in the plugin API |
 | **DCO + CLA** | Every commit signed off; the contributor has signed |
 | **ADR back-links** | Every ADR named in another's `Amends:` carries the reciprocal note — see below |
@@ -52,8 +56,11 @@ supersedes:**` line and every `> **Amended by [ADR-nnnn]…**` note. Then assert
 3. the Status column of [`docs/adr/README.md`](../../docs/adr/README.md) names
    every ADR that amends or supersedes that row.
 
-**Why it is a gate and not a nicety.** The review of 2026-09-11 found three
-defects that are one missing back-link each: `COEP` still listed as a served
+**Why it is a gate and not a nicety.** Running the rule by hand on 2026-09-11 found
+**nine** omissions — five missing reciprocal notes and four index rows that did not name an
+amendment their own ADR records. All are fixed, so this gate opens clean instead of with a
+backlog. The review of the same day had already found three defects that are one missing
+back-link each: `COEP` still listed as a served
 header in two places because [ADR-0040](../../docs/adr/0040-no-cross-origin-isolation.md)'s
 `Amends:` named four of the six places it reached;
 [ADR-0015](../../docs/adr/0015-deployment.md) carrying a topology superseded three

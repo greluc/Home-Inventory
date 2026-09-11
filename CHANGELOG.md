@@ -25,10 +25,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 415 numbered, testable requirements across
+- A requirements catalogue with 419 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 43 architecture decision records, each with its alternatives and consequences —
+- 47 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
@@ -55,6 +55,33 @@ commit".
 
 ### Changed
 
+- **Every database, cache and broker now needs a password.** Only PostgreSQL asked for
+  one; the cache holding your sessions, the message broker and the search index did not,
+  and the web server — the part reachable from the internet — could talk to all of them
+  directly. It now reaches the application and nothing else. Alongside that, the message
+  broker could not have started at all without a login.
+- **A crash now costs at most fifteen minutes of work, as promised.** The recovery target
+  said fifteen minutes and the backup was a nightly dump, so the real answer was up to a
+  day. Continuous write-ahead archiving closes the gap, and the weekly restore rehearsal
+  now recovers to a moment between two backups rather than to the last backup.
+- **Deleting old audit entries no longer looks like tampering.** Retention periods are
+  set per tenant, and honouring one would have broken the tamper-evidence chain the audit
+  log is built on — so the system would have raised an alarm about itself, daily. A
+  deletion is now recorded as what it is, and the chain stays verifiable either side of it.
+- **Searching German finds German.** The offline and small-installation search indexed
+  words literally, so *Bohrmaschinen* did not find *Bohrmaschine*. It now understands
+  German and English word forms.
+- **Trashed items disappear from filters and reports immediately.** They kept answering
+  searches over custom fields until they were finally removed, which for the default
+  retention period is thirty days.
+- **Scanning on iPhone and iPad was described wrongly.** Safari has no built-in barcode
+  reader, so those devices always used the bundled decoder. It is now treated as the main
+  path there, with its own speed target, rather than as a fallback nobody measured.
+- **The design system speaks English and is translatable.** Fourteen components had
+  German button and screen-reader labels baked into them, which no translation could
+  reach; every one is now supplied by the application. Five recorded colour-contrast
+  figures were wrong, and the rules meant to block off-system colours and spacing only
+  warned instead of failing.
 - **Photos and documents now have somewhere to live.** The default media store —
   the only one a small installation has — had no volume anywhere in the
   deployment and no backup entry, so in that configuration uploads had nowhere to

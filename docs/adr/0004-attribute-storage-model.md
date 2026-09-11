@@ -47,5 +47,13 @@ price.
   reports orphaned references.
 - Reporting over attributes goes through OpenSearch aggregations or through
   `item_attr_index`, not through JSONB scans.
+- **A soft-deleted item leaves the projection.** `REQ-CORE-009` makes deletion two-stage,
+  so `deleted_at` is set long before any row is removed and the side table's
+  `ON DELETE CASCADE` never fires. The projection therefore deletes the item's rows when
+  `deleted_at` is set and rebuilds them on restore, in the same transaction as the state
+  change. The alternative — keeping the rows and filtering on a join back to `item` in
+  every query — was rejected: it makes correctness depend on every future query
+  remembering, and `REQ-CORE-013` calls this path *transactionally exact*. This was
+  unstated until 2026-09-11, and unstated meant trashed items answered attribute filters.
 - Staging: stage 0 gets by with A (JSONB only). The step to D is **additive** and
   requires no data migration.

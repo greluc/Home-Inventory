@@ -69,6 +69,37 @@ web client targets **React 19**: the component sources are a specification of
 behaviour and markup, not a drop-in library, and the first real build is where
 they become React 19 components.
 
+## What had to be corrected in the delivery
+
+*2026-09-11. Being binding means the delivery is held to the requirements it is bound by,
+and three things in it were not.*
+
+1. **Hard-coded German display text.** Fourteen components carried literal German
+   accessible names and labels — `aria-label="Schließen"`, `"Währung"`, `"Vorherige Seite"`,
+   a `placeholder="0,00"` that hard-codes one locale's decimal mark. That violates
+   `REQ-NFR-032` (no hard-coded display text, stage 0) and `REQ-CON-001` (code in English).
+   Every one is now a **prop with an English default**, which is what a client passing text
+   from its resource bundle needs, and which the `.d.ts` files document. The larger sets —
+   `ScanOverlay`, `ConflictField`, `StatusChip` — export their default map so a client can
+   translate from a known key set rather than guessing it.
+2. **Five recorded contrast ratios did not reproduce.** `REQ-NFR-077` has CI recompute
+   every ratio from the token values and fail on a mismatch; `color.code.ink` was recorded
+   at 20.4 against an actual 19.8 (21 is the theoretical maximum, so 20.4 on `#0a0a0a` was
+   never possible), and four others were off. The check would have failed on the first run.
+   All 64 now reproduce.
+3. **The adherence ruleset could not fail a build.** `REQ-NFR-076`'s acceptance says a raw
+   hex value or a hard-coded `px` on a themed property **fails the build**, and every rule
+   in `adherence.oxlintrc.json` was `warn`. They are `error` now, the px rule was extended
+   to bare numeric literals on themed properties — the commonest way a px value enters
+   React code, and the form the string rule could not see — and the three components that
+   violated it were moved onto tokens.
+
+**The German that stays is a closed list of two**, and it is in the delivery on purpose:
+[`guidelines/type-german.html`](../../design-system/guidelines/type-german.html) and the
+mock data under [`ui_kits/`](../../design-system/ui_kits/). German compound width is a
+design constraint this product actually has, and those two are where it is demonstrated.
+`REQ-CON-012` and `REQ-CON-014` carry the list; a third entry needs a row there.
+
 ## Licence consequences, and why they were due now
 
 The system vendors two third-party asset sets. This closes item A4 of

@@ -2,14 +2,14 @@ Turns a runtime type definition into a form. This is the product's unusual surfa
 
 ```jsx
 <FieldRenderer split schema={[
-  { title: "Identifikation", fields: [
-    { key:"name", label:"Bezeichnung", type:"text", required:true, value:"Akku-Bohrschrauber GSR 18V-55" },
-    { key:"sn",   label:"Seriennummer", type:"text", mono:true, value:"3 601 JJ0 100" },
+  { title: "Identification", fields: [
+    { key:"name", label:"Name", type:"text", required:true, value:"Cordless drill GSR 18V-55" },
+    { key:"sn",   label:"Serial number", type:"text", mono:true, value:"3 601 JJ0 100" },
   ]},
-  { title: "Wert", fields: [
-    { key:"wbw", label:"Wiederbeschaffungswert", type:"money", value:189.99, currency:"EUR" },
-    { key:"mhd", label:"Mindesthaltbarkeitsdatum", type:"date" },
-    { key:"key", label:"Lizenzschlüssel", type:"secret", restricted:true },
+  { title: "Value", fields: [
+    { key:"rv",  label:"Replacement value", type:"money", value:189.99, currency:"EUR" },
+    { key:"bbd", label:"Best-before date", type:"date" },
+    { key:"key", label:"Licence key", type:"secret", restricted:true },
   ]},
 ]} />
 ```

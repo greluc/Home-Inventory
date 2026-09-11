@@ -10,4 +10,12 @@ export interface DeviceModel {
   status?: "success" | "offline" | "pending" | "conflict" | "warning";
   current?: boolean;
 }
-export declare function DeviceRow(props: { device: DeviceModel; trailing?: React.ReactNode }): JSX.Element;
+export declare function DeviceRow(props: {
+  device: DeviceModel;
+  trailing?: React.ReactNode;
+  /** User-visible strings. English defaults; the client passes the translated text from its
+   *  resource bundle, because no display text is hard-coded in a component (REQ-NFR-032). */
+  currentLabel?: string;
+  /** The word after the unsent count, e.g. "unsent". */
+  unsentLabel?: string;
+}): JSX.Element;

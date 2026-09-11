@@ -29,7 +29,7 @@ through a hardened instance reachable from the internet.
 | A REST API `/api/v1` with OpenAPI and problem details | GraphQL, gRPC, webhooks |
 | The web PWA (read and write, online) | Offline operation |
 | **Both container runtimes rootless** (Podman/Quadlet and Docker/Compose), the service matrix, migrations, health endpoints, logging | Helm, OpenSearch, RabbitMQ |
-| **All security foundations**: the RLS schema, CSP served by `web` with hashes, upload hardening, parameterised queries, the authorization scaffolding, the network segmentation with the management port bound to `internal` | — |
+| **All security foundations**: the RLS schema, CSP served by `web` with hashes **and `trusted-types`**, upload hardening, parameterised queries, the authorization scaffolding, the network segmentation with the management port bound to `internal`, **a credential on every datastore and `web` on its own two-member segment** ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)), **the WAL archive volume** ([ADR-0045](../adr/0045-wal-archive-volume.md)) and **the URL signing key** | — |
 
 **Binding requirements:** every requirement whose **Stage** column reads `0`.
 
@@ -94,7 +94,7 @@ tags and roles themselves — without a developer and without a restart.
 | **First-party plugins** | `plugin-smtp`, `plugin-blobstore-s3`, `plugin-blobstore-nextcloud`, `plugin-webhook`, `plugin-oidc` — built against the same contract third parties get in stage 3, which is what proves the contract before it is published |
 | **Media** | S3 and **Nextcloud adapters as plugins**, resumable upload, reference counting, the mandatory malware scan |
 | **API** | GraphQL (read-only), ETag/If-Match, idempotency, SSE, the versioning policy with measurement |
-| **Audit** | The append-only log with a hash chain, history queries |
+| **Audit** | The append-only log with a hash chain, history queries, the hourly anchor, and the `homeinv_housekeeping` role with the truncation marker that lets per-tenant retention be enforced without looking like tampering ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
 | **Notifications** | Rules as data, reminders — delivered through `plugin-smtp` and `plugin-webhook` |
 | **Import/export** | CSV with a mapping profile and dry run, the tenant export, GDPR access, the Homebox and InvenTree profiles |
 | **Operations** | Metrics, tracing, backup with **automated restore verification**, housekeeping runs, runbooks |
@@ -110,7 +110,7 @@ tags and roles themselves — without a developer and without a restart.
 |---|---|
 | **Codes** | The public short code, pre-issuing, binding and reassignment, resolution at `/c/{code}` with a neutral response |
 | **Generation** | QR shipped, the `CodeFormat` port in place |
-| **Scanning** | Browser camera with `BarcodeDetector` and a ZXing fallback, continuous scan mode, HID handheld scanners, scan sessions in all modes |
+| **Scanning** | Browser camera with `BarcodeDetector` where the browser has it and **ZXing-WASM everywhere else — including all of iOS**, where it is the only path (risk R17); continuous scan mode, HID handheld scanners, scan sessions in all modes |
 | **Foreign codes** | Recognising and binding EAN, UPC, ITF-14, ISBN |
 | **Labels** | Templates with the bounded expression language, the `LabelMedia` catalogue with verification flags, start offset, calibration sheet, to-scale preview |
 | **Printing** | The print job as an aggregate, the PDF target shipped, the `PrintTarget` port, the position record |
@@ -193,7 +193,12 @@ RLS, the authorization scaffolding, CSP, upload hardening, parameterised queries
 module boundaries with machine verification, multilingual support, cursor
 pagination, a `traceId` in every response, configuration through environment
 variables — and **rootless in both container runtimes, including the service
-matrix**. Converting a running installation from rootful to rootless afterwards
+matrix**. Since 2026-09-11 also: **authentication on every datastore**, because
+retrofitting a credential onto a running Valkey means invalidating every session and onto
+a running RabbitMQ means a queue migration; **the WAL archive volume**, because adding one
+later is a PostgreSQL restart and a base backup; and **the two generated search vectors**
+([ADR-0047](../adr/0047-bilingual-search-vectors.md)), because after the first million
+items that is a table rewrite. Converting a running installation from rootful to rootless afterwards
 means re-homing every volume; at the beginning it costs an hour of setup.
 
 **All of it is expensive later and cheap now.**

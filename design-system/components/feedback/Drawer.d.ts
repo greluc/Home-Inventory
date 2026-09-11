@@ -8,6 +8,8 @@ export interface DrawerProps {
   footer?: ReactNode;
   /** Off for a filter drawer on a wide screen, where the list stays interactive behind it. */
   scrim?: boolean;
+  /** Accessible name of the close button. English default; the client passes the translated string (REQ-NFR-032). */
+  closeLabel?: string;
   children: ReactNode;
 }
 export declare function Drawer(props: DrawerProps): JSX.Element;

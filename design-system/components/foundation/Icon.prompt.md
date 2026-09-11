@@ -1,7 +1,7 @@
 Renders a self-hosted Lucide glyph at one of five sizes, each with its own stroke-width token (dark values are lighter, because a light stroke on a dark ground blooms).
 
 \`\`\`jsx
-<Icon name="scan-line" size={24} label="Code scannen" />
+<Icon name="scan-line" size={24} label="Scan a code" />
 <Icon name="cloud-off" size={16} />   {/* decorative — the label is next to it */}
 \`\`\`
 

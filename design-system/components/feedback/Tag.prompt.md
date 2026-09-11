@@ -1,6 +1,6 @@
 A user-assigned label.
 
 ```jsx
-<Tag>Werkzeug</Tag>
-<Tag onRemove={fn} removeLabel="Werkzeug entfernen">Werkzeug</Tag>
+<Tag>Tool</Tag>
+<Tag onRemove={fn} removeLabel="Remove tool">Tool</Tag>
 ```

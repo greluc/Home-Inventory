@@ -29,7 +29,7 @@ Date: YYYY-MM-DD
 | [0005](0005-identity.md) | An own identity core with optional OIDC federation | Accepted |
 | [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted |
 | [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032 |
-| [0008](0008-search.md) | OpenSearch as a derived read model | Accepted, amended by 0039 |
+| [0008](0008-search.md) | OpenSearch as a derived read model | Accepted, amended by 0039, 0047 |
 | [0009](0009-messaging-and-events.md) | RabbitMQ with a transactional outbox | Accepted, extended (O13) |
 | [0010](0010-api-surfaces.md) | REST and read-only GraphQL outward, gRPC for plugins | Accepted |
 | [0011](0011-api-versioning.md) | The major version in the URL, additive minor versions | Accepted |
@@ -42,17 +42,17 @@ Date: YYYY-MM-DD
 | [0018](0018-licensing.md) | AGPL-3.0-or-later for the core, Apache-2.0 for the plugin API | Accepted |
 | [0019](0019-sensitive-field-encryption.md) | Per-tenant envelope encryption for sensitive fields | Accepted |
 | [0020](0020-configuration-as-data.md) | Tenant configuration is synchronised domain data | Accepted |
-| [0021](0021-podman-quadlet.md) | Podman with Quadlet as an equally supported way to run it | Accepted |
-| [0022](0022-rootless.md) | Rootless as the mandatory basis for every way of running it | Accepted |
-| [0023](0023-push-notifications.md) | Push through Firebase and APNs as a plugin, content-free payload | Amended by 0026 |
-| [0024](0024-malware-scan.md) | A mandatory malware scan, fail-closed | Accepted, amended by 0036 |
+| [0021](0021-podman-quadlet.md) | Podman with Quadlet as an equally supported way to run it | Accepted, amended by 0027 |
+| [0022](0022-rootless.md) | Rootless as the mandatory basis for every way of running it | Accepted, amended by 0027 |
+| [0023](0023-push-notifications.md) | Push through Firebase and APNs as a plugin, content-free payload | Amended by 0026, 0037 |
+| [0024](0024-malware-scan.md) | A mandatory malware scan, fail-closed | Accepted, amended by 0036, 0037 |
 | [0025](0025-money-representation.md) | An in-house `Money` value type instead of JavaMoney or Joda-Money | Accepted |
-| [0026](0026-core-outbound-via-plugins.md) | Every outbound connection of the core moves into a plugin | Accepted |
-| [0027](0027-egress-enforcement.md) | Egress enforcement: deny-all for the core, a proxy per plugin segment | Accepted, amended by 0036, 0037 |
+| [0026](0026-core-outbound-via-plugins.md) | Every outbound connection of the core moves into a plugin | Accepted, amended by 0037, 0042 |
+| [0027](0027-egress-enforcement.md) | Egress enforcement: deny-all for the core, a proxy per plugin segment | Accepted, amended by 0036, 0037; §1 withdrawn by 0042 |
 | [0028](0028-plugin-runtime-stage-1.md) | The plugin runtime moves to stage 1 | Accepted |
 | [0029](0029-session-cookie-and-oidc-state.md) | `SameSite=Strict` stays; code resolution and OIDC state are decoupled | Accepted |
 | [0030](0030-public-code-format.md) | The public code: 10 payload characters and a Damm check symbol | Accepted |
-| [0031](0031-audit-chain-per-tenant.md) | The audit chain runs per tenant and is anchored in time | Accepted |
+| [0031](0031-audit-chain-per-tenant.md) | The audit chain runs per tenant and is anchored in time | Accepted, amended by 0046 |
 | [0032](0032-per-tenant-blob-addressing.md) | Blobs are content-addressed within a tenant, never across | Accepted |
 | [0033](0033-dark-as-default-appearance.md) | Dark is the default appearance, on every platform | Accepted, amended by 0038 |
 | [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted |
@@ -63,5 +63,9 @@ Date: YYYY-MM-DD
 | [0039](0039-degraded-response-signalling.md) | Degradation is signalled in the payload; the `Warning` header is dropped | Accepted |
 | [0040](0040-no-cross-origin-isolation.md) | `Cross-Origin-Embedder-Policy` is dropped; `COOP` and `CORP` stay | Accepted |
 | [0041](0041-migration-as-its-own-service.md) | Migration is its own one-shot service, on every runtime | Accepted |
-| [0042](0042-edge-is-not-internal.md) | A published port needs a non-internal segment; `web` becomes the ingress | Accepted |
-| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted |
+| [0042](0042-edge-is-not-internal.md) | A published port needs a non-internal segment; `web` becomes the ingress | Accepted, amended by 0044 |
+| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044 |
+| [0044](0044-internal-is-not-a-trust-boundary.md) | `internal` is not a trust boundary: every datastore authenticates, and `web` leaves it | Accepted |
+| [0045](0045-wal-archive-volume.md) | The WAL archive is a volume of its own, or the recovery point objective is fiction | Accepted |
+| [0046](0046-truncatable-audit-chain.md) | The audit chain is truncatable, and per-tenant retention has a mechanism | Accepted |
+| [0047](0047-bilingual-search-vectors.md) | Two generated search vectors, German and English, instead of `simple` | Accepted |

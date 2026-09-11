@@ -208,8 +208,12 @@ In detail per item in the ADRs; here only what holds the choice together.
 - **OpenSearch** was chosen (see [ADR-0008](../adr/0008-search.md)) and carries
   facets and later reporting in addition to search. The `SearchIndex` port keeps
   the PostgreSQL fallback available.
-- **React as a PWA** has by far the best ecosystem for camera-based scanning
-  (the `BarcodeDetector` API with a ZXing fallback) and for offline storage.
+- **React as a PWA** has by far the best ecosystem for camera-based scanning and for
+  offline storage. The scanning path is `BarcodeDetector` **where it exists** — Chromium
+  on Android, ChromeOS and macOS — and **ZXing-WASM everywhere else**, which includes all
+  of Safari and therefore every browser on iOS ([10 §10.3](10-identification-and-labels.md)).
+  The WASM build is the load-bearing half, not the fallback, and the ecosystem argument
+  rests on it.
 - **Kotlin Multiplatform** shares sync logic, domain model and the generated API
   client between Android and iOS — the most expensive part of the apps is
   written exactly once.

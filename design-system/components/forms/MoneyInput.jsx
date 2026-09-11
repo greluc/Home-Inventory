@@ -1,6 +1,6 @@
 import React from "react";
 
-export function MoneyInput({ amount, currency = "EUR", currencies = ["EUR", "CHF", "USD", "GBP"], readOnly, disabled, locale = "de-DE", ...rest }) {
+export function MoneyInput({ amount, currency = "EUR", currencies = ["EUR", "CHF", "USD", "GBP"], readOnly, disabled, locale, currencyLabel = "Currency", ...rest }) {
   if (readOnly) {
     const n = amount == null || amount === "" ? null : Number(amount);
     return (
@@ -11,9 +11,9 @@ export function MoneyInput({ amount, currency = "EUR", currencies = ["EUR", "CHF
   }
   return (
     <div className="hi-combo" data-disabled={disabled || undefined}>
-      <input type="text" inputMode="decimal" className="hi-combo__num" defaultValue={amount} disabled={disabled} placeholder="0,00" {...rest} />
+      <input type="text" inputMode="decimal" className="hi-combo__num" defaultValue={amount} disabled={disabled} {...rest} />
       <span className="hi-combo__unit">
-        <select defaultValue={currency} disabled={disabled} aria-label="Währung">
+        <select defaultValue={currency} disabled={disabled} aria-label={currencyLabel}>
           {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </span>

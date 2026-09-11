@@ -104,6 +104,21 @@ networks:
     internal: true              # no route out of the deployment, at all.
                                 # The management listener binds HERE and nowhere
                                 # else — see api.ports below.
+                                #
+                                # IT IS NOT A TRUST BOUNDARY, and that correction is
+                                # ADR-0044. Reachability is not authorisation: every
+                                # datastore on this segment authenticates its callers,
+                                # and `web` is no longer a member. Before that, the one
+                                # internet-facing container could open postgres:5432,
+                                # valkey:6379 (sessions), opensearch:9200, rabbitmq:5672,
+                                # blobstore:8100 and :8090 on both core roles — the exact
+                                # "unpublished is not unreachable" mistake ADR-0037 fixed
+                                # for plugins and nobody applied to the ingress.
+  frontend:
+    internal: true              # EXACTLY TWO MEMBERS: web and api (ADR-0044). It carries
+                                # the web → api hop of ADR-0042 and nothing else, so the
+                                # ingress reaches the API and no datastore. api keeps its
+                                # `internal` membership; web has none.
   scanner:
     internal: true
     egressVia: egress-proxy     # freshclam only, to the deployment allowlist
@@ -131,6 +146,14 @@ networks:
 
 volumes:
   pgdata:   { service: postgres }
+  pgwal:    { service: postgres }    # the WAL ARCHIVE, separate from PGDATA (ADR-0045).
+                                     # 06 §6.13 promised continuous WAL archiving and
+                                     # REQ-NFR-014 turns that into RPO <= 15 min — and
+                                     # there was no volume, no archive_command and no
+                                     # target anywhere. A read-only root filesystem and
+                                     # no bind mounts (ADR-0022) leave exactly one place
+                                     # for it: a second runtime-managed volume, backed up
+                                     # with the dump and restored with it.
   osdata:   { service: opensearch }
   mqdata:   { service: rabbitmq }
   kvdata:   { service: valkey }
@@ -147,12 +170,16 @@ services:
   web:
     role: static
     image: { name: ghcr.io/greluc/home-inv-web, digest: "TODO" }
-    networks: [edge, internal]
+    networks: [edge, frontend]
     # THE INGRESS (ADR-0042). It is the only container with a published port, and
     # it proxies /api, /graphql, /c/, /.well-known and the SSE stream to `api`
-    # over `internal`. api itself publishes nothing and is not on `edge`, which is
+    # over `frontend`. api itself publishes nothing and is not on `edge`, which is
     # stricter than the previous shape and costs one host port rather than adding
     # a container.
+    #
+    # It is NOT on `internal` (ADR-0044). It needs `api` and nothing else, and a
+    # member of `internal` can open every datastore port on that segment — which
+    # is a lot of reach for the one container an attacker meets first.
     #
     # It also serves the application shell AND every security header — CSP, HSTS,
     # COOP, CORP, Referrer-Policy, Permissions-Policy (ADR-0038; COEP is
@@ -182,12 +209,14 @@ services:
   api:
     role: api
     image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }
-    networks: [internal]                         # NOT edge: api publishes nothing and
-                                                 # is reached through web (ADR-0042)
+    networks: [internal, frontend]               # NOT edge: api publishes nothing and
+                                                 # is reached through web over the
+                                                 # two-member `frontend` segment
+                                                 # (ADR-0042, ADR-0044)
     networksByPlugin: all                        # plus one membership per installed
                                                  # plugin segment, generated (ADR-0037)
     ports:
-      - { container: 8080, host: null }          # reached by web over `internal`
+      - { container: 8080, host: null }          # reached by web over `frontend` (ADR-0044)
       - { container: 8090, host: null, bindTo: internal }
                                                  # management: /actuator, /livez, /readyz
                                                  # NOT published AND bound to the internal
@@ -216,13 +245,34 @@ services:
                                                              # application host is checked at
                                                              # startup (REQ-SEC-061)
       HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # the in-deployment store, ADR-0043
+      HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
+                                                             # pinned, exactly like a plugin's
+                                                             # (REQ-SEC-056). `internal` is not a
+                                                             # trust boundary — ADR-0044
+      HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_USER: "homeinv"
+      HOMEINV_SEARCH_USER: "homeinv"
     # NO db-migration-password. It is mounted into the one-shot `migrate` service
     # and nowhere else (ADR-0041, REQ-SEC-101): homeinv_migrator owns the tables
     # and can rewrite an RLS policy, and mounting it into a long-running,
     # internet-facing process for that process's whole life undoes part of what
     # ADR-0003 buys. api VALIDATES the schema at startup and refuses to start
     # against one it does not expect.
-    secrets: [db-password, data-key, jwt-key]
+    # Every datastore credential is here because NONE of them existed before ADR-0044:
+    # the matrix authenticated PostgreSQL and nothing else, so Valkey, RabbitMQ and
+    # OpenSearch were reachable-and-open to anything on `internal`, and RabbitMQ could
+    # not have worked at all — its `guest` account is restricted to loopback.
+    secrets:
+      - db-password
+      - data-key
+      - jwt-key
+      - url-signing-key          # signs media URLs (REQ-MED-010) and pagination cursors
+                                 # (08 §8.2). Both were specified as signed and neither
+                                 # had a key in this file.
+      - valkey-password
+      - mq-password
+      - search-password
+      - mtls-core                # client identity towards blobstore and the plugins
     tmpfs: ["/tmp"]
     dependsOn: [postgres, valkey, migrate, blobstore]   # migrate must have exited 0
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
@@ -247,7 +297,18 @@ services:
                                                              # that gets printed on them
       HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
       HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # ADR-0043
-    secrets: [db-password, data-key]
+      HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
+      HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_USER: "homeinv"
+      HOMEINV_SEARCH_USER: "homeinv"
+    secrets:
+      - db-password
+      - data-key
+      - url-signing-key          # the worker renders label artifacts and signs their URLs
+      - valkey-password
+      - mq-password
+      - search-password
+      - mtls-core
     tmpfs: ["/tmp"]
     # rabbitmq exists only in standard and ha (see its own `profiles`). A flat
     # dependsOn would generate Requires=homeinv-rabbitmq.service into the minimal
@@ -293,8 +354,21 @@ services:
     image: { name: docker.io/library/postgres, tag: "18-alpine", digest: "TODO" }
     user: "70:70"                 # the image's own postgres user; 10001 breaks initdb
     networks: [internal]
-    volumes: [{ name: pgdata, path: /var/lib/postgresql/data }]
+    volumes:
+      - { name: pgdata, path: /var/lib/postgresql/data }
+      - { name: pgwal,  path: /var/lib/homeinv/wal-archive }   # ADR-0045
     tmpfs: ["/tmp", "/var/run/postgresql"]          # the unix socket lives here
+    settings:
+      # RPO <= 15 min (REQ-NFR-014) is WAL archiving or it is nothing. The target is a
+      # second runtime-managed volume, because a read-only root filesystem and the
+      # no-bind-mount rule (ADR-0022) leave nowhere else, and because a backup that
+      # cannot be exported through the runtime cannot be restored with correct
+      # ownership (REQ-NFR-066).
+      wal_level: replica
+      archive_mode: "on"
+      archive_command: "test ! -f /var/lib/homeinv/wal-archive/%f && cp %p /var/lib/homeinv/wal-archive/%f"
+      archive_timeout: "900"     # 900 s = the RPO ceiling, so an idle instance still
+                                 # closes a segment inside the window
     secrets: [db-password, db-migration-password]
     resources: { memoryReservation: 1Gi, memoryLimit: 2Gi }
     health: { command: "pg_isready", interval: 10s }
@@ -302,8 +376,16 @@ services:
     notes: >
       Requires the ltree extension. The application role has no DDL rights and no
       BYPASSRLS; migrations run under a separate role (REQ-SEC-002, REQ-SEC-003).
-      The two roles are created by an init script, not by the image — the image
-      only knows POSTGRES_PASSWORD_FILE for the superuser.
+      A THIRD role, homeinv_housekeeping, owns the retention deletions of ADR-0046:
+      homeinv_app has only INSERT and SELECT on audit (REQ-SEC-069), so it cannot be
+      the role that enforces a retention period, and homeinv_migrator must not be
+      mounted into anything long-running (ADR-0041). All three are created by an init
+      script, not by the image — the image only knows POSTGRES_PASSWORD_FILE for the
+      superuser.
+
+      The `pgwal` volume is the WAL archive (ADR-0045). It is exported with the daily
+      dump and restored with it; without it REQ-NFR-014 promises an RPO of 15 minutes
+      that nothing delivers.
 
   valkey:
     image: { name: docker.io/valkey/valkey, tag: "8-alpine", digest: "TODO" }
@@ -311,6 +393,15 @@ services:
     networks: [internal]
     volumes: [{ name: kvdata, path: /data }]
     tmpfs: ["/tmp"]
+    secrets: [valkey-password]
+    files:
+      - target: /etc/valkey/users.acl
+        generatedFrom: secrets
+        notes: >
+          One ACL user, `homeinv`, with the password from the secret; `default` is
+          disabled. Valkey held no credential at all until ADR-0044, which meant
+          every session and every rate-limit counter was readable by anything that
+          could open port 6379 on `internal` — including, at the time, `web`.
     resources: { memoryReservation: 128Mi, memoryLimit: 256Mi }
     health: { command: "valkey-cli ping", interval: 10s }
     profiles: [minimal, standard, ha]
@@ -331,9 +422,16 @@ services:
                                   # outside the deployment, so ADR-0026 does not make it
                                   # a plugin.
     ports:
-      - { container: 8100, host: null }   # gRPC, the same BlobStore contract the
-                                          # plugin-blobstore-* plugins implement.
-                                          # Never published to the host.
+      - { container: 8100, host: null }   # gRPC over mTLS, the same BlobStore contract
+                                          # AND the same transport the plugin-blobstore-*
+                                          # plugins use. Never published to the host —
+                                          # and, since ADR-0044, never unauthenticated
+                                          # either: this service holds every tenant's
+                                          # media, and "only reachable from internal"
+                                          # was the whole of its access control.
+    secrets: [mtls-blobstore]             # server identity; api and worker pin its
+                                          # fingerprint through HOMEINV_BLOBSTORE_FINGERPRINT,
+                                          # exactly as a plugin registration does (REQ-SEC-056)
     volumes: [{ name: blobdata, path: /var/lib/homeinv/blobs }]
     tmpfs: ["/tmp"]
     resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
@@ -392,7 +490,8 @@ services:
           its daily signature updates — the exact dependency ADR-0036 removes.
     notes: >
       Mandatory in every profile — the malware scan cannot be deselected
-      (ADR-0024). It is why the minimal profile needs about 3.4 GB rather than 1.5.
+      (ADR-0024). It is why the minimal profile reserves about 3.5 GB rather than 1.5 —
+      the figure in the budget block below, computed from the rows in this file.
       Its signature updates were the one dependency nothing traced: this segment is
       internal, the proxy did not run in `minimal`, and the proxy's allowlist was
       generated from plugin manifests, which a scanner does not have. All three are
@@ -469,12 +568,36 @@ services:
     networks: [internal]
     volumes: [{ name: osdata, path: /usr/share/opensearch/data }]
     tmpfs: ["/tmp", "/usr/share/opensearch/logs", "/usr/share/opensearch/config"]
-    secrets: [opensearch-admin-password]
+    secrets: [opensearch-admin-password, search-password, mtls-search]
     env:
-      OPENSEARCH_INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/opensearch-admin-password
+      # THE ONE DOCUMENTED EXCEPTION TO THE *_FILE RULE (ADR-0044, REQ-NFR-054).
+      # This image reads OPENSEARCH_INITIAL_ADMIN_PASSWORD and nothing else; the
+      # *_FILE convention belongs to the Docker Official Images (postgres, mysql),
+      # not to OpenSearch. The variable below held a value the image ignores, so the
+      # security plugin would have come up with no admin password at all — while
+      # DISABLE_INSTALL_DEMO_CONFIG also denied it certificates and the health check
+      # called https://. The generator reads the secret file and injects the value
+      # here; the exception list in REQ-NFR-054 has exactly this one entry.
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "${SECRET_FILE:opensearch-admin-password}"
       DISABLE_INSTALL_DEMO_CONFIG: "true"
       bootstrap.memory_lock: "false"     # mlock needs a capability we drop; heap is
                                          # bounded by the memory limit instead
+    files:
+      # DISABLE_INSTALL_DEMO_CONFIG: "true" removes the demo certificates as well as the
+      # demo users, and nothing replaced either. Both are generated now, from this file.
+      - target: /usr/share/opensearch/config/opensearch-security/internal_users.yml
+        generatedFrom: secrets
+        notes: >
+          Two users: `admin` from opensearch-admin-password, and `homeinv` from
+          search-password with read and write on the tenant indices only. api and
+          worker authenticate as `homeinv` — they had no credential at all before
+          ADR-0044, on a service whose port was open to every member of `internal`.
+      - target: /usr/share/opensearch/config/certificates
+        generatedFrom: secrets
+        source: mtls-search
+        notes: >
+          Transport and HTTP certificates. The health check calls https://localhost:9200,
+          which was true of the command and false of the configuration.
     hostPrerequisites:
       - key: vm.max_map_count
         value: 262144
@@ -497,9 +620,17 @@ services:
     networks: [internal]
     volumes: [{ name: mqdata, path: /var/lib/rabbitmq }]
     tmpfs: ["/tmp", "/var/log/rabbitmq", "/etc/rabbitmq"]
+    secrets: [mq-password]
+    env:
+      RABBITMQ_DEFAULT_USER: "homeinv"
+      RABBITMQ_DEFAULT_PASS_FILE: /run/secrets/mq-password   # the image reads _FILE here
     resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
     health: { command: "rabbitmq-diagnostics -q ping", interval: 20s, startPeriod: 60s }
     profiles: [standard, ha]
+    notes: >
+      This service had no credential until ADR-0044, and the omission was not merely a
+      weakness: the built-in `guest` account is restricted to loopback, so api and worker
+      could not have connected at all. The generated stack did not start.
 
 secrets:
   # Passed as files, never as environment values holding the secret itself.
@@ -519,7 +650,62 @@ secrets:
       process away from the one role that can rewrite an RLS policy.
   data-key:                  { required: true, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
   jwt-key:                   { required: true, notes: "Ed25519 pair; two active versions during rotation." }
-  opensearch-admin-password: { required: true, profiles: [standard, ha], notes: "Required by OpenSearch since 2.12; no default exists." }
+  url-signing-key:
+    required: true
+    services: [api, worker]
+    notes: >
+      Signs the short-lived media URLs of REQ-MED-010 and the opaque pagination cursors
+      of 08 §8.2. Both were specified as signed from stage 0 and neither named a key,
+      so there was nothing for an implementer to sign with. Separate from jwt-key on
+      purpose: that one is an identity key with its own rotation, and a URL signature
+      should not be forgeable by anything that can mint a token.
+  valkey-password:
+    required: true
+    services: [valkey, api, worker]
+    notes: "ACL password for the single `homeinv` user; `default` is disabled (ADR-0044)."
+  mq-password:
+    required: true
+    profiles: [standard, ha]
+    services: [rabbitmq, api, worker]
+    notes: >
+      RabbitMQ had no credential at all, and `guest` is loopback-only — the generated
+      stack could not connect (ADR-0044).
+  search-password:
+    required: true
+    profiles: [standard, ha]
+    services: [opensearch, api, worker]
+    notes: "The core's OpenSearch client user, distinct from the admin account (ADR-0044)."
+  mtls-core:
+    required: true
+    services: [api, worker]
+    notes: >
+      Client identity for gRPC over mTLS towards `blobstore` and towards every plugin
+      (REQ-SEC-056). One identity for both, because both are the same transport and the
+      same contract.
+  mtls-blobstore:
+    required: true
+    services: [blobstore]
+    notes: >
+      Server identity for the in-deployment BlobStore, pinned by fingerprint in
+      HOMEINV_BLOBSTORE_FINGERPRINT. ADR-0043 gave this service every tenant's media and
+      no authentication; ADR-0044 gives it the one the plugin adapters already had.
+  mtls-search:
+    required: true
+    profiles: [standard, ha]
+    services: [opensearch]
+    notes: >
+      Transport and HTTP certificates for OpenSearch. DISABLE_INSTALL_DEMO_CONFIG removes
+      the demo certificates as well as the demo users, and nothing replaced them, while
+      the health check called https://.
+  opensearch-admin-password:
+    required: true
+    profiles: [standard, ha]
+    notes: >
+      Required by OpenSearch since 2.12; no default exists. **The one documented exception
+      to the *_FILE rule** (REQ-NFR-054): the image reads
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD and knows no _FILE variant, so the generator
+      injects the file's contents into that variable. Stated here rather than left as a
+      variable the image silently ignores.
   # Credentials for outbound targets (object storage, SMTP, OIDC) are deliberately
   # absent here: those connections leave the core entirely — see ADR-0026. They
   # belong to the plugin services that make them, and are added with those
@@ -554,12 +740,21 @@ required:
     volume has a row in the backup table of 06 §6.13. `blobdata` had neither
     until 2026-09-11 (ADR-0043), which left the default media store with no
     place to write and nothing to restore from
+  - every datastore authenticates its callers — postgres, valkey, rabbitmq, opensearch
+    and blobstore each hold a credential or an mTLS identity, and none of them treats
+    "reachable from `internal`" as authorisation (ADR-0044)
+  - postgres declares an archive_command and a volume for it; a deployment that promises
+    RPO <= 15 min and archives nowhere fails the check (ADR-0045, REQ-NFR-014)
   # Topology properties, checked by the connectivity test rather than by reading
-  # this file (ADR-0037, REQ-SEC-098/099)
+  # this file (ADR-0037, REQ-SEC-098/099, ADR-0044)
   - every plugin sits on its own segment, alone among plugins
   - no plugin segment contains clamav
   - no management listener is reachable from a plugin segment
   - every outbound connection, from a plugin or from clamav, passes egress-proxy
+  - "`web` reaches `api` and nothing else: postgres, valkey, rabbitmq, opensearch,
+    blobstore and :8090 on both core roles all refuse from the `frontend` segment.
+    The ingress is the container an attacker meets first, and it used to sit on
+    `internal` with all of them"
   # ADR-0042. Verified by running the stack, not by reading this file.
   - exactly two containers sit on a non-internal segment — `web` and
     `egress-proxy` — and neither holds data, a credential or domain logic

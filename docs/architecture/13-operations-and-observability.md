@@ -52,7 +52,7 @@ Prometheus, Grafana and ready-made dashboards ships with the product.
 |---|---|
 | **HTTP** | Requests per second, duration (p50/p95/p99) by route and status, error rate |
 | **Domain** | Items per tenant, locations, media and bytes per tenant, scans per hour, print jobs by state |
-| **Database** | Connection pool utilisation, query duration, slow queries, lock wait time, table and index size, bloat |
+| **Database** | Connection pool utilisation, query duration, slow queries, lock wait time, table and index size, bloat, **WAL archive fill level and archiving failures** ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | **Outbox** | Unpublished entries, age of the oldest, relay throughput — **the most important metric in the system**, because a backlog here lets every derived store go stale |
 | **RabbitMQ** | Queue length, consumer lag, dead-letter count, retries |
 | **Search** | Index lag, query duration, fallback rate (share of searches served from PostgreSQL), document count |
@@ -121,6 +121,7 @@ cannot reconstruct without tracing.
 | 5xx error rate | > 2 % over 5 min |
 | Disk space | < 15 % free |
 | Backup failed, or the restore verification failed | immediately |
+| **WAL archiving failing**, or the archive volume above 80 % | 15 min — when `archive_command` cannot write, PostgreSQL retains WAL in `pgdata` and eventually refuses to write at all. A full archive volume takes down the one component with no fallback |
 | Signs of a tenant breach (the isolation check in operation) | immediately |
 | Conspicuous failed logins | > 100/min overall or > 20 per account |
 | ClamAV unreachable (uploads blocked) | 5 min |
@@ -143,7 +144,8 @@ vulnerability.
 | Backup | daily | see [06 §6.13](06-deployment-view.md) |
 | **Restore verification** | weekly | Restore the backup into a throwaway container, check consistency, publish the result as a metric |
 | Empty the trash | daily | Finally remove deleted records after the retention period; the tombstone stays |
-| Prune `change_log` | daily | Detach partitions beyond the retention period |
+| Prune `change_log` **partitions** | daily | Detach a monthly partition once **every** tenant's retention has elapsed for its whole range. This is bulk reclamation at the instance maximum — it is **not** what enforces a tenant's retention period, and the two runs used to read as though it were ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
+| Prune the **WAL archive** | daily | Remove segments older than the newest verified base backup, and publish the volume's fill level as a metric ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | Audit partitions | monthly | Create and archive |
 | Orphaned blobs | weekly | Check reference counts, remove unreferenced ones — **with a grace period**, never immediately |
 | Expired tokens and invitations | hourly | |
@@ -156,7 +158,7 @@ vulnerability.
 | Deregister dormant devices | daily | |
 | Update ClamAV signatures (`freshclam`) | daily | A scanner with stale signatures gives false confidence. The fetch goes through the `egress-proxy`, which runs in every profile for this one reason and carries the mirror as a fixed allowlist entry ([ADR-0036](../adr/0036-scanner-egress.md)); a failed fetch appears in the proxy's access log attributed to `clamav`, so the 48-hour alert has a cause and not only a symptom |
 | Catch-up scan for `PENDING_SCAN` blobs | hourly | Release or discard uploads accepted during a scanner outage |
-| Enforce per-tenant retention periods | daily | `change_log`, audit, trash, conflict archive — within the fixed bounds |
+| Enforce per-tenant retention periods | daily | `change_log`, audit, trash, conflict archive — within the fixed bounds, by **row deletion inside live partitions** under `homeinv_housekeeping`. For the audit log it also writes an `audit.chain_truncation` row and marks the affected anchors `pruned`, so a recorded truncation stays distinguishable from an unexplained gap ([ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
 | Dependency check | daily | |
 
 Every run is **repeatable and cancellable**, logs start, end and scope, and runs
@@ -181,7 +183,9 @@ For each of these situations there is a written, rehearsed runbook:
 2. Disk space is full (including immediate measures without data loss)
 3. The outbox is backing up
 4. The search index is inconsistent → rebuild without an outage through an alias switch
-5. Recovery after data loss (full and single tenant)
+5. Recovery after data loss (full and single tenant) — dump **plus** WAL replay to a
+   point in time, which is what the RPO of 15 minutes actually means
+   ([ADR-0045](../adr/0045-wal-archive-volume.md))
 6. Suspicion that an account is compromised
 7. A plugin is behaving suspiciously → disable and preserve evidence
 8. An upgrade fails → roll back to the previous version
@@ -192,6 +196,10 @@ For each of these situations there is a written, rehearsed runbook:
 13. Containers do not start after a VM reboot (missing `linger`)
 14. Resource limits are not taking effect (missing cgroup v2 delegation)
 15. A volume is not writable after a restore (UID mapping)
+16. WAL archiving has stopped and the archive volume is filling
+17. A tenant's audit chain reports *truncated* — reading `audit.chain_truncation` to tell
+    a recorded retention run from an unexplained gap
+    ([ADR-0046](../adr/0046-truncatable-audit-chain.md))
 
 ## 13.11 What the operator must be able to see
 

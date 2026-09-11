@@ -2,8 +2,8 @@ Holds a screen's actions and moves them to the right place per width: bottom-pin
 
 \`\`\`jsx
 <ActionBar sticky stack>
-  <Button variant="ghost" full>Abbrechen</Button>
-  <Button variant="primary" icon="save" full>Speichern</Button>
+  <Button variant="ghost" full>Cancel</Button>
+  <Button variant="primary" icon="save" full>Save</Button>
 </ActionBar>
 \`\`\`
 

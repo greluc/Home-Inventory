@@ -3,6 +3,14 @@
 **Status:** Accepted · **Date:** 2026-09-11
 **Amends:** [07 §7.8](../architecture/07-data-model.md), `REQ-SEC-070`
 
+> **Amended by [ADR-0046](0046-truncatable-audit-chain.md):** the chain is **truncatable**
+> and pruned windows' anchors are **marked**. The sentence below — *"removing or altering
+> an entry makes the affected anchor and every later one disagree"* — is what made
+> `REQ-PRIV-010`'s per-tenant audit retention impossible to carry out: honouring it would
+> have raised this ADR's own tampering signal, daily. Anchors are still never pruned, and
+> the anchor chain is still unbroken; what changes is that a *recorded* truncation is
+> distinguishable from an unexplained gap.
+
 ## Context
 
 `REQ-SEC-070` and [07 §7.8](../architecture/07-data-model.md) require that every

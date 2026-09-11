@@ -8,7 +8,7 @@ function mark(label, q) {
   return [label.slice(0, i), <mark key="m">{label.slice(i, i + q.length)}</mark>, label.slice(i + q.length)];
 }
 
-export function ComboBox({ options = [], value, placeholder = "Suchen oder wählen", emptyText = "Kein Treffer", onSelect, disabled, id }) {
+export function ComboBox({ options = [], value, placeholder = "Search or choose", emptyText = "No match", onSelect, disabled, id }) {
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const [sel, setSel] = React.useState(value ?? "");
@@ -24,7 +24,7 @@ export function ComboBox({ options = [], value, placeholder = "Suchen oder wähl
         <span className="hi-combo__unit" aria-hidden="true"><Icon name="chevrons-up-down" size={16} /></span>
       </div>
       {open ? (
-        <div style={{ position: "absolute", insetInline: 0, top: "calc(100% + 2px)", zIndex: "var(--z-popover)" }}>
+        <div style={{ position: "absolute", insetInline: 0, top: "calc(100% + var(--space-025))", zIndex: "var(--z-popover)" }}>
           <ul className="hi-listbox" id={id + "-lb"} role="listbox">
             {list.length === 0 ? <li className="hi-listbox__empty">{emptyText}</li> : null}
             {list.map((o) => {

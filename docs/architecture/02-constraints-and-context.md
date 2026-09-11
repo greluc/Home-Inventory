@@ -68,6 +68,23 @@ alternatives and consequences.
   from the host and from the internet, not from a container sharing its segment.
   Hence one network segment per plugin, and a management listener bound to
   `internal` ([ADR-0037](../adr/0037-per-plugin-network-segments.md)).
+- **"Reachable" is not "authorised", and that applies inside the deployment too.** The
+  design segmented the outward boundary carefully and left `internal` as a flat network
+  where only PostgreSQL asked for a credential — with `web`, the one container holding a
+  published port, a full member of it. Every store on the segment now authenticates, and
+  the ingress sits on a two-member segment with `api` alone
+  ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)). It is the third time this
+  project has had to write the same sentence down, after RLS
+  ([ADR-0003](../adr/0003-multi-tenancy.md)) and per-plugin segments
+  ([ADR-0037](../adr/0037-per-plugin-network-segments.md)).
+- **A recovery point objective is a volume, not a sentence.** "RPO ≤ 15 min (WAL)" needs
+  somewhere for the WAL to go, and with a read-only root filesystem and no bind mounts
+  there is exactly one candidate: a second runtime-managed volume
+  ([ADR-0045](../adr/0045-wal-archive-volume.md)).
+- **`BarcodeDetector` does not exist in WebKit.** Browser scanning on iPhone and iPad is
+  ZXing-WASM, on the device class quality goal Q6 is written around. That makes the WASM
+  decoder a primary path with a measured performance target, not a contingency
+  ([10 §10.3](10-identification-and-labels.md), risk R17).
 - **A strict CSP and a static frontend rule out nonces.** A nonce is per-response,
   and nothing that serves a built bundle can mint one. Inline content is therefore
   authorised by hash, which also means the `web` container — not the operator's
@@ -194,21 +211,32 @@ constraint that shapes the design:
 
 ## 2.7 Open constraints
 
-See [ADR-0000 Open Points](../adr/0000-open-points.md). **No decision is open.** The review pass
-of 2026-09-11 raised five (O18–O22) and the `problem.type` registry a sixth
-(O23); all six were decided the same day, each recorded there with its rationale.
+See [ADR-0000 Open Points](../adr/0000-open-points.md). **No decision is open.** The review
+passes of 2026-09-11 raised nine (O18–O26) and all nine were decided the same day, each
+recorded there with its rationale — the last three being the conditions
+[`problem-types.yaml`](../reference/problem-types.yaml) had left `pending`, one of which
+a **stage-0** requirement depended on.
 
-What remains is outstanding *work*, stated here in its current form
-rather than in the form it had when it was raised:
+What remains is outstanding **work**, and all of it waits on something this repository does
+not have yet — a CI workflow, or a build:
 
-- **A2** — the **Dymo** printable areas, from Dymo's SDK documentation. The
-  Brother DK widths are **done**: they came from Brother's raster reference on
-  2026-09-11 and are in [`label-media.yaml`](../reference/label-media.yaml).
 - **A5** — the connectivity suite under **rootless Podman with `pasta` and under
   `kind`**. Port publishing on an internal segment was *not* merely unverified:
   it was measured under Docker, found **false**, and the topology was changed
   ([ADR-0042](../adr/0042-edge-is-not-internal.md)). What is outstanding is
-  confirming the corrected topology on the other two runtimes.
+  confirming the corrected topology on the other two runtimes — and, since
+  [ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md), the `frontend` segment
+  with it.
 - **A6** — emitting the generated `freshclam.conf` from the service matrix. The
   expected output is already fixed as a CI fixture at
   [`deploy/expected/clamav-freshclam.conf`](../../deploy/expected/clamav-freshclam.conf).
+- **A4b** and **A7** — the two documentation gates, fully specified in
+  [`.github/workflows/README.md`](../../.github/workflows/README.md): the ADR back-link
+  check and the unbacked-claim check. They read Markdown and need no build, which is why
+  they are the first two workflows this project gets. A4b would have caught the missing
+  back-links found on 2026-09-11 in [ADR-0026](../adr/0026-core-outbound-via-plugins.md).
+
+**A2 is closed.** The Brother DK figures came from Brother's raster reference; the Dymo
+ones do not exist — that series carries the printable area as per-roll runtime data, not
+as a document constant, which is an answer rather than a gap
+([10 §10.5](10-identification-and-labels.md)).

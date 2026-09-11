@@ -3,7 +3,8 @@ import { Icon } from "../foundation/Icon.jsx";
 
 export function Field({
   id, label, help, error, required = false, optional = false,
-  readOnly = false, restricted = false, children, className = "", ...rest
+  readOnly = false, restricted = false, children, className = "",
+  restrictedLabel = "No permission for this field", ...rest
 }) {
   const describedBy = [help ? id + "-help" : null, error ? id + "-err" : null].filter(Boolean).join(" ") || undefined;
   const cls = ["hi-field", error ? "hi-field--invalid" : "", readOnly ? "hi-field--readonly" : "", className].filter(Boolean).join(" ");
@@ -18,7 +19,7 @@ export function Field({
         {restricted ? (
           <div className="hi-restricted hi-hatch">
             <Icon name="lock" size={16} />
-            <span>Keine Berechtigung für dieses Feld</span>
+            <span>{restrictedLabel}</span>
           </div>
         ) : typeof children === "function" ? children({ id, describedBy, invalid: !!error }) : children}
       </div>

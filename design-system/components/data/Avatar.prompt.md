@@ -1,6 +1,6 @@
 Initials, or a device glyph.
 
 ```jsx
-<Avatar name="Lukas Greiner" />
+<Avatar name="Alex Turner" />
 <Avatar device icon="tablet" />
 ```

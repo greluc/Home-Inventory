@@ -39,7 +39,10 @@ play, a second line is not a luxury but a precondition for Q1. A forgotten
 ## Consequences
 
 - The application role has **no** `BYPASSRLS`, **no** table ownership and **no**
-  DDL rights. Migrations run under a separate role.
+  DDL rights. Migrations run under a separate role, and the retention deletions of
+  [ADR-0046](0046-truncatable-audit-chain.md) under a third, `homeinv_housekeeping` —
+  because `REQ-SEC-069` denies the application `DELETE` on the audit log and something
+  still has to enforce a retention period.
 - `SET LOCAL` is transaction-scoped; a test ensures no connection returns to the
   pool with a tenant still set.
 - An automated isolation proof covers **every** table. A new table without RLS

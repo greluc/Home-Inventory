@@ -2,6 +2,11 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 
+> **Amended by [ADR-0038](0038-csp-delivery-and-first-paint.md)**: the strict CSP below is
+> served by the `web` container and authorises its inline content by **hash**, not by a
+> nonce — nothing that emits a static bundle can mint one. Back-link added 2026-09-11
+> (**A4b**).
+
 ## Context
 
 The web frontend has to use the camera for QR and barcode scanning, work fully
@@ -38,9 +43,13 @@ well-trodden path.
   something in this repository to check
   ([ADR-0038](0038-csp-delivery-and-first-paint.md)).
 - `dangerouslySetInnerHTML` is forbidden by a lint rule.
-- Scanning: the `BarcodeDetector` API preferred, ZXing-WASM in a web worker as a
-  fallback. Camera access requires HTTPS — stated explicitly in the installation
-  guide, because it is the most common stumbling block.
+- Scanning: the `BarcodeDetector` API **where the browser has it** — Chromium on
+  Android, ChromeOS and macOS — and ZXing-WASM in a web worker everywhere else. WebKit
+  implements no `BarcodeDetector`, so on iPhone and iPad the WASM decoder is the **only**
+  browser path, not a fallback; that makes its performance a measured target
+  ([10 §10.3](../architecture/10-identification-and-labels.md), risk R17). Camera access
+  requires HTTPS — stated explicitly in the installation guide, because it is the most
+  common stumbling block.
 - Offline: IndexedDB for domain data (no `localStorage`), a service worker for
   the application code, the Cache API for images, `navigator.storage.persist()`
   requested.

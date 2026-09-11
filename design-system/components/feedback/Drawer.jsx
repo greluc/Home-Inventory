@@ -1,6 +1,6 @@
 import React from "react";
 import { Icon } from "../foundation/Icon.jsx";
-export function Drawer({ title, onClose, footer, scrim = true, children }) {
+export function Drawer({ title, onClose, footer, scrim = true, closeLabel = "Close", children }) {
   return (
     <>
       {scrim ? <div className="hi-scrim" onClick={onClose} /> : null}
@@ -8,7 +8,7 @@ export function Drawer({ title, onClose, footer, scrim = true, children }) {
         <div className="hi-drawer__grip" />
         <div className="hi-drawer__head">
           <span className="hi-modal__title">{title}</span>
-          <button type="button" className="hi-iconbtn" style={{ marginLeft: "auto" }} aria-label="Schließen" onClick={onClose}><Icon name="x" size={20} /></button>
+          <button type="button" className="hi-iconbtn" style={{ marginLeft: "auto" }} aria-label={closeLabel} onClick={onClose}><Icon name="x" size={20} /></button>
         </div>
         <div className="hi-drawer__body">{children}</div>
         {footer ? <div className="hi-drawer__foot">{footer}</div> : null}

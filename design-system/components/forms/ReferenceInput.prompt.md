@@ -1,5 +1,5 @@
-The `reference` field type. Two lines: the target's name, and its path so you know *which* Kiste 4.
+The `reference` field type. Two lines: the target's name, and its path so you know *which* Box 4.
 
 ```jsx
-<ReferenceInput kind="location" label="Kiste 4" path={["Keller","Regal B"]} />
+<ReferenceInput kind="location" label="Box 4" path={["Cellar","Shelf B"]} />
 ```

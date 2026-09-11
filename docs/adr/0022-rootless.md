@@ -1,6 +1,9 @@
 # ADR-0022 — Rootless as the mandatory basis for every way of running it
 
 **Status:** Accepted · **Date:** 2026-09-11
+> **Amended by [ADR-0027](0027-egress-enforcement.md)**: one service is added to the
+> topology, the `egress-proxy`. Back-link added 2026-09-11 (**A4b**).
+
 **Tightens:** [ADR-0015](0015-deployment.md) — rootful Docker is thereby no longer
 a supported path.
 

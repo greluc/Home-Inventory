@@ -8,7 +8,7 @@ export function Tooltip({ content, children, placement = "top" }) {
       {children}
       {open ? (
         <span className="hi-tooltip" role="tooltip"
-              style={placement === "top" ? { bottom: "calc(100% + 6px)", left: 0 } : { top: "calc(100% + 6px)", left: 0 }}>
+              style={placement === "top" ? { bottom: "calc(100% + var(--space-075))", left: 0 } : { top: "calc(100% + var(--space-075))", left: 0 }}>
           {content}
         </span>
       ) : null}
