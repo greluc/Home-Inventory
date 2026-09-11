@@ -109,6 +109,15 @@ One source, one `<Icon>` component of our own.
   `LICENSES/ISC.txt`, `LICENSES/MIT.txt` and explicit annotations
   (ADR-0000, A4).
 
+## The build runtime
+
+**Node 26.** Newest major and the LTS line from 2026-10-28, maintained to
+2029-04-30 — Node 24 would have been the safer-sounding choice and would have
+forced a migration a year earlier. It stays on an LTS line for the same reason
+Java does; leaving that line is a decision, not a version bump, and Renovate is
+configured to hold it
+([02 Constraints](../docs/architecture/02-constraints-and-context.md)).
+
 ## Status
 
 Empty. Stage 0 delivers the first screens:

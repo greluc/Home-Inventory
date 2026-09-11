@@ -17,6 +17,7 @@ alternatives and consequences.
 | Media storage | `BlobStore` port; `filesystem` in the core, S3/MinIO and Nextcloud (WebDAV) as plugins | [0007](../adr/0007-media-storage.md), [0026](../adr/0026-core-outbound-via-plugins.md) |
 | Outbound connections | **The core opens none.** Every call leaving the deployment is made by a plugin, through an egress proxy that enforces the manifest's host allowlist | [0026](../adr/0026-core-outbound-via-plugins.md), [0027](../adr/0027-egress-enforcement.md) |
 | Web | React 19, TypeScript, Vite, PWA | [0012](../adr/0012-web-frontend.md) |
+| Web build runtime | **Node 26** — the newest major *and* the LTS line from 2026-10-28, maintained to 2029-04-30. Node 24 would have meant migrating a year earlier. Like Java, this stays on an LTS line; leaving it is a decision, not a bump. | [0012](../adr/0012-web-frontend.md) |
 | Apps | Kotlin Multiplatform, Compose Multiplatform (Android, iOS) | [0013](../adr/0013-mobile-apps.md) |
 | Outward API | REST (OpenAPI 3.1) and GraphQL (read-only) | [0010](../adr/0010-api-surfaces.md) |
 | Plugin and internal API | gRPC, protobuf, `buf` | [0010](../adr/0010-api-surfaces.md) |

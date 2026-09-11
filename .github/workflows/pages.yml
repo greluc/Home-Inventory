@@ -13,9 +13,9 @@
 #     not hand every visitor's address to a CDN. The guard below fails the build
 #     rather than trusting review.
 #
-# NOTE: the actions below are pinned to major-version tags. Pinning them to full
-# commit SHAs is the hardened form and should happen when the supply-chain gates
-# in .github/workflows/README.md are built.
+# All four actions run on the node24 runtime. NOTE: they are pinned to
+# major-version tags; pinning to full commit SHAs is the hardened form and should
+# happen when the supply-chain gates in .github/workflows/README.md are built.
 
 name: Pages
 
@@ -44,7 +44,7 @@ jobs:
     outputs:
       ready: ${{ steps.guard.outputs.ready }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The workflow lands before the site does. Until `website/index.html`
       # exists there is nothing to publish, and a red cross on every push would
@@ -84,10 +84,11 @@ jobs:
           test -f _site/design-system/assets/fonts/OFL.txt
           test -f _site/design-system/assets/icons/LUCIDE-LICENSE.txt
 
-          # Jekyll drops every path beginning with an underscore. Pages built by
-          # Actions do not run Jekyll, but the file costs nothing and protects
-          # against a later switch back to branch-based publishing.
-          touch _site/.nojekyll
+          # No `touch _site/.nojekyll` here on purpose: since
+          # upload-pages-artifact v4 the artifact excludes dotfiles, so the line
+          # would look like protection and provide none. It costs nothing either:
+          # Pages built by Actions never run Jekyll. The copy in `website/`
+          # stays, for the case where publishing ever moves back to a branch.
 
       # REQ-PRIV-015, enforced rather than asserted. Hyperlinks to other sites
       # are fine — a visitor choosing to click one is not a silent disclosure.
@@ -120,10 +121,10 @@ jobs:
           fi
           echo 'No third-party resource references found.'
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         if: steps.guard.outputs.ready == 'true'
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: steps.guard.outputs.ready == 'true'
         with:
           path: _site
@@ -137,4 +138,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

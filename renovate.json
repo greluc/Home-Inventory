@@ -49,6 +49,20 @@
       "matchPackageNames": ["eclipse-temurin", "openjdk", "java"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "Node is on an LTS line for the same reason Java is. The action that installs it may bump freely; the runtime itself may not.",
+      "matchDatasources": ["node-version", "docker"],
+      "matchPackageNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "GitHub Actions stay on their newest major. An action left behind eventually runs on a deprecated Node runtime, which is how a workflow starts failing without anyone changing it.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "prPriority": 5
     }
   ],
 
