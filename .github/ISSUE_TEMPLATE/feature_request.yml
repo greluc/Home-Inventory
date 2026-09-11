@@ -1,0 +1,65 @@
+name: Feature request
+description: Something the system should be able to do and cannot.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you write: a lot of what looks like a missing feature is
+        **configuration** in this system. Item types, fields, location
+        categories, roles, label templates, saved searches, reminder rules and
+        label geometries are all editable in the running system without a
+        release — that is deliberate
+        ([09 §9.1](https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/09-extensibility-and-plugins.md)).
+
+        If it needs code, the next question is whether it belongs in the core or
+        in a **plugin**. Anything touching a device, an external service or a
+        file format is usually a plugin — and a plugin needs no permission from
+        us to exist.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What are you trying to do, and where does the system get in your way?
+        Describe the situation, not the feature — the best solution is often not
+        the one either of us thought of first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Optional.
+
+  - type: dropdown
+    id: shape
+    attributes:
+      label: Where do you think this belongs
+      options:
+        - Configuration — it should be possible without code
+        - A plugin
+        - The core
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do today instead
+      description: >-
+        How you work around it now, and how painful that is. This is what tells
+        us whether it is worth doing before something else.
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for an existing issue
+          required: true
+        - label: I checked whether the requirements catalogue already covers this
+          required: false

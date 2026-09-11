@@ -1,0 +1,47 @@
+name: Documentation problem
+description: Something in the documentation is wrong, unclear or missing.
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `docs/` is the specification of this project, so a defect in it is a
+        defect in the project. Unclear counts: if you had to read something three
+        times, that is worth reporting.
+
+  - type: input
+    id: where
+    attributes:
+      label: Which document
+      placeholder: docs/architecture/07-data-model.md §7.5, or docs/adr/0004-…, or README.md
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem
+      options:
+        - It is wrong — it does not match the code or reality
+        - It is unclear or ambiguous
+        - It is missing — something is not covered
+        - It contradicts another document
+        - A broken link, a typo, or formatting
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: What is wrong
+      description: >-
+        Quote the passage if you can. If it contradicts something else, name
+        both places — a contradiction is never fixed by editing only one side.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What it should say
+      description: Optional, and very welcome.

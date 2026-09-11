@@ -1,0 +1,44 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+[*.{java,kt,kts}]
+indent_size = 2
+# Google Java Style; Checkstyle enforces the rest.
+ij_continuation_indent_size = 4
+
+[*.py]
+indent_size = 4
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown — do not strip them.
+trim_trailing_whitespace = false
+max_line_length = 80
+
+[*.{yaml,yml}]
+indent_size = 2
+
+[*.{container,network,volume,pod}]
+# systemd unit syntax
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[LICENSES/**]
+# Verbatim licence texts — never reformatted.
+insert_final_newline = unset
+trim_trailing_whitespace = false
+max_line_length = unset
+
+[LICENSE]
+insert_final_newline = unset
+trim_trailing_whitespace = false
+max_line_length = unset

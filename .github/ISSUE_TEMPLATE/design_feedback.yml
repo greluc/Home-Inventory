@@ -1,0 +1,63 @@
+name: Design feedback — a hole, a doubt, a better alternative
+description: The most useful kind of issue while the project has no code yet.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The project is in its design phase, so this is the report with the
+        highest leverage: a flaw found here costs an edit, the same flaw found
+        after implementation costs a rewrite.
+
+        You do not need a solution. "Your three-way merge loses data in this
+        sequence" is a complete and welcome issue.
+
+  - type: input
+    id: where
+    attributes:
+      label: Which document
+      description: Chapter, ADR or requirement ID — whatever you were reading.
+      placeholder: docs/architecture/11-offline-synchronization.md §11.4, or ADR-0014, or REQ-SYNC-005
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem
+      options:
+        - It does not hold — here is a case it gets wrong
+        - A decision was dismissed too easily in its ADR
+        - Two documents contradict each other
+        - A requirement cannot be tested as written
+        - Something important is not covered at all
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What breaks, and under what circumstances? A concrete sequence beats a
+        general worry — "two devices edit the same field offline, then A syncs
+        before B" is something we can test against.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternative
+    attributes:
+      label: What you would do instead
+      description: Optional. If you have an alternative, what does it cost?
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I read the ADR for this decision, including the options it lists
+          required: false
+        - label: I checked ADR-0000 in case this is already a known open point
+          required: false

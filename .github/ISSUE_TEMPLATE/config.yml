@@ -1,0 +1,22 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/greluc/Home-Inventory/security/advisories/new
+    about: >-
+      Never open a public issue for a security problem. Use private vulnerability
+      reporting — it is encrypted and keeps the report out of public view. See
+      SECURITY.md for the scope and the response times you can expect.
+
+  - name: Ask a question or discuss an idea
+    url: https://github.com/greluc/Home-Inventory/discussions
+    about: >-
+      For anything open-ended: "does this design handle X?", "why not Y?", "how
+      would I run this on Z?". A question that turns out to be a gap in the
+      documentation gets fixed there.
+
+  - name: Read the architecture first
+    url: https://github.com/greluc/Home-Inventory/blob/main/docs/README.md
+    about: >-
+      The project is in its design phase — the documentation is the product. Most
+      "how does this work" questions are answered there, and every decision has
+      an ADR stating the alternatives it was chosen over.

@@ -1,0 +1,79 @@
+# REUSE configuration — https://reuse.software
+#
+# Why this file exists: the core is AGPL-3.0-or-later, but the plugin API and
+# the SDKs are Apache-2.0 so that plugin authors can choose their own licence
+# ([ADR-0018](docs/adr/0018-licensing.md)). That separation is only worth
+# anything if it is machine-checkable, and REUSE is how it gets checked.
+#
+# Files that carry their own SPDX header do not need an entry here. This file
+# covers what cannot carry one (licence texts, generated data, binary assets)
+# and the directory-wide defaults.
+
+version = 1
+SPDX-PackageName = "Home Inventory"
+SPDX-PackageSupplier = "Lucas Greuloch <lucas.greuloch@gmail.com>"
+SPDX-PackageDownloadLocation = "https://github.com/greluc/Home-Inventory"
+
+# --- The core: AGPL ---------------------------------------------------------
+
+[[annotations]]
+path = [
+  "app/**",
+  "web/**",
+  "deploy/**",
+  "api/**",
+  ".github/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Lucas Greuloch"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# --- The plugin contract: Apache-2.0, deliberately ---------------------------
+# Anything a plugin author compiles against must stay permissive. A file that
+# ends up here by accident makes the promise in ADR-0018 false, which is why CI
+# checks this boundary rather than trusting it.
+
+[[annotations]]
+path = [
+  "plugin-api/**",
+  "plugin-sdk/**",
+  "proto/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Lucas Greuloch"
+SPDX-License-Identifier = "Apache-2.0"
+
+# --- Documentation ----------------------------------------------------------
+
+[[annotations]]
+path = ["docs/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Lucas Greuloch"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# --- Third-party text, kept verbatim ----------------------------------------
+
+[[annotations]]
+path = ["LICENSES/**", "LICENSE"]
+precedence = "override"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = ["CODE_OF_CONDUCT.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "Organization for Ethical Source and Contributor Covenant contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# --- Project meta -----------------------------------------------------------
+
+[[annotations]]
+path = [
+  "README.md", "CONTRIBUTING.md", "SECURITY.md", "SECURITY.asc", "CHANGELOG.md",
+  "PLUGINS.md", "CLAUDE.md", "cla/**",
+  ".gitignore", ".gitattributes", ".editorconfig", "REUSE.toml",
+  "renovate.json",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Lucas Greuloch"
+SPDX-License-Identifier = "CC-BY-SA-4.0"

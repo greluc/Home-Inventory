@@ -1,0 +1,38 @@
+# Code owners for Home Inventory.
+#
+# This file routes review requests. It only *blocks* a merge when the branch
+# protection on `main` has "Require review from Code Owners" enabled.
+#
+# Syntax: https://docs.github.com/articles/about-code-owners
+
+# Catch-all — everything lands with the maintainer.
+*                           @greluc
+
+# --- The places where a mistake is expensive --------------------------------
+# Listed separately so they stay visible in a large diff, and so that a future
+# second maintainer inherits the boundary rather than having to rediscover it.
+
+# The documentation is the specification; a change here is a change to the
+# product, not a note about it.
+/docs/                      @greluc
+/docs/adr/                  @greluc
+/docs/requirements/         @greluc
+
+# Licensing: the AGPL core and the Apache-2.0 plugin API must stay separated,
+# or the promise made to plugin authors in ADR-0018 becomes false.
+/LICENSE                    @greluc
+/LICENSES/                  @greluc
+/REUSE.toml                 @greluc
+/plugin-api/                @greluc
+/plugin-sdk/                @greluc
+/proto/                     @greluc
+
+# Deployment: rootless, network segmentation and secret handling live here.
+/deploy/                    @greluc
+/.github/workflows/         @greluc
+
+# Project governance and the legal surface.
+/CONTRIBUTING.md            @greluc
+/SECURITY.md                @greluc
+/CODE_OF_CONDUCT.md         @greluc
+/cla/                       @greluc

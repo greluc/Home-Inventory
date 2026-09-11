@@ -1,0 +1,68 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "commitMessagePrefix": "build(deps):",
+  "labels": ["dependencies"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "rebaseWhen": "behind-base-branch",
+
+  "_comment_automerge": "Patch versions merge themselves on a green build; anything larger is read by a human. Rationale in docs/architecture/12-security.md §12.10.",
+  "packageRules": [
+    {
+      "description": "Patch updates merge automatically once CI is green.",
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Minor and major updates are always reviewed by a person.",
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false
+    },
+    {
+      "description": "The stack's stateful services stay on their major line. A PostgreSQL, OpenSearch or RabbitMQ major is a migration, not a dependency bump.",
+      "matchPackageNames": [
+        "postgres",
+        "opensearchproject/opensearch",
+        "rabbitmq",
+        "valkey/valkey",
+        "clamav/clamav"
+      ],
+      "matchUpdateTypes": ["major"],
+      "enabled": false,
+      "prBodyNotes": ["A major update of this service is a migration with its own runbook — open it deliberately, not through Renovate."]
+    },
+    {
+      "description": "Container images are referenced by digest, so digest updates are the real update path.",
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    },
+    {
+      "description": "Java is on an LTS line; moving off it is a decision with an ADR.",
+      "matchPackageNames": ["eclipse-temurin", "openjdk", "java"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ],
+
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "schedule": ["at any time"],
+    "automerge": false,
+    "prPriority": 10
+  },
+
+  "osvVulnerabilityAlerts": true,
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  }
+}

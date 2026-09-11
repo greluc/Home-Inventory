@@ -1,0 +1,148 @@
+# Home Inventory — the service matrix
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR THE DEPLOYMENT TOPOLOGY.
+#
+# The Quadlet units under deploy/quadlet/ and compose.yaml under deploy/compose/
+# are GENERATED from it; the Helm chart under deploy/helm/ is VALIDATED against
+# it. Editing a generated artifact by hand fails the drift check in CI
+# ([ADR-0021](../docs/adr/0021-podman-quadlet.md), REQ-NFR-063).
+#
+# Why it exists: two hand-maintained descriptions of the same topology diverge —
+# not if, but when. And the failure shows up at an operator's site, on the
+# runtime we did not test, which is the worst place to find it (risk R13).
+#
+# Status: seed. The values below follow the architecture but nothing generates
+# from them yet, because there is no code to deploy. Image digests are marked
+# TODO deliberately — a tag here would defeat the digest-pinning rule.
+
+version: 1
+
+defaults:
+  # Applies to every service unless overridden. Every one of these is a
+  # requirement, not a preference — see REQ-SEC-085.
+  user: "10001:10001"
+  readOnlyRootFilesystem: true
+  noNewPrivileges: true
+  dropCapabilities: [ALL]
+  restart: on-failure
+  autoUpdate: disabled          # images are digest-pinned; updates are deliberate
+
+networks:
+  edge:
+    internal: false             # the only segment the reverse proxy reaches
+  internal:
+    internal: true              # no route to the internet, at all
+  plugins:
+    internal: false             # outbound only to each plugin's declared allowlist
+
+volumes:
+  pgdata:   { service: postgres }
+  osdata:   { service: opensearch }
+  mqdata:   { service: rabbitmq }
+  kvdata:   { service: valkey }
+  cvddata:  { service: clamav }
+
+services:
+
+  web:
+    role: static
+    image: { name: ghcr.io/greluc/home-inv-web, digest: "TODO" }
+    networks: [edge]
+    ports: [{ container: 8081, host: 8081 }]
+    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    health: { command: "/healthcheck", interval: 15s }
+    profiles: [minimal, standard, ha]
+
+  api:
+    role: api
+    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }
+    networks: [edge, internal, plugins]
+    ports: [{ container: 8080, host: 8080 }]   # never below 1024 — rootless
+    env:
+      SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
+    secrets: [db-password, data-key, jwt-key]
+    dependsOn: [postgres, valkey]
+    resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
+    health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
+    profiles: [minimal, standard, ha]
+
+  worker:
+    role: worker
+    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image as api
+    networks: [internal, plugins]
+    env:
+      SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
+    secrets: [db-password, data-key]
+    dependsOn: [postgres, rabbitmq, clamav]
+    resources: { memoryReservation: 512Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
+    health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
+    profiles: [minimal, standard, ha]
+
+  postgres:
+    image: { name: docker.io/library/postgres, tag: "18-alpine", digest: "TODO" }
+    networks: [internal]
+    volumes: [{ name: pgdata, path: /var/lib/postgresql/data }]
+    secrets: [db-password, db-migration-password]
+    resources: { memoryReservation: 1Gi, memoryLimit: 2Gi }
+    health: { command: "pg_isready", interval: 10s }
+    profiles: [minimal, standard, ha]
+    notes: >
+      Requires the ltree extension. The application role has no DDL rights and no
+      BYPASSRLS; migrations run under a separate role (REQ-SEC-002, REQ-SEC-003).
+
+  valkey:
+    image: { name: docker.io/valkey/valkey, tag: "8-alpine", digest: "TODO" }
+    networks: [internal]
+    volumes: [{ name: kvdata, path: /data }]
+    resources: { memoryReservation: 128Mi, memoryLimit: 256Mi }
+    health: { command: "valkey-cli ping", interval: 10s }
+    profiles: [minimal, standard, ha]
+
+  clamav:
+    image: { name: docker.io/clamav/clamav, tag: "stable", digest: "TODO" }
+    networks: [plugins]           # outbound: signature mirror only
+    volumes: [{ name: cvddata, path: /var/lib/clamav }]
+    resources: { memoryReservation: 1Gi, memoryLimit: 1536Mi }
+    health: { command: "clamdcheck.sh", interval: 60s, startPeriod: 300s }
+    profiles: [minimal, standard, ha]
+    notes: >
+      Mandatory in every profile — the malware scan cannot be deselected
+      (ADR-0024). It is why the minimal profile needs about 3 GB rather than 1.5.
+
+  opensearch:
+    image: { name: docker.io/opensearchproject/opensearch, tag: "3", digest: "TODO" }
+    networks: [internal]
+    volumes: [{ name: osdata, path: /usr/share/opensearch/data }]
+    resources: { memoryReservation: 1536Mi, memoryLimit: 2Gi }
+    health: { command: "curl -fsS localhost:9200/_cluster/health", interval: 20s, startPeriod: 120s }
+    profiles: [standard, ha]
+    notes: "Not backed up — rebuildable from PostgreSQL (ADR-0008)."
+
+  rabbitmq:
+    image: { name: docker.io/library/rabbitmq, tag: "4-management-alpine", digest: "TODO" }
+    networks: [internal]
+    volumes: [{ name: mqdata, path: /var/lib/rabbitmq }]
+    resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
+    health: { command: "rabbitmq-diagnostics -q ping", interval: 20s, startPeriod: 60s }
+    profiles: [standard, ha]
+
+secrets:
+  # Passed as files, never as environment values holding the secret itself.
+  # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
+  db-password:            { required: true }
+  db-migration-password:  { required: true }
+  data-key:               { required: true, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
+  jwt-key:                { required: true, notes: "Ed25519 pair; two active versions during rotation." }
+
+forbidden:
+  # Checked in CI against every generated artifact and the Helm chart
+  # (REQ-SEC-084). Listed here so the check has one place to read from.
+  - privileged
+  - cap_add
+  - "pid: host"
+  - "network_mode: host"
+  - "user: root"
+  - "SecurityLabelDisable=true"
+  - container socket mounts
+  - host ports below 1024
+  - bind mounts into host directories

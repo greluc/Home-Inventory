@@ -1,0 +1,67 @@
+# Normalise line endings on commit, check out LF everywhere.
+# The project is developed on Windows and runs on Linux; without this, a shell
+# script or a Dockerfile committed from Windows arrives in the container with
+# CRLF and fails with a message that names the wrong cause.
+* text=auto eol=lf
+
+# Files that must keep CRLF even on Linux
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Explicitly text, so nothing is guessed
+*.java      text diff=java
+*.kt        text diff=kotlin
+*.kts       text diff=kotlin
+*.ts        text
+*.tsx       text
+*.js        text
+*.jsx       text
+*.py        text diff=python
+*.sql       text
+*.proto     text
+*.md        text diff=markdown
+*.asc       text eol=lf
+*.yaml      text
+*.yml       text
+*.json      text
+*.toml      text
+*.xml       text
+*.html      text diff=html
+*.css       text
+*.sh        text eol=lf
+*.container text eol=lf
+*.network   text eol=lf
+*.volume    text eol=lf
+Dockerfile  text eol=lf
+gradlew     text eol=lf
+
+# Binary — never diffed, never normalised
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.avif      binary
+*.heic      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.jar       binary
+*.zip       binary
+*.gz        binary
+*.onnx      binary
+
+# GitHub language statistics: documentation and generated artifacts should not
+# dominate the language bar, and generated clients are not hand-written code.
+docs/**            linguist-documentation
+LICENSES/**        linguist-vendored
+*.md               linguist-detectable=true
+**/generated/**    linguist-generated=true
+api/openapi.yaml   linguist-generated=false
+
+# The Gradle wrapper is committed on purpose and is not "vendored noise"
+gradle/wrapper/gradle-wrapper.jar binary linguist-vendored

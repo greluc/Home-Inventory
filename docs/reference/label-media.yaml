@@ -1,0 +1,145 @@
+# Home Inventory — label geometries (LabelMedia)
+#
+# The starter catalogue for the `LabelMediaCatalog` (see 10 §10.5). This file is
+# the seed source: during implementation it is loaded into `labeling.label_media`
+# and is extendable in the UI afterwards (extension level 1).
+#
+# NOTE — `verified` is not decoration but the central statement of each entry:
+#   verified: true   Dimensions, grid, margins AND pitch come from the
+#                    manufacturer's data sheet or a verified template file.
+#                    The source and the verification date are in the entry.
+#   verified: false  At least one value is derived or comes from a retail
+#                    source. The calibration sheet is mandatory before any
+#                    bulk print.
+#
+# Why the distinction matters (REQ-LBL-004, REQ-LBL-007):
+#   From label size and count the grid can be guessed, but NOT how the leftover
+#   space is distributed. With 64 labels of 48.5 mm across 210 mm of width,
+#   16 mm are left over — that could be 8 mm of margin on each side, OR gaps
+#   between the columns, OR both. All three look identical on the first label
+#   and diverge from the fourth column onwards. That is exactly why nothing is
+#   marked verified that was merely calculated.
+#
+# Unit: millimetres. The origin is the top-left corner of the sheet.
+
+schemaVersion: 1
+updated: 2026-09-11
+
+sheets:
+  - id: avery-zweckform-3474
+    vendor: Avery Zweckform
+    articleNumber: "3474"
+    name: Multi-purpose labels 70 × 37 mm
+    kind: SHEET
+    pageSize:  { width: 210.0, height: 297.0 }
+    grid:      { columns: 3, rows: 8 }          # 24 per sheet
+    label:     { width: 70.0, height: 37.0, cornerRadius: 0.0 }
+    margin:    { left: 0.0, top: 0.5, right: 0.0, bottom: 0.5 }
+    pitch:     { x: 70.0, y: 37.0 }             # marginless, no gaps
+    verified: true
+    verifiedOn: 2026-09-11
+    sources:
+      - "Avery Zweckform product page 3474 — 70 × 37 mm, 24 labels per sheet"
+      - "glabels zweckform-iso-templates.xml: nx=3 ny=8 x0=0 y0=0 dx=70mm dy=37mm round=0"
+    notes: >
+      A marginless format: 3 × 70 mm = 210 mm is the full sheet width, hence no
+      side margins and no column gaps. Vertically 297 − 8 × 37 = 1 mm remains,
+      split evenly top and bottom. Two independent sources agree, so this entry
+      is fully evidenced.
+
+  - id: avery-zweckform-3667
+    vendor: Avery Zweckform
+    articleNumber: "3667"
+    name: Multi-purpose labels 48.5 × 16.9 mm
+    kind: SHEET
+    pageSize:  { width: 210.0, height: 297.0 }
+    grid:      { columns: 4, rows: 16 }         # 64 per sheet
+    label:     { width: 48.5, height: 16.9, cornerRadius: 0.0 }
+    margin:    { left: 8.0, top: 13.3, right: 8.0, bottom: 13.3 }   # DERIVED
+    pitch:     { x: 48.5, y: 16.9 }                                  # DERIVED
+    verified: false
+    sources:
+      - "Avery Zweckform Fachshop / Viking — 48.5 × 16.9 mm, 64 labels per sheet"
+    notes: >
+      The label size and the count are evidenced; the grid and the margins are
+      NOT. 4 × 16 is the only plausible split of 64 at this width, but whether
+      the 16 mm of leftover width sit as side margins or as column gaps cannot
+      be decided from the available sources. Before release: check against the
+      manufacturer's data sheet, or measure with the calibration sheet.
+
+rolls:
+  - id: brother-dk-11201
+    vendor: Brother
+    articleNumber: DK-11201
+    name: Address labels 29 × 90 mm (die-cut)
+    kind: ROLL
+    media:   { width: 29.0 }
+    label:   { length: 90.0, cornerRadius: 0.0 }
+    verified: true
+    verifiedOn: 2026-09-11
+    sources: ["Brother product data / TME data sheet — 29 mm × 90 mm, die-cut"]
+    notes: >
+      Careful when designing templates: the PRINTABLE width is smaller than the
+      29 mm media width — DK rolls have unprintable margins. The exact figure is
+      to be taken from the Brother SDK data sheet and added here; until then the
+      media width applies and the preview warns.
+
+  - id: brother-dk-11209
+    vendor: Brother
+    articleNumber: DK-11209
+    name: Small address labels 29 × 62 mm (die-cut)
+    kind: ROLL
+    media:   { width: 29.0 }
+    label:   { length: 62.0, cornerRadius: 0.0 }
+    verified: true
+    verifiedOn: 2026-09-11
+    sources: ["Brother product data — 29 × 62 mm, die-cut"]
+    notes: "Unprintable margins as for DK-11201 — still to be added."
+
+  - id: brother-dk-22205
+    vendor: Brother
+    articleNumber: DK-22205
+    name: Continuous tape 62 mm
+    kind: ROLL
+    media:   { width: 62.0 }
+    label:   { length: null, cornerRadius: 0.0 }   # free, continuous material
+    verified: true
+    verifiedOn: 2026-09-11
+    sources: ["Brother product data — 62 mm continuous tape, 30 m"]
+    notes: >
+      Continuous material: the label length comes from the template, not from
+      the media. The renderer cuts at the rendered height.
+
+  - id: dymo-99012
+    vendor: Dymo
+    articleNumber: "99012"
+    name: LabelWriter large address labels 36 × 89 mm
+    kind: ROLL
+    media:   { width: 36.0 }
+    label:   { length: 89.0, cornerRadius: 0.0 }
+    verified: true
+    verifiedOn: 2026-09-11
+    sources: ["Dymo product data / retail data sheet — 36 × 89 mm"]
+
+  - id: dymo-11354
+    vendor: Dymo
+    articleNumber: "11354"
+    name: LabelWriter multi-purpose labels 32 × 57 mm
+    kind: ROLL
+    media:   { width: 32.0 }
+    label:   { length: 57.0, cornerRadius: 0.0 }
+    verified: true
+    verifiedOn: 2026-09-11
+    sources: ["Dymo product data / retail data sheet — 32 × 57 mm"]
+
+# ---------------------------------------------------------------------------
+# Not included yet — deliberately, not forgotten
+#
+# Further Avery Zweckform and Herma sheet formats are added only once their
+# geometry is FULLY evidenced. The rule from 10 §10.5 applies: a small verified
+# catalogue beats a large half-verified one — a pitch that is 0.5 mm wrong only
+# ruins the sheet at the eighth row, and by then it is gone.
+#
+# A user who needs a missing format creates it themselves (level 1) and
+# calibrates it with the calibration sheet. That is the intended path, not a
+# workaround.

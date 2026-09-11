@@ -1,0 +1,116 @@
+# ---------------------------------------------------------------------------
+# Secrets — the most important block. Nothing here may ever reach the remote.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*.pfx
+keystore.properties
+secrets/
+*.secret
+# Secrets are passed to containers as files. Whatever an operator mounts
+# into /run/secrets stays out of here.
+run/secrets/
+
+# ---------------------------------------------------------------------------
+# Gradle / Java
+# ---------------------------------------------------------------------------
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!src/**/build/
+out/
+bin/
+*.class
+*.jar
+!gradle/wrapper/*.jar
+*.war
+*.ear
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# ---------------------------------------------------------------------------
+# Node / web
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+
+# ---------------------------------------------------------------------------
+# Python (the plugin SDK and tooling)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+
+# ---------------------------------------------------------------------------
+# Kotlin Multiplatform / Android / iOS (from stage 3 onwards)
+# ---------------------------------------------------------------------------
+local.properties
+.kotlin/
+*.xcuserdatad/
+xcuserdata/
+Pods/
+
+# ---------------------------------------------------------------------------
+# Container and deployment artifacts
+# ---------------------------------------------------------------------------
+*.tar
+*.tar.gz
+!docs/**/*.tar.gz
+.docker/
+compose.override.yaml
+compose.override.yml
+
+# ---------------------------------------------------------------------------
+# IDE
+# ---------------------------------------------------------------------------
+.idea/
+!.idea/icon.svg
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.fleet/
+.settings/
+.project
+.classpath
+
+# ---------------------------------------------------------------------------
+# Operating system
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+
+# ---------------------------------------------------------------------------
+# Local scratch space — never committed
+# ---------------------------------------------------------------------------
+/tmp/
+/scratch/
+*.local
+*.log
+logs/

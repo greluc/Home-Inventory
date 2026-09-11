@@ -1,0 +1,124 @@
+# 02 — Non-Functional Requirements
+
+Related to the quality goals Q1–Q7 in
+[01 Introduction and Goals](../architecture/01-introduction-and-goals.md).
+
+---
+
+## NFR-P — Performance and scalability (Q7)
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-NFR-001 | Item detail view: p95 < 150 ms at 1 M items per tenant. | M | 1 | A load test with a generated data set |
+| REQ-NFR-002 | Full-text search with facets: p95 < 500 ms at 1 M items. | M | 1 | A load test |
+| REQ-NFR-003 | Writing an item: p95 < 300 ms. | M | 1 | A load test |
+| REQ-NFR-004 | Index lag after a write: p95 < 2 s. | M | 1 | A metric in operation, with the threshold as an alert |
+| REQ-NFR-005 | Image derivatives after upload: p95 < 30 s. | S | 1 | A load test with 20 MP images |
+| REQ-NFR-006 | Rendering a label sheet with 500 codes: < 20 s, without degrading API response times. | S | 2 | A load test alongside API traffic |
+| REQ-NFR-007 | Seeding a device with 100 000 items: < 5 min over Wi-Fi, < 300 MB locally. | S | 3 | A device test |
+| REQ-NFR-008 | The application layer is **stateless** and horizontally scalable. | M | 1 | Two instances behind a load balancer without session affinity |
+| REQ-NFR-009 | The system runs within 8 GB RAM in the `standard` profile and within 3 GB in `minimal`. The mandatory malware scanner ([ADR-0024](../adr/0024-malware-scan.md)) is included in both figures. | M | 1 | Both profiles started and verified in CI |
+| REQ-NFR-010 | No endpoint loads data without a bound; every collection is paginated and capped (max. 200 per page). | M | 0 | Verified across all endpoints |
+
+## NFR-V — Availability and robustness (Q5)
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-NFR-011 | Target availability 99 % on a monthly average. | S | 1 | Measured through the health endpoint |
+| REQ-NFR-012 | A failure of OpenSearch, RabbitMQ, Valkey or the `BlobStore` only degrades the system; reads and writes stay possible. | M | 1 | A failure test per dependency |
+| REQ-NFR-013 | Every derived store is fully rebuildable from PostgreSQL, with a documented and rehearsed procedure. | M | 1 | The rebuild performed quarterly |
+| REQ-NFR-014 | Recovery point RPO ≤ 15 min, recovery time RTO ≤ 2 h. | M | 1 | The rehearsal documented |
+| REQ-NFR-015 | Restorability of the backup is **verified automatically every week**; an unverified backup counts as non-existent. | M | 1 | The result as a metric; a failure is an immediate alert |
+| REQ-NFR-016 | Event delivery is at-least-once; every consumer is idempotent. | M | 1 | Duplicate delivery produces no second effect |
+| REQ-NFR-017 | A restart loses no acknowledged change and no outbox message. | M | 1 | A fault injection test |
+| REQ-NFR-018 | Orderly shutdown: in-flight requests finish (max. 30 s), consumers deregister. | M | 1 | A rolling update without user-visible errors |
+
+## NFR-M — Modularity, maintainability, extensibility (Q2, Q3, Q4)
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-NFR-019 | Module boundaries are enforced **mechanically**; a violation fails the build. | M | 0 | Spring Modulith + ArchUnit in CI |
+| REQ-NFR-020 | No cycle between building blocks. | M | 0 | The Modulith check |
+| REQ-NFR-021 | A block accesses only another block's `api` package, never internal types or foreign database schemas. | M | 0 | An ArchUnit rule, including over the migration files |
+| REQ-NFR-022 | `domain` code is free of framework dependencies. | M | 0 | An ArchUnit rule |
+| REQ-NFR-023 | Entities do not leave their block; only `*View` types go outward. | M | 0 | An ArchUnit rule |
+| REQ-NFR-024 | The shared kernel `platform` contains no domain logic; its size is monitored. | M | 0 | A figure per release in the changelog |
+| REQ-NFR-025 | Test coverage of the domain logic ≥ 80 %, in the `domain` package ≥ 90 %. | M | 1 | Measured in CI; falling below fails the build |
+| REQ-NFR-026 | Every block is individually testable (`@ApplicationModuleTest`). | M | 1 | At least one such test per block |
+| REQ-NFR-027 | Integration tests run against **the same image digests** as production; substitute databases are excluded. | M | 0 | The Testcontainers configuration verified |
+| REQ-NFR-028 | A new contributor starts the system locally with **one command in ≤ 10 min**. | M | 0 | An onboarding test in CI |
+| REQ-NFR-029 | All dependency versions live in the version catalog resp. in lock files. | M | 0 | No version in `build.gradle.kts` |
+| REQ-NFR-030 | Every load-bearing decision has an ADR; the documentation changes in the same unit of work as the code. | M | 0 | Checked in review |
+
+## NFR-U — Usability, language, accessibility (Q6)
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-NFR-031 | Capturing an item with a pre-printed label in **≤ 3 interactions**. | M | 2 | An acceptance test against the clock |
+| REQ-NFR-032 | The UI is multilingual from the start; texts live in resource bundles, not in code. | M | 0 | No hard-coded display text |
+| REQ-NFR-033 | German and English are shipped; English is the fallback language. | M | 0 | Complete translations for both |
+| REQ-NFR-034 | Field labels in type definitions can be stored multilingually. | M | 1 | Several languages settable per field |
+| REQ-NFR-035 | Times are stored in UTC and displayed in the user's time zone. | M | 0 | A test across several time zones |
+| REQ-NFR-036 | Money is stored as `numeric` with an ISO 4217 code, never as floating point. | M | 1 | A schema check |
+| REQ-NFR-070 | Money is represented by an **in-house immutable `Money` value type** (`BigDecimal` + `java.util.Currency`) in `platform`; no money library is used ([ADR-0025](../adr/0025-money-representation.md)). Arithmetic across currencies **throws**; no constructor, factory, DTO or test helper on the money path accepts `double` or `float`; the rounding mode is always explicit; the JSON shape carries the amount as a **string**. | M | 1 | An ArchUnit rule forbids `double`/`float` on the money path; `Money` is held at 100 % branch coverage; a cross-currency operation test expects an exception |
+| REQ-NFR-037 | The UI is fully operable by keyboard. | S | 1 | A manual check per view |
+| REQ-NFR-038 | WCAG 2.2 AA as the **goal**: contrast, focus indication, labels, reduced motion. Verified automatically, **without** a formal conformance statement. | M | 1 | `axe` blocking in CI; keyboard operation spot-checked per view |
+| REQ-NFR-039 | The UI works on phone screens from 360 px wide and is operable one-handed. | M | 1 | A device test |
+| REQ-NFR-071 | **Phone, tablet and desktop are all first-class**, in both orientations. One responsive layout system covers them, not three designs; the breakpoints are tokens **shared between the web client and the Compose apps**, not invented per platform. **Hit-target size follows the pointer type, not the width** — a wide touch device keeps touch-sized targets — and no function is reachable only by hover. | M | 1 | Every screen verified at 360 px, at tablet width in portrait and landscape, and on a desktop; a rotation mid-task loses no input; a `pointer: coarse` device at 1024 px still gets 44 × 44 px targets |
+| REQ-NFR-040 | **Dark is the default appearance everywhere**, regardless of the operating system setting. Light is opt-in, and its toggle is reachable without hunting — in the user menu, not buried in a settings sub-page. The choice is stored per user and applied **before first paint**, so a light-preferring user never sees a dark flash. | M | 1 | A fresh installation and a first-time visitor get dark; the choice survives a reload with no flash of the wrong theme; both themes verified against AA |
+
+## NFR-O — Operations and observability
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-NFR-041 | Logging as JSON lines with `traceId`, `tenantId`, `actorId`. | M | 0 | The format verified |
+| REQ-NFR-042 | Every error response contains a `traceId` findable in the server log. | M | 0 | An end-to-end test |
+| REQ-NFR-043 | Prometheus metrics for HTTP, database, outbox, queues, search, sync, plugins, media, security and the JVM. | M | 1 | The endpoint exists, dashboards ship with the product |
+| REQ-NFR-044 | Distributed tracing through OpenTelemetry, configurable and inactive when unconfigured. | S | 1 | A trace visible across core, broker, worker and plugin |
+| REQ-NFR-045 | `/livez` checks nothing external; `/readyz` checks the database and the completed migration. | M | 0 | A database outage causes no restart loop |
+| REQ-NFR-046 | A missing secret causes a **startup abort** with a clear message; there is no generated default key. | M | 0 | Startup without the key demonstrably fails |
+| REQ-NFR-047 | At startup a configuration overview with **masked** secrets is logged. | M | 0 | The output verified |
+| REQ-NFR-048 | Every alert in operation leads to an action; there are exactly two urgencies. | M | 1 | The alert catalogue from [13 §13.7](../architecture/13-operations-and-observability.md) |
+| REQ-NFR-049 | For **each** of the situations named in [13 §13.10](../architecture/13-operations-and-observability.md) a written runbook exists. | M | 1 | Present and walked through at least once |
+| REQ-NFR-050 | Recurring tasks are repeatable, cancellable, and log start, end and scope. | M | 1 | Verified per task |
+
+## NFR-D — Deployment and portability
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-NFR-051 | **Two** container runtimes are supported as equals: Podman ≥ 5.0 with Quadlet, and Docker with Compose v2. A fresh installation runs with one command on either path. | M | 0 | The installation guide walked through in CI for **both** paths |
+| REQ-NFR-052 | A Helm chart is maintained as an equal and tested in CI against `kind`. | S | 2 | The chart test green |
+| REQ-NFR-053 | `api` and `worker` are **the same image**, distinguished only by the profile. | M | 1 | One image in the registry per version |
+| REQ-NFR-054 | Configuration exclusively through environment variables; secrets through files. | M | 0 | No configuration file in the image |
+| REQ-NFR-055 | Containers run as non-root **inside the container** and **rootless on the host**, with a read-only filesystem, without capabilities and with resource limits. | M | 0 | All three deployment descriptions checked in CI; see REQ-SEC-083 ff. |
+| REQ-NFR-056 | Migrations are backward compatible; the previous code version runs against the new schema. | M | 1 | A test with the N−1 version in CI |
+| REQ-NFR-057 | No migration holds a lock longer than 5 s on a realistic data set. | M | 1 | A migration test against a large copy |
+| REQ-NFR-058 | The `minimal` profile (without OpenSearch and RabbitMQ) stays permanently runnable and is tested in CI. | M | 1 | Both profiles in the test matrix |
+| REQ-NFR-059 | **Rootless is mandatory.** There is no supported path with a root daemon or a root container; rootful Docker and rootful Podman are excluded. | M | 0 | [ADR-0022](../adr/0022-rootless.md); a CI check |
+| REQ-NFR-060 | A setup script checks the host prerequisites (`subuid`/`subgid`, `linger`, cgroup v2 delegation) and **aborts with a clear message** when one is missing. | M | 0 | A run without `linger` or without delegated controllers demonstrably fails |
+| REQ-NFR-061 | No service binds a port below 1024; TLS is terminated exclusively by the external reverse proxy. | M | 0 | A CI check across all deployment descriptions |
+| REQ-NFR-062 | Runtime-managed volumes only; no bind mounts into host directories. The UID mapping is fixed and documented per service. | M | 0 | A test: restart against an existing volume, write access succeeds |
+| REQ-NFR-063 | A **service matrix** (`deploy/services.yaml`) is the source of truth; the Quadlet units and `compose.yaml` are generated from it and the Helm chart is validated against it. | M | 1 | A hand-written deviation fails the CI comparison |
+| REQ-NFR-064 | The same smoke suite runs in CI **rootless** under Podman, **rootless** under Docker and against `kind` — and does so once on a Debian-family and once on a RHEL-family distribution with **SELinux `enforcing`**. | M | 1 | A change that works under only one runtime, or only without SELinux, fails the build |
+| REQ-NFR-065 | The Quadlet units, `compose.yaml` and the Helm chart live versioned in the repository, not only on the host. | M | 0 | Present and part of the release |
+| REQ-NFR-066 | Volumes are backed up and restored through the runtime, never by copying out of the storage directory. | M | 1 | The restore rehearsal succeeds with correct ownership |
+| REQ-NFR-067 | Start order is reliable: `Requires=`/`After=` with `Notify=healthy` (Quadlet) resp. `depends_on` with a health check (Compose). | M | 0 | A cold start without startup errors, repeated ten times |
+| REQ-NFR-068 | The operations documentation gives the commands for logs, restart, upgrade and restore for **every** way of running it. | M | 1 | Present and walked through at least once |
+| REQ-NFR-069 | Supported are **Debian ≥ 13, Ubuntu ≥ 26.04 LTS, Fedora ≥ 43, and RHEL, CentOS Stream, Rocky Linux and AlmaLinux ≥ 9.5 resp. ≥ 10** — the floor is Podman 5.0. The installation guide carries both package families (`apt`/`dnf`) including the per-family packages and firewall steps. One representative of each family is tested continuously; the rest count as supported but not continuously verified — and the guide says so. | M | 1 | Both guide paths walked through in CI; the version matrix in [06 §6.2](../architecture/06-deployment-view.md) current |
+
+## NFR-C — Project and publication
+
+| ID | Requirement | Prio | Stage | Acceptance |
+|---|---|---|---|---|
+| REQ-CON-001 | Package root `de.greluc.homeinv`; code, API, database and protocols **in English only**. | M | 0 | A lint rule and review |
+| REQ-CON-002 | Documentation in **English**, in arc42 structure, with Mermaid diagrams in plain text. | M | 0 | No binary diagrams in the repository; no German-language document in the corpus |
+| REQ-CON-003 | Conventional Commits and **DCO** (`git commit -s`) for every contribution. | M | 0 | A CI check |
+| REQ-CON-004 | Semantic versioning separately for the application, the REST API, the plugin contract and the event schemas. | M | 1 | Four version streams documented |
+| REQ-CON-005 | A maintained `CHANGELOG.md` names changes, breaks and deprecations per release. | M | 1 | Present per release |
+| REQ-CON-006 | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` exist. | M | 1 | Present and current |
+| REQ-CON-007 | `LICENSE` (AGPL-3.0-or-later) at the root; plugin API modules carry Apache-2.0 with their own licence file. | M | 1 | REUSE-compliant SPDX headers per file |
+| REQ-CON-008 | The plugin API has **no** dependency on core modules; CI ensures it. | M | 3 | A dependency check in CI |
+| REQ-CON-009 | From every running installation the exact version including the commit hash and a link to the source are reachable (an AGPL obligation). | M | 1 | Visible in the UI |
+| REQ-CON-010 | A CycloneDX SBOM is published per release. | M | 1 | The artifact exists |
+| REQ-CON-011 | Third-party contributions additionally require a **signed CLA**. The flow is automated (a CLA assistant in the pull request), the signatures are recorded durably, and there is a separate path for contributions made on behalf of an employer. | M | 1 | A pull request without a signature is blocked; the record is verifiable |
+| REQ-CON-012 | The documentation corpus is maintained entirely in English; no new German-language document is created. | M | 0 | A CI check: no document in the corpus is German-language |
