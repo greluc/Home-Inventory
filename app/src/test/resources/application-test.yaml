@@ -13,6 +13,15 @@ spring:
     username: homeinv_app
     password: test-app
 
+  data:
+    redis:
+      # No ACL on the test Valkey: the container runs the stock image, and the
+      # deployment's credential is created by setup.sh, which no test runs. Empty
+      # rather than absent, so that the deployment defaults in application.yaml
+      # do not reach a server that would refuse them.
+      username: ""
+      password: ""
+
   flyway:
     enabled: true
     # Migrations run as the migrator, exactly as the one-shot migrate service
@@ -36,3 +45,13 @@ homeinv:
     # container that is destroyed with the suite - it is not a secret and it is
     # not one anywhere else either.
     url-signing-key-file: build/resources/test/db/test-url-signing.key
+
+  # TrustedProxies has no default and must not get one: a deployment without this
+  # list produces no error at all, only wrong numbers (06 §6.7). The tests
+  # therefore state it, and state something narrow.
+  trusted-proxies: "127.0.0.1/32,::1/128"
+
+  # Deliberately a name that does not resolve here. The startup check then says
+  # so and continues, which is what a laptop and a CI runner need and what the
+  # class documents.
+  ingress-host: "web.invalid"

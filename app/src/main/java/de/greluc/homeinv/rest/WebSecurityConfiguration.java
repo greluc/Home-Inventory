@@ -13,6 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * How requests are authenticated and what a session looks like.
@@ -38,19 +39,28 @@ public class WebSecurityConfiguration {
    * @param http the builder
    * @param tenantContextFilter the filter that publishes the session's tenant to
    *     {@code TenantContext}
+   * @param corsConfigurationSource the one named origin cross-origin requests may come from
    * @return the configured chain
    * @throws Exception when the builder rejects the configuration, which fails startup rather than
    *     leaving the application running with a security configuration that did not apply
    */
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http, TenantContextFilter tenantContextFilter)
+  public SecurityFilterChain filterChain(
+      HttpSecurity http,
+      TenantContextFilter tenantContextFilter,
+      CorsConfigurationSource corsConfigurationSource)
       throws Exception {
     CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
     // The token is read from the header, not from a request parameter. A parameter
     // can be planted by a form post from another origin; a header cannot without CORS.
     csrfHandler.setCsrfRequestAttributeName(null);
 
-    http.csrf(
+    // Named origin, never reflected, never `*` (REQ-SEC-062). Spring Security
+    // applies no CORS rules at all unless it is given a source, and "no rules"
+    // is only safe until somebody adds a permissive one to make an integration
+    // work; a named one is the thing that has to be edited to get it wrong.
+    http.cors(cors -> cors.configurationSource(corsConfigurationSource))
+        .csrf(
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(csrfHandler)
@@ -64,7 +74,12 @@ public class WebSecurityConfiguration {
         .authorizeHttpRequests(
             authorize ->
                 authorize
-                    .requestMatchers("/api/v1/auth/login", "/actuator/health/**")
+                    // The probes. `/livez` and `/readyz` are the additional paths
+                    // the health groups carry (13 §13.3); they answer on the
+                    // management listener, which is bound to `internal` and is
+                    // unreachable from here (REQ-SEC-099).
+                    .requestMatchers(
+                        "/api/v1/auth/login", "/actuator/health/**", "/livez", "/readyz")
                     .permitAll()
                     // Authorised by the signature in the URL and by nothing else
                     // (REQ-MED-010). A browser following an <img src> to the

@@ -1,0 +1,5 @@
+# Secrets arrive as files and are read before anything else resolves a property.
+# `spring.datasource.password` is resolved while the data source is built, long
+# before any bean of ours exists, so this has to be a post-processor.
+org.springframework.boot.EnvironmentPostProcessor=\
+  de.greluc.homeinv.platform.SecretFiles

@@ -2,8 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Defaults that hold in every profile. Anything environment-specific comes from
-# HOMEINV_* variables, and anything secret from a file the container mounts —
+# HOMEINV_* variables, and anything secret from a FILE the container mounts —
 # never from a value in this file, because this file is public (CLAUDE.md).
+#
+# `homeinv.secret.<name>` is where SecretFiles publishes the content of every
+# mounted secret, read from the path a HOMEINV_<NAME>_FILE variable names
+# (06 §6.11). A missing one leaves the placeholder unresolved and startup fails
+# with Spring's own message — which is the intended behaviour: there is no
+# generated default and there must not be (REQ-NFR-046).
 
 spring:
   application:
@@ -12,9 +18,7 @@ spring:
   datasource:
     url: ${HOMEINV_DB_URL:jdbc:postgresql://localhost:5432/homeinv}
     username: ${HOMEINV_DB_USER:homeinv_app}
-    # No default. A missing secret must abort startup with a clear message
-    # rather than fall back to something that works and is wrong.
-    password: ${HOMEINV_DB_PASSWORD}
+    password: ${homeinv.secret.db-password}
     hikari:
       # The application role holds no DDL rights and no BYPASSRLS; the pool
       # must never be configured with the migrator's credentials.
@@ -24,6 +28,13 @@ spring:
       # transaction-scoped and discarded at commit, so this is belt and braces —
       # but the test that proves it (REQ-SEC-005) is worth keeping honest.
       auto-commit: false
+
+  data:
+    redis:
+      host: ${HOMEINV_VALKEY_HOST:localhost}
+      port: ${HOMEINV_VALKEY_PORT:6379}
+      username: ${HOMEINV_VALKEY_USER:homeinv}
+      password: ${homeinv.secret.valkey-password:}
 
   jpa:
     open-in-view: false
@@ -68,8 +79,21 @@ server:
     whitelabel:
       enabled: false
   shutdown: graceful
+  # The application does NOT trust forwarded headers by itself. Spring's
+  # `framework` strategy would apply them from any peer, which in front of a
+  # proxy is a client telling us its own address. TrustedForwardedHeaderFilter
+  # applies them only from the configured hops (REQ-SEC-063).
+  forward-headers-strategy: none
 
 management:
+  server:
+    # A listener of its own, bound to the internal segment and to nothing else.
+    # Not published to the host AND not reachable from a plugin segment: `api`
+    # sits on every one of them, so "unpublished" alone would have let any plugin
+    # read the per-tenant metrics of 13 §13.3 without holding a capability
+    # (REQ-SEC-099, ADR-0037).
+    port: ${MANAGEMENT_SERVER_PORT:8090}
+    address: ${MANAGEMENT_SERVER_ADDRESS:127.0.0.1}
   endpoints:
     web:
       exposure:
@@ -79,6 +103,21 @@ management:
       probes:
         enabled: true
       show-details: never # Health details name internal hosts; operators read metrics.
+      group:
+        # `/livez` — is the process alive. It checks NOTHING external, and that is
+        # the whole point: a liveness probe that touches the database turns a
+        # database outage into a restart loop, which is the one response
+        # guaranteed to make the outage worse (REQ-NFR-045, 13 §13.3).
+        livez:
+          include: livenessState
+          additional-path: "management:/livez"
+        # `/readyz` — may this instance take traffic. The database has to be
+        # reachable and the schema has to be the one this build expects; a
+        # skipped migration stops the rollout here rather than surfacing later as
+        # a missing column at request time (ADR-0041, REQ-SEC-101).
+        readyz:
+          include: readinessState,db,schemaVersionCheck
+          additional-path: "management:/readyz"
 
 logging:
   # JSON lines with traceId, tenantId and actorId (REQ-NFR-041). The structured
@@ -91,3 +130,16 @@ homeinv:
   # value that writes itself into the physical world, and a later change breaks
   # every label already printed (CLAUDE.md rule 9).
   public-base-url: ${HOMEINV_PUBLIC_BASE_URL:http://localhost:8080}
+  # A dedicated hostname for media. Same-site with the application host, or the
+  # `Cross-Origin-Resource-Policy: same-site` the media responses carry blocks
+  # our own pages from loading them (06 §6.11, REQ-SEC-061).
+  media-base-url: ${HOMEINV_MEDIA_BASE_URL:http://localhost:8080}
+  # Both hops in front of `api`: the operator's reverse proxy and `web`'s address
+  # on the frontend segment (REQ-SEC-103). No default — see TrustedProxies.
+  trusted-proxies: ${HOMEINV_TRUSTED_PROXIES:}
+  # The name the ingress answers to on the frontend segment. Resolved at startup
+  # and checked against the list above, because a deployment where it is missing
+  # produces no error at all — only wrong numbers (06 §6.7).
+  ingress-host: ${HOMEINV_INGRESS_HOST:web}
+  security:
+    url-signing-key-file: ${HOMEINV_URL_SIGNING_KEY_FILE:}

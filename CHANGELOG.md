@@ -21,6 +21,16 @@ commit".
 
 ### Added
 
+- **`/livez` and `/readyz`**, on a management listener bound to the internal
+  segment. Liveness consults nothing external, so a database outage does not
+  become a restart loop; readiness consults the database *and* the schema
+  version, so an instance whose migration was skipped never takes traffic.
+- **Secrets are read from the files the deployment mounts**, named by
+  `HOMEINV_<NAME>_FILE`. A missing one aborts startup; there is no generated
+  default.
+- **A configuration overview at startup**, with every credential-shaped key
+  masked to its length.
+
 - **One command brings the stack up.** `deploy/setup.sh` checks the host
   prerequisites a rootless deployment needs and refuses to continue without them,
   generates every secret the service matrix declares — random bytes, key pairs

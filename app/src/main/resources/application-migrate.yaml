@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The `migrate` role (ADR-0041): the same image, connecting as the one role that
+# owns the schema, applying what is pending and exiting.
+#
+# It is the same jar because a migration that runs against a different build of
+# the entities is a migration that was never tested against them. It is a
+# different *process* because homeinv_migrator can rewrite an RLS policy, and
+# mounting that credential into a long-running internet-facing service for its
+# whole life undoes part of what ADR-0003 buys (REQ-SEC-101).
+
+spring:
+  main:
+    # No HTTP listener: this role serves nothing and must not open a port.
+    web-application-type: none
+    # Beans are created only when something needs them. MigrationRunner needs the
+    # data source and nothing else, so the REST layer, the media pipeline, the
+    # session store and the URL signing key are never constructed - and their
+    # secrets, which this role deliberately does not hold, are never required.
+    lazy-initialization: true
+
+  datasource:
+    url: ${HOMEINV_DB_URL:jdbc:postgresql://localhost:5432/homeinv}
+    # The migrator, not the application role. This is the only place in the
+    # configuration where that credential appears, and the only service the
+    # matrix mounts it into.
+    username: ${HOMEINV_DB_MIGRATION_USER:homeinv_migrator}
+    password: ${homeinv.secret.db-migration-password}
+    hikari:
+      # One connection, briefly. A pool sized for serving traffic would be a pool
+      # this process never uses.
+      maximum-pool-size: 2
+      pool-name: homeinv-migrate
+
+  jpa:
+    hibernate:
+      # Nothing is validated here: the entities belong to the roles that serve,
+      # and at the moment this process starts the schema is by definition the old
+      # one. SchemaVersionCheck does the validating, in the roles that need it.
+      ddl-auto: none
+
+  # Spring Boot's own Flyway auto-configuration stays off in every profile,
+  # including this one. MigrationRunner builds Flyway itself, so the ability to
+  # migrate exists exactly where that bean does and not one property away from
+  # every other role.
+  flyway:
+    enabled: false
+
+  autoconfigure:
+    exclude:
+      # Sessions and the login throttle live in Valkey and this role has neither
+      # a reason to reach it nor its credential.
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+management:
+  # No management listener either. A one-shot that exposes a port would keep the
+  # port open for as long as it runs, which is seconds, and would need an address
+  # to bind on a segment it is not meant to serve on.
+  server:
+    port: -1
