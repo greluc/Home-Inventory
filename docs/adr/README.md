@@ -73,3 +73,4 @@ Date: YYYY-MM-DD
 | [0049](0049-openapi-generated-from-the-implementation.md) | The OpenAPI document is generated from the implementation, with a drift check | Accepted |
 | [0050](0050-blobstore-service-in-rust.md) | The `blobstore` service is written in Rust | Accepted |
 | [0051](0051-broker-in-stage-0.md) | RabbitMQ moves to stage 0, because a stage-0 requirement needs the worker | Accepted |
+| [0052](0052-one-stored-image-format.md) | Every stored image is AVIF, and the bytes that arrived are never stored | Accepted |

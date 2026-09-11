@@ -70,6 +70,15 @@ public class UploadPipeline {
   private long maxPixels;
 
   /**
+   * The longest edge a stored image may have (REQ-MED-005).
+   *
+   * <p>Not a preference: a 12000-pixel photograph is decoded by every client that
+   * displays it, and the pixel limit above bounds what this process decodes while
+   * this bounds what everyone else has to.
+   */
+  private static final int MAX_EDGE_PX = 4096;
+
+  /**
    * Runs an upload through every check and stores it.
    *
    * @param tenantId the owning tenant
@@ -120,17 +129,83 @@ public class UploadPipeline {
         }
       }
 
-      try (InputStream forStore = Files.newInputStream(spool)) {
-        blobs.store(tenantId, sha256, forStore);
+      if (!detected.image()) {
+        // A document is stored as it arrived. There is no re-encoding that makes
+        // a PDF safer without also making it a different document, and the
+        // serving side refuses to render it inline anyway (REQ-SEC-045).
+        try (InputStream forStore = Files.newInputStream(spool)) {
+          blobs.store(tenantId, sha256, forStore);
+        }
+        return new Stored(sha256, detected.mediaType(), false, size, width, height);
       }
 
-      return new Stored(sha256, detected.mediaType(), detected.image(), size, width, height);
+      // EVERY image is re-encoded, and what is stored is the re-encoding — never
+      // the bytes that arrived (REQ-SEC-041). Three things follow from doing it
+      // here rather than later:
+      //
+      //   * an embedded payload in a polyglot file does not survive being decoded
+      //     and written out again, and it never reaches the store to begin with;
+      //   * EXIF, GPS included, is gone before anything is persisted, rather than
+      //     being stripped from a copy while the original keeps it
+      //     (REQ-MED-006, REQ-PRIV-007);
+      //   * HEIC is transcoded before it is written, which is the only way
+      //     REQ-MED-003's "no stored blob has a HEIC magic number" can be true.
+      //
+      // AVIF for all of them, at Q=60: one output format is one decoder path to
+      // reason about, and the alternative — preserving each input's format —
+      // would mean JPEG stays JPEG and its metadata handling stays JPEG's.
+      //
+      // This is the one derivative produced synchronously. `thumb` and `preview`
+      // are the worker's (ADR-0051); `full` cannot be, because until it exists
+      // the only bytes on hand are the ones that must not be stored.
+      Path reEncoded = Files.createTempFile("homeinv-full-", ".avif");
+      try {
+        ImageProcessor.Dimensions dimensions =
+            images.derive(spool, reEncoded, MAX_EDGE_PX, ImageProcessor.OutputFormat.AVIF);
+        String derivedSha = hashOf(reEncoded);
+        try (InputStream forStore = Files.newInputStream(reEncoded)) {
+          blobs.store(tenantId, derivedSha, forStore);
+        }
+        return new Stored(
+            derivedSha,
+            "image/avif",
+            true,
+            Files.size(reEncoded),
+            dimensions.width(),
+            dimensions.height());
+      } finally {
+        Files.deleteIfExists(reEncoded);
+      }
 
     } finally {
       // The spool file holds an unscanned upload; it does not outlive the request
       // under any exit path.
       Files.deleteIfExists(spool);
     }
+  }
+
+  /**
+   * The SHA-256 of a file, as the lowercase hex the blob layout uses.
+   *
+   * @param file the file to hash
+   * @return the digest
+   * @throws IOException when the file cannot be read
+   */
+  private static String hashOf(Path file) throws IOException {
+    MessageDigest digest;
+    try {
+      digest = MessageDigest.getInstance("SHA-256");
+    } catch (NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException("SHA-256 is unavailable", impossible);
+    }
+    try (InputStream bytes = Files.newInputStream(file)) {
+      byte[] buffer = new byte[8192];
+      int read;
+      while ((read = bytes.read(buffer)) > 0) {
+        digest.update(buffer, 0, read);
+      }
+    }
+    return HexFormat.of().formatHex(digest.digest());
   }
 
   /**

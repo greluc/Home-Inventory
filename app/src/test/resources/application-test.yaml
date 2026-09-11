@@ -46,6 +46,12 @@ homeinv:
     # not one anywhere else either.
     url-signing-key-file: build/resources/test/db/test-url-signing.key
 
+  # A dedicated media host, distinct from the application host and same-site with
+  # it. Both properties are stated rather than defaulted, because the check that
+  # compares them is one of the things under test.
+  public-base-url: "http://app.localhost:8080"
+  media-base-url: "http://media.localhost:8080"
+
   # TrustedProxies has no default and must not get one: a deployment without this
   # list produces no error at all, only wrong numbers (06 §6.7). The tests
   # therefore state it, and state something narrow.

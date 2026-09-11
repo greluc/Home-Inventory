@@ -21,6 +21,11 @@ commit".
 
 ### Added
 
+- **An uploaded image is re-encoded before it is stored**, to AVIF, with every
+  metadata block removed — so an embedded payload never reaches the store and GPS
+  coordinates never reach anyone. Media is served from its own hostname through
+  short-lived signed links, never inline, never with a session cookie.
+
 - **Text arriving through the API is canonicalised.** Unicode NFC, control
   characters removed, trimmed — so two spellings of the same name are one name,
   and a right-to-left override cannot make a label read as something it is not.
@@ -54,7 +59,7 @@ commit".
 - A requirements catalogue with 422 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 52 architecture decision records, each with its alternatives and consequences —
+- 53 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

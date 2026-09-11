@@ -128,6 +128,7 @@ public class MediaController {
    * @param tenantId the tenant, from the path and covered by the signature
    * @param sha256 the content address
    * @param variant {@code thumb}, {@code preview} or {@code full}
+   * @param issuedTo the user the link was signed for, from the query and covered by the signature
    * @param expires the expiry from the query
    * @param signature the signature from the query
    * @return the bytes, or {@code 404} when the signature does not verify
@@ -145,11 +146,12 @@ public class MediaController {
       @PathVariable UUID tenantId,
       @PathVariable @Pattern(regexp = "[0-9a-f]{64}") String sha256,
       @PathVariable @Pattern(regexp = "thumb|preview|full") String variant,
+      @RequestParam("u") UUID issuedTo,
       @RequestParam long expires,
       @RequestParam String signature)
       throws IOException {
 
-    if (!signer.verify(tenantId, sha256, variant, expires, signature)) {
+    if (!signer.verify(tenantId, issuedTo, sha256, variant, expires, signature)) {
       // 404 and not 403: a 403 would confirm that this blob exists for this
       // tenant, which is exactly what an unsigned request must not learn.
       return ResponseEntity.notFound().build();
@@ -157,11 +159,26 @@ public class MediaController {
 
     InputStream bytes = media.openVerified(tenantId, sha256);
     return ResponseEntity.ok()
+        // Never inline, whatever the file is. A PDF displayed inline runs in a
+        // viewer with the origin's privileges, and REQ-SEC-045 says never; the
+        // same header makes the answer the same for every type rather than a
+        // list of exceptions somebody has to keep right.
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
         .header("X-Content-Type-Options", "nosniff")
+        // A sandbox with no allowances (REQ-SEC-043). Belt and braces next to
+        // `attachment`: if a browser ever renders one of these anyway, it does so
+        // in an opaque origin with no scripts, no forms and no popups.
+        .header("Content-Security-Policy", "sandbox; default-src 'none'")
+        // Foreign sites cannot embed a tenant's media. Same-site rather than
+        // same-origin, because the media host is deliberately a different host
+        // from the application's (MediaHostCheck, 12 §12.9).
+        .header("Cross-Origin-Resource-Policy", "same-site")
         // Private: a shared cache must not keep a tenant's photo and hand it to
         // the next holder of the same URL after the signature has expired.
         .header(HttpHeaders.CACHE_CONTROL, "private, max-age=60")
+        // Deliberately not the file's own type. `application/octet-stream` with
+        // `nosniff` is the pair that stops a browser deciding for itself what a
+        // response is, and nothing here needs a browser to render it.
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
         .body(new InputStreamResource(bytes));
   }

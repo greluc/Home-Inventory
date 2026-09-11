@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -63,15 +64,39 @@ class UploadPipelineTest {
   }
 
   @Test
-  @DisplayName("stores a clean image under its content address")
-  void storesACleanImage() throws IOException {
-    UploadPipeline.Stored stored = pipeline.accept(TENANT, new ByteArrayInputStream(jpeg(200)));
+  @DisplayName("stores the RE-ENCODED image, never the bytes that arrived (REQ-SEC-041)")
+  void storesTheReEncodedImage() throws IOException {
+    byte[] arrived = jpeg(200);
+    UploadPipeline.Stored stored = pipeline.accept(TENANT, new ByteArrayInputStream(arrived));
 
-    assertThat(stored.mediaType()).isEqualTo("image/jpeg");
+    // AVIF, whatever came in. One output format is one decoder path to reason
+    // about, and preserving each input's format would mean a JPEG keeps JPEG's
+    // metadata handling - which is the thing being removed.
+    assertThat(stored.mediaType()).isEqualTo("image/avif");
     assertThat(stored.image()).isTrue();
     assertThat(stored.widthPx()).isEqualTo(800);
     assertThat(stored.sha256()).hasSize(64);
-    assertThat(blobs.stored).containsKey(stored.sha256());
+
+    // The address is the derivative's, not the upload's. A polyglot file's
+    // payload does not survive being decoded and written out again, and this is
+    // what establishes that the surviving bytes are the ones that were written
+    // out rather than the ones that were sent.
+    assertThat(blobs.stored).containsOnlyKeys(stored.sha256());
+    assertThat(blobs.stored.get(stored.sha256())).isNotEqualTo(arrived);
+    assertThat(processor.derivations).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("never writes a HEIC blob: it is transcoded before anything is stored (REQ-MED-003)")
+  void heicIsTranscodedBeforeStoring() throws IOException {
+    UploadPipeline.Stored stored = pipeline.accept(TENANT, new ByteArrayInputStream(heic(200)));
+
+    assertThat(stored.mediaType()).isEqualTo("image/avif");
+    // The acceptance criterion is literally "no stored blob has a HEIC magic
+    // number", so that is what is asserted - on the bytes in the store, not on
+    // the type this code reported about them.
+    byte[] persisted = blobs.stored.get(stored.sha256());
+    assertThat(new String(persisted, StandardCharsets.UTF_8)).doesNotContain("ftypheic");
   }
 
   @Test
@@ -164,6 +189,25 @@ class UploadPipelineTest {
   }
 
   /** A JPEG-signatured buffer of the requested length. */
+  /**
+   * A file whose magic bytes say HEIC.
+   *
+   * <p>The ISO base media box at offset 4 is what distinguishes HEIC from AVIF; the rest is
+   * padding, because nothing here decodes it.
+   *
+   * @param length how many bytes in total
+   * @return the fixture
+   */
+  private static byte[] heic(int length) {
+    byte[] file = new byte[length];
+    file[0] = 0;
+    file[1] = 0;
+    file[2] = 0;
+    file[3] = 0x18;
+    System.arraycopy("ftypheic".getBytes(StandardCharsets.UTF_8), 0, file, 4, 8);
+    return file;
+  }
+
   private static byte[] jpeg(int length) {
     byte[] b = new byte[length];
     b[0] = (byte) 0xFF;
@@ -221,6 +265,15 @@ class UploadPipelineTest {
     @Override
     public Dimensions derive(Path source, Path target, int maxEdge, OutputFormat format) {
       derivations.incrementAndGet();
+      // Writes something that is NOT the source. The pipeline hashes this file
+      // and stores it, so a stub that wrote nothing would leave the pipeline
+      // storing an empty blob and every assertion below would pass while saying
+      // nothing about what was actually persisted.
+      try {
+        Files.write(target, ("re-encoded:" + format + ":" + maxEdge).getBytes(StandardCharsets.UTF_8));
+      } catch (IOException unwritable) {
+        throw new java.io.UncheckedIOException(unwritable);
+      }
       return dimensions;
     }
   }

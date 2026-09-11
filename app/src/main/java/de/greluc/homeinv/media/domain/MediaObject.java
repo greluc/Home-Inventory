@@ -55,6 +55,29 @@ public class MediaObject {
   @Column(name = "height_px")
   private Integer heightPx;
 
+  /**
+   * The {@code thumb} derivative's own content address, or {@code null} until it exists.
+   *
+   * <p>Null is not a placeholder here, it is the answer: {@code MediaService} offers a URL only for
+   * a variant whose address is set, so a client never receives a link to a file that has not been
+   * produced (ADR-0051).
+   */
+  @Column(name = "thumb_sha256")
+  private String thumbSha256;
+
+  /** The {@code preview} derivative's content address, or {@code null} until it exists. */
+  @Column(name = "preview_sha256")
+  private String previewSha256;
+
+  /**
+   * When the derivation ran, whether or not it produced anything.
+   *
+   * <p>A PDF has no derivatives and still has to be marked done, or the worker would claim it again
+   * for ever.
+   */
+  @Column(name = "derived_at")
+  private Instant derivedAt;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "scan_state", nullable = false)
   private ScanState scanState;

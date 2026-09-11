@@ -145,7 +145,7 @@ homeinv:
   # A dedicated hostname for media. Same-site with the application host, or the
   # `Cross-Origin-Resource-Policy: same-site` the media responses carry blocks
   # our own pages from loading them (06 §6.11, REQ-SEC-061).
-  media-base-url: ${HOMEINV_MEDIA_BASE_URL:http://localhost:8080}
+  media-base-url: ${HOMEINV_MEDIA_BASE_URL:http://media.localhost:8080}
   # Both hops in front of `api`: the operator's reverse proxy and `web`'s address
   # on the frontend segment (REQ-SEC-103). No default — see TrustedProxies.
   trusted-proxies: ${HOMEINV_TRUSTED_PROXIES:}
