@@ -1,0 +1,57 @@
+# Every dependency version lives here, never in a build script (CLAUDE.md,
+# ADR-0001, REQ-NFR-029). A version typed into a `build.gradle.kts` is a version
+# Renovate cannot see.
+
+[versions]
+# The language level. Java 25 is an LTS line; leaving it is a decision with an
+# ADR, and renovate.json is configured to hold it (ADR-0001).
+java = "25"
+
+springBoot = "4.1.1"
+springModulith = "2.1.1"
+
+flyway = "13.6.0"
+postgresql = "42.7.13"
+
+lombok = "1.18.48"
+
+# Test-only
+testcontainers = "2.0.5"
+archunit = "1.5.0"
+
+[libraries]
+# --- Runtime ---------------------------------------------------------------
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-session-data-redis = { module = "org.springframework.session:spring-session-data-redis" }
+
+spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "springModulith" }
+spring-modulith-starter-core = { module = "org.springframework.modulith:spring-modulith-starter-core" }
+spring-modulith-starter-jpa = { module = "org.springframework.modulith:spring-modulith-starter-jpa" }
+spring-modulith-actuator = { module = "org.springframework.modulith:spring-modulith-actuator" }
+spring-modulith-observability = { module = "org.springframework.modulith:spring-modulith-observability" }
+
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+
+# --- Test ------------------------------------------------------------------
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test" }
+
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
+
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }

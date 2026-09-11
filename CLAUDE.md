@@ -218,12 +218,22 @@ negotiable:
 
 ## Build, run, test
 
-**Nothing to build yet.** When the implementation starts, this section gets the real
-commands. The plan (from [`docs/architecture/`](docs/architecture/)):
+```bash
+./gradlew build            # compile, test, assemble
+./gradlew :app:bootJar     # the runnable artifact
+./gradlew :app:test        # tests only
+```
 
 - Gradle 9 with Kotlin DSL, always through the wrapper (`./gradlew`), never the IDE test
   runner. Dependency versions live in the **version catalog**
   (`gradle/libs.versions.toml`) — edit that, not `build.gradle.kts`.
+- **Java 25 comes from a Gradle toolchain, not from `JAVA_HOME`.** Gradle itself runs on
+  whatever JDK launches it (17+); the toolchain decides what the code is compiled against,
+  so a contributor on JDK 21 produces the same bytes as CI. No vendor is pinned — the
+  language version is what has to match. Anyone without a JDK 25 gets one downloaded, via
+  the Foojay resolver in `settings.gradle.kts`.
+- **The building blocks are packages, not Gradle subprojects.** `:app` is one project;
+  the boundary is enforced by Spring Modulith and ArchUnit, where it belongs.
 - Integration tests run against **the same image digests as production** via Testcontainers.
   H2 or any other substitute database is forbidden: JSONB, `ltree` and RLS behave
   differently, which is exactly where the bugs would be.
