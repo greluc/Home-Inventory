@@ -38,7 +38,10 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
-        options.compilerArgs.addAll(listOf("-Xlint:all", "-parameters"))
+        // -processing: Lombok claims its own annotations and javac then reports every
+        // Spring and JPA annotation as "unclaimed". The warning is noise, and noise
+        // is how a build teaches people to stop reading warnings.
+        options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-parameters"))
     }
 
     tasks.withType<Test>().configureEach {
