@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.application;
 
+import de.greluc.homeinv.catalog.api.CatalogProvisioning;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.domain.Item;
 import de.greluc.homeinv.inventory.domain.ItemKind;
@@ -39,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ItemService {
 
   private final ItemRepository items;
+  private final CatalogProvisioning catalog;
   private final Clock clock;
 
   /**
@@ -70,12 +72,20 @@ public class ItemService {
       return new CreateResult(toView(found), false);
     }
 
+    // Stage 0 has no configurable type system, so a client has no way to know a
+    // type version id and is not asked for one. The tenant's built-in type fills
+    // the NOT NULL column the schema carries from the start (O27).
+    UUID typeVersionId =
+        command.itemTypeVersionId() != null
+            ? command.itemTypeVersionId()
+            : catalog.builtinItemTypeVersion(tenantId);
+
     Instant now = Instant.now(clock);
     Item item =
         Item.create(
             id,
             tenantId,
-            command.itemTypeVersionId(),
+            typeVersionId,
             command.name(),
             command.description(),
             command.kind(),
@@ -102,8 +112,9 @@ public class ItemService {
    */
   private static boolean sameContent(Item item, CreateItemCommand command) {
     BigDecimal wanted = command.quantity() != null ? command.quantity() : BigDecimal.ONE;
-    return Objects.equals(item.getItemTypeVersionId(), command.itemTypeVersionId())
-        && Objects.equals(item.getName(), command.name())
+    // The type is not compared: at stage 0 the client never sends one, so a repeat
+    // would compare a resolved id against null and call every retry a conflict.
+    return Objects.equals(item.getName(), command.name())
         && Objects.equals(item.getDescription(), command.description())
         && item.getKind() == command.kind()
         && Objects.equals(item.getLocationId(), command.locationId())
@@ -211,7 +222,8 @@ public class ItemService {
    * What is needed to create an item.
    *
    * @param id the client's chosen id, or {@code null} to have one generated
-   * @param itemTypeVersionId the type version; at stage 0 the tenant's built-in type
+   * @param itemTypeVersionId the type version, or {@code null} to use the tenant's built-in type,
+   *     which is what every stage-0 client does because there is no type system to choose from
    * @param name the name; must not be blank
    * @param description free text, may be {@code null}
    * @param kind physical or digital

@@ -46,9 +46,10 @@ public class SessionConfiguration {
     serializer.setUseHttpOnlyCookie(true);
     serializer.setUseSecureCookie(true);
     serializer.setSameSite("Strict");
-    // No domain, ever: setting one is what the __Host- prefix exists to forbid,
-    // and a browser would reject the cookie outright.
-    serializer.setDomainNamePattern(null);
+    // No domain is set, and none must be: a Domain attribute is exactly what the
+    // __Host- prefix forbids, and a browser would reject the cookie outright.
+    // Not setting it is the default; calling setDomainNamePattern(null) to say so
+    // explicitly throws, because the serialiser does not accept null there.
     return serializer;
   }
 }

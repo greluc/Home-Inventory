@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Test profile. The URLs come from Testcontainers at runtime; what is fixed here
+# is the separation of roles, which is the whole point of testing against a real
+# PostgreSQL rather than a substitute.
+
+spring:
+  datasource:
+    # The application runs as the application role, NOBYPASSRLS and without DDL
+    # rights. Running tests as the owner would make every isolation test pass for
+    # the wrong reason.
+    username: homeinv_app
+    password: test-app
+
+  flyway:
+    enabled: true
+    # Migrations run as the migrator, exactly as the one-shot migrate service
+    # does in production (ADR-0041).
+    user: homeinv_migrator
+    password: test-migrator
+    locations: classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+# No password-cost override. The floor in REQ-SEC-010 is validated at startup, so
+# a lowered cost here would simply fail to boot - which is the point. Argon2id at
+# 19 MiB costs tens of milliseconds, and a test class that logs in a dozen times
+# spends less on it than on starting the container it logs in to.

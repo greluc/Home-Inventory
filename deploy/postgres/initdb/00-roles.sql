@@ -29,6 +29,19 @@ CREATE ROLE homeinv_readonly   WITH LOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE NO
 -- still requires retention to be enforced (ADR-0046).
 CREATE ROLE homeinv_housekeeping WITH LOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE NOSUPERUSER;
 
+-- Owns exactly one thing: the function that resolves a user's tenants during
+-- login. It exists because SECURITY DEFINER does **not** bypass
+-- `FORCE ROW LEVEL SECURITY` — a forced policy applies to the table owner too,
+-- so a definer function owned by the migrator is still blocked by it.
+--
+-- The way out without BYPASSRLS is a role that has a policy of its own on the
+-- one table, and nothing else at all. NOLOGIN, so nobody connects as it; the
+-- application can EXECUTE the function but can never assume the role.
+CREATE ROLE homeinv_bootstrap WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE NOSUPERUSER;
+
+-- The migrator has to be able to hand ownership of that function over.
+GRANT homeinv_bootstrap TO homeinv_migrator;
+
 -- Nobody gets the public schema. A table created there by accident would carry
 -- no policy at all.
 REVOKE ALL ON SCHEMA public FROM PUBLIC;

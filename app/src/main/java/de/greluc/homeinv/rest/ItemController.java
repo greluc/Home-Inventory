@@ -142,7 +142,8 @@ public class ItemController {
    * be one a non-HTTP caller could walk past.
    *
    * @param id the client's chosen UUIDv7, or {@code null} to have one assigned
-   * @param itemTypeVersionId the type version; at stage 0 the tenant's built-in type
+   * @param itemTypeVersionId the type version, or omitted — which is what a stage-0 client does,
+   *     because there is no type system to choose from and the server fills in the built-in type
    * @param name the name
    * @param description free text
    * @param kind {@code PHYSICAL} or {@code DIGITAL}
@@ -152,7 +153,7 @@ public class ItemController {
    */
   public record CreateItemRequest(
       UUID id,
-      @NotNull UUID itemTypeVersionId,
+      UUID itemTypeVersionId,
       @NotBlank @Size(max = 500) String name,
       @Size(max = 20_000) String description,
       @NotNull ItemKind kind,

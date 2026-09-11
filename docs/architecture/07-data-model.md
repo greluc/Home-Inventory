@@ -481,14 +481,22 @@ Provided by Spring Modulith and extended:
 
 ```sql
 CREATE TABLE outbox.event_publication (
-    id                uuid PRIMARY KEY,
-    listener_id       text NOT NULL,
-    event_type        text NOT NULL,
-    serialized_event  text NOT NULL,
-    tenant_id         uuid,
-    trace_id          text,
-    publication_date  timestamptz NOT NULL,
-    completion_date   timestamptz
+    id                     uuid PRIMARY KEY,
+    listener_id            text NOT NULL,
+    event_type             text NOT NULL,
+    serialized_event       text NOT NULL,
+    tenant_id              uuid,          -- our addition, for attribution
+    trace_id               text,          -- our addition
+    publication_date       timestamptz NOT NULL,
+    completion_date        timestamptz,
+    -- Spring Modulith 2.x. Added here 2026-09-11: this DDL described the 1.x
+    -- shape, and the application would not start against it — Hibernate
+    -- validates the registry's entity mapping at boot and reported the three
+    -- columns missing. Taken from what that mapping generates.
+    completion_attempts    integer NOT NULL DEFAULT 0,
+    last_resubmission_date timestamptz,
+    status                 text
+        CHECK (status IN ('PUBLISHED','PROCESSING','COMPLETED','FAILED','RESUBMITTED'))
 );
 CREATE INDEX outbox_incomplete ON outbox.event_publication (publication_date)
     WHERE completion_date IS NULL;

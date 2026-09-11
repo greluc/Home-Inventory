@@ -34,6 +34,12 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
+        # Spring Modulith's event_publication entity carries no schema of its
+        # own, so it lands wherever the default points. Our own entities all
+        # name their schema explicitly and are unaffected; without this the
+        # registry looks for the table in `public`, where the role script
+        # deliberately allows nothing.
+        default_schema: outbox
         jdbc.time_zone: UTC
         # Batch writes, but keep ordering so the optimistic-lock version checks
         # stay meaningful.
@@ -43,6 +49,12 @@ spring:
 
   flyway:
     enabled: false # The application never migrates; the one-shot `migrate` service does (ADR-0041).
+    # Flyway keeps its history in a schema of its own, not in `public`. The role
+    # script revokes everything on `public` so that a table created there by
+    # accident cannot exist without a policy - and Flyway's history table would
+    # have been the first such table.
+    schemas: flyway
+    default-schema: flyway
 
   threads:
     virtual:

@@ -39,6 +39,11 @@ spring-modulith-starter-jpa = { module = "org.springframework.modulith:spring-mo
 spring-modulith-actuator = { module = "org.springframework.modulith:spring-modulith-actuator" }
 spring-modulith-observability = { module = "org.springframework.modulith:spring-modulith-observability" }
 
+# Spring Boot 4 split its auto-configurations into per-technology modules:
+# `flyway-core` gives you the library, this gives you Boot's integration. Without
+# it Flyway is on the classpath and simply never runs - which looks exactly like
+# a broken migration and is not one.
+spring-boot-starter-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
@@ -52,8 +57,10 @@ spring-security-test = { module = "org.springframework.security:spring-security-
 spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test" }
 
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
-testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
-testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
+# Testcontainers 2.x renamed every module to a `testcontainers-` prefix; the old
+# coordinates resolve to nothing rather than to an old version.
+testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
 
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 

@@ -66,11 +66,16 @@ public class AuthController {
     AuthenticatedUser user =
         authentication.login(request.email(), request.password(), clientAddressOf(httpRequest));
 
-    HttpSession existing = httpRequest.getSession(false);
-    if (existing != null) {
-      existing.invalidate();
+    // Rotate the session id rather than discarding the session. This is the
+    // servlet container's own fixation defence: the id an attacker may have
+    // planted is replaced, while the session object itself survives — which
+    // invalidate-and-recreate does not, and which is what a client holding the
+    // session would otherwise lose.
+    if (httpRequest.getSession(false) != null) {
+      httpRequest.changeSessionId();
+    } else {
+      httpRequest.getSession(true);
     }
-    httpRequest.getSession(true);
 
     Authentication token = UsernamePasswordAuthenticationToken.authenticated(user, null, List.of());
     SecurityContext context = SecurityContextHolder.createEmptyContext();
