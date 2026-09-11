@@ -25,10 +25,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 405 numbered, testable requirements across
+- A requirements catalogue with 412 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 35 architecture decision records, each with its alternatives and consequences —
+- 42 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
@@ -57,6 +57,39 @@ commit".
   third of the time, and printed labels cannot be recalled.
 - **Uploads are scanned and served safely from the first release**, not from the
   second. Stage 0 already accepts documents, so it already needs both.
+- **The malware scanner can now actually update its signatures.** It was
+  mandatory and fail-closed from the first release while sitting on a network with
+  no way out, so it would have run forever on whatever signature set its image was
+  built with. The outbound proxy now runs in every setup, including the smallest
+  one, carrying a single fixed entry for the signature mirror.
+- **Each plugin now runs on its own network.** They shared one before, which let
+  any plugin read the server's internal metrics, stop the virus scanner — and with
+  it every upload in the system — and use another plugin's outbound route. None of
+  that needed a permission the operator had granted.
+- **Labels need about 15 mm, not 10.** The QR code carries the item's UUID as well
+  as its short code, so it is larger than the earlier figure assumed. The preview
+  now computes the minimum label size from the actual code content and warns
+  before a sheet is printed that will not scan.
+- **A degraded search now says so in the response body** rather than in an HTTP
+  header that was withdrawn from the specification in 2022 and that clients are
+  told to ignore.
+- **Database migrations run as their own step, once, and then exit.** The account
+  that owns the tables is no longer mounted inside the long-running server, so a
+  break-in there cannot reach it. The server checks that the schema matches before
+  it accepts traffic, instead of changing it.
+- **One browser security header is deliberately gone.** It protected against a
+  class of attack this system has nothing to lose to, and its cost was that images
+  and plugin panels could silently fail to load — including for plugin authors who
+  had no way to know why.
+- **The deployment now publishes one port instead of two**, and the application
+  server publishes none at all: requests reach it through the web container. This
+  came out of testing an assumption that turned out to be wrong — a container on a
+  fully isolated network cannot accept an incoming connection, which would have
+  made the first installation unreachable.
+- **Label templates know how much of a label can actually be printed.** A Brother
+  "29 × 90 mm" label offers 25.9 × 83.9 mm, and the print head is not centred on
+  the narrow rolls. Both figures now come from the manufacturer's own reference, and
+  the two Dymo formats are marked unverified until theirs do too.
 
 ### Fixed
 

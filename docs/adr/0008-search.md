@@ -2,6 +2,11 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 
+> **Amended by [ADR-0039](0039-degraded-response-signalling.md):** the fallback is
+> signalled by `meta.degraded` in the response envelope, not by `Warning: 199` —
+> that header was obsoleted by RFC 9111 §5.5 in 2022. The two mentions below are
+> corrected in place.
+
 ## Context
 
 Search has to cover names, descriptions, notes, attribute values, tags and
@@ -41,7 +46,9 @@ Three reasons that together shape the architecture:
 2. **Correctness.** A stale index can at most show one hit too many or too few,
    never wrong content.
 3. **Availability.** If OpenSearch fails, the PostgreSQL adapter takes over; the
-   response carries `Warning: 199` and the UI shows the degraded state.
+   response carries `meta.degraded: true` with `degradedReason: "search-fallback"`
+   and the UI shows the degraded state
+   ([ADR-0039](0039-degraded-response-signalling.md)).
 
 ## Consequences
 

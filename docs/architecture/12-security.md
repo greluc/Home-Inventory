@@ -70,8 +70,8 @@ is gone and the claim is now the one that holds.
 | ① Zone 0 → 1 | TLS 1.3, HSTS, rate limiting, payload limits, basic WAF rules |
 | ② Zone 1 → 2 | Authentication, CSRF, origin check, schema validation, **authorization**, setting the tenant context |
 | ③ Zone 2 → 3 | A dedicated DB role without DDL and without `BYPASSRLS`, RLS active, parameterised queries only |
-| ④ Zone 2 ↔ 4 | mTLS, capability check **per call**, deadline, payload limit, bulkhead, circuit breaker |
-| ⑤ Zone 4 → 5 | The **only** way out of the deployment. Outbound goes through the egress proxy, which applies the granting plugin's manifest allowlist and logs every attempt, permitted or refused ([ADR-0027](../adr/0027-egress-enforcement.md)). Credentials for the target — the Nextcloud app password with access to exactly one folder, SMTP and OIDC secrets — belong to the plugin, not to the core, which narrows what a core compromise yields |
+| ④ Zone 2 ↔ 4 | mTLS, capability check **per call**, deadline, payload limit, bulkhead, circuit breaker. **Zone 4 is not one room.** Each plugin has its own network segment holding only itself, `api`, `worker` and the proxy ([ADR-0037](../adr/0037-per-plugin-network-segments.md)), so a plugin reaches no other plugin, no scanner and no management endpoint — those bind to `internal`. Until 2026-09-11 every plugin shared one segment with `clamd` and with both core roles' port 8090, which put per-tenant metrics and the fail-closed scanner within reach of code holding no capability at all |
+| ⑤ Zone 4 → 5 | The **only** way out of the deployment, in **every** profile ([ADR-0036](../adr/0036-scanner-egress.md)). Outbound goes through the egress proxy, which applies the granting plugin's manifest allowlist — plus one fixed deployment entry for the malware scanner's signature mirror, which has no manifest — and logs every attempt, permitted or refused ([ADR-0027](../adr/0027-egress-enforcement.md)). The caller is identified by the segment interface the connection arrived on, not by a claimed source address. Credentials for the target — the Nextcloud app password with access to exactly one folder, SMTP and OIDC secrets — belong to the plugin, not to the core, which narrows what a core compromise yields |
 
 **Everything runs rootless.** No container and no container daemon runs as `root`
 on the host ([ADR-0022](../adr/0022-rootless.md)). An escape from zone 4 — the
@@ -79,12 +79,21 @@ only place where foreign code runs — is therefore confined to an unprivileged
 service user without `sudo`. Under Podman there is moreover no daemon at all, and
 hence no root-equivalent socket.
 
-**The core does not reach the internet — and now that is true.** `app-api` and
-`app-worker` sit only on segments with no route out of the deployment, and after
+**`app-api` and `app-worker` do not reach the internet.** They sit only on segments
+with no route out of the deployment, and after
 [ADR-0026](../adr/0026-core-outbound-via-plugins.md) they have no external target
 left to reach: object storage, mail, federated login, webhooks and push all became
-plugins. The property is verified rather than asserted — a CI test takes every
-core container, tries every external host, and expects a refusal.
+plugins. The property is verified rather than asserted — a CI test takes them,
+tries every external host, and expects a refusal.
+
+**Two containers do have a route out, and naming them is part of the claim**
+([ADR-0042](../adr/0042-edge-is-not-internal.md)). A published port requires a
+non-internal segment — measured, not assumed — so `web`, the ingress, has one; and
+`egress-proxy`, the designed chokepoint, has one because that is its function.
+Neither holds data, a database credential, an encryption key or domain logic.
+This section previously said "the core" reached nothing, which was a claim with
+two counterexamples in its own topology; the narrower sentence is the one that is
+true and the one a test can check (`REQ-SEC-102`).
 
 That is what confines **SSRF** to Zone 4. Webhook delivery is the one place where a
 tenant supplies the URL, and it now happens inside a container that holds no data,
@@ -110,13 +119,15 @@ catalogue.
 | | Enumerating public codes | **50 bits** of randomness ([ADR-0030](../adr/0030-public-code-format.md)) — at 10⁶ issued codes a guess hits with probability ≈ 1 : 1.1 · 10⁹ · rate limiting with increasing delay · a neutral response for unknown codes, identical to the one for a missing permission |
 | | Revealing error messages | A uniform error format without internals; different causes yield identical responses |
 | | Timing differences at login | Constant-time comparison, a dummy hash operation for unknown accounts |
-| | **SSRF — a tenant points the system at an address of their choosing** (a webhook target, a resolver host). Classic escalation: the cloud metadata endpoint, a service on the internal network, a port scan by timing | The core makes **no** outbound connection at all ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)), so there is nothing to coerce. Delivery happens in a plugin that holds no data and no database credential, and whose only route out is the egress proxy with its declared allowlist ([ADR-0027](../adr/0027-egress-enforcement.md)). The proxy refuses private, link-local and metadata ranges outright, resolves the name itself rather than trusting the caller, and re-checks on redirect |
+| | **SSRF — a tenant points the system at an address of their choosing** (a webhook target, a resolver host). Classic escalation: the cloud metadata endpoint, a service on the internal network, a port scan by timing | The core makes **no** outbound connection at all ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)), so there is nothing to coerce. Delivery happens in a plugin that holds no data and no database credential, and whose only route out is the egress proxy with its declared allowlist ([ADR-0027](../adr/0027-egress-enforcement.md)). The proxy refuses private, link-local and metadata ranges outright and resolves the name itself rather than trusting the caller. **A redirect to an undeclared host is refused because it needs a new `CONNECT` the allowlist rejects — not because the proxy inspects it.** Under `CONNECT` the proxy sees host and port and nothing else, so it cannot read a redirect inside TLS; the allowlist is what carries this, and saying "re-checks on redirect" would promise a mechanism that cannot exist |
 | **D** Denial of service | Expensive queries | Cost analysis for GraphQL, result limits, a request timeout, rate limiting per tenant |
 | | Image bombs (decompression bombs) | A pixel limit before decoding, memory and time limits in the image process, processing in the worker |
 | | A slow plugin | Deadline, bulkhead, circuit breaker |
 | | Filling up storage | Per-tenant quotas for counts, bytes and API calls |
 | **E** Elevation of privilege | A plugin reaching core data | The capability model, process and network separation, in-process only signed and only by the operator |
-| | **Escaping a container** (a kernel or runtime bug) | **Rootless**: the escapee is an unprivileged user without `sudo` on the host · no root daemon, no root-equivalent socket · `no-new-privileges`, `cap_drop: ALL`, a read-only filesystem · a separate UID range per plugin · [ADR-0022](../adr/0022-rootless.md) |
+| | **Escaping a container** (a kernel or runtime bug) | **Rootless**: the escapee is an unprivileged user without `sudo` on the host · no root daemon, no root-equivalent socket · `no-new-privileges`, `cap_drop: ALL`, a read-only filesystem · a separate UID range **and a separate network segment** per plugin, which now fail independently rather than together · [ADR-0022](../adr/0022-rootless.md), [ADR-0037](../adr/0037-per-plugin-network-segments.md) |
+| | **A plugin reading the core's management endpoints.** `/actuator/prometheus` carries per-tenant counts and byte volumes ([13 §13.3](13-operations-and-observability.md)); reaching it needs no capability, only a route | The management port binds to `internal` and is unreachable from any plugin segment (`REQ-SEC-099`). "Unpublished" was never the same as "unreachable" — it hides a port from the host, not from a neighbour on the same segment |
+| | **A plugin stopping the malware scanner.** The scan is fail-closed, so an unreachable `clamd` blocks **every** upload in the instance ([ADR-0024](../adr/0024-malware-scan.md)) | `clamd` sits on the `scanner` segment with `worker` alone; no plugin is on it (`REQ-SEC-098`) |
 | | Role manipulation | Permission granting only by `OWNER`/`ADMIN`, nobody grants themselves permissions, every change audited |
 | | SQL injection | Parameterised queries only; dynamic SQL only through a checked builder with field names from an allowlist |
 | | Template injection in labels | A non-Turing-complete expression language, field access from an allowlist |
@@ -203,9 +214,14 @@ The riskiest input in the system.
 
 ## 12.9 Security-related HTTP headers
 
+Served by the `web` container, from configuration that lives in this repository —
+**not** by the operator's reverse proxy, because a header set outside this
+repository is one `REQ-SEC-060`'s CI comparison cannot check
+([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md)).
+
 ```
-Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-{r}';
-  style-src 'self' 'nonce-{r}'; img-src 'self' {MEDIA_ORIGIN} data: blob:;
+Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-{bootstrap}';
+  style-src 'self' 'sha256-{critical}'; img-src 'self' {MEDIA_ORIGIN} data: blob:;
   connect-src 'self' {MEDIA_ORIGIN}; font-src 'self';
   frame-src {PLUGIN_UI_ORIGIN}; worker-src 'self' blob:;
   manifest-src 'self'; media-src 'self' {MEDIA_ORIGIN};
@@ -217,13 +233,37 @@ Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: camera=(self), geolocation=(), microphone=(), payment=()
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Resource-Policy: same-site
-Cross-Origin-Embedder-Policy: require-corp
 ```
+
+> **`Cross-Origin-Embedder-Policy` is deliberately absent**
+> ([ADR-0040](../adr/0040-no-cross-origin-isolation.md)). `require-corp` exists to
+> earn cross-origin isolation — `SharedArrayBuffer` and full-resolution timers —
+> and nothing here uses either: the ZXing-WASM fallback is single-threaded, local
+> web storage is IndexedDB, and the apps are native. It costs two obligations that
+> fail **silently**: CORP on every embedded cross-origin response, and COEP on
+> every cross-origin document the page frames — which would make a plugin panel
+> from an author who never heard of the header render as an empty box.
+>
+> It is listed here rather than simply missing, so nobody adds it back as an
+> oversight. **The CI header comparison fails if COEP appears**, for the same
+> reason. The trigger for reversing this is written into ADR-0040: the first thing
+> that wants threaded WASM.
 
 `{MEDIA_ORIGIN}` and `{PLUGIN_UI_ORIGIN}` are substituted at startup from
 `HOMEINV_MEDIA_BASE_URL` and `HOMEINV_PLUGIN_UI_BASE_URL`. They are the
 deployment's own hostnames, not third-party hosts — which is what `REQ-PRIV-015`
 means by "no external host": no host the operator does not run.
+
+`{bootstrap}` and `{critical}` are **hashes emitted by the build**, not nonces. A
+nonce is per-response by definition, and nothing that emits this document can mint
+one: the shell is a static bundle served by nginx. A hash is also the more precise
+statement — it authorises that exact script and no other, where a nonce authorises
+whatever the server chooses to mark. A CI check recomputes both from the built
+bundle and fails on a mismatch, the same drift mechanism as `deploy/services.yaml`
+and `tokens.json`. The one inline script the shell needs is the theme bootstrap
+that beats first paint ([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md));
+`'strict-dynamic'` is deliberately absent, because a self-hosted bundle that
+contacts no third-party host has nothing to load dynamically.
 
 **Four directives are present because the previous policy silently disabled
 features it was written to protect.** They are listed rather than quietly added:
@@ -239,15 +279,22 @@ features it was written to protect.** They are listed rather than quietly added:
 is switched off. **No `unsafe-inline`, no `unsafe-eval`**: the Vite build is set
 up accordingly, and a CI test compares the served CSP against an expected string.
 
-> **`Cross-Origin-Embedder-Policy: require-corp` constrains the media hostname.**
-> Every cross-origin response the page embeds must carry a `Cross-Origin-Resource-Policy`
-> that permits it. `same-site` suffices **only if the media host is a subdomain of
-> the same registrable domain** (`media.inv.example.org` next to `inv.example.org`).
-> A media host on a different registrable domain must send
-> `Cross-Origin-Resource-Policy: cross-origin` instead, or every image silently
-> fails to load. The installation guide states this next to
-> `HOMEINV_MEDIA_BASE_URL`, and a startup check warns when the two hosts are not
-> same-site.
+> **`Cross-Origin-Resource-Policy` still constrains the media hostname, and
+> dropping COEP does not change that.** The two are easy to conflate. CORP is
+> enforced on every cross-origin no-cors subresource load regardless of COEP; what
+> COEP changed was the other direction, by making an *absent* CORP header fatal.
+> So the media host's value still has to be right:
+>
+> | Media host | CORP value | Result |
+> |---|---|---|
+> | a subdomain of the application's registrable domain (`media.inv.example.org` next to `inv.example.org`) | `same-site` | loads |
+> | a **different** registrable domain | `same-site` | **blocked — every image silently fails** |
+> | a different registrable domain | `cross-origin` | loads |
+>
+> The installation guide states this next to `HOMEINV_MEDIA_BASE_URL`, and a
+> startup check warns when the two hosts are not same-site. CORP is kept on
+> purpose — it stops foreign sites embedding tenant media — not as a leftover of a
+> header that is no longer sent.
 
 Plugin UI panels (`ui:panel`) run in an `iframe` with `sandbox` on **their own
 origin** (`HOMEINV_PLUGIN_UI_BASE_URL`, one subdomain per plugin ID); communication

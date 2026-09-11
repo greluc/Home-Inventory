@@ -5,6 +5,29 @@
 **Amends:** [ADR-0021](0021-podman-quadlet.md), [ADR-0022](0022-rootless.md) — one
 service is added to the topology.
 
+> **Amended by [ADR-0036](0036-scanner-egress.md)**: the proxy runs in **every**
+> profile, not only `standard` and `ha`, and its allowlist has a second, closed
+> source — a fixed deployment list for in-deployment services that need a named
+> external target and have no manifest. Today that list holds one entry, the
+> ClamAV signature mirror.
+>
+> **§1 is withdrawn by [ADR-0042](0042-edge-is-not-internal.md), on measurement.**
+> The sentence *"a published port is forwarded into the container's network
+> namespace by the runtime and does not need a routed path outward"* is false: a
+> container on an `internal` network gets **no port mapping at all**, and the only
+> kind of network that publishes always grants outbound. `edge` is therefore not
+> internal, `web` is the ingress, and `api` publishes nothing. The same trace found
+> that the `egress-proxy` below sat only on internal segments — the chokepoint had
+> no route through it — and gave it a non-internal `egress` segment. Flagging this
+> as A5 rather than asserting it is what made the difference.
+>
+> **Amended by [ADR-0037](0037-per-plugin-network-segments.md)**: §2's "the proxy
+> identifies the caller by source address" and §3's per-plugin TCP port are
+> replaced by something stronger. Each plugin has its own segment, the proxy has
+> one interface per segment, and the caller is identified by the interface the
+> connection arrived on. On the single shared segment assumed below, plugin A
+> could have used plugin B's forwarding port.
+
 ## Context
 
 Three requirements demand that a plugin reaches **only** the hosts named in its
@@ -74,8 +97,8 @@ gateway of their own; their only route outward is the proxy, handed to them as
 
 | Property | Value |
 |---|---|
-| Allowlist source | Generated from the `capabilities[].hosts` entries of every **granted** plugin manifest — the manifest stays the single declaration, as `REQ-SEC-055` requires |
-| Granularity | Per plugin: the proxy identifies the caller by source address and applies that plugin's list, so plugin A cannot use plugin B's allowance |
+| Allowlist source | Generated from the `capabilities[].hosts` entries of every **granted** plugin manifest — the manifest stays the single declaration, as `REQ-SEC-055` requires. Plus one closed deployment list for services that are part of the deployment and have no manifest, today holding only the signature mirror ([ADR-0036](0036-scanner-egress.md)) |
+| Granularity | Per plugin: the proxy has one interface per plugin segment and identifies the caller by **the interface the connection arrived on**, so plugin A cannot use plugin B's allowance ([ADR-0037](0037-per-plugin-network-segments.md); this read "by source address" while all plugins shared one segment, which was weaker than it sounded) |
 | Protocol | HTTP and `CONNECT`, which covers every HTTPS target. Non-HTTP targets go through the TCP mode in §3 |
 | On a denied host | The connection is refused and logged with plugin ID, target and time — the log is the source for the UI view `REQ-ENR-009` requires |
 | Reload | On a capability grant or revocation, without restarting plugins |
@@ -91,7 +114,11 @@ An HTTP forward proxy does not speak SMTP, and `plugin-smtp` from
 
 **The same container gains a plain TCP forwarding mode.** A manifest may declare a
 target as `host:port` with a protocol other than HTTP; the proxy then listens on a
-per-plugin local port and forwards bytes to exactly that destination.
+per-plugin local port and forwards bytes to exactly that destination. Since
+[ADR-0037](0037-per-plugin-network-segments.md) that port is bound to **that
+plugin's segment interface only** — on the shared segment assumed here, any
+plugin could have connected to it and reached another plugin's declared
+destination, `plugin-smtp`'s mail server included.
 
 | Property | Value |
 |---|---|
@@ -127,9 +154,9 @@ from a proxy access log it is a record of what happened.
 
 ## Consequences
 
-- **One more container** (~32 MB) in every profile that runs plugins. After
-  [ADR-0026](0026-core-outbound-via-plugins.md) that is every profile that uses
-  mail or remote storage, so in practice: most of them. Added to the sizing in
+- **One more container** (~32 MB) in **every** profile — including `minimal`,
+  which has no plugins but does have a scanner that needs its signatures
+  ([ADR-0036](0036-scanner-egress.md)). Added to the sizing in
   [06 §6.7](../architecture/06-deployment-view.md).
 - **The proxy is a chokepoint.** Its failure stops every plugin's external call at
   once. That is acceptable — the failure is visible, per-plugin degradation is

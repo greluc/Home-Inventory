@@ -3,9 +3,11 @@
 **Status:** Accepted · **Date:** 2026-09-11
 **Partially supersedes:** [ADR-0016](0016-identifiers.md), *Decision, part 2*. Part 1
 (UUIDv7 as the primary key) stands unchanged. Of the four reasons why the printed
-code is not the UUID, three stand; the fourth ("information leakage") was withdrawn
-separately as open point **O12** — the QR fragment prints the UUID on the same
-label, so the argument contradicted itself.
+code is not the UUID, **two stand** — human readability and decoupling through
+`CodeBinding`. Two were withdrawn for the same reason, that the QR fragment prints
+the UUID on the same label: "information leakage" as open point **O12**, and
+"print size" on 2026-09-11 (see *Consequences*). Both had argued against printing
+something the label prints anyway.
 
 ## Context
 
@@ -130,3 +132,20 @@ already larger for another reason.
   base URL warning — both are values that write themselves into the physical world.
 - **Pre-issued labels printed before this change do not exist**, because no code
   has been issued yet. This is the last moment at which this decision is free.
+- **The "print size" reason in [ADR-0016](0016-identifiers.md) is withdrawn, and
+  the minimum label size is now a computed figure rather than an assertion.**
+  Measured out, the specified payload
+  (`https://<base>/c/<11 chars>#i=<36-char uuid>`, ≈ 76 characters) is a QR
+  **version 5** symbol: 37 × 37 modules, 45 including the four-module quiet zone.
+  At the 0.33 mm minimum module size that
+  [10 §10.5](../architecture/10-identification-and-labels.md) and `REQ-LBL-007`
+  already require, that is **≈ 15 mm of label edge**, not the 10 mm
+  [10 §10.1](../architecture/10-identification-and-labels.md) claimed. The same
+  measurement inverts the old argument: a URL carrying the UUID in its *path*
+  instead (≈ 62 characters) would be a **version 4** symbol — smaller than what
+  this design prints. Reasons 2 and 3 carry the decision on their own, exactly as
+  they did after O12.
+- **The starter catalogue is unaffected.** Its smallest format, Avery Zweckform
+  3667 at 48.5 × 16.9 mm, yields 0.376 mm per module — above the floor. The
+  correction lands in the prose and in the preview warning, not in
+  [`label-media.yaml`](../reference/label-media.yaml).

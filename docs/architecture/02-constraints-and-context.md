@@ -57,6 +57,22 @@ alternatives and consequences.
   Neither Podman, nor Docker Compose, nor standard Kubernetes `NetworkPolicy` can
   restrict egress by name. The requirement is real and the mechanism had to be
   supplied: an egress proxy ([ADR-0027](../adr/0027-egress-enforcement.md)).
+- **The mandatory malware scanner is itself an outbound dependency**, and it is the
+  one the "no outbound" rule kept hiding: the *scan* opens nothing, but the
+  *signatures* come from a mirror. A fail-closed scanner that cannot update reports
+  clean and means nothing, so the egress proxy runs in every profile — the smallest
+  one included — carrying one fixed allowlist entry that no tenant consents to
+  ([ADR-0036](../adr/0036-scanner-egress.md)).
+- **"Unpublished" and "unreachable" are different properties**, and conflating them
+  cost the management port its protection. A port with no host mapping is hidden
+  from the host and from the internet, not from a container sharing its segment.
+  Hence one network segment per plugin, and a management listener bound to
+  `internal` ([ADR-0037](../adr/0037-per-plugin-network-segments.md)).
+- **A strict CSP and a static frontend rule out nonces.** A nonce is per-response,
+  and nothing that serves a built bundle can mint one. Inline content is therefore
+  authorised by hash, which also means the `web` container — not the operator's
+  reverse proxy — must serve the headers, or the CI comparison has nothing to
+  compare ([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md)).
 
 ## 2.2 Organisational constraints
 
@@ -162,6 +178,7 @@ no `network:outbound` capability at all.
 | SMTP | outbound **via `plugin-smtp`** | SMTP over TLS | Invitations, reminders, security notifications | Queued with retry; invitations stay valid. Without the plugin there is no mail at all — a reduced but valid deployment, stated in the UI ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) |
 | Webhook receivers | outbound **via `plugin-webhook`** | HTTPS to a tenant-supplied URL | Integration with foreign systems | Retried, then dead-lettered; the delivery log shows it |
 | Push services | outbound **via `plugin-webpush` / `-fcm` / `-apns`** | HTTPS | Notifications to devices | Everything keeps working without push ([ADR-0023](../adr/0023-push-notifications.md)) |
+| ClamAV signature mirror | outbound **via `clamav`**, through the egress proxy | HTTPS (`freshclam`) | Keeping the mandatory malware scan meaningful | Signatures age; above 48 h a warning fires. Uploads keep being scanned against what is already loaded. **The one outbound connection a `minimal` installation makes** ([ADR-0036](../adr/0036-scanner-egress.md)) |
 
 ## 2.6 Threat environment (short form)
 
@@ -177,6 +194,7 @@ constraint that shapes the design:
 
 ## 2.7 Open constraints
 
-See [ADR-0000 Open Points](../adr/0000-open-points.md). What remains there is
-outstanding *work*, not undecided questions — most notably the printable width of
-the Brother DK rolls.
+See [ADR-0000 Open Points](../adr/0000-open-points.md). **No decision is open.**
+What remains is outstanding *work* — the printable width of the Brother DK rolls
+(A2), verifying that port publishing behaves as assumed on an internal segment
+(A5), and emitting the generated `freshclam.conf` from the service matrix (A6).

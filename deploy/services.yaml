@@ -31,6 +31,20 @@ defaults:
                                 # The two runtimes express "come back after a reboot"
                                 # differently; the generator maps this key, and that is
                                 # exactly the kind of divergence this file exists to absorb.
+                                #
+                                # THE TWO KEYS COLLIDE UNDER COMPOSE, and the generator
+                                # resolves it rather than leaving it to chance: Compose
+                                # has ONE `restart` field, so it cannot express both
+                                # "on-failure" and "come back after a reboot".
+                                # startOnBoot WINS — `restart: unless-stopped`, which
+                                # restarts on failure too and additionally survives a
+                                # reboot. What is lost is the narrower semantics of
+                                # on-failure: under Compose a container stopped by the
+                                # operator stays stopped, but one that exits 0 on its own
+                                # is restarted, where Quadlet's Restart=on-failure would
+                                # leave it. No shipped service exits 0 on its own, so the
+                                # difference is theoretical — but an undocumented
+                                # generator decision is how the two paths drift (risk R13).
   autoUpdate: disabled          # images are digest-pinned; updates are deliberate
 
 # WHY EVERY THIRD-PARTY SERVICE OVERRIDES `user` AND `tmpfs`
@@ -56,19 +70,58 @@ networks:
   # forwarded into the container namespace and needs no outward route.
   # See A5 in ADR-0000: that this holds under rootless Podman/pasta and rootless
   # Docker is a verification item, with a named fallback if it does not.
+  #
+  # ZONE 4 IS NOT ONE ROOM (ADR-0037). There used to be a single `plugins`
+  # segment holding every plugin, clamav, the proxy, api and worker. On it, a
+  # plugin holding NO capability at all could read the core's management port
+  # (per-tenant metrics), stop the fail-closed scanner and thereby block every
+  # upload, and use another plugin's forwarding port on the proxy. One segment
+  # per plugin costs n generated networks and closes all three structurally.
+  # MEASURED 2026-09-11, and it contradicted the design (A5, ADR-0042): under
+  # Docker a container on an `internal: true` network gets NO port mapping at all
+  # — `docker port` is empty and the port is unreachable — while a non-internal
+  # network, the only kind that publishes, ALWAYS grants outbound. "Publishes a
+  # port" and "has no route out" cannot both hold for one container. So exactly
+  # two segments are non-internal, each with exactly one member, and both members
+  # hold no data, no credential and no domain logic.
   edge:
-    internal: true              # web + api listen here; they still cannot call out
+    internal: false             # web only. Publishes 8080 and proxies to api over
+                                # `internal`. api publishes NOTHING and is not here.
+    members: [web]
+  egress:
+    internal: false             # egress-proxy only — the route the chokepoint needs.
+    members: [egress-proxy]     # It sat on internal segments alone until 2026-09-11,
+                                # which meant the one component whose job is the
+                                # outbound call could not make one.
   internal:
-    internal: true              # no route out of the deployment, at all
-  plugins:
+    internal: true              # no route out of the deployment, at all.
+                                # The management listener binds HERE and nowhere
+                                # else — see api.ports below.
+  scanner:
+    internal: true
+    members: [worker, clamav, egress-proxy]
+    egressVia: egress-proxy     # freshclam only, to the deployment allowlist
+                                # entry below (ADR-0036). `api` is deliberately
+                                # absent: the scan runs in the worker, never in
+                                # the request path (ADR-0024).
+  # One segment per installed plugin, GENERATED from the plugin services below.
+  # Template, not a literal entry — there is no plugin service in this seed yet.
+  "plugin-<id>":
+    generated: perPlugin
     internal: true              # plugin containers get NO gateway of their own
+    members: ["plugin-<id>", api, worker, egress-proxy]
     egressVia: egress-proxy     # the single exception, and it is a container,
-                                # not a route: plugins reach it by HTTPS_PROXY and
-                                # it applies the granting manifest's allowlist
+                                # not a route: the plugin reaches it by HTTPS_PROXY
+                                # and it applies that plugin's manifest allowlist
                                 # (ADR-0027). A hostname rule is not expressible
                                 # in netavark, Compose or standard NetworkPolicy,
                                 # which is exactly why this is a proxy and not a
                                 # network flag.
+                                # The proxy has one interface per segment and
+                                # identifies the caller by the interface the
+                                # connection arrived on — not by a source address
+                                # it claims, which is what it did while every
+                                # plugin shared one segment.
 
 volumes:
   pgdata:   { service: postgres }
@@ -82,35 +135,72 @@ services:
   web:
     role: static
     image: { name: ghcr.io/greluc/home-inv-web, digest: "TODO" }
-    networks: [edge]
-    # nginx-unprivileged listens on 8080 inside; published on 8081 so it does not
-    # collide with api on the host. Both host ports must be opened to the reverse
-    # proxy in the host firewall — see 06 §6.3.
-    ports: [{ container: 8080, host: 8081 }]
+    networks: [edge, internal]
+    # THE INGRESS (ADR-0042). It is the only container with a published port, and
+    # it proxies /api, /graphql, /c/, /.well-known and the SSE stream to `api`
+    # over `internal`. api itself publishes nothing and is not on `edge`, which is
+    # stricter than the previous shape and costs one host port rather than adding
+    # a container.
+    #
+    # It also serves the application shell AND every security header — CSP, HSTS,
+    # COOP, CORP, Referrer-Policy, Permissions-Policy (ADR-0038; COEP is
+    # deliberately absent, ADR-0040). Letting the operator's reverse proxy serve
+    # the bundle instead is NOT supported: the header set would live outside this
+    # repository and REQ-SEC-060's CI comparison would have nothing to compare.
+    # The CSP authorises the one inline script — the theme bootstrap that beats
+    # first paint — by HASH, not by a nonce, because nothing that emits a static
+    # document can mint one.
+    #
+    # It has an outbound route, because `edge` must be non-internal for the port
+    # to work at all. That is acceptable for exactly the reason it is acceptable
+    # for egress-proxy: it holds no data, no secret and no domain logic
+    # (REQ-SEC-102).
+    # nginx-unprivileged listens on 8080 inside. ONE published host port for the
+    # whole deployment, and therefore one firewall rule — see 06 §6.3. It used to
+    # be two, 8080 for api and 8081 for web, until api stopped publishing.
+    ports: [{ container: 8080, host: 8080 }]
     tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
-    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    dependsOn: [api]
+    # Raised from 32/128Mi: it is on the request path for every API call now, not
+    # only for static files.
+    resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
     health: { command: "/healthcheck", interval: 15s }
     profiles: [minimal, standard, ha]
 
   api:
     role: api
     image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }
-    networks: [edge, internal, plugins]
+    networks: [internal]                         # NOT edge: api publishes nothing and
+                                                 # is reached through web (ADR-0042)
+    networksByPlugin: all                        # plus one membership per installed
+                                                 # plugin segment, generated (ADR-0037)
     ports:
-      - { container: 8080, host: 8080 }          # never below 1024 — rootless
-      - { container: 8090, host: null }          # management: /actuator, /livez, /readyz
-                                                 # NOT published — 13 §13.3 requires the
-                                                 # Prometheus endpoint to be unreachable
-                                                 # from outside; an unpublished port is the
-                                                 # only way to make that true rather than
-                                                 # a reverse-proxy rule someone forgets.
+      - { container: 8080, host: null }          # reached by web over `internal`
+      - { container: 8090, host: null, bindTo: internal }
+                                                 # management: /actuator, /livez, /readyz
+                                                 # NOT published AND bound to the internal
+                                                 # segment only. host: null hides it from
+                                                 # the host; it does NOT hide it from a
+                                                 # container on the same segment, and api
+                                                 # sits on every plugin segment. Without
+                                                 # bindTo, any plugin could read the
+                                                 # per-tenant metrics of 13 §13.3 without
+                                                 # holding a single capability
+                                                 # (ADR-0037, REQ-SEC-099).
     env:
       SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
       MANAGEMENT_SERVER_PORT: "8090"
+      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"           # bindTo, resolved by the generator
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
+    # NO db-migration-password. It is mounted into the one-shot `migrate` service
+    # and nowhere else (ADR-0041, REQ-SEC-101): homeinv_migrator owns the tables
+    # and can rewrite an RLS policy, and mounting it into a long-running,
+    # internet-facing process for that process's whole life undoes part of what
+    # ADR-0003 buys. api VALIDATES the schema at startup and refuses to start
+    # against one it does not expect.
     secrets: [db-password, data-key, jwt-key]
     tmpfs: ["/tmp"]
-    dependsOn: [postgres, valkey]
+    dependsOn: [postgres, valkey, migrate]      # migrate must have exited 0
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
@@ -118,10 +208,16 @@ services:
   worker:
     role: worker
     image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image as api
-    networks: [internal, plugins]
+    networks: [internal, scanner]
+    networksByPlugin: all                        # plus one membership per installed
+                                                 # plugin segment, generated (ADR-0037)
+    ports:
+      - { container: 8090, host: null, bindTo: internal }      # same reasoning as api
     env:
       SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
       MANAGEMENT_SERVER_PORT: "8090"
+      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
+      HOMEINV_DB_MIGRATE_ON_START: "false"       # validates the schema, never changes it
     secrets: [db-password, data-key]
     tmpfs: ["/tmp"]
     # rabbitmq exists only in standard and ha (see its own `profiles`). A flat
@@ -134,6 +230,35 @@ services:
     resources: { memoryReservation: 512Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
+
+  migrate:
+    role: migrate
+    lifecycle: oneShot            # → Quadlet: [Service] Type=oneshot, RemainAfterExit=yes
+                                  # → Compose: restart: "no", and api/worker depend on it
+                                  #            with condition: service_completed_successfully
+                                  # → Helm:    the pre-upgrade Job that already existed
+                                  # Success is exit 0. api and worker do not start otherwise.
+    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image again
+    networks: [internal]          # it talks to PostgreSQL and to nothing else
+    env:
+      SPRING_PROFILES_ACTIVE: "migrate"
+      HOMEINV_DB_MIGRATE_ON_START: "true"
+    # THE ONLY SERVICE THAT GETS THE MIGRATION CREDENTIAL (ADR-0041, REQ-SEC-101).
+    # No data-key, no jwt-key: Flyway performs DDL and reads no tenant data.
+    secrets: [db-migration-password]
+    tmpfs: ["/tmp"]
+    dependsOn: [postgres]
+    resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
+    profiles: [minimal, standard, ha]
+    notes: >
+      Four documents described this migration three different ways — at startup
+      (05 §5.11), as its own step (06 §6.12), as a Kubernetes Job (06 §6.8) — and
+      this file described none of them: no core service held db-migration-password,
+      so the generated units described a stack that could not migrate. One one-shot
+      service on all three runtimes settles it, and keeps homeinv_migrator out of
+      every long-running process. It has no health check because it is not expected
+      to stay alive; the generator omits the key for lifecycle: oneShot rather than
+      failing the "every service declares a health check" rule.
 
   postgres:
     image: { name: docker.io/library/postgres, tag: "18-alpine", digest: "TODO" }
@@ -170,39 +295,101 @@ services:
   clamav:
     image: { name: docker.io/clamav/clamav, tag: "stable", digest: "TODO" }
     user: "100:101"               # the image's own clamav user
-    networks: [plugins]           # outbound: signature mirror only
+    networks: [scanner]           # NOT a plugin segment: on the old shared one, a
+                                  # plugin could reach clamd and stop it, and with a
+                                  # fail-closed scan that blocks every upload in the
+                                  # instance (ADR-0037, REQ-SEC-098).
     volumes: [{ name: cvddata, path: /var/lib/clamav }]
     tmpfs: ["/tmp", "/run/clamav", "/var/log/clamav"]
     resources: { memoryReservation: 1Gi, memoryLimit: 1536Mi }
     health: { command: "clamdcheck.sh", interval: 60s, startPeriod: 300s }
     profiles: [minimal, standard, ha]
+    egress:
+      via: egress-proxy
+      allowlistEntry: clamav-signature-mirror    # the deployment allowlist, ADR-0036
+      configuredBy: freshclam.HTTPProxyServer    # NOT HTTPS_PROXY — freshclam reads
+                                                 # its proxy from its own config file
+    files:
+      # A6, decided 2026-09-11. Generated from the egress block above and delivered
+      # read-only through each runtime's file-mount mechanism, because a read-only
+      # root filesystem and no bind mounts (ADR-0022) leave no other way in.
+      # It is NOT a secret; only the delivery path is shared with secrets.
+      - target: /etc/clamav/freshclam.conf
+        generatedFrom: egress
+        expected: expected/clamav-freshclam.conf   # the fixture CI compares against
+        deliveredBy:
+          podman: "secret type=mount"
+          docker: "secret"
+          kubernetes: "ConfigMap"
+        notes: >
+          A thin first-party image with the setting baked in was rejected: it would
+          put our rebuild, trivy scan and cosign signature between the scanner and
+          its daily signature updates — the exact dependency ADR-0036 removes.
     notes: >
       Mandatory in every profile — the malware scan cannot be deselected
-      (ADR-0024). It is why the minimal profile needs about 3 GB rather than 1.5.
+      (ADR-0024). It is why the minimal profile needs about 3.4 GB rather than 1.5.
+      Its signature updates were the one dependency nothing traced: this segment is
+      internal, the proxy did not run in `minimal`, and the proxy's allowlist was
+      generated from plugin manifests, which a scanner does not have. All three are
+      fixed in ADR-0036; without them stage 0 would ship a mandatory, fail-closed
+      scanner whose signatures freeze at the image build date.
 
   egress-proxy:
     image: { name: ghcr.io/greluc/home-inv-egress-proxy, digest: "TODO" }
-    networks: [plugins]
+    networks: [scanner, egress]   # `egress` is non-internal and is its route out.
+                                  # Without it this container sat only on internal
+                                  # segments and could not make the very call it
+                                  # exists to make (measured 2026-09-11, ADR-0042).
+    networksByPlugin: all         # one interface per plugin segment, generated
+    ports:
+      - { container: 8118, host: null }   # HTTP/CONNECT, one listener per segment
+                                          # interface. Never published to the host.
     tmpfs: ["/tmp", "/var/run"]
     resources: { memoryReservation: 16Mi, memoryLimit: 32Mi }
     health: { command: "/healthcheck", interval: 30s }
-    profiles: [standard, ha]      # `minimal` opens nothing outward and needs no proxy
+    profiles: [minimal, standard, ha]
+                                  # EVERY profile since ADR-0036. `minimal` runs no
+                                  # plugin, but it does run the mandatory scanner,
+                                  # and that scanner's signatures have to come from
+                                  # somewhere. Listing it as [standard, ha] is what
+                                  # left `minimal` with a fail-closed scan and no
+                                  # way to update what it scans against.
+    allowlist:
+      # SOURCE 1 — per plugin, from granted manifests. Reloaded on grant/revoke.
+      fromGrantedManifests: true
+      # SOURCE 2 — the deployment allowlist (ADR-0036). Fixed, shipped with the
+      # image, consented to by nobody. CLOSED in the same sense as the
+      # instance-wide table list in 07 §7.1: a new entry needs a row here and a
+      # sentence saying why that service cannot be a plugin.
+      deployment:
+        - id: clamav-signature-mirror
+          caller: clamav
+          reason: >
+            ClamAV is in-deployment infrastructure with no manifest, no capability
+            grant and no per-tenant consent, so it cannot use source 1. The mirror
+            sits behind a CDN with rotating addresses, which is precisely why
+            ADR-0027 chose hostname allowlisting over CIDR.
     notes: >
       The single route out of the deployment (ADR-0027). Plugin containers get no
-      gateway of their own and reach it via HTTPS_PROXY. Its allowlist is generated
-      from the `capabilities[].hosts` entries of every GRANTED plugin manifest and
-      reloaded on a grant or revocation. It speaks HTTP and CONNECT only, and never
-      terminates TLS — it sees host and port, never content, so a compromise here
-      does not yield any plugin's credentials. It refuses private, link-local and
-      cloud-metadata ranges outright, resolves names itself rather than trusting
-      the caller, and re-checks on redirect. Every attempt is logged with plugin,
-      target and outcome; that log is the source for the per-resolver disclosure
-      REQ-ENR-009 requires.
+      gateway of their own and reach it via HTTPS_PROXY; clamav reaches it via
+      freshclam's own proxy setting. Its allowlist has the two sources above. It
+      speaks HTTP and CONNECT only, and never terminates TLS — it sees host and
+      port, never content, so a compromise here does not yield any plugin's
+      credentials. It refuses private, link-local and cloud-metadata ranges
+      outright and resolves names itself rather than trusting the caller. A
+      redirect to an undeclared host fails because it needs a new CONNECT the
+      allowlist rejects — NOT because the proxy inspects the redirect, which under
+      CONNECT it cannot see. Every attempt is logged with caller, target and
+      outcome; that log is the source for the per-resolver disclosure REQ-ENR-009
+      requires.
+      The caller is identified by the SEGMENT INTERFACE the connection arrived on,
+      one per plugin (ADR-0037). It used to be identified by source address on a
+      shared segment, where plugin A could also use plugin B's forwarding port.
       It has two modes: HTTP/CONNECT for the usual targets, and plain TCP
       forwarding to an exact host:port for non-HTTP ones — plugin-smtp being the
       case that forced it (ADR-0027 §3). TCP mode forwards bytes only, so STARTTLS
-      and implicit TLS both pass through untouched, and both modes write the same
-      access log.
+      and implicit TLS both pass through untouched, each per-plugin listener binds
+      to that plugin's interface alone, and both modes write the same access log.
 
   opensearch:
     image: { name: docker.io/opensearchproject/opensearch, tag: "3", digest: "TODO" }
@@ -246,7 +433,18 @@ secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
   db-password:               { required: true }
-  db-migration-password:     { required: true }
+  db-migration-password:
+    required: true
+    services: [migrate, postgres]
+    notes: >
+      Two mounts, and the difference between them is the point (ADR-0041,
+      REQ-SEC-101). `migrate` USES it: it connects as homeinv_migrator and runs
+      Flyway, then exits. `postgres` only CREATES the role with it, once, in its
+      first-initialisation script — the image itself knows only
+      POSTGRES_PASSWORD_FILE for the superuser. No long-running APPLICATION
+      service holds it: not api, not worker. That is what the CI check asserts,
+      and it is the property that keeps a compromise of the internet-facing
+      process away from the one role that can rewrite an RLS policy.
   data-key:                  { required: true, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
   jwt-key:                   { required: true, notes: "Ed25519 pair; two active versions during rotation." }
   opensearch-admin-password: { required: true, profiles: [standard, ha], notes: "Required by OpenSearch since 2.12; no default exists." }
@@ -275,5 +473,34 @@ required:
   - every service runs as a non-root user (uid != 0)
   - every service sets readOnlyRootFilesystem, and declares the paths it needs writable
   - every service drops all capabilities and sets no-new-privileges
-  - every service declares a memory limit and a health check
+  - every service declares a memory limit, and a health check unless lifecycle is oneShot
   - every image is referenced by digest
+  - db-migration-password is mounted only into `migrate` (which uses it) and
+    `postgres` (which creates the role with it at first init) — into no
+    long-running application service
+  # Topology properties, checked by the connectivity test rather than by reading
+  # this file (ADR-0037, REQ-SEC-098/099)
+  - every plugin sits on its own segment, alone among plugins
+  - no plugin segment contains clamav
+  - no management listener is reachable from a plugin segment
+  - every outbound connection, from a plugin or from clamav, passes egress-proxy
+  # ADR-0042. Verified by running the stack, not by reading this file.
+  - exactly two containers sit on a non-internal segment — `web` and
+    `egress-proxy` — and neither holds data, a credential or domain logic
+  - api and worker sit on no non-internal segment and reach no external host
+  - exactly one host port is published in the whole deployment
+
+budget:
+  # Stated because the sum of limits deliberately exceeds the VM, and a figure
+  # nobody can derive from the table is worse than none (06 §6.7).
+  minimal:  { reservations: ~3.4Gi, limits: ~6.9Gi }
+  standard: { reservations: ~5.4Gi, limits: ~9.4Gi, plusPerPlugin: 256Mi }
+  vm:       ">= 8Gi"
+  note: >
+    The reservations are the budget; the limits over-commit on purpose. Each limit
+    is sized for that service's own worst case — a 500-code label sheet, an
+    OpenSearch reindex, a large re-encode — and those do not coincide. Sizing every
+    limit so the sum fits 8 GB would throttle each service to half of what it needs
+    when it is the one working. Each container stays bounded, so a runaway service
+    cannot take the host; that is what the limits are for. `ha` does not
+    over-commit, because it runs on >= 16 GB across several nodes.

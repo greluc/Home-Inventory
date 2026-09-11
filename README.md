@@ -43,7 +43,7 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 | Storage | PostgreSQL 18 (row-level security, JSONB, `uuidv7()`) |
 | Search | OpenSearch (a derived read model) |
 | Messaging | RabbitMQ (quorum queues) + a transactional outbox in PostgreSQL |
-| Media | A `BlobStore` port — adapters for filesystem, S3/MinIO and **Nextcloud (WebDAV)** |
+| Media | A `BlobStore` port — `filesystem` in the core; S3/MinIO and **Nextcloud (WebDAV)** as first-party **plugins**, because they leave the deployment ([ADR-0026](docs/adr/0026-core-outbound-via-plugins.md)) |
 | Web | React 19 + TypeScript + Vite, an installable PWA |
 | Apps | Kotlin Multiplatform + Compose Multiplatform (Android, iOS) |
 | API | REST (OpenAPI 3.1, `/api/v1`) · GraphQL (read-only) · gRPC (plugins, internal) |

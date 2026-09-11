@@ -10,6 +10,11 @@
 > Safari). It is therefore not a core channel either — `plugin-webpush` carries it,
 > under the same three opt-ins as FCM and APNs. Everything else here stands, and the
 > content-free payload now applies to Web Push as well.
+>
+> **Amended by [ADR-0037](0037-per-plugin-network-segments.md).** "They run in the
+> `plugins` network segment" below is now "each runs in **its own** segment" —
+> there is no shared one. Nothing about the target lists, the payload or the three
+> opt-ins changes.
 
 ## Context
 

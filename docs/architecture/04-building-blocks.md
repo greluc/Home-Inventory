@@ -58,11 +58,11 @@ worker and API from drifting apart.
 
 | Unit | State | Scaling | Note |
 |---|---|---|---|
-| `web` | none | arbitrary (static) | Can also be served directly by the reverse proxy |
+| `web` | none | arbitrary (static) | Serves the application shell **and every security header** — the CSP, HSTS, COOP/CORP/COEP, `Referrer-Policy`, `Permissions-Policy`. Serving the bundle from the operator's reverse proxy instead is **not supported**: the header set would then live outside this repository and `REQ-SEC-060`'s CI comparison would have nothing to compare ([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md)) |
 | `app` (api) | none | horizontal | Sessions in Valkey, no local files |
 | `app` (worker) | none | horizontal | Consumes RabbitMQ, competing consumers |
-| `plugin-host` | plugin's own | per plugin | Own service account, own UID range, no route out except through the proxy |
-| `egress-proxy` | none | one per deployment | The single chokepoint for every outbound connection. Holds no credentials and terminates no TLS — it sees host and port, never content |
+| `plugin-host` | plugin's own | per plugin | Own service account, own UID range, **own network segment**, no route out except through the proxy ([ADR-0037](../adr/0037-per-plugin-network-segments.md)) |
+| `egress-proxy` | none | one per deployment | The single chokepoint for every outbound connection, in **every** profile — `minimal` has no plugins but does have a scanner that needs its signatures ([ADR-0036](../adr/0036-scanner-egress.md)). Holds no credentials and terminates no TLS — it sees host and port, never content. One interface per plugin segment, so the caller is identified by topology rather than by a claimed source address |
 
 ## 4.2 Level 2 — Building blocks inside `app`
 
@@ -428,7 +428,7 @@ translates protocol into use-case call and back.
 | `inventory` | inventory | Holds `item`, `item_attr_index` |
 | `locations` | locations | Requires the `ltree` extension |
 | `tagging` | tagging | |
-| `media` | media | Metadata only, never binary data |
+| `media` | media | Metadata only, never binary data. The blobs themselves live under `sha256/<tenantId>/<hash>` in the `BlobStore` ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)) |
 | `identification` | identification | |
 | `labeling` | labeling | |
 | `enrichment` | enrichment | |
@@ -439,6 +439,7 @@ translates protocol into use-case call and back.
 | `audit` | audit | Append-only, own permissions, partitioned by month |
 | `plugins` | plugins | |
 | `outbox` | (cross-cutting) | Spring Modulith event publication registry |
+| `idempotency` | (cross-cutting) | `Idempotency-Key` → the first response ([07 §7.8](07-data-model.md)). It belongs to no block, because every block writes it inside its own transaction — and not to `platform`, which has no schema and no database access |
 
 **Rule:** every block owns its schema. A block never reads or writes in another
 block's schema — not even reading, not even "just briefly". Enforced through an

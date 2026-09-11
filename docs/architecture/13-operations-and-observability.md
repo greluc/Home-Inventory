@@ -27,12 +27,23 @@ time*.
 ## 13.3 Metrics
 
 Exposed as a Prometheus endpoint at `/actuator/prometheus` on a **separate
-management port (8090) that is not published to the host** — `management.server.port`
-in Spring Boot, `{ container: 8090, host: null }` in
-[`deploy/services.yaml`](../../deploy/services.yaml). "Not publicly reachable" is
-therefore a property of the topology, not a reverse-proxy rule an operator has to
-remember to write. Prometheus scrapes it from inside the `internal` network; the
-health endpoints of [13.5](#135-health-endpoints) live on the same port.
+management port (8090) that is not published to the host and is bound to the
+`internal` segment only** — `management.server.port` **and
+`management.server.address`** in Spring Boot,
+`{ container: 8090, host: null, bindTo: internal }` in
+[`deploy/services.yaml`](../../deploy/services.yaml). Prometheus scrapes it from
+inside `internal`; the health endpoints of [13.5](#135-health-endpoints) live on
+the same port, which is how the operator view (`REQ-NFR-072`) reads them.
+
+> **The binding is the half that was missing, and it is the load-bearing half.**
+> `host: null` makes the port unreachable from the host and from the internet. It
+> does **not** make it unreachable from a container on the same segment — and
+> `api` and `worker` sat on the shared `plugins` segment, so any plugin could read
+> the per-tenant counts and byte volumes listed below without holding a single
+> capability. An unpublished port is hidden from the host, not from a neighbour.
+> Since [ADR-0037](../adr/0037-per-plugin-network-segments.md) each plugin has its
+> own segment and the management listener binds to `internal`, where no plugin is.
+> `REQ-SEC-099` states it and the connectivity test checks it.
 
 Since no monitoring stack exists, an optional `compose.monitoring.yaml` with
 Prometheus, Grafana and ready-made dashboards ships with the product.
@@ -88,12 +99,12 @@ cannot reconstruct without tracing.
 
 | Failed | Effect | Still possible |
 |---|---|---|
-| **OpenSearch** | Search falls back to PostgreSQL, facets restricted, the response carries `Warning: 199` | everything else |
+| **OpenSearch** | Search falls back to PostgreSQL, facets restricted, the response carries `meta.degraded: true` with `degradedReason: "search-fallback"` ([ADR-0039](../adr/0039-degraded-response-signalling.md)) | everything else |
 | **RabbitMQ** | The outbox backs up, derived data goes stale | **All** reads and writes — the user notices nothing beyond delayed thumbnails |
 | **Valkey** | Sessions invalid (re-login) · rate limiting falls back to per-instance counting, so with *n* instances the effective limit is *n* times the configured one · **in-flight OIDC logins fail** (state and PKCE verifier live here, [ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)) | everything else — **idempotency is unaffected**, because those records live in PostgreSQL, not here ([ADR-0009](../adr/0009-messaging-and-events.md)) |
 | **`plugin-blobstore-*` / Nextcloud** | Uploads are queued, already loaded images come from the cache | everything else |
 | **`plugin-smtp`** | No invitations, no password-reset mail, no security notifications. The administration UI states it rather than failing silently. A `minimal` installation runs without this plugin by design ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) | everything else |
-| **`egress-proxy`** | **Every** outbound call of every plugin stops at once — storage, mail, enrichment, webhooks, push. Reads and writes are unaffected; uploads queue as above. It is a deliberate chokepoint ([ADR-0027](../adr/0027-egress-enforcement.md)): one visible failure beats per-plugin enforcement that cannot be verified | everything that does not leave the deployment |
+| **`egress-proxy`** | **Every** outbound call of every plugin stops at once — storage, mail, enrichment, webhooks, push — **and the ClamAV signature update** ([ADR-0036](../adr/0036-scanner-egress.md)), which is why the proxy now runs in `minimal` too. Reads and writes are unaffected; uploads queue as above, and keep being scanned against the signatures already loaded. A prolonged outage therefore shows up as the 48-hour signature-age warning before it shows up anywhere else. It is a deliberate chokepoint ([ADR-0027](../adr/0027-egress-enforcement.md)): one visible failure beats per-plugin enforcement that cannot be verified | everything that does not leave the deployment |
 | **ClamAV** | **Uploads are rejected** (`503`), already accepted blobs stay `PENDING_SCAN` and unretrievable; a background run catches the scan up. The only degradation level that blocks a user function entirely — deliberately, see [ADR-0024](../adr/0024-malware-scan.md) | everything except uploads |
 | **One plugin** | Only the function depending on it, visibly marked | everything else |
 | **PostgreSQL** | **Total outage.** The only component without a fallback — and the reason its backup is the only one that really counts | nothing |
@@ -143,7 +154,7 @@ vulnerability.
 | Check search index lag | continuous | |
 | Plugin health | per minute | |
 | Deregister dormant devices | daily | |
-| Update ClamAV signatures (`freshclam`) | daily | A scanner with stale signatures gives false confidence |
+| Update ClamAV signatures (`freshclam`) | daily | A scanner with stale signatures gives false confidence. The fetch goes through the `egress-proxy`, which runs in every profile for this one reason and carries the mirror as a fixed allowlist entry ([ADR-0036](../adr/0036-scanner-egress.md)); a failed fetch appears in the proxy's access log attributed to `clamav`, so the 48-hour alert has a cause and not only a symptom |
 | Catch-up scan for `PENDING_SCAN` blobs | hourly | Release or discard uploads accepted during a scanner outage |
 | Enforce per-tenant retention periods | daily | `change_log`, audit, trash, conflict archive — within the fixed bounds |
 | Dependency check | daily | |

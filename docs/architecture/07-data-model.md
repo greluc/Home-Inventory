@@ -29,6 +29,20 @@
    spells them out rather than eliding them for brevity — the first draft did
    elide them, and four of the five sample tables then disagreed with this rule.
    A migration check enforces it, so the samples and the rule cannot drift again.
+
+   **A *domain* table is one that holds mutable state a user edits.** Three kinds
+   of table are not that, carry no `version` and no audit columns, and are listed
+   here exhaustively for the same reason the instance-wide list above is closed —
+   otherwise the check contradicts this chapter's own DDL, which it did:
+
+   | Kind | Tables | Why the columns would be meaningless |
+   |---|---|---|
+   | **Derived** | `inventory.item_attr_index` | A projection of `item.attributes`, rebuilt wholesale by `REINDEX_ATTRIBUTES`. It has no version of its own — the row it mirrors does — and no author but the application |
+   | **Append-only records of an event** | `sync.change_log`, `audit.audit_entry`, `audit.chain_anchor`, `identification.label_base_url_usage` | Nothing updates them, so `version`, `updated_at` and `updated_by` would be dead columns. `occurred_at` and the actor are already in the row, under the names the record uses |
+   | **Infrastructure** | `outbox.event_publication`, `idempotency.processed_request` | Owned by a mechanism, not by a block's domain model |
+
+   **The list is closed.** A new table that is none of the three needs the columns;
+   a new table that claims to be one of the three needs a row here.
 5. **No deletion without a tombstone.** A domain delete sets `deleted_at`; final
    removal is a separate, logged operation that leaves a tombstone for
    reconciliation.
@@ -326,9 +340,25 @@ ALTER TABLE inventory.item ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory.item FORCE  ROW LEVEL SECURITY;   -- applies to the owner too
 
 CREATE POLICY tenant_isolation ON inventory.item
-    USING      (tenant_id = current_setting('app.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+    USING      (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 ```
+
+> **Why `nullif` is there, and why leaving it out was a defect.** The obvious
+> spelling is `current_setting('app.tenant_id', true)::uuid`, and it is wrong on a
+> pooled connection. A two-part GUC name that PostgreSQL does not recognise becomes
+> a **session placeholder** the first time it is set. `SET LOCAL` reverts at the end
+> of the transaction — but to the placeholder's session value, which is the **empty
+> string**, not `NULL`. So `current_setting(…, true)` returns `NULL` only on a
+> connection that has never carried a tenant; on every connection that has served
+> one transaction it returns `''`, and `''::uuid` raises `22P02`.
+>
+> The consequence is not a leak — an exception is as closed as an empty result —
+> but it is not what the row below promises, and it is not what `REQ-SEC-005`
+> tests for. A forgotten `SET LOCAL` would surface as a `500` on an unrelated
+> query rather than as the documented empty set, and the obvious "fix" for a
+> confusing `22P02` is to loosen the cast, which is where a real bug would enter.
+> `nullif` makes the documented behaviour the actual behaviour.
 
 **What it takes for this to actually hold:**
 
@@ -337,7 +367,7 @@ CREATE POLICY tenant_isolation ON inventory.item
 | Roles | `homeinv_app` (the application): **no** `BYPASSRLS`, **no** table ownership, **no** DDL rights · `homeinv_migrator`: owner, active only at startup · `homeinv_readonly`: for reporting |
 | Setting the context | `SET LOCAL app.tenant_id` at the start of every transaction, from the authenticated context — never from a request parameter |
 | Connection pool | `SET LOCAL` is transaction-scoped and is discarded automatically when the connection returns. A test ensures no connection goes back into the pool with a tenant still set. |
-| Missing context | `current_setting(..., true)` returns `NULL` → the policy fails → **zero rows**. A forgotten context yields empty results, not foreign data. |
+| Missing context | `nullif(current_setting(..., true), '')` yields `NULL` → the policy fails → **zero rows**. A forgotten context yields empty results, not foreign data — on a fresh connection *and* on a pooled one that has already served a tenant, which is the case the plain cast got wrong (see the note above). |
 | Cross-tenant administration | An explicit, logged `SECURITY DEFINER` function with its own permission check — never `BYPASSRLS` |
 | Proof | A test procedure creates two tenants, sets the context wrongly or not at all, and verifies for **every** table that nothing leaks. A new table without RLS fails the test. |
 
@@ -468,7 +498,7 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | `plugins.plugin_registration` | Plugin registry | Manifest, contract version, certificate fingerprint |
 | `plugins.granted_capability` | Granted capabilities | Per tenant, with timestamp, granting person and revocation |
 | `tenancy.quota_usage` | Usage counters | Carried forward, not counted on every query |
-| `platform.idempotency_record` | `Idempotency-Key` → the first response | `PRIMARY KEY (tenant_id, key)`, plus the payload hash and the serialised response. Written **in the same transaction** as the record it protects ([ADR-0009](../adr/0009-messaging-and-events.md)); a daily run removes entries older than 24 h |
+| `idempotency.processed_request` | `Idempotency-Key` → the first response | `PRIMARY KEY (tenant_id, key)`, plus the payload hash and the serialised response. Written **in the same transaction** as the record it protects ([ADR-0009](../adr/0009-messaging-and-events.md)); a daily run removes entries older than 24 h. **Its own schema, not `platform`** — the shared kernel has no schema and no database access at all ([04 §4.3](04-building-blocks.md)), and it cannot belong to a block either, because every block writes it inside its own transaction. Cross-cutting infrastructure, exactly like `outbox` |
 
 ## 7.9 Migrations
 

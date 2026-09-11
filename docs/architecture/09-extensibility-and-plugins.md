@@ -49,7 +49,7 @@ port, never an implementation.
 | `NotificationChannel` | Deliver a message | **Every channel is a plugin**, because every one of them talks to a host outside the deployment: SMTP, webhook, Web Push/VAPID, Firebase, APNs (all **first-party plugins**) · ntfy, Matrix, Signal |
 | `IdentityProvider` | Federated login | OIDC (**first-party plugin**), LDAP, SAML |
 | `ImageProcessor` | Image derivatives | libvips (**in-core**), ImageMagick |
-| `VirusScanner` | Check uploads | **ClamAV (in-core adapter, mandatory)** — `clamd` is part of the deployment, so the adapter opens no external connection; its own signature updates are its business, not the core's. Other scanners are interchangeable, but "no scanner" is not a supported configuration |
+| `VirusScanner` | Check uploads | **ClamAV (in-core adapter, mandatory)** — `clamd` is part of the deployment, so the adapter opens no external connection. Its **signature updates** are the deployment's business and not "its own", as this row used to claim: `freshclam` reaches the mirror through the `egress-proxy`, which for that reason runs in every profile and carries one fixed allowlist entry ([ADR-0036](../adr/0036-scanner-egress.md)). `clamd` sits on the `scanner` segment with `worker`, out of reach of any plugin ([ADR-0037](../adr/0037-per-plugin-network-segments.md)). Other scanners are interchangeable, but "no scanner" is not a supported configuration |
 | `ValuationProvider` | Estimate current and replacement value | Straight-line depreciation (**in-core**, pure arithmetic), declining balance, market-price and dealer services (plugins — they call out) |
 | `ImportMapper` | Read a foreign format | CSV profile (**in-core**), Homebox, InvenTree, Snipe-IT |
 
@@ -137,7 +137,7 @@ entitlement, no "read access, which is harmless anyway".
 | `core:event:subscribe` | Receiving events | Only the types named in the manifest |
 | `core:setting:read` | Reading its own settings | **Its own only**, never anyone else's |
 | `network:outbound` | Outbound network connections | Only through the egress proxy, only to the manifest's hosts. Enforced outside the plugin, never by the plugin ([ADR-0027](../adr/0027-egress-enforcement.md)) — an allowlist that untrusted code applies to itself is documentation, not a control |
-| `ui:panel` | Its own area in the UI | Served in an isolated `iframe` with its own origin and a strict CSP |
+| `ui:panel` | Its own area in the UI | Served in an isolated `iframe` with its own origin and a strict CSP. The panel needs **no** `Cross-Origin-Embedder-Policy` of its own: the application does not set COEP ([ADR-0040](../adr/0040-no-cross-origin-isolation.md)), which was the one requirement a third-party author could not have guessed and would have met as a blank frame |
 | `print:target` | Appearing as a print target | |
 
 **Granting:**
@@ -181,7 +181,7 @@ graph LR
 |---|---|
 | Process boundary | Own container, **rootless**, own user, `read_only`, `cap_drop: ALL`, `no-new-privileges`, memory and CPU limits. An escape lands as an unprivileged user on the host, not as `root` — see [ADR-0022](../adr/0022-rootless.md). |
 | Namespace boundary | Each plugin gets its **own UID range** where feasible (`UserNS=auto`), so two plugins cannot see each other even at host level |
-| Network boundary | Its own network segment. No access to PostgreSQL, OpenSearch, RabbitMQ, Valkey. Outbound only to the hosts named in the manifest. |
+| Network boundary | **Its own network segment**, holding exactly the plugin, `api`, `worker` and `egress-proxy` ([ADR-0037](../adr/0037-per-plugin-network-segments.md)). No access to PostgreSQL, OpenSearch, RabbitMQ, Valkey or ClamAV; no access to the core's management endpoints, which bind to `internal` only; **no access to any other plugin**, including to that plugin's forwarding port on the proxy. Outbound only to the hosts named in the manifest. Until 2026-09-11 this row said "its own network segment" while the topology had one shared `plugins` segment, and every clause after the first was weaker than it read |
 | Identity | Its own mTLS certificate; the fingerprint is recorded in the registration and checked on every connection |
 | Deadline | A deadline per call; exceeding it aborts and counts towards the circuit breaker |
 | Bulkhead | A bounded, dedicated concurrency pool per plugin — a slow plugin consumes no core resources |

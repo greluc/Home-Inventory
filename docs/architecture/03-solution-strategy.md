@@ -55,7 +55,11 @@ inventory/
 
 The cut follows the domain, not the technology. There are no global
 "controller / service / repository" layers, but 18 building blocks each with its
-own internal layering. The full catalogue is in
+own internal layering: the seven consistency-critical ones, the nine supporting
+ones, plus `plugins` and `platform`. The four access blocks (`rest`, `graphql`,
+`grpc`, `events-stream`) are not counted — they hold no domain logic, own no
+schema and decide nothing
+([04 §4.4](04-building-blocks.md)). The full catalogue is in
 [04 Building Blocks](04-building-blocks.md).
 
 Coupling between blocks is allowed on exactly three paths:

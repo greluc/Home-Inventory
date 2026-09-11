@@ -32,7 +32,7 @@ globally unique, linked to an entity through a `CodeBinding` table.
 
 | Reason | Explanation |
 |---|---|
-| **Print size** | 36 characters yield a QR code of version 3–4; 9 characters fit into version 1–2 and stay sharply readable on 25 × 10 mm |
+| ~~Print size~~ | **Withdrawn 2026-09-11**, on the same ground as the row below it. The symbol does not carry the code alone: it carries the URL *and* the UUID in the fragment, so the real payload is larger than a bare UUID would have been, not smaller. The figures and the corrected minimum label size are in [10 §10.1](../architecture/10-identification-and-labels.md) and [ADR-0030](0030-public-code-format.md) |
 | **Readability** | A label must still be useful when the scan fails. You can type `7Q2-M4X-9KD`; you cannot type a UUID |
 | **Decoupling** | A label can be reassigned; the code hangs on a binding, not on the identity. The binding history remains |
 | ~~Information leakage~~ | **Withdrawn 2026-09-11** (open point O12). The argument was self-defeating: the QR code prints the UUID in its fragment on the same label. The fragment is kept for offline resolution and the reason is dropped — see [10 §10.1](../architecture/10-identification-and-labels.md) and [ADR-0030](0030-public-code-format.md). The three reasons above carry the decision unchanged |

@@ -6,11 +6,34 @@
 #
 # NOTE — `verified` is not decoration but the central statement of each entry:
 #   verified: true   Dimensions, grid, margins AND pitch come from the
-#                    manufacturer's data sheet or a verified template file.
-#                    The source and the verification date are in the entry.
+#                    manufacturer's data sheet or a verified template file —
+#                    and, for rolls, the PRINTABLE AREA too (see `printable`
+#                    below). The source and the verification date are in the
+#                    entry.
+#                    The printable area joined this list on 2026-09-11, when
+#                    reading Brother's raster reference showed that a "29 × 90 mm"
+#                    label offers 25.9 × 83.9 mm and that the print window is not
+#                    centred on the head. A geometry that is right about the
+#                    medium and wrong about the print area still ruins the label,
+#                    so it does not get to be called verified.
 #   verified: false  At least one value is derived or comes from a retail
 #                    source. The calibration sheet is mandatory before any
 #                    bulk print.
+#
+# The flag is BINARY and stays binary. One unsourced value makes the whole entry
+# unverified, even when everything else is evidenced — see brother-dk-11209,
+# whose printable width is solidly sourced and whose printable length is not.
+# Per-field evidence belongs in `sources` and `notes`, and an unknown value is
+# written as `null` rather than as a plausible number. A third state would have to
+# be interpreted by the renderer, and it would be interpreted as "good enough".
+#
+# `printable` (rolls) records what the printer can actually put on the medium,
+# which is never the medium's own size:
+#   printable.width / .length   the print area in mm
+#   printable.offset            unprintable margin, per side and per end
+#   printable.headPins          where the print area sits within the raster line
+#                               — NOT derivable from the width, see the Brother
+#                               block below
 #
 # Why the distinction matters (REQ-LBL-004, REQ-LBL-007):
 #   From label size and count the grid can be guessed, but NOT how the leftover
@@ -67,34 +90,94 @@ sheets:
       be decided from the available sources. Before release: check against the
       manufacturer's data sheet, or measure with the calibration sheet.
 
+# ---------------------------------------------------------------------------
+# BROTHER DK — the printable area is not the media size, and the media is not
+# centred on the print head. Both facts are sourced, both are easy to get wrong,
+# and both ruin a label silently.
+#
+# Source for every Brother figure below (retrieved and extracted 2026-09-11):
+#   Brother Software Developer's Manual, Raster Command Reference
+#   QL-800/810W/820NWB, version 1.01, §2.3.2 "Page size" and §2.3.4
+#   "Number of pins", document cv_ql800_eng_raster_101.pdf
+#
+# Two things that table says and a retail data sheet does not:
+#
+#  1. UNPRINTABLE MARGINS. Every DK medium loses 1.5 mm on each side across the
+#     web, and every DIE-CUT label additionally loses 3.0 mm at each end.
+#     A "29 × 90 mm" label offers 25.9 × 83.9 mm of print area, not 29 × 90.
+#
+#  2. THE MEDIA IS NOT CENTRED ON THE HEAD. The raster line is always 720 dots
+#     (90 bytes) at 300 dpi, and the printable window sits at a different offset
+#     per media width:
+#         29 mm media:  408 pins left margin | 306 printable | 6 pins right
+#         62 mm media:   12 pins left margin | 696 printable | 12 pins right
+#     A renderer that centres a 29 mm raster on the head prints off the label.
+#     This is precisely the class of error the `verified` flag exists for: the
+#     figure is not derivable from the media width, it has to be read.
+#
+# 300 dpi ⇒ 1 dot = 25.4/300 = 0.084667 mm. The mm and dot columns in the source
+# agree with that to within rounding, which is the cross-check that the table was
+# read correctly: 306 × 0.084667 = 25.91 mm, 696 × 0.084667 = 58.93 mm.
+# ---------------------------------------------------------------------------
+
 rolls:
   - id: brother-dk-11201
     vendor: Brother
     articleNumber: DK-11201
     name: Address labels 29 × 90 mm (die-cut)
     kind: ROLL
-    media:   { width: 29.0 }
-    label:   { length: 90.0, cornerRadius: 0.0 }
+    media:   { width: 29.0, length: 89.8 }        # nominal 90 mm; the table says 89.8
+    label:   { length: 89.8, cornerRadius: 0.0 }
+    printable:
+      width:  25.9          # 306 dots
+      length: 83.9          # 991 dots
+      offset: { side: 1.5, end: 3.0 }             # 18 dots / 35 dots
+      headPins: { leftMargin: 408, printArea: 306, rightMargin: 6, rasterBytes: 90 }
     verified: true
     verifiedOn: 2026-09-11
-    sources: ["Brother product data / TME data sheet — 29 mm × 90 mm, die-cut"]
+    sources:
+      - "Brother Raster Command Reference QL-800/810W/820NWB v1.01 §2.3.2(b), die-cut ID 271: 29.0 mm/342 dots × 89.8 mm/1061 dots, print area 25.9 mm/306 dots × 83.9 mm/991 dots, offsets 1.5 mm/18 dots and 3.0 mm/35 dots"
+      - "…§2.3.4 die-cut pin table, row '29mm x 90mm': 408 / 306 / 6 / 90"
     notes: >
-      Careful when designing templates: the PRINTABLE width is smaller than the
-      29 mm media width — DK rolls have unprintable margins. The exact figure is
-      to be taken from the Brother SDK data sheet and added here; until then the
-      media width applies and the preview warns.
+      The nominal 90 mm is 89.8 mm of media and 83.9 mm of print area — a
+      template laid out to 90 mm loses 6 mm at the ends, which is where a QR
+      code's quiet zone goes first.
 
   - id: brother-dk-11209
     vendor: Brother
     articleNumber: DK-11209
     name: Small address labels 29 × 62 mm (die-cut)
     kind: ROLL
-    media:   { width: 29.0 }
+    media:   { width: 29.0, length: 62.0 }
     label:   { length: 62.0, cornerRadius: 0.0 }
-    verified: true
+    printable:
+      width:  25.9          # 306 dots — evidenced, see below
+      length: null          # NOT evidenced: no 29 × 62 row in the reference
+      offset: { side: 1.5, end: 3.0 }
+      headPins: { leftMargin: 408, printArea: 306, rightMargin: 6, rasterBytes: 90 }
+    verified: false         # binary on purpose — see the note below
     verifiedOn: 2026-09-11
-    sources: ["Brother product data — 29 × 62 mm, die-cut"]
-    notes: "Unprintable margins as for DK-11201 — still to be added."
+    sources:
+      - "Brother Raster Command Reference QL-800/810W/820NWB v1.01 §2.3.4: all three 29 mm rows — continuous '29 mm', die-cut '29mm x 42mm' and die-cut '29mm x 90mm' — are identically 408 / 306 / 6 / 90"
+      - "…§2.3.2(a) ID 258, 29 mm continuous: print area width 25.9 mm / 306 dots, width offset 1.5 mm / 18 dots"
+    notes: >
+      **The printable WIDTH is evidenced; the printable LENGTH is not**, so the
+      entry is `verified: false`. The flag stays binary — one unsourced value
+      makes the entry unverified, which is the rule at the top of this file and
+      the behaviour the renderer needs. A third state such as "partial" would
+      have to be interpreted by the renderer, and the first thing it would be
+      interpreted as is "good enough".
+      DK-11209 (29 × 62 mm) has no row of its own in this reference — the die-cut
+      table lists 29 × 42 and 29 × 90 but not 29 × 62. The width is nonetheless
+      sourced rather than guessed: printable width is a function of media width,
+      and all three 29 mm entries in the document agree exactly, which is stronger
+      evidence than a single row would be.
+      The length is left null on purpose. 62.0 − 2 × 3.0 = 56.0 mm would almost
+      certainly be right, and "almost certainly" is what `verified` exists to keep
+      out — DK-11201's own nominal 90 mm turned out to be 89.8 mm of media, so the
+      nominal figure is not reliable input for that subtraction. Until the row is
+      read from a reference that carries it, the preview treats the length as
+      unverified and requires the calibration sheet before a bulk print.
 
   - id: brother-dk-22205
     vendor: Brother
@@ -103,13 +186,29 @@ rolls:
     kind: ROLL
     media:   { width: 62.0 }
     label:   { length: null, cornerRadius: 0.0 }   # free, continuous material
+    printable:
+      width:  58.9          # 696 dots
+      length: null          # continuous — the template decides
+      offset: { side: 1.5, end: null }
+      headPins: { leftMargin: 12, printArea: 696, rightMargin: 12, rasterBytes: 90 }
     verified: true
     verifiedOn: 2026-09-11
-    sources: ["Brother product data — 62 mm continuous tape, 30 m"]
+    sources:
+      - "Brother Raster Command Reference QL-800/810W/820NWB v1.01 §2.3.2(a) ID 259, 62 mm continuous: 62.0 mm/732 dots, print area width 58.9 mm/696 dots, width offset 1.5 mm/18 dots"
+      - "…§2.3.4 continuous pin table, row '62 mm': 12 / 696 / 12 / 90"
     notes: >
-      Continuous material: the label length comes from the template, not from
-      the media. The renderer cuts at the rendered height.
+      Continuous material: the label length comes from the template, not from the
+      media, and only the width is constrained. The renderer cuts at the rendered
+      height. Note the head offsets differ sharply from the 29 mm media — 12/696/12
+      here against 408/306/6 there — so the raster origin is per medium, never a
+      constant.
 
+  # The two Dymo entries were `verified: true` until 2026-09-11 and are now
+  # `false` — not because anything about them changed, but because the rule did.
+  # Adding the printable area to the definition of "verified" (see the header)
+  # made a field mandatory that these entries never carried. Downgrading them is
+  # the honest consequence; leaving them at `true` under the new rule would have
+  # meant the flag stopped meaning one thing.
   - id: dymo-99012
     vendor: Dymo
     articleNumber: "99012"
@@ -117,9 +216,16 @@ rolls:
     kind: ROLL
     media:   { width: 36.0 }
     label:   { length: 89.0, cornerRadius: 0.0 }
-    verified: true
+    printable: null         # NOT sourced — see the note
+    verified: false
     verifiedOn: 2026-09-11
     sources: ["Dymo product data / retail data sheet — 36 × 89 mm"]
+    notes: >
+      The medium's dimensions are evidenced; the **printable area is not**. Dymo
+      LabelWriter media has unprintable margins of its own, and the figures have
+      to come from Dymo's SDK documentation the way the Brother ones came from
+      Brother's. Until then the calibration sheet is required before a bulk print,
+      which is exactly what `verified: false` already means.
 
   - id: dymo-11354
     vendor: Dymo
@@ -128,9 +234,11 @@ rolls:
     kind: ROLL
     media:   { width: 32.0 }
     label:   { length: 57.0, cornerRadius: 0.0 }
-    verified: true
+    printable: null         # NOT sourced — see dymo-99012
+    verified: false
     verifiedOn: 2026-09-11
     sources: ["Dymo product data / retail data sheet — 32 × 57 mm"]
+    notes: "Printable area not sourced, as for dymo-99012."
 
 # ---------------------------------------------------------------------------
 # Not included yet — deliberately, not forgotten

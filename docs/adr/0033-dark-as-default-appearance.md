@@ -38,7 +38,7 @@ Three conditions make the override defensible, and all three are binding:
 | Condition | Requirement |
 |---|---|
 | The escape hatch is obvious | The toggle sits in the user menu, not inside a settings sub-page |
-| The choice is remembered and never flashes | Applied before first paint; a light-preferring user never sees a dark frame. `color-scheme` is set so native controls, scrollbars and the caret follow; the PWA manifest carries a matching `theme_color`/`background_color` so the splash does not flash white |
+| The choice is remembered and never flashes | Applied before first paint; a light-preferring user never sees a dark frame. **How** that is achieved against a static shell is [ADR-0038](0038-csp-delivery-and-first-paint.md): a local mirror of the profile value under `localStorage['homeinv.theme']`, read by a hash-authorised inline bootstrap — this condition was binding here without a mechanism, and the strict CSP made the obvious one impossible. `color-scheme` is set so native controls, scrollbars and the caret follow; the PWA manifest carries a matching `theme_color`/`background_color` so the splash does not flash white |
 | Both themes are designed, not derived | Light is a genuine second theme, not dark with inverted values. Every token pair carries a measured contrast ratio in **both** themes (`REQ-NFR-038`) |
 
 ## Rationale

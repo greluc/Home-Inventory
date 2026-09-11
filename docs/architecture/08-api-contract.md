@@ -101,12 +101,23 @@ rejected instead of silently returning wrong results.
 {
   "data": [ … ],
   "page": { "nextCursor": "…", "hasMore": true, "estimatedTotal": 1284 },
-  "meta": { "degraded": false, "took": 41 }
+  "meta": {
+    "degraded": false,          // true when a derived store is unavailable
+    "degradedReason": null,     // a stable token, e.g. "search-fallback"
+    "took": 41
+  }
 }
 ```
 
 `estimatedTotal` is explicitly an estimate — an exact total over a million rows
 costs more than it is worth.
+
+**`meta.degraded` is the contract for degradation**, not a header
+([ADR-0039](../adr/0039-degraded-response-signalling.md)). `degradedReason` is a
+stable token from a documented set — clients branch on it the way they branch on
+`problem.type`, never on prose — and a new token is a minor change. Degradation
+never changes the status code: a degraded search returns `200`, because its
+results are correct, only poorer. `503` stays reserved for "this will not work".
 
 ### Concurrency and idempotency
 
@@ -181,10 +192,17 @@ speeds:
 
 ```http
 Deprecation: @1780358400
-Sunset: Tue, 30 Jun 2026 00:00:00 GMT
+Sunset: Wed, 02 Jun 2027 00:00:00 GMT
 Link: <https://…/docs/migration/v1-to-v2>; rel="deprecation"
-Warning: 299 - "Endpoint /api/v1/items/search is deprecated, use /api/v1/items"
 ```
+
+`Deprecation` (RFC 9745) names the moment the endpoint was declared deprecated —
+here 2026-06-02 — and `Sunset` (RFC 8594) the moment it stops answering. **The
+gap is twelve months**, per the table below; the example previously showed 28
+days and contradicted the rule three lines under it. There is deliberately no
+`Warning: 299` line: RFC 9111 §5.5 obsoleted that field in 2022, and the three
+headers above already carry the same information in parseable form
+([ADR-0039](../adr/0039-degraded-response-signalling.md)).
 
 | Rule | Value |
 |---|---|

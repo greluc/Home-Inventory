@@ -113,7 +113,7 @@ Rules that go with it:
 | **No `double` or `float` anywhere on the money path** — not in a constructor, a factory, a DTO or a test helper | The classic money defect; an ArchUnit rule enforces it |
 | JSON shape `{"amount": "49.90", "currency": "EUR"}` — the amount is a **string** | A JSON number would lose precision in JavaScript clients before our code ever sees it |
 | Rounding mode is always explicit (`RoundingMode.HALF_UP` as the default), never implicit | `BigDecimal` throws on an implicit rounding requirement; an explicit choice is auditable |
-| `Money` is immutable and `Comparable` only within the same currency | Comparing across currencies is meaningless |
+| **`Money` is immutable and does not implement `Comparable`.** Comparison within one currency goes through `isGreaterThan`/`isLessThan` or a `Comparator` from `Money.inCurrency(c)` | Comparing across currencies is meaningless, and a `compareTo` that throws does not satisfy `Comparable`'s contract — see the second correction note above. *This row read "`Comparable` only within the same currency" until 2026-09-11 and contradicted the record it sits under; an implementer following it would have shipped the bug the note describes.* |
 
 ## Rationale
 

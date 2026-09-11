@@ -13,17 +13,44 @@ chapter.
 
 ### Why the public code is not the UUID
 
-It would be simpler to print the UUID onto the label. Four reasons argue against
-it, and they weigh more:
+It would be simpler to print the UUID onto the label. **Two** reasons argue
+against it, and they weigh more. Two further reasons were written down, and both
+were withdrawn on 2026-09-11 for the same underlying mistake — they argued against
+printing something this label prints anyway.
 
-1. **Length.** 36 characters produce a QR code of version 3–4. An 11-character
-   code stays far smaller and sharply readable on a 25 × 10 mm label — and that is
-   what matters in practice.
-2. **Human readability.** A label must still be useful when the scan fails. You
-   can read and type `7Q2M-4X9K-D2F`; you cannot do that with a UUID.
-3. **Decoupling.** A label can be reassigned (the item is disposed of, the label
+1. **Human readability.** A label must still be useful when the scan fails. You
+   can read and type `7Q2M-4X9K-D2F`; you cannot do that with a UUID. This is the
+   reason that carries the most weight in practice, because a smudged or
+   badly-lit label is the normal case in a cellar.
+2. **Decoupling.** A label can be reassigned (the item is disposed of, the label
    stays on the container). The code is tied to a **binding**, not to the
    identity. The binding history is preserved.
+
+> **A third reason was withdrawn on 2026-09-11.** It read: *"Length. 36 characters
+> produce a QR code of version 3–4. An 11-character code stays far smaller and
+> sharply readable on a 25 × 10 mm label."* It compared the code alone against a
+> UUID alone, and the symbol carries neither: it carries the URL **and** the UUID
+> in the fragment ([10.2](#102-what-the-qr-code-contains)). Measured out at error
+> correction level M:
+>
+> | What the symbol actually carries | Characters | QR version | Modules + quiet zone |
+> |---|---|---|---|
+> | `https://<base>/c/<code>#i=<uuid>` — **as specified** | ≈ 76 | **5** | 45 |
+> | `https://<base>/c/<uuid>` — the rejected variant | ≈ 62 | **4** | 41 |
+>
+> The design prints the **larger** symbol. The argument does not merely fail to
+> support the decision; it points the other way. Reasons 1 and 2 carry it on their
+> own, exactly as they did after O12.
+>
+> The second half of that sentence was wrong too, and it mattered more: 45 modules
+> at the 0.33 mm minimum module size this chapter itself requires
+> ([10.5](#105-the-label-model), `REQ-LBL-007`)
+> needs **≈ 15 mm of label edge**, not 10 (the figures are in
+> [10.5](#105-the-label-model), where the renderer checks them). The starter
+> catalogue is unaffected —
+> its smallest format, Avery Zweckform 3667 at 48.5 × 16.9 mm, yields 0.376 mm per
+> module. What was wrong was the prose, not the geometry.
+
 > **A fourth reason was withdrawn on 2026-09-11** (open point **O12**). It read:
 > *"Information leakage — UUIDv7 contains a timestamp; on a label every visitor
 > can scan, that is needlessly given away."* It could not stand, because
@@ -43,7 +70,7 @@ it, and they weigh more:
 > is a low-value disclosure, and it is bounded — the UUID discloses *when the
 > record was made*, nothing about the object, the tenant or its value. It is
 > recorded as an accepted risk in [12 §12.3](12-security.md) rather than left
-> unsaid. Reasons 1–3 carry the decision on their own.
+> unsaid. Reasons 1 and 2 carry the decision on their own.
 
 ### Structure of the public code
 
@@ -257,19 +284,50 @@ was merely computed.
 
 #### Catalogue status (verified 2026-09-11)
 
-| Format | Size | Layout | `verified` |
+| Format | Size | Printable area | `verified` |
 |---|---|---|---|
 | Avery Zweckform **3474** | 70 × 37 mm | 3 × 8, marginless, 0.5 mm top/bottom | **yes** — two independent sources agree |
 | Avery Zweckform **3667** | 48.5 × 16.9 mm | 4 × 16 | **no** — size and count sourced, margins derived |
-| Brother **DK-11201** | 29 × 90 mm | roll, die-cut | **yes** |
-| Brother **DK-11209** | 29 × 62 mm | roll, die-cut | **yes** |
-| Brother **DK-22205** | 62 mm continuous | length from the template | **yes** |
-| Dymo **99012** | 36 × 89 mm | roll | **yes** |
-| Dymo **11354** | 32 × 57 mm | roll | **yes** |
+| Brother **DK-11201** | 29 × 89.8 mm die-cut | **25.9 × 83.9 mm** | **yes** — Brother raster reference |
+| Brother **DK-11209** | 29 × 62 mm die-cut | **25.9 ×** *length unsourced* | **no** — width evidenced, length not |
+| Brother **DK-22205** | 62 mm continuous | **58.9 mm** wide, length from the template | **yes** — Brother raster reference |
+| Dymo **99012** | 36 × 89 mm | *not sourced* | **no** |
+| Dymo **11354** | 32 × 57 mm | *not sourced* | **no** |
 
-An outstanding point for all Brother DK rolls: the **printable** width is smaller
-than the media width (unprintable margins). The exact value comes from the
-Brother SDK data sheet and is still to be added; until then the preview warns.
+### What reading the Brother data sheet actually changed
+
+The outstanding point *"the printable width is smaller than the media width, the
+exact value is still to be added"* is **closed** (2026-09-11, ADR-0000 **A2**),
+from Brother's *Raster Command Reference QL-800/810W/820NWB* v1.01 §2.3.2 and
+§2.3.4. It produced two facts, and the second was not on anyone's list:
+
+1. **The margins are larger than "a bit".** Every DK medium loses 1.5 mm per side
+   across the web, and every die-cut label a further **3.0 mm at each end**. A
+   nominal "29 × 90 mm" label is 29 × **89.8** mm of medium and **25.9 × 83.9 mm**
+   of print area. A template laid out to 90 mm loses 6 mm at the ends — which is
+   where a QR code's quiet zone goes first, and the quiet zone is the single most
+   common reason a printed code will not read.
+2. **The medium is not centred on the print head, and the offset is not derivable
+   from the width.** The raster line is always 720 dots (90 bytes) at 300 dpi, and
+   the print window sits at a different place per medium:
+
+   | Medium | left margin | print area | right margin |
+   |---|---|---|---|
+   | 29 mm | **408 pins** | 306 pins | 6 pins |
+   | 62 mm | 12 pins | 696 pins | 12 pins |
+
+   The 62 mm medium is centred; the 29 mm medium is not, by a wide margin. A
+   renderer that centres a 29 mm raster on the head prints off the label
+   entirely. **This is the clearest example in the whole catalogue of why
+   `verified` exists**: the figure cannot be calculated from anything else on the
+   label, it has to be read — and everything about it looks plausible until the
+   first sheet comes out wrong.
+
+The same pass **downgraded the two Dymo entries to `verified: false`**. Nothing
+about them changed; the rule did. Adding the printable area to the definition of
+"verified" made a field mandatory that they never carried, and leaving them at
+`true` would have meant the flag stopped meaning one thing. Their printable areas
+have to come from Dymo's SDK documentation the way Brother's came from Brother's.
 
 The catalogue stays **deliberately small**. Few verified formats beat many
 half-verified ones — anyone who needs a missing format creates it themselves
@@ -293,6 +351,7 @@ bindings.
 | Rendering runs in the worker with memory and time limits | A pathological template must not take the core down |
 | The preview is to scale and shows quiet zones | Too small a quiet zone is the most common reason a printed QR code will not read |
 | The minimum module size is checked and warned about | A QR code below ~0.33 mm module size is unreliable with phone cameras |
+| **The minimum label edge follows from it, and is computed rather than assumed** | The specified payload (`https://<base>/c/<code>#i=<uuid>`, ≈ 76 characters) is a QR **version 5** symbol — 37 × 37 modules, **45** including the four-module quiet zone. At 0.33 mm that is **≈ 15 mm**, and a template placing a code on a shorter edge than that fails the preview check rather than producing a label that will not scan. Where the tenant has chosen the host-free form `homeinv:<code>` ([10.2](#102-what-the-qr-code-contains)) the payload drops to ≈ 19 characters, a version 2 symbol, ≈ 11 mm. The renderer computes this from the actual payload; the figures here are the two shipped cases |
 
 ## 10.6 Print jobs
 

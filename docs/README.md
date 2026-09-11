@@ -86,10 +86,19 @@ Each has its own ADR with rationale and alternatives.
 | 27 | Egress enforcement | Deny-all for the core, an allowlisting proxy per plugin segment | [0027](adr/0027-egress-enforcement.md) |
 | 28 | Stage plan | The plugin runtime is part of stage 1, not stage 3 | [0028](adr/0028-plugin-runtime-stage-1.md) |
 | 29 | Web session | `SameSite=Strict`, with code resolution and OIDC state decoupled | [0029](adr/0029-session-cookie-and-oidc-state.md) |
+| 30 | Printed code format | 10 payload characters plus a Damm check symbol, Crockford Base32 | [0030](adr/0030-public-code-format.md) |
 | 31 | Audit chain | Per tenant, with an hourly instance-wide anchor | [0031](adr/0031-audit-chain-per-tenant.md) |
+| 32 | Blob addressing | Content-addressed within a tenant, never across | [0032](adr/0032-per-tenant-blob-addressing.md) |
 | 33 | Appearance | Dark by default everywhere; light is opt-in | [0033](adr/0033-dark-as-default-appearance.md) |
 | 34 | Icons and assets | Lucide, self-hosted; no third-party host for anything | [0034](adr/0034-icon-set-and-no-third-party-hosts.md) |
 | 35 | Design system | Binding, not a reference; `tokens.json` is the single source for web and apps | [0035](adr/0035-design-system.md) |
+| 36 | Scanner egress | The egress proxy runs in every profile; the signature mirror is a fixed allowlist entry | [0036](adr/0036-scanner-egress.md) |
+| 37 | Plugin isolation | One network segment per plugin; the management port bound to `internal` | [0037](adr/0037-per-plugin-network-segments.md) |
+| 38 | CSP and first paint | Headers served by `web`, inline content authorised by hash, theme mirrored in `localStorage` | [0038](adr/0038-csp-delivery-and-first-paint.md) |
+| 39 | Degradation signal | `meta.degraded` in the envelope; the obsolete `Warning` header is dropped | [0039](adr/0039-degraded-response-signalling.md) |
+| 40 | Cross-origin isolation | Not pursued — `COEP` is dropped, `COOP` and `CORP` stay | [0040](adr/0040-no-cross-origin-isolation.md) |
+| 41 | Migration | Its own one-shot service on every runtime; no long-running process holds DDL rights | [0041](adr/0041-migration-as-its-own-service.md) |
+| 42 | Inbound topology | `edge` is not internal; `web` is the ingress and the only publisher | [0042](adr/0042-edge-is-not-internal.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open**; what

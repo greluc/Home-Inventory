@@ -24,12 +24,12 @@ through a hardened instance reachable from the internet.
 | **One** tenant (the model is multi-tenant, the UI shows one) | Tenant administration, roles beyond admin/user |
 | Items with **fixed** fields (name, description, quantity, note, purchase data) | The configurable type system |
 | A location tree with fixed categories | Category configuration, mobile locations |
-| Photos and documents: upload, re-encoding, EXIF stripping, thumbnails, the **mandatory malware scan**, serving through signed URLs from the media hostname, `BlobStore` (filesystem, in-core) | S3 and Nextcloud adapters (they are plugins), resumable upload |
+| Photos and documents: upload, re-encoding, EXIF stripping, thumbnails, the **mandatory malware scan** — with the `egress-proxy` it needs for its signatures ([ADR-0036](../adr/0036-scanner-egress.md)) — serving through signed URLs from the media hostname, `BlobStore` (filesystem, in-core) | S3 and Nextcloud adapters (they are plugins), resumable upload |
 | Full-text search (PostgreSQL), cursor pagination | OpenSearch, facets, saved searches |
 | A REST API `/api/v1` with OpenAPI and problem details | GraphQL, gRPC, webhooks |
 | The web PWA (read and write, online) | Offline operation |
 | **Both container runtimes rootless** (Podman/Quadlet and Docker/Compose), the service matrix, migrations, health endpoints, logging | Helm, OpenSearch, RabbitMQ |
-| **All security foundations**: the RLS schema, CSP, upload hardening, parameterised queries, the authorization scaffolding | — |
+| **All security foundations**: the RLS schema, CSP served by `web` with hashes, upload hardening, parameterised queries, the authorization scaffolding, the network segmentation with the management port bound to `internal` | — |
 
 **Binding requirements:** every requirement whose **Stage** column reads `0`.
 
@@ -53,6 +53,17 @@ through a hardened instance reachable from the internet.
 > every profile ([ADR-0024](../adr/0024-malware-scan.md)) and ships in the stage-0
 > container set, and the RLS schema is stage-0 work by everyone's account. The
 > Stage column now says what this page always said.
+>
+> **A third error of the same shape, found 2026-09-11:** the scanner shipped in
+> stage 0 and the `egress-proxy` it needs for its signatures did not — the proxy
+> was filed with the plugin runtime in stage 1, and in `minimal` it was not
+> scheduled at all. Stage 0 would therefore have had a mandatory, **fail-closed**
+> scanner running on whatever signature set was baked into its image: reporting
+> clean and meaning nothing, with a 48-hour staleness alert firing forever. The
+> proxy moves to stage 0 carrying one fixed allowlist entry, which is the smallest
+> possible version of the same component
+> ([ADR-0036](../adr/0036-scanner-egress.md)); its plugin-facing half stays in
+> stage 1 with the runtime.
 
 ---
 
@@ -71,7 +82,7 @@ tags and roles themselves — without a developer and without a restart.
 | **Lifecycle** | Warranty, maintenance log, lending, sale, disposal, trash, history with restore, value reporting (purchase price, current value, replacement value, the insurance report) |
 | **Search** | OpenSearch with facets, filters, sorting, saved searches, the PostgreSQL fallback |
 | **Events** | The outbox, RabbitMQ, the worker role |
-| **Plugin runtime** | Registry, manifests, signature verification, the per-tenant capability model, lifecycle, health, gRPC over mTLS, bulkheads and circuit breakers, and the **egress proxy**. Moved here from stage 3 ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) because the core makes no outbound connection any more — so mail, remote storage and federated login are all plugins, and stage 1 needs all three |
+| **Plugin runtime** | Registry, manifests, signature verification, the per-tenant capability model, lifecycle, health, gRPC over mTLS, bulkheads and circuit breakers, the **per-plugin network segments** ([ADR-0037](../adr/0037-per-plugin-network-segments.md)), and the **plugin-facing half of the egress proxy** — its manifest-driven allowlist, the per-segment interfaces and the TCP forwarding mode. The proxy container itself already exists from stage 0, for the scanner ([ADR-0036](../adr/0036-scanner-egress.md)). Moved here from stage 3 ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) because the core makes no outbound connection any more — so mail, remote storage and federated login are all plugins, and stage 1 needs all three |
 | **First-party plugins** | `plugin-smtp`, `plugin-blobstore-s3`, `plugin-blobstore-nextcloud`, `plugin-webhook`, `plugin-oidc` — built against the same contract third parties get in stage 3, which is what proves the contract before it is published |
 | **Media** | S3 and **Nextcloud adapters as plugins**, resumable upload, reference counting, the mandatory malware scan |
 | **API** | GraphQL (read-only), ETag/If-Match, idempotency, SSE, the versioning policy with measurement |

@@ -31,7 +31,12 @@ well-trodden path.
 ## Consequences
 
 - **A strict CSP without `unsafe-inline` and without `unsafe-eval`.** The Vite
-  build is configured accordingly and a CI test checks the served policy.
+  build is configured accordingly and a CI test checks the served policy. The
+  inline content the shell does need — the theme bootstrap that beats first paint
+  — is authorised by **hash**, not by a nonce, and the headers are served by the
+  `web` container rather than by an operator's reverse proxy, so the check has
+  something in this repository to check
+  ([ADR-0038](0038-csp-delivery-and-first-paint.md)).
 - `dangerouslySetInnerHTML` is forbidden by a lint rule.
 - Scanning: the `BarcodeDetector` API preferred, ZXing-WASM in a web worker as a
   fallback. Camera access requires HTTPS — stated explicitly in the installation
