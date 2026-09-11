@@ -70,14 +70,40 @@ nothing.
 `BigDecimal` and `java.util.Currency`. **No** JavaMoney, **no** Joda-Money.
 
 ```java
-public record Money(BigDecimal amount, Currency currency) implements Comparable<Money> {
+public record Money(BigDecimal amount, Currency currency) {
     // Invariants enforced in the compact constructor:
     //  - amount and currency non-null
-    //  - scale ≤ currency.getDefaultFractionDigits() for persisted values
+    //  - amount is NORMALISED to exactly currency.getDefaultFractionDigits()
+    //    via setScale(digits, RoundingMode.HALF_UP)  ← see the two notes below
     //  - arithmetic across different currencies throws CurrencyMismatchException
     //  - no constructor, factory or operation accepts double or float
+    //
+    // Deliberately NOT Comparable — see below.
+    public boolean isGreaterThan(Money other) { … }   // throws on a currency mismatch
+    public static Comparator<Money> inCurrency(Currency c) { … }
 }
 ```
+
+> **Two corrections to the first draft of this record, both of which would have
+> shipped as bugs.**
+>
+> **Scale must be exact, not "≤".** A `record` derives `equals` from
+> `Objects.equals` on its components, and `BigDecimal.equals` compares **scale as
+> well as value**: `49.90` and `49.9` are unequal and hash differently. Under a
+> `scale ≤ digits` invariant both are valid, so two `Money` values representing the
+> same amount could fail `equals`, break a `HashMap` lookup, and make a set of
+> prices contain apparent duplicates. Normalising to exactly the currency's
+> fraction digits in the compact constructor removes the class of bug entirely —
+> and it is exactly the kind of detail a money library would have handled, which is
+> the honest counterweight to the "write it yourself" decision above.
+>
+> **`Comparable` is wrong here.** Its contract expects a total order over the type,
+> and throwing on a currency mismatch does not provide one: `Collections.sort` on a
+> mixed list would fail partway through, leaving the list in an undefined state,
+> and `TreeMap` would behave unpredictably. Comparison is only ever meaningful
+> within one currency, so it is exposed as `Comparator` factories and explicit
+> `isGreaterThan`/`isLessThan` methods that check and throw — the check stays, the
+> broken contract goes.
 
 Rules that go with it:
 

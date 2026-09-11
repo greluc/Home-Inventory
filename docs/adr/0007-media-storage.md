@@ -1,6 +1,15 @@
 # ADR-0007 — A BlobStore port with filesystem, S3 and Nextcloud adapters
 
-**Status:** Accepted · **Date:** 2026-09-11
+**Status:** Accepted, **partially superseded** · **Date:** 2026-09-11
+
+> **Superseded in part by [ADR-0026](0026-core-outbound-via-plugins.md)** — the
+> `s3` and `nextcloud` adapters are no longer shipped inside the core; they became
+> out-of-process plugins, because the core keeps no outbound route. The `BlobStore`
+> port, content addressing and the adapter contract test stand unchanged, and
+> `filesystem` remains a core adapter.
+>
+> **Amended by [ADR-0032](0032-per-tenant-blob-addressing.md)** — content addressing
+> is scoped to the tenant (`sha256/<tenantId>/<hash>`) rather than global.
 
 ## Context
 

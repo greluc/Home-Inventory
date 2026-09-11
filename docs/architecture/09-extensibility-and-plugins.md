@@ -28,22 +28,30 @@ webhook targets, tenant settings.
 Every port is a narrow, functionally motivated interface. The core knows only the
 port, never an implementation.
 
+**"Shipped" now means two different things**, and the column says which
+([ADR-0026](../adr/0026-core-outbound-via-plugins.md)):
+
+| Marking | Meaning |
+|---|---|
+| **in-core** | Part of the core image, always available, opens no socket to a host outside the deployment |
+| **first-party plugin** | Built and signed by this project, delivered as its own container, but still a plugin — because it makes an outbound connection. It is installed, granted and revoked like any other |
+
 | Port | Purpose | Example implementations |
 |---|---|---|
-| `CodeFormat` | Generate a code and claim/parse a raw scan | QR (shipped), DataMatrix, Code128, EAN-13, ITF-14, Aztec, GS1 Digital Link, NFC tag |
-| `ScanSource` | The origin of a scan | Browser camera (shipped), app camera, HID handheld scanner, Bluetooth ring scanner, image file, clipboard |
-| `LabelRenderer` | Template + data → a printable artifact | PDF sheet (shipped), PNG, ZPL, EPL, Brother raster |
-| `PrintTarget` | Artifact → printer | Download (shipped), CUPS/IPP, Brother QL over the network, Zebra over TCP 9100, Dymo |
-| `LabelMediaProvider` | Contribute label geometries | Avery Zweckform catalogue (shipped), Herma, continuous rolls |
+| `CodeFormat` | Generate a code and claim/parse a raw scan | QR (**in-core**), DataMatrix, Code128, EAN-13, ITF-14, Aztec, GS1 Digital Link, NFC tag |
+| `ScanSource` | The origin of a scan | Browser camera (**in-core**), app camera, HID handheld scanner, Bluetooth ring scanner, image file, clipboard |
+| `LabelRenderer` | Template + data → a printable artifact | PDF sheet (**in-core**), PNG, ZPL, EPL, Brother raster |
+| `PrintTarget` | Artifact → printer | Download (**in-core** — writes to the `BlobStore`, opens nothing), CUPS/IPP, Brother QL over the network, Zebra over TCP 9100, Dymo |
+| `LabelMediaProvider` | Contribute label geometries | Avery Zweckform catalogue (**in-core**, it is data), Herma, continuous rolls |
 | `MetadataResolver` | Code → metadata | ISBN (Open Library, DNB), EAN/GTIN (Open Food Facts, GS1), MPN, Discogs, TMDB, IGDB |
-| `BlobStore` | Binary storage | Filesystem, S3/MinIO, **Nextcloud/WebDAV** (all three shipped), FTP, Backblaze |
-| `SearchIndex` | Index and search | OpenSearch (shipped), PostgreSQL (shipped), Meilisearch, Typesense |
-| `NotificationChannel` | Deliver a message | E-mail (shipped), webhook (shipped), Web Push/VAPID (shipped), **Firebase and APNs as plugins** ([ADR-0023](../adr/0023-push-notifications.md)), ntfy, Matrix, Signal |
-| `IdentityProvider` | Federated login | OIDC (shipped), LDAP, SAML |
-| `ImageProcessor` | Image derivatives | libvips (shipped), ImageMagick |
-| `VirusScanner` | Check uploads | **ClamAV (shipped, mandatory)**; other scanners are interchangeable, but "no scanner" is not a supported configuration |
-| `ValuationProvider` | Estimate current and replacement value | Straight-line depreciation (shipped), declining balance, market-price and dealer services |
-| `ImportMapper` | Read a foreign format | CSV profile (shipped), Homebox, InvenTree, Snipe-IT |
+| `BlobStore` | Binary storage | Filesystem (**in-core**, the default) · S3/MinIO and **Nextcloud/WebDAV** as **first-party plugins** · FTP, Backblaze |
+| `SearchIndex` | Index and search | OpenSearch (**in-core** — part of the deployment, not an external host), PostgreSQL (**in-core**), Meilisearch, Typesense |
+| `NotificationChannel` | Deliver a message | **Every channel is a plugin**, because every one of them talks to a host outside the deployment: SMTP, webhook, Web Push/VAPID, Firebase, APNs (all **first-party plugins**) · ntfy, Matrix, Signal |
+| `IdentityProvider` | Federated login | OIDC (**first-party plugin**), LDAP, SAML |
+| `ImageProcessor` | Image derivatives | libvips (**in-core**), ImageMagick |
+| `VirusScanner` | Check uploads | **ClamAV (in-core adapter, mandatory)** — `clamd` is part of the deployment, so the adapter opens no external connection; its own signature updates are its business, not the core's. Other scanners are interchangeable, but "no scanner" is not a supported configuration |
+| `ValuationProvider` | Estimate current and replacement value | Straight-line depreciation (**in-core**, pure arithmetic), declining balance, market-price and dealer services (plugins — they call out) |
+| `ImportMapper` | Read a foreign format | CSV profile (**in-core**), Homebox, InvenTree, Snipe-IT |
 
 **Admission criterion for a new port:** there must be at least two plausible,
 genuinely different implementations. A port with exactly one conceivable
@@ -77,8 +85,14 @@ spec:
 
   capabilities:                             # each granted individually
     - id: network:outbound
-      hosts: ["openlibrary.org", "services.dnb.de"]
+      hosts: ["openlibrary.org", "services.dnb.de"]     # HTTPS via CONNECT
       reason: "Querying the metadata sources"
+    # A non-HTTP target is declared as host:port with its protocol; the proxy
+    # forwards raw TCP to exactly that destination (ADR-0027). plugin-smtp uses
+    # this form:
+    #   - id: network:outbound
+    #     tcp: ["mail.example.org:587"]
+    #     reason: "Delivering invitations and notifications"
     - id: core:item:read
       reason: "Read existing fields so that only gaps are proposed"
 
@@ -104,7 +118,7 @@ spec:
 | Field | Security meaning |
 |---|---|
 | `capabilities` | **Exhaustive.** What is not in the manifest is not possible — not even with consent granted. An extension requires a new manifest and new consent. |
-| `network:outbound.hosts` | A fixed target list. The plugin container gets a network rule that permits only these names. |
+| `network:outbound.hosts` | A fixed target list. It is compiled into the allowlist of the **egress proxy** that is the plugin's only route outward — no container runtime can express a hostname rule by itself, so the proxy is the enforcement point ([ADR-0027](../adr/0027-egress-enforcement.md)). A host not listed here is refused **and logged**, which is what makes REQ-ENR-009 answerable from evidence rather than from the manifest. |
 | `contract` | A range, not a point. The core rejects a plugin outside its range at startup without failing itself. |
 | Signature | Manifest and artifact are signed (`cosign`). Unsigned plugins are permitted only if the operator explicitly enables that — with a permanent warning. |
 
@@ -122,7 +136,7 @@ entitlement, no "read access, which is harmless anyway".
 | `core:event:emit` | Raising its own events | Only from a declared list of event types |
 | `core:event:subscribe` | Receiving events | Only the types named in the manifest |
 | `core:setting:read` | Reading its own settings | **Its own only**, never anyone else's |
-| `network:outbound` | Outbound network connections | With a fixed target list, enforced in the network, not in code |
+| `network:outbound` | Outbound network connections | Only through the egress proxy, only to the manifest's hosts. Enforced outside the plugin, never by the plugin ([ADR-0027](../adr/0027-egress-enforcement.md)) — an allowlist that untrusted code applies to itself is documentation, not a control |
 | `ui:panel` | Its own area in the UI | Served in an isolated `iframe` with its own origin and a strict CSP |
 | `print:target` | Appearing as a print target | |
 
@@ -242,7 +256,8 @@ docker build -t example/mpn:1.0.0 . && cosign sign example/mpn:1.0.0
 
 | Path | Description |
 |---|---|
-| Shipped | Contained in the core image, always available (QR, PDF sheet, filesystem, S3, Nextcloud, OpenSearch, PostgreSQL search, e-mail, webhook, Web Push, OIDC, ClamAV, the Avery catalogue) |
+| In-core | Contained in the core image, always available, opening nothing outward: QR, PDF sheet, the download print target, the filesystem `BlobStore`, OpenSearch and PostgreSQL search, libvips, the ClamAV adapter, straight-line depreciation, the CSV mapper, the Avery catalogue |
+| First-party plugins | Built and signed by this project, shipped as their own containers because each one calls out: `plugin-blobstore-s3`, `plugin-blobstore-nextcloud`, `plugin-smtp`, `plugin-webhook`, `plugin-webpush`, `plugin-push-fcm`, `plugin-push-apns`, `plugin-oidc` ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). They are installed, granted and revoked exactly like a third party's — no privileged path, because a privileged path is what would eventually be used for something else |
 | Operator installation | A container from a registry, added to the service matrix (whence the Quadlet unit or Compose service, or Helm values); registered in the administration UI with the manifest URL and the certificate fingerprint |
 | Directory | A **curated list in the repository** (`PLUGINS.md`) with name, publisher, ports, manifest URL, certificate fingerprint, contract version and licence. Admission by pull request, conditional on passing the contract test suite and a signed manifest. **No** distribution, **no** counter-signature and **no** security assurance by this project — that is stated at the top of the list. Installation remains a deliberate act by the operator. |
 

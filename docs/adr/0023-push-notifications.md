@@ -3,6 +3,14 @@
 **Status:** Accepted · **Date:** 2026-09-11
 **Resolves:** O9 in [ADR-0000](0000-open-points.md)
 
+> **Amended by [ADR-0026](0026-core-outbound-via-plugins.md).** The row
+> *"Web Push as an equal channel"* below was wrong in one respect: VAPID Web Push
+> needs no **account** with Google or Apple, but it does open a **connection** to
+> their push endpoints (`fcm.googleapis.com` for Chrome, `web.push.apple.com` for
+> Safari). It is therefore not a core channel either — `plugin-webpush` carries it,
+> under the same three opt-ins as FCM and APNs. Everything else here stands, and the
+> content-free payload now applies to Web Push as well.
+
 ## Context
 
 The apps are to receive push notifications (warranty expiry, a due return, a

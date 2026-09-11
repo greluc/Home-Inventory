@@ -14,7 +14,8 @@ alternatives and consequences.
 | Search | OpenSearch | [0008](../adr/0008-search.md) |
 | Messaging | RabbitMQ with quorum queues, transactional outbox | [0009](../adr/0009-messaging-and-events.md) |
 | Cache, sessions, rate limits | Valkey (Redis-compatible) | [0009](../adr/0009-messaging-and-events.md) |
-| Media storage | `BlobStore` port; adapters for filesystem, S3/MinIO, Nextcloud (WebDAV) | [0007](../adr/0007-media-storage.md) |
+| Media storage | `BlobStore` port; `filesystem` in the core, S3/MinIO and Nextcloud (WebDAV) as plugins | [0007](../adr/0007-media-storage.md), [0026](../adr/0026-core-outbound-via-plugins.md) |
+| Outbound connections | **The core opens none.** Every call leaving the deployment is made by a plugin, through an egress proxy that enforces the manifest's host allowlist | [0026](../adr/0026-core-outbound-via-plugins.md), [0027](../adr/0027-egress-enforcement.md) |
 | Web | React 19, TypeScript, Vite, PWA | [0012](../adr/0012-web-frontend.md) |
 | Apps | Kotlin Multiplatform, Compose Multiplatform (Android, iOS) | [0013](../adr/0013-mobile-apps.md) |
 | Outward API | REST (OpenAPI 3.1) and GraphQL (read-only) | [0010](../adr/0010-api-surfaces.md) |
@@ -46,6 +47,16 @@ alternatives and consequences.
   authorization is enforced not per surface but **once in the application
   layer**; the surfaces are pure adapters
   ([08 API Contract](08-api-contract.md)).
+- **"The core makes no outbound connection" forces the plugin runtime into stage 1.**
+  Mail is an outbound connection, and invitations, password reset and security
+  notifications are stage 1 functions. What looks like a networking rule therefore
+  determines the delivery plan
+  ([ADR-0026](../adr/0026-core-outbound-via-plugins.md),
+  [ADR-0028](../adr/0028-plugin-runtime-stage-1.md)).
+- **A hostname allowlist is not expressible in any of the three container runtimes.**
+  Neither Podman, nor Docker Compose, nor standard Kubernetes `NetworkPolicy` can
+  restrict egress by name. The requirement is real and the mechanism had to be
+  supplied: an egress proxy ([ADR-0027](../adr/0027-egress-enforcement.md)).
 
 ## 2.2 Organisational constraints
 
@@ -93,13 +104,17 @@ graph TB
     subgraph "Extensions (plugins)"
         P1["Code plugins<br/>QR, DataMatrix, EAN"]
         P2["Scanner plugins<br/>camera, handheld"]
-        P3["Printer plugins<br/>Brother QL, Zebra ZPL, PDF sheet"]
+        P3["Printer plugins<br/>Brother QL, Zebra ZPL"]
         P4["Resolver plugins<br/>ISBN, EAN/GTIN, MPN"]
-        P5["Storage plugins<br/>further backends"]
+        P5["Storage plugins<br/>S3, Nextcloud"]
+        P6["Channel plugins<br/>SMTP, webhook, push"]
+        P7["Identity plugin<br/>OIDC"]
     end
 
+    EP{{"egress-proxy<br/>allowlist per plugin"}}
+
     subgraph "Third-party systems"
-        X1["Nextcloud<br/>media storage"]
+        X1["Nextcloud / S3<br/>media storage"]
         X2["Metadata sources<br/>Open Library, DNB,<br/>Open Food Facts, GS1"]
         X3["OIDC provider<br/>optional"]
         X4["SMTP<br/>invitations, reminders"]
@@ -116,12 +131,22 @@ graph TB
     SYS <--> P3
     SYS <--> P4
     SYS <--> P5
+    SYS <--> P6
+    SYS <--> P7
 
-    SYS --> X1
-    P4 --> X2
-    SYS --> X3
-    SYS --> X4
+    P3 & P4 & P5 & P6 & P7 --> EP
+    EP --> X1
+    EP --> X2
+    EP --> X3
+    EP --> X4
 ```
+
+**`SYS` has no arrow to any third-party system, and that is the point.** Every
+line leaving this deployment starts at a plugin and passes the egress proxy
+([ADR-0026](../adr/0026-core-outbound-via-plugins.md),
+[ADR-0027](../adr/0027-egress-enforcement.md)). Plugins P1 and P2 have no arrow to
+the proxy either — code generation and scan parsing are pure computation and get
+no `network:outbound` capability at all.
 
 ## 2.5 External interfaces
 
@@ -131,11 +156,12 @@ graph TB
 | Web PWA | inbound | REST, GraphQL, WebSocket/SSE | Operation | — |
 | Apps (KMP) | inbound | REST + sync protocol | Operation, offline reconciliation | Apps keep working offline |
 | Out-of-process plugins | both | gRPC over mTLS | Extension points | Plugin counts as unavailable; the dependent function degrades visibly |
-| Nextcloud | outbound | WebDAV over HTTPS, app password | Media storage | Uploads are queued; reads come from the local cache |
-| Metadata sources | outbound (only via resolver plugins) | HTTPS | Enrichment by ISBN/EAN | Enrichment drops out, capture still works |
-| OIDC provider | outbound | OpenID Connect (Authorization Code + PKCE) | Optional federation | Local account login remains possible |
-| SMTP | outbound | SMTP over TLS | Invitations, reminders, security notifications | Queued with retry; invitations stay valid |
-| S3/MinIO | outbound | S3 API | Alternative media storage | As Nextcloud |
+| Nextcloud / S3 | outbound **via `plugin-blobstore-*`** | WebDAV resp. S3 over HTTPS, app password held by the plugin | Media storage | Uploads are queued; reads come from the local cache |
+| Metadata sources | outbound **via resolver plugins** | HTTPS | Enrichment by ISBN/EAN | Enrichment drops out, capture still works |
+| OIDC provider | outbound **via `plugin-oidc`** | OpenID Connect (Authorization Code + PKCE) | Optional federation | Local account login remains possible |
+| SMTP | outbound **via `plugin-smtp`** | SMTP over TLS | Invitations, reminders, security notifications | Queued with retry; invitations stay valid. Without the plugin there is no mail at all — a reduced but valid deployment, stated in the UI ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) |
+| Webhook receivers | outbound **via `plugin-webhook`** | HTTPS to a tenant-supplied URL | Integration with foreign systems | Retried, then dead-lettered; the delivery log shows it |
+| Push services | outbound **via `plugin-webpush` / `-fcm` / `-apns`** | HTTPS | Notifications to devices | Everything keeps working without push ([ADR-0023](../adr/0023-push-notifications.md)) |
 
 ## 2.6 Threat environment (short form)
 

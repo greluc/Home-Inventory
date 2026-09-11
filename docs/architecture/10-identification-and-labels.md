@@ -8,7 +8,7 @@ chapter.
 | Identifier | Example | Issued by | Used for | Visible |
 |---|---|---|---|---|
 | **UUID** | `0199d3a4-7c31-7a5e-9f21-0242ac120002` | Client or server (UUIDv7) | Primary key, API, sync, durable identity | in the API |
-| **Public code** | `7Q2-M4X-9KD` | `identification`, on demand | What is printed on the label and gets scanned | on the label and in the UI |
+| **Public code** | `7Q2M-4X9K-D2F` | `identification`, on demand | What is printed on the label and gets scanned | on the label and in the UI |
 | **Foreign code** | ISBN `9783836287456`, EAN `4006381333931` | Manufacturer/publisher | Already present on the object, the basis for enrichment | as printed |
 
 ### Why the public code is not the UUID
@@ -16,32 +16,52 @@ chapter.
 It would be simpler to print the UUID onto the label. Four reasons argue against
 it, and they weigh more:
 
-1. **Length.** 36 characters produce a QR code of version 3–4. A 9-character code
-   fits into version 1–2 and stays sharply readable on a 25 × 10 mm label — and
-   that is what matters in practice.
+1. **Length.** 36 characters produce a QR code of version 3–4. An 11-character
+   code stays far smaller and sharply readable on a 25 × 10 mm label — and that is
+   what matters in practice.
 2. **Human readability.** A label must still be useful when the scan fails. You
-   can read and type `7Q2-M4X-9KD`; you cannot do that with a UUID.
+   can read and type `7Q2M-4X9K-D2F`; you cannot do that with a UUID.
 3. **Decoupling.** A label can be reassigned (the item is disposed of, the label
    stays on the container). The code is tied to a **binding**, not to the
    identity. The binding history is preserved.
-4. **Information leakage.** UUIDv7 contains a timestamp. On a label that every
-   visitor can see and scan, that is needlessly given away.
+> **A fourth reason was withdrawn on 2026-09-11** (open point **O12**). It read:
+> *"Information leakage — UUIDv7 contains a timestamp; on a label every visitor
+> can scan, that is needlessly given away."* It could not stand, because
+> [10.2](#102-what-the-qr-code-contains) prints the UUID on the same label in the
+> fragment. Not sending it to the *server* is not the same as not printing it:
+> whoever photographs a label has the UUID, timestamp included.
+>
+> **The fragment stays and the reason goes.** Offline resolution is the stronger
+> claim: it works from *any* label, including one whose binding the device has
+> never synchronised — a device seeded for one location that walks into another,
+> or a label printed after the last sync. Resolving by the code alone would work
+> only where the device already holds the binding, which is the case where it
+> least needs help.
+>
+> **What is accepted with it, stated plainly:** the creation timestamp of an item
+> is readable by anyone who photographs its label. For a household inventory that
+> is a low-value disclosure, and it is bounded — the UUID discloses *when the
+> record was made*, nothing about the object, the tenant or its value. It is
+> recorded as an accepted risk in [12 §12.3](12-security.md) rather than left
+> unsaid. Reasons 1–3 carry the decision on their own.
 
 ### Structure of the public code
 
 ```
-7Q2-M4X-9KD
-└──┬──┘ └┬┘
-   │     └── 2 payload characters + 1 check character
-   └──────── 6 payload characters
+7Q2M-4X9K-D2F
+└─┬┘ └─┬┘ └┬┘
+  │    │   └── 2 payload characters + 1 check symbol
+  │    └────── 4 payload characters
+  └─────────── 4 payload characters
 ```
 
 | Property | Value |
 |---|---|
 | Alphabet | **Crockford Base32** — `0123456789ABCDEFGHJKMNPQRSTVWXYZ`. Without `I`, `L`, `O`, `U`: no confusing `0`/`O` or `1`/`I`/`l`, and no accidental profanity |
-| Length | 8 payload characters = 40 bits ≈ 1.1 · 10¹² possibilities, plus 1 check character |
+| Length | **10 payload characters = 50 bits** ≈ 1.13 · 10¹⁵ possibilities, plus 1 check symbol ([ADR-0030](../adr/0030-public-code-format.md)) |
 | Generation | Cryptographically random, **not** sequential — otherwise other people's codes would be guessable |
-| Check character | Crockford modulo-37 checksum — catches typos and single-character transpositions |
+| Check symbol | **Damm algorithm** over the same 32 symbols. Catches every single-character error and every adjacent transposition — the same guarantee as Crockford's modulo-37, but the symbol stays inside the payload alphabet. Crockford's version draws its check symbol from 37 values, five of which (`*`, `~`, `$`, `=`, `U`) are outside it: awkward in a URL, in input normalisation and in QR alphanumeric encoding, and `U` is excluded from the payload on purpose |
+| Collision handling | On a unique violation a new code is drawn. At 10⁶ issued codes the chance of that happening at all is ≈ 0.044 %; the redraw rate is a metric, not an assumption. At the previous 40 bits it would have been ≈ 36 % |
 | Uniqueness | Global, not per tenant (`UNIQUE(code)`). Otherwise a scan could not be resolved unambiguously. The code reveals **nothing** about the tenant. |
 | Input tolerance | Hyphens, case and the confusable characters are normalised on input (`o`→`0`, `l`/`i`→`1`) |
 | Pre-issuing | Codes can be generated and printed **in advance**, before the item exists. A sheet of unassigned labels is bound on first scan — the fastest capture path there is. |
@@ -49,19 +69,19 @@ it, and they weigh more:
 ## 10.2 What the QR code contains
 
 ```
-https://inv.example.org/c/7Q2M4X9KD#i=0199d3a4-7c31-7a5e-9f21-0242ac120002
-└──────────────┬───────────────────┘└──────────────┬─────────────────────┘
-      resolved by the server            fragment — never reaches the server
+https://inv.example.org/c/7Q2M4X9KD2F#i=0199d3a4-7c31-7a5e-9f21-0242ac120002
+└───────────────┬────────────────────┘└──────────────┬─────────────────────┘
+       resolved by the server             fragment — never reaches the server
 ```
 
 | Part | Purpose |
 |---|---|
 | URL form | Any camera app leads to the target. A bare numeric code would not — and that is exactly where many inventory systems fail in practice. |
 | `/c/<code>` | Resolution by the server, with login and permission check (see [08 §8.6](08-api-contract.md)) |
-| `#i=<uuid>` | **Offline resolution.** Browsers do not send the fragment to the server; the installed PWA and the apps read it locally and find the item without a network. No additional information leakage. |
+| `#i=<uuid>` | **Offline resolution from any label**, including one whose code→item binding the device has never synchronised. Browsers do not send the fragment to the server. It **is** printed on the label, and the accepted disclosure that follows is stated in [10.1](#why-the-public-code-is-not-the-uuid) and in [12 §12.3](12-security.md) — the earlier claim of "no additional information leakage" was wrong and is withdrawn. Lowercase hex also forces the QR into byte mode, so the symbol is one or two versions larger than the code alone would need |
 | Base URL | **Configurable at deployment time** (`HOMEINV_PUBLIC_BASE_URL`). It is printed on every label — changing it later invalidates them. How that is safeguarded is in 10.2.1. |
 
-Optionally without a URL (`homeinv:7Q2M4X9KD`) for operators who want nothing
+Optionally without a URL (`homeinv:7Q2M4X9KD2F`) for operators who want nothing
 resolvable on their labels — then only a scan from our own app works. The choice
 is a tenant setting.
 

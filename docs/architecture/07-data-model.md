@@ -5,12 +5,30 @@
 1. **PostgreSQL 18 is the single source of truth.** Every other store is derived
    and rebuildable.
 2. **Every domain table carries `tenant_id`** and is subject to row-level
-   security. There is no exception for "but this table is global".
+   security. There is no exception for "but this table is global" — but there are
+   four tables that are **not domain tables**, and pretending otherwise would
+   force either a fake `tenant_id` or a silently weakened check. They are listed
+   exhaustively here, and the RLS check reads this list rather than treating them
+   as violations:
+
+   | Table | Why it is instance-wide | What protects it instead |
+   |---|---|---|
+   | `identification.public_code` | The printed code must resolve **before** any tenant is known, and `UNIQUE(code)` is global so a scan is unambiguous ([ADR-0030](../adr/0030-public-code-format.md)). A per-tenant code space would make resolution impossible | The code reveals nothing about the tenant. Resolution goes through one `SECURITY DEFINER` function that returns a binding only after the caller's permission is checked — it is on the documented list of `REQ-SEC-008` |
+   | `identification.code_binding` | Follows `public_code` for the same reason | Carries `tenant_id` and is RLS-protected on read; only the resolver function crosses it |
+   | `identification.label_base_url_usage` | Records which base URLs this **instance** has ever printed. It is deployment history, not tenant data ([10 §10.2.1](10-identification-and-labels.md)) | Readable by the operator only; contains no tenant reference at all |
+   | `audit.chain_anchor` | The anchor spans all tenants by design — that is the property it provides ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)) | Contains hashes only, never content. Readable by the operator; a tenant verifies its own chain against its own entries |
+
+   **The list is closed.** A new instance-wide table needs an entry here and a
+   sentence saying what protects it instead — which is deliberately more friction
+   than adding `tenant_id`.
 3. **Primary keys are UUIDv7** (`uuidv7()`, built into PostgreSQL 18). They are
    time-ordered — unlike UUIDv4, therefore index-friendly — and can be generated
    by the client while offline ([ADR-0016](../adr/0016-identifiers.md)).
 4. **Every domain table carries `version bigint`** for optimistic locking, plus
-   `created_at`/`updated_at`/`created_by`/`updated_by`.
+   `created_at`/`updated_at`/`created_by`/`updated_by`. The DDL in this chapter
+   spells them out rather than eliding them for brevity — the first draft did
+   elide them, and four of the five sample tables then disagreed with this rule.
+   A migration check enforces it, so the samples and the rule cannot drift again.
 5. **No deletion without a tombstone.** A domain delete sets `deleted_at`; final
    removal is a separate, logged operation that leaves a tombstone for
    reconciliation.
@@ -65,28 +83,38 @@ CREATE TABLE catalog.item_type (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
     tenant_id       uuid NOT NULL REFERENCES tenancy.tenant(id),
     key             text NOT NULL,                    -- 'book', 'power-tool'
-    parent_id       uuid REFERENCES catalog.item_type(id),
+    parent_id       uuid,
     kind            text NOT NULL CHECK (kind IN ('PHYSICAL','DIGITAL')),
     icon            text,
     archived_at     timestamptz,
     created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    created_by      uuid, updated_by uuid,
     version         bigint NOT NULL DEFAULT 1,
-    UNIQUE (tenant_id, key)
+    UNIQUE (tenant_id, key),
+    UNIQUE (tenant_id, id),                           -- the target of composite FKs, see 7.5
+    FOREIGN KEY (tenant_id, parent_id) REFERENCES catalog.item_type (tenant_id, id)
 );
 
 CREATE TABLE catalog.item_type_version (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
-    item_type_id    uuid NOT NULL REFERENCES catalog.item_type(id) ON DELETE CASCADE,
+    item_type_id    uuid NOT NULL,
     tenant_id       uuid NOT NULL,
     version_number  int  NOT NULL,
     json_schema     jsonb NOT NULL,       -- generated, never hand-written
     published_at    timestamptz,
-    UNIQUE (item_type_id, version_number)
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    created_by      uuid,
+    version         bigint NOT NULL DEFAULT 1,
+    UNIQUE (item_type_id, version_number),
+    UNIQUE (tenant_id, id),
+    FOREIGN KEY (tenant_id, item_type_id)
+        REFERENCES catalog.item_type (tenant_id, id) ON DELETE CASCADE
 );
 
 CREATE TABLE catalog.field_definition (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
-    item_type_version_id uuid NOT NULL REFERENCES catalog.item_type_version(id) ON DELETE CASCADE,
+    item_type_version_id uuid NOT NULL,
     tenant_id           uuid NOT NULL,
     key                 text NOT NULL,                -- 'isbn', 'purchasePrice'
     data_type           text NOT NULL,                -- see the type list in 04
@@ -101,7 +129,13 @@ CREATE TABLE catalog.field_definition (
     facetable           boolean NOT NULL DEFAULT false,
     sensitive           boolean NOT NULL DEFAULT false,   -- encrypted + permission-gated
     deprecated_at       timestamptz,
-    UNIQUE (item_type_version_id, key)
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          uuid, updated_by uuid,
+    version             bigint NOT NULL DEFAULT 1,
+    UNIQUE (item_type_version_id, key),
+    FOREIGN KEY (tenant_id, item_type_version_id)
+        REFERENCES catalog.item_type_version (tenant_id, id) ON DELETE CASCADE
 );
 ```
 
@@ -111,23 +145,36 @@ CREATE TABLE catalog.field_definition (
 CREATE TABLE inventory.item (
     id                  uuid PRIMARY KEY,                -- from the client (UUIDv7)
     tenant_id           uuid NOT NULL,
-    item_type_version_id uuid NOT NULL REFERENCES catalog.item_type_version(id),
+    item_type_version_id uuid NOT NULL,
     name                text NOT NULL,
     description         text,
     kind                text NOT NULL CHECK (kind IN ('PHYSICAL','DIGITAL')),
-    location_id         uuid REFERENCES locations.location(id),
+    location_id         uuid,
     quantity            numeric(19,4) NOT NULL DEFAULT 1 CHECK (quantity >= 0),
     quantity_unit       text,
     lifecycle_state     text NOT NULL DEFAULT 'ACTIVE',
     attributes          jsonb NOT NULL DEFAULT '{}'::jsonb,
-    search_vector       tsvector,                        -- fallback search
+    search_vector       tsvector                         -- fallback search; GENERATED,
+                        GENERATED ALWAYS AS (                -- so it cannot drift from
+                            to_tsvector('simple',            -- the row it describes
+                                coalesce(name,'') || ' ' || coalesce(description,''))
+                        ) STORED,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     created_by          uuid, updated_by uuid,
     deleted_at          timestamptz,
     version             bigint NOT NULL DEFAULT 1,
     CONSTRAINT physical_needs_location
-        CHECK (kind <> 'PHYSICAL' OR location_id IS NOT NULL OR deleted_at IS NOT NULL)
+        CHECK (kind <> 'PHYSICAL' OR location_id IS NOT NULL OR deleted_at IS NOT NULL),
+    UNIQUE (tenant_id, id),                          -- the target of composite FKs, see 7.5
+    -- Composite, so a reference cannot cross a tenant boundary even though
+    -- foreign key checks bypass RLS — see 7.5.
+    CONSTRAINT item_location_same_tenant
+        FOREIGN KEY (tenant_id, location_id)
+        REFERENCES locations.location (tenant_id, id),
+    CONSTRAINT item_type_version_same_tenant
+        FOREIGN KEY (tenant_id, item_type_version_id)
+        REFERENCES catalog.item_type_version (tenant_id, id)
 );
 
 CREATE INDEX item_attributes_gin ON inventory.item
@@ -142,7 +189,7 @@ CREATE INDEX item_search_fts ON inventory.item USING gin (search_vector);
 ```sql
 CREATE TABLE inventory.item_attr_index (
     tenant_id   uuid    NOT NULL,
-    item_id     uuid    NOT NULL REFERENCES inventory.item(id) ON DELETE CASCADE,
+    item_id     uuid    NOT NULL,
     field_key   text    NOT NULL,
     num_value   numeric(38,10),
     text_value  text,
@@ -150,7 +197,9 @@ CREATE TABLE inventory.item_attr_index (
     bool_value  boolean,
     ref_value   uuid,
     unit_value  text,          -- ISO 4217 code for `money`, unit symbol for `quantity`
-    PRIMARY KEY (item_id, field_key)
+    PRIMARY KEY (item_id, field_key),
+    FOREIGN KEY (tenant_id, item_id)
+        REFERENCES inventory.item (tenant_id, id) ON DELETE CASCADE
 );
 
 CREATE INDEX iai_num  ON inventory.item_attr_index (tenant_id, field_key, num_value)
@@ -231,17 +280,25 @@ Validation happens in **three** places, deliberately redundant:
 CREATE TABLE locations.location (
     id              uuid PRIMARY KEY,
     tenant_id       uuid NOT NULL,
-    category_id     uuid NOT NULL REFERENCES catalog.location_category(id),
-    parent_id       uuid REFERENCES locations.location(id),
+    category_id     uuid NOT NULL,
+    parent_id       uuid,
     name            text NOT NULL,
     path            ltree NOT NULL,      -- materialised path
     depth           int   NOT NULL,
     is_mobile       boolean NOT NULL DEFAULT false,
     attributes      jsonb NOT NULL DEFAULT '{}'::jsonb,
     sealed_at       timestamptz,          -- moving box closed
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    created_by      uuid, updated_by uuid,
     deleted_at      timestamptz,
     version         bigint NOT NULL DEFAULT 1,
-    CONSTRAINT depth_limit CHECK (depth <= 12)
+    CONSTRAINT depth_limit CHECK (depth <= 12),
+    UNIQUE (tenant_id, id),               -- the target of composite FKs, see 7.5
+    FOREIGN KEY (tenant_id, category_id)
+        REFERENCES catalog.location_category (tenant_id, id),
+    FOREIGN KEY (tenant_id, parent_id)
+        REFERENCES locations.location (tenant_id, id)
 );
 
 CREATE INDEX location_path_gist ON locations.location USING gist (path);
@@ -284,13 +341,55 @@ CREATE POLICY tenant_isolation ON inventory.item
 | Cross-tenant administration | An explicit, logged `SECURITY DEFINER` function with its own permission check — never `BYPASSRLS` |
 | Proof | A test procedure creates two tenants, sets the context wrongly or not at all, and verifies for **every** table that nothing leaks. A new table without RLS fails the test. |
 
+### The gap RLS does not close: foreign keys
+
+PostgreSQL documents it plainly: *referential integrity checks, such as unique or
+primary key constraints and foreign key references, always bypass row security.*
+The referential triggers run outside the policy, and no `FORCE` changes that.
+
+That matters here, because the tables in [7.3](#73-the-attribute-model-variant-d)
+reference across schemas — `inventory.item.location_id` into
+`locations.location`, `item_type_version_id` into `catalog.item_type_version`,
+`locations.location.category_id` into `catalog.location_category`. Written
+naively, an `INSERT` carrying a **foreign tenant's** `location_id` passes the
+`WITH CHECK` policy on `item` (its own `tenant_id` is correct) and passes the
+foreign key check (which ignores RLS). The row comes into existence, pointing
+across a tenant boundary. The application layer catches it
+([05 §5.1](05-runtime-view.md): foreign location → `404`) — but the whole purpose
+of RLS here is to hold **when the application layer is wrong**.
+
+**Therefore every cross-aggregate reference carries the tenant in the key:**
+
+```sql
+-- Referenced side: the tenant-qualified key the reference points at.
+ALTER TABLE locations.location
+    ADD CONSTRAINT location_tenant_key UNIQUE (tenant_id, id);
+
+-- Referencing side: the tenant travels with the reference.
+ALTER TABLE inventory.item
+    ADD CONSTRAINT item_location_same_tenant
+    FOREIGN KEY (tenant_id, location_id)
+    REFERENCES locations.location (tenant_id, id);
+```
+
+The check still bypasses RLS — it now simply cannot succeed across a tenant
+boundary, because `tenant_id` is part of what is matched. The same pattern
+applies to `item_type_version_id`, `category_id`, `media_object`, `code_binding`
+and every other reference between aggregates.
+
+| Point | Rule |
+|---|---|
+| Every referenced table | carries `UNIQUE (tenant_id, id)` in addition to its primary key |
+| Every foreign key between aggregates | is composite: `(tenant_id, <ref>_id)`, never `<ref>_id` alone |
+| Proof | The isolation test is extended: it is not enough that tenant A cannot **read** tenant B's rows — tenant A must also be unable to **create a reference** to one. A single-column foreign key between two tenant-scoped tables fails the build, checked over the migration files. |
+
 ## 7.6 The change log for reconciliation
 
 ```sql
 CREATE TABLE sync.change_log (
     tenant_id     uuid    NOT NULL,
     seq           bigint  NOT NULL,      -- strictly monotonic per tenant
-    entity_type   text    NOT NULL,      -- 'item', 'location', 'tag', 'item_type'
+    entity_type   text    NOT NULL,      -- see the entity type list below
     entity_id     uuid    NOT NULL,
     operation     text    NOT NULL,      -- 'UPSERT' | 'DELETE'
     entity_version bigint NOT NULL,
@@ -298,13 +397,32 @@ CREATE TABLE sync.change_log (
     actor_id      uuid,
     device_id     uuid,                  -- originating device, for echo suppression
     occurred_at   timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (tenant_id, seq)
+    PRIMARY KEY (tenant_id, seq, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
+
+-- The cursor lookup path. Not UNIQUE: uniqueness of (tenant_id, seq) is
+-- guaranteed by the per-tenant sequence, not by an index — see the note below.
+CREATE INDEX change_log_cursor ON sync.change_log (tenant_id, seq);
 ```
+
+> **Why `occurred_at` sits in the primary key — and why leaving it out was a
+> defect.** PostgreSQL requires every unique constraint on a partitioned table to
+> contain **all** partition key columns. `PRIMARY KEY (tenant_id, seq)` with
+> `PARTITION BY RANGE (occurred_at)` does not satisfy that, and the
+> `CREATE TABLE` fails outright. Adding `occurred_at` makes the DDL valid but
+> moves the guarantee: the database no longer enforces that `seq` is unique
+> within a tenant. That enforcement therefore rests entirely on the per-tenant
+> sequence, allocated in the same transaction as the change — which is where the
+> monotonicity comes from in any case. A nightly check verifies the invariant
+> (no duplicate `(tenant_id, seq)`, no gap that is not explained by a rolled-back
+> transaction) and reports deviations as a metric, the same way
+> `item_attr_index` is reconciled.
 
 | Aspect | Decision |
 |---|---|
-| Monotonic sequence | One sequence per tenant. The entry is created in the same transaction as the change. |
+| Monotonic sequence | One sequence per tenant. The entry is created in the same transaction as the change. Uniqueness of `(tenant_id, seq)` is a property of the sequence, not of a constraint — see the note above. |
+| Entity types, reconciled **both ways** | `item`, `location`, `tag`, `tag_assignment`, `item_relation`, `attachment`, `maintenance_entry`, `loan`, `stocktake`, `code_binding` |
+| Entity types, **download only** | `item_type`, `item_type_version`, `field_definition`, `location_category`, `value_list`, `label_template` — configuration is never edited offline ([11 §11.2](11-offline-synchronization.md)) |
 | Partitioning | Monthly. Old partitions are detached after the retention period. |
 | Retention | **Configurable per tenant** within fixed bounds: at least 30, at most 365 days, default 90. A device whose cursor is older is asked to perform a **full sync** — which is why tombstones must live at least as long. The UI states explicitly how long a device may stay offline at the chosen setting. |
 | Echo suppression | `device_id` prevents a device from receiving its own changes back. |
@@ -341,14 +459,16 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | `identification.public_code` | The printed short code | `UNIQUE(code)` **globally**, not per tenant — otherwise a scan could not be resolved unambiguously. The code reveals nothing about the tenant. |
 | `identification.code_binding` | Code → entity | Historising: a label can be reassigned, the history stays |
 | `identification.label_base_url_usage` | Which base URLs have ever been printed onto labels | The source for the "labels with the old base" report ([10 §10.2.1](10-identification-and-labels.md)) |
-| `media.media_object` | Blob metadata | `sha256` with `UNIQUE(tenant_id, sha256)`, `ref_count` for reference counting |
-| `audit.audit_entry` | Append-only log | Partitioned monthly; `prev_hash`/`entry_hash` form a chain; the application role has only `INSERT` and `SELECT` |
+| `media.media_object` | Blob metadata | `sha256` with `UNIQUE(tenant_id, sha256)`, `ref_count` per tenant. The blob path carries the tenant (`sha256/<tenantId>/<hash>`), so metadata and storage are scoped the same way — they were not before, and the mismatch is what made the dedup short cut leak ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)) |
+| `audit.audit_entry` | Append-only log | Partitioned monthly; `prev_hash`/`entry_hash` form a chain **per tenant**, so a write locks only against that tenant's other writes and a tenant can verify its own chain under its own RLS context ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)). The application role has only `INSERT` and `SELECT` |
+| `audit.chain_anchor` | Hourly Merkle root over all tenants | Instance-wide, no `tenant_id` — see the exception list in [7.1](#71-ground-rules). The per-tenant chains prove internal consistency; the anchor is what a rewrite cannot reproduce, because it spans every tenant and chains to its own predecessor. Never pruned: ~9 000 rows a year, and pruning would discard exactly the evidence |
 | `audit.revision_record` | Domain history | JSONB snapshot per version, restore possible |
 | `inventory.item_relation` | Relations | `relation_type` (`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR`, `RELATED`), directed, `CHECK` against self-reference |
 | `inventory.loan` | Lending | Borrower (internal or free text), handed out, due back, returned |
 | `plugins.plugin_registration` | Plugin registry | Manifest, contract version, certificate fingerprint |
 | `plugins.granted_capability` | Granted capabilities | Per tenant, with timestamp, granting person and revocation |
 | `tenancy.quota_usage` | Usage counters | Carried forward, not counted on every query |
+| `platform.idempotency_record` | `Idempotency-Key` → the first response | `PRIMARY KEY (tenant_id, key)`, plus the payload hash and the serialised response. Written **in the same transaction** as the record it protects ([ADR-0009](../adr/0009-messaging-and-events.md)); a daily run removes entries older than 24 h |
 
 ## 7.9 Migrations
 
@@ -357,7 +477,7 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | Tool | Flyway, numbered SQL scripts, one script per change |
 | Executing role | `homeinv_migrator` — the application role **never** has DDL rights |
 | Location | `src/main/resources/db/migration/<schema>/V<n>__<description>.sql` — one directory per building block |
-| CI checks | Migration against a copy of a realistic data set · no lock held longer than 5 s · backward compatibility with the previous code version · every new table has RLS and `tenant_id` (checked automatically) |
+| CI checks | Migration against a copy of a realistic data set · no lock held longer than 5 s · backward compatibility with the previous code version · every new table has RLS and `tenant_id` (checked automatically) · every new domain table has `version` and the four audit columns ([7.1](#71-ground-rules), rule 4) · **no single-column foreign key between two tenant-scoped tables** — references are composite on `(tenant_id, id)` ([7.5](#75-tenant-isolation-row-level-security)) · no statement in one block's migration names another block's schema ([04 §4.5](04-building-blocks.md)) |
 | Forbidden | Destructive changes in the same release as the corresponding code change (the three-step from [06 §6.12](06-deployment-view.md)) |
 | Test data | Separate from migrations, never inside `V*` scripts |
 

@@ -12,7 +12,8 @@ graph TB
         WEB["<b>web</b><br/>React PWA<br/><i>static assets</i>"]
         API["<b>app</b> (role: api)<br/>Spring Boot 4<br/><i>stateless, scalable</i>"]
         WRK["<b>app</b> (role: worker)<br/>same artifact<br/><i>event processing</i>"]
-        PLG["<b>plugin-host</b><br/>0..n own containers<br/><i>foreign code</i>"]
+        PLG["<b>plugin-host</b><br/>0..n own containers<br/><i>foreign and outbound code</i>"]
+        EGP["<b>egress-proxy</b><br/><i>the only way out</i>"]
     end
 
     subgraph State["Stateful"]
@@ -20,8 +21,10 @@ graph TB
         OS[("OpenSearch<br/>derived")]
         MQ[["RabbitMQ"]]
         KV[("Valkey<br/>cache, sessions, limits")]
-        BLOB[("BlobStore<br/>FS / S3 / Nextcloud")]
+        BLOB[("BlobStore<br/><i>filesystem, in-core</i>")]
     end
+
+    EXT{{"Anything outside<br/>the deployment"}}
 
     RP --> WEB
     RP --> API
@@ -37,7 +40,17 @@ graph TB
     WRK --> BLOB
     API <-->|"gRPC over mTLS"| PLG
     WRK <-->|"gRPC over mTLS"| PLG
+    PLG --> EGP
+    EGP -->|"allowlist per plugin"| EXT
 ```
+
+**Read the diagram for what is missing.** Neither `api` nor `worker` has an arrow
+to anything outside the deployment. Remote object storage, mail, federated login,
+webhooks and push are not absent — they are reached through `plugin-host`, and
+only ever through `egress-proxy`
+([ADR-0026](../adr/0026-core-outbound-via-plugins.md),
+[ADR-0027](../adr/0027-egress-enforcement.md)). The in-core `BlobStore` is the
+filesystem adapter, which opens no socket.
 
 **Important:** `api` and `worker` are the **same container image** with a
 different Spring profile. That keeps the version matrix at one and prevents
@@ -48,7 +61,8 @@ worker and API from drifting apart.
 | `web` | none | arbitrary (static) | Can also be served directly by the reverse proxy |
 | `app` (api) | none | horizontal | Sessions in Valkey, no local files |
 | `app` (worker) | none | horizontal | Consumes RabbitMQ, competing consumers |
-| `plugin-host` | plugin's own | per plugin | Own service account, own network policy |
+| `plugin-host` | plugin's own | per plugin | Own service account, own UID range, no route out except through the proxy |
+| `egress-proxy` | none | one per deployment | The single chokepoint for every outbound connection. Holds no credentials and terminates no TLS — it sees host and port, never content |
 
 ## 4.2 Level 2 — Building blocks inside `app`
 
@@ -149,7 +163,7 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 | Schema | `identity` |
 | Key notions | `User`, `Credential` (password/TOTP/passkey), `Session`, `RefreshToken`, `ServiceAccount`, `IdentityProvider` |
 | Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView` |
-| Outbound ports | `PasswordHasher` (Argon2id), `MailSender`, `OidcClient` |
+| Outbound ports | `PasswordHasher` (Argon2id, in-core) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
 | Events | `UserRegistered`, `UserDeactivated`, `CredentialChanged`, `SuspiciousLoginDetected` |
 | Notable | Knows **no** tenants and **no** permissions. Who someone is and what someone may do are separate questions. |
 
@@ -164,7 +178,7 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 | Schema | `tenancy` |
 | Key notions | `Tenant`, `Membership`, `Invitation`, `Quota`, `TenantSettings` |
 | Publishes | `TenantService`, `MembershipQuery`, `QuotaGuard` |
-| Outbound ports | `MailSender` |
+| Outbound ports | `MailSender` — served by `plugin-smtp` ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). Invitations therefore need that plugin installed; without it a tenant administrator can still add members, but no invitation mail goes out, and the UI says so |
 | Events | `TenantCreated`, `TenantSuspended`, `TenantDeletionRequested`, `MemberJoined`, `MemberLeft`, `QuotaExceeded` |
 | Notable | `QuotaGuard` is called **before** every creating operation (item count, bytes stored, plugin count, API calls). That way abuse limitation is not something to bolt on later. |
 
@@ -216,7 +230,7 @@ attributes, quantities, relations, lifecycle.
 | Schema | `inventory` |
 | Key notions | `Item` (aggregate root), `ItemAttributes` (JSONB), `ItemRelation`, `ItemLifecycle`, `MaintenanceEntry`, `Loan`, `Bundle`, `ConsumableStock`, `Valuation` (purchase price, current value, replacement value) |
 | Publishes | `ItemService`, `ItemQuery`, `ItemView`, `ItemRef` |
-| Outbound ports | `AttributeValidator` (catalog), `LocationLookup` (locations), `QuotaGuard` (tenancy), `AccessControl` (authorization), `CodeAssignment` (identification) |
+| Outbound ports | `AttributeValidator` (catalog), `LocationLookup` (locations), `QuotaGuard` (tenancy), `AccessControl` (authorization), `CodeAssignment` (identification), **`AuditService` (audit)** — [05 §5.1](05-runtime-view.md) writes an audit entry inside the item transaction, and without this port that write would be a block reaching into a foreign schema, which [4.5](#45-mapping-blocks-to-database-schemas) forbids |
 | Events | `ItemCreated`, `ItemUpdated`, `ItemMoved`, `ItemDeleted`, `ItemRestored`, `ItemLent`, `ItemReturned`, `ItemDisposed`, `QuantityChanged`, `StockBelowMinimum` |
 | Item kinds | `PHYSICAL` (has a location, can carry a code) and `DIGITAL` (no physical place, instead a carrier/account, licence key, expiry, seat count) |
 | States | `ACTIVE` → `LENT` → `ACTIVE` · `ACTIVE` → `ARCHIVED` · `ACTIVE` → `TRASHED` → `ACTIVE`/`PURGED` · `ACTIVE` → `SOLD`/`DISPOSED` |
@@ -260,9 +274,9 @@ attributes, quantities, relations, lifecycle.
 | Schema | `media` |
 | Key notions | `MediaObject`, `MediaVariant` (derivative), `Attachment` (link to item/location), `UploadSession` |
 | Publishes | `MediaService`, `AttachmentQuery`, `MediaView` (returns **only** signed, short-lived URLs) |
-| Outbound ports | `BlobStore` (adapters: filesystem, S3, Nextcloud/WebDAV), `ImageProcessor`, `VirusScanner` |
+| Outbound ports | `BlobStore` (`filesystem` in-core; S3 and Nextcloud/WebDAV as plugins), `ImageProcessor` (libvips, in-core), `VirusScanner` (ClamAV in the deployment) |
 | Events | `MediaUploaded`, `MediaVariantsReady`, `MediaDeleted`, `MediaScanFailed` |
-| Content addressing | Blobs are stored under `sha256/<hash>`. The same file is stored once; deletion removes the blob only when no link remains (reference counting). That makes offline upload idempotent. |
+| Content addressing | Blobs are stored under `sha256/<tenantId>/<hash>` — content-addressed **within a tenant**, never across ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)). The same file uploaded twice by the same tenant is stored once, which is the case that actually occurs and what makes offline catch-up idempotent. Two tenants holding the same bytes hold two objects: a global namespace would have been an existence oracle across the tenant boundary and would have let the second tenant inherit the first one's malware verdict. Deletion follows the tenant's own reference count. |
 | Derivatives | `thumb` 200 px, `preview` 1024 px, `full` (re-encoded, max 4096 px) — the original optionally retained. Generated asynchronously in the worker. |
 | Security | Server-side type detection (magic bytes, not the file extension) · re-encoding of all images (destroys embedded payloads) · **EXIF stripping including GPS** by default, retention only on an explicit setting · SVG rejected · served from a dedicated hostname with `Content-Disposition: attachment` and `Content-Security-Policy: sandbox` |
 
@@ -345,7 +359,7 @@ attributes, quantities, relations, lifecycle.
 | Schema | `notification` |
 | Key notions | `NotificationRule`, `Notification`, `DeliveryAttempt`, `Reminder`, `Subscription` |
 | Publishes | `NotificationService`, `ReminderService` |
-| Outbound ports | `NotificationChannel` (plugin: e-mail, webhook, web push, Firebase, APNs, ntfy, Matrix) |
+| Outbound ports | `NotificationChannel` — **every** implementation is a plugin, including e-mail and webhook, because every one of them leaves the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) |
 | Events | `NotificationRaised`, `NotificationDelivered`, `NotificationFailed` |
 | Triggers | Warranty expiry, maintenance interval, loan return date, minimum stock undercut, software licence expiry, stocktake discrepancy, security-relevant account events |
 | Notable | Reminder rules are data (level 1), not code: a condition as a saved search + a time offset + a channel. |
@@ -409,7 +423,7 @@ translates protocol into use-case call and back.
 |---|---|---|
 | `identity` | identity | Holds password hashes — separate backup strategy |
 | `tenancy` | tenancy | Source schema for `tenant_id` foreign keys |
-| `authz` | authorization | |
+| `authorization` | authorization | |
 | `catalog` | catalog | Type and field definitions, JSON Schema cache |
 | `inventory` | inventory | Holds `item`, `item_attr_index` |
 | `locations` | locations | Requires the `ltree` extension |
@@ -427,6 +441,22 @@ translates protocol into use-case call and back.
 | `outbox` | (cross-cutting) | Spring Modulith event publication registry |
 
 **Rule:** every block owns its schema. A block never reads or writes in another
-block's schema — not even reading, not even "just briefly". Enforced through
-separate PostgreSQL roles with a restricted `search_path` and through an ArchUnit
-rule over the migration files.
+block's schema — not even reading, not even "just briefly". Enforced through an
+ArchUnit rule over the repository classes **and** over the migration files: a
+statement in block A's migration that names schema B fails the build.
+
+> **Why this is *not* enforced through a PostgreSQL role per block.** That would
+> be the stronger mechanism, and it is incompatible with the rest of this design.
+> A role per block means a connection per block, and a connection per block means
+> a transaction per block — which destroys exactly the property the whole topology
+> rests on: *create item* touches six blocks and commits **once**
+> ([03 §3.6.2](03-solution-strategy.md)). Trading that for a check that ArchUnit
+> already performs statically would buy a distributed transaction and call it
+> modularity. Roles are therefore separated by **privilege**, not by block —
+> `homeinv_app`, `homeinv_migrator`, `homeinv_readonly` ([07 §7.5](07-data-model.md)).
+>
+> The cross-schema foreign keys in [07 §7.3](07-data-model.md) are the deliberate
+> exception to the rule above, and the only one: they are declared at migration
+> time by `homeinv_migrator`, not used at runtime by a block to read foreign data.
+> Their own hazard — foreign key checks bypass row-level security — is handled
+> separately in [07 §7.5](07-data-model.md).

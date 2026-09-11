@@ -18,22 +18,57 @@
 version: 1
 
 defaults:
-  # Applies to every service unless overridden. Every one of these is a
-  # requirement, not a preference — see REQ-SEC-085.
-  user: "10001:10001"
+  # Applies to every service unless overridden below. The security keys are
+  # requirements, not preferences (REQ-SEC-085) — but "non-root" means "not uid 0",
+  # NOT "uid 10001 everywhere". See the note on `user` below.
+  user: "10001:10001"           # first-party images only — third-party images override it
   readOnlyRootFilesystem: true
   noNewPrivileges: true
   dropCapabilities: [ALL]
-  restart: on-failure
+  restart: on-failure           # crash handling
+  startOnBoot: true             # → Quadlet: WantedBy=default.target
+                                # → Compose: restart: unless-stopped
+                                # The two runtimes express "come back after a reboot"
+                                # differently; the generator maps this key, and that is
+                                # exactly the kind of divergence this file exists to absorb.
   autoUpdate: disabled          # images are digest-pinned; updates are deliberate
 
+# WHY EVERY THIRD-PARTY SERVICE OVERRIDES `user` AND `tmpfs`
+#
+# REQ-SEC-085 requires a non-root user and a read-only root filesystem. It does
+# not require one specific uid, and applying 10001 to an upstream image breaks it:
+#
+#   postgres     runs as uid 70 (alpine). initdb refuses to start under a uid with
+#                no /etc/passwd entry, and the unix socket needs /var/run/postgresql.
+#   opensearch   runs as uid 1000 and writes to config/, logs/ and /tmp.
+#   rabbitmq     runs as uid 999 and writes to /etc/rabbitmq and /var/log/rabbitmq.
+#   valkey       runs as uid 999.
+#   clamav       runs as uid 100 and writes to /run/clamav and /tmp.
+#
+# 06 §6.5 already records that these images use different inside-UIDs — this file
+# has to say so too, or the generated units describe a stack that cannot start.
+# Each service therefore names its own uid and its own writable paths; the CI check
+# asserts "uid != 0 and readOnlyRootFilesystem: true", not a fixed number.
+
 networks:
+  # NO segment gives the core a route out of the deployment (ADR-0026). "edge"
+  # means "has published ports", not "can call out" — a published port is
+  # forwarded into the container namespace and needs no outward route.
+  # See A5 in ADR-0000: that this holds under rootless Podman/pasta and rootless
+  # Docker is a verification item, with a named fallback if it does not.
   edge:
-    internal: false             # the only segment the reverse proxy reaches
+    internal: true              # web + api listen here; they still cannot call out
   internal:
-    internal: true              # no route to the internet, at all
+    internal: true              # no route out of the deployment, at all
   plugins:
-    internal: false             # outbound only to each plugin's declared allowlist
+    internal: true              # plugin containers get NO gateway of their own
+    egressVia: egress-proxy     # the single exception, and it is a container,
+                                # not a route: plugins reach it by HTTPS_PROXY and
+                                # it applies the granting manifest's allowlist
+                                # (ADR-0027). A hostname rule is not expressible
+                                # in netavark, Compose or standard NetworkPolicy,
+                                # which is exactly why this is a proxy and not a
+                                # network flag.
 
 volumes:
   pgdata:   { service: postgres }
@@ -48,7 +83,11 @@ services:
     role: static
     image: { name: ghcr.io/greluc/home-inv-web, digest: "TODO" }
     networks: [edge]
-    ports: [{ container: 8081, host: 8081 }]
+    # nginx-unprivileged listens on 8080 inside; published on 8081 so it does not
+    # collide with api on the host. Both host ports must be opened to the reverse
+    # proxy in the host firewall — see 06 §6.3.
+    ports: [{ container: 8080, host: 8081 }]
+    tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
     resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
     health: { command: "/healthcheck", interval: 15s }
     profiles: [minimal, standard, ha]
@@ -57,10 +96,20 @@ services:
     role: api
     image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }
     networks: [edge, internal, plugins]
-    ports: [{ container: 8080, host: 8080 }]   # never below 1024 — rootless
+    ports:
+      - { container: 8080, host: 8080 }          # never below 1024 — rootless
+      - { container: 8090, host: null }          # management: /actuator, /livez, /readyz
+                                                 # NOT published — 13 §13.3 requires the
+                                                 # Prometheus endpoint to be unreachable
+                                                 # from outside; an unpublished port is the
+                                                 # only way to make that true rather than
+                                                 # a reverse-proxy rule someone forgets.
     env:
       SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
+      MANAGEMENT_SERVER_PORT: "8090"
+      HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
     secrets: [db-password, data-key, jwt-key]
+    tmpfs: ["/tmp"]
     dependsOn: [postgres, valkey]
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
@@ -72,16 +121,26 @@ services:
     networks: [internal, plugins]
     env:
       SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
+      MANAGEMENT_SERVER_PORT: "8090"
     secrets: [db-password, data-key]
-    dependsOn: [postgres, rabbitmq, clamav]
+    tmpfs: ["/tmp"]
+    # rabbitmq exists only in standard and ha (see its own `profiles`). A flat
+    # dependsOn would generate Requires=homeinv-rabbitmq.service into the minimal
+    # profile, where that unit does not exist — the stack would not start.
+    dependsOn: [postgres, clamav]
+    dependsOnByProfile:
+      standard: [rabbitmq]
+      ha:       [rabbitmq]
     resources: { memoryReservation: 512Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
 
   postgres:
     image: { name: docker.io/library/postgres, tag: "18-alpine", digest: "TODO" }
+    user: "70:70"                 # the image's own postgres user; 10001 breaks initdb
     networks: [internal]
     volumes: [{ name: pgdata, path: /var/lib/postgresql/data }]
+    tmpfs: ["/tmp", "/var/run/postgresql"]          # the unix socket lives here
     secrets: [db-password, db-migration-password]
     resources: { memoryReservation: 1Gi, memoryLimit: 2Gi }
     health: { command: "pg_isready", interval: 10s }
@@ -89,19 +148,31 @@ services:
     notes: >
       Requires the ltree extension. The application role has no DDL rights and no
       BYPASSRLS; migrations run under a separate role (REQ-SEC-002, REQ-SEC-003).
+      The two roles are created by an init script, not by the image — the image
+      only knows POSTGRES_PASSWORD_FILE for the superuser.
 
   valkey:
     image: { name: docker.io/valkey/valkey, tag: "8-alpine", digest: "TODO" }
+    user: "999:1000"              # the image's own valkey user
     networks: [internal]
     volumes: [{ name: kvdata, path: /data }]
+    tmpfs: ["/tmp"]
     resources: { memoryReservation: 128Mi, memoryLimit: 256Mi }
     health: { command: "valkey-cli ping", interval: 10s }
     profiles: [minimal, standard, ha]
+    notes: >
+      AOF persistence is on. Valkey holds sessions, rate-limit counters and the
+      short-lived OIDC state — all recoverable by re-login or by retrying the
+      login. Idempotency records deliberately do NOT live here: they are written to
+      PostgreSQL in the same transaction as the record they protect (ADR-0009), so
+      a Valkey outage cannot produce a duplicate.
 
   clamav:
     image: { name: docker.io/clamav/clamav, tag: "stable", digest: "TODO" }
+    user: "100:101"               # the image's own clamav user
     networks: [plugins]           # outbound: signature mirror only
     volumes: [{ name: cvddata, path: /var/lib/clamav }]
+    tmpfs: ["/tmp", "/run/clamav", "/var/log/clamav"]
     resources: { memoryReservation: 1Gi, memoryLimit: 1536Mi }
     health: { command: "clamdcheck.sh", interval: 60s, startPeriod: 300s }
     profiles: [minimal, standard, ha]
@@ -109,19 +180,64 @@ services:
       Mandatory in every profile — the malware scan cannot be deselected
       (ADR-0024). It is why the minimal profile needs about 3 GB rather than 1.5.
 
+  egress-proxy:
+    image: { name: ghcr.io/greluc/home-inv-egress-proxy, digest: "TODO" }
+    networks: [plugins]
+    tmpfs: ["/tmp", "/var/run"]
+    resources: { memoryReservation: 16Mi, memoryLimit: 32Mi }
+    health: { command: "/healthcheck", interval: 30s }
+    profiles: [standard, ha]      # `minimal` opens nothing outward and needs no proxy
+    notes: >
+      The single route out of the deployment (ADR-0027). Plugin containers get no
+      gateway of their own and reach it via HTTPS_PROXY. Its allowlist is generated
+      from the `capabilities[].hosts` entries of every GRANTED plugin manifest and
+      reloaded on a grant or revocation. It speaks HTTP and CONNECT only, and never
+      terminates TLS — it sees host and port, never content, so a compromise here
+      does not yield any plugin's credentials. It refuses private, link-local and
+      cloud-metadata ranges outright, resolves names itself rather than trusting
+      the caller, and re-checks on redirect. Every attempt is logged with plugin,
+      target and outcome; that log is the source for the per-resolver disclosure
+      REQ-ENR-009 requires.
+      It has two modes: HTTP/CONNECT for the usual targets, and plain TCP
+      forwarding to an exact host:port for non-HTTP ones — plugin-smtp being the
+      case that forced it (ADR-0027 §3). TCP mode forwards bytes only, so STARTTLS
+      and implicit TLS both pass through untouched, and both modes write the same
+      access log.
+
   opensearch:
     image: { name: docker.io/opensearchproject/opensearch, tag: "3", digest: "TODO" }
+    user: "1000:1000"             # the image's own opensearch user
     networks: [internal]
     volumes: [{ name: osdata, path: /usr/share/opensearch/data }]
+    tmpfs: ["/tmp", "/usr/share/opensearch/logs", "/usr/share/opensearch/config"]
+    secrets: [opensearch-admin-password]
+    env:
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/opensearch-admin-password
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      bootstrap.memory_lock: "false"     # mlock needs a capability we drop; heap is
+                                         # bounded by the memory limit instead
+    hostPrerequisites:
+      - key: vm.max_map_count
+        value: 262144
+        notes: >
+          A HOST sysctl. It cannot be set from inside a rootless container, and the
+          service user has no sudo — so it is a one-time root action at install time
+          (a drop-in under /etc/sysctl.d), not something the stack can arrange for
+          itself. The setup script checks it and aborts with a clear message; see
+          06 §6.3. This is the one place where "rootless all the way down" needs a
+          root action once, and saying so is better than letting the operator find
+          out from an OpenSearch stack trace.
     resources: { memoryReservation: 1536Mi, memoryLimit: 2Gi }
-    health: { command: "curl -fsS localhost:9200/_cluster/health", interval: 20s, startPeriod: 120s }
+    health: { command: "curl -fsS -k https://localhost:9200/_cluster/health", interval: 20s, startPeriod: 120s }
     profiles: [standard, ha]
     notes: "Not backed up — rebuildable from PostgreSQL (ADR-0008)."
 
   rabbitmq:
     image: { name: docker.io/library/rabbitmq, tag: "4-management-alpine", digest: "TODO" }
+    user: "999:999"               # the image's own rabbitmq user
     networks: [internal]
     volumes: [{ name: mqdata, path: /var/lib/rabbitmq }]
+    tmpfs: ["/tmp", "/var/log/rabbitmq", "/etc/rabbitmq"]
     resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
     health: { command: "rabbitmq-diagnostics -q ping", interval: 20s, startPeriod: 60s }
     profiles: [standard, ha]
@@ -129,10 +245,15 @@ services:
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
-  db-password:            { required: true }
-  db-migration-password:  { required: true }
-  data-key:               { required: true, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
-  jwt-key:                { required: true, notes: "Ed25519 pair; two active versions during rotation." }
+  db-password:               { required: true }
+  db-migration-password:     { required: true }
+  data-key:                  { required: true, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
+  jwt-key:                   { required: true, notes: "Ed25519 pair; two active versions during rotation." }
+  opensearch-admin-password: { required: true, profiles: [standard, ha], notes: "Required by OpenSearch since 2.12; no default exists." }
+  # Credentials for outbound targets (object storage, SMTP, OIDC) are deliberately
+  # absent here: those connections leave the core entirely — see ADR-0026. They
+  # belong to the plugin services that make them, and are added with those
+  # services in the same change.
 
 forbidden:
   # Checked in CI against every generated artifact and the Helm chart
@@ -141,8 +262,18 @@ forbidden:
   - cap_add
   - "pid: host"
   - "network_mode: host"
-  - "user: root"
+  - "user: root"                    # uid 0 in any form, not the literal string only
   - "SecurityLabelDisable=true"
   - container socket mounts
   - host ports below 1024
   - bind mounts into host directories
+
+required:
+  # The positive counterpart to `forbidden`, so the CI check reads both from one
+  # place (REQ-SEC-085). Stated as properties, not as values: a fixed uid would be
+  # wrong for every upstream image — see the note at the top of this file.
+  - every service runs as a non-root user (uid != 0)
+  - every service sets readOnlyRootFilesystem, and declares the paths it needs writable
+  - every service drops all capabilities and sets no-new-privileges
+  - every service declares a memory limit and a health check
+  - every image is referenced by digest

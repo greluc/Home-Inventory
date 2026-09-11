@@ -49,3 +49,17 @@ interests.
   goes stale until the broker returns.
 - Valkey stays responsible for cache, sessions and rate limiting, not for events
   — separate jobs, separate failure consequences.
+- **Nor for idempotency records** (*decided 2026-09-11, open point O13*). They were
+  filed under Valkey with a 24-hour TTL, while
+  [13 §13.6](../architecture/13-operations-and-observability.md) rated a Valkey
+  outage as harmless — "sessions invalid, re-login". Both could not be true: losing
+  the records means a retry after a network drop creates a duplicate, which is the
+  exact failure `REQ-API-005` exists to prevent, for the exact clients it was
+  written for.
+
+  The `Idempotency-Key` and its payload hash are therefore written to **PostgreSQL,
+  in the same transaction as the record they protect**. That is the same argument
+  the outbox rests on, applied to the same problem: two stores cannot be made
+  consistent by hoping, and here they need not be — the key and the entity share one
+  `COMMIT`, so there is no window in which one exists without the other. Valkey may
+  still cache the lookup; it is never the source.

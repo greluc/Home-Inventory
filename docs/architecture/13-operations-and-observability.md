@@ -26,10 +26,16 @@ time*.
 
 ## 13.3 Metrics
 
-Exposed as a Prometheus endpoint at `/actuator/prometheus` (**not** publicly
-reachable). Since no monitoring stack exists, an optional
-`compose.monitoring.yaml` with Prometheus, Grafana and ready-made dashboards
-ships with the product.
+Exposed as a Prometheus endpoint at `/actuator/prometheus` on a **separate
+management port (8090) that is not published to the host** — `management.server.port`
+in Spring Boot, `{ container: 8090, host: null }` in
+[`deploy/services.yaml`](../../deploy/services.yaml). "Not publicly reachable" is
+therefore a property of the topology, not a reverse-proxy rule an operator has to
+remember to write. Prometheus scrapes it from inside the `internal` network; the
+health endpoints of [13.5](#135-health-endpoints) live on the same port.
+
+Since no monitoring stack exists, an optional `compose.monitoring.yaml` with
+Prometheus, Grafana and ready-made dashboards ships with the product.
 
 | Group | Metrics |
 |---|---|
@@ -41,6 +47,7 @@ ships with the product.
 | **Search** | Index lag, query duration, fallback rate (share of searches served from PostgreSQL), document count |
 | **Sync** | Active devices, push size, conflicts per day, share of expired cursors (full seedings), `change_log` size |
 | **Plugins** | Calls, duration, error rate and circuit state **per plugin** |
+| **Egress** | Permitted and refused connections per plugin and target host — the source for the per-resolver disclosure `REQ-ENR-009` requires, which is evidence rather than a restatement of the manifest |
 | **Media** | Upload duration, derivative backlog, `BlobStore` errors, storage used |
 | **Security** | Failed logins, triggered rate limits, `403`/`404` on foreign objects, access to unknown codes, second-factor events |
 | **JVM** | Memory, collector pauses, threads, virtual threads, class loading |
@@ -83,8 +90,10 @@ cannot reconstruct without tracing.
 |---|---|---|
 | **OpenSearch** | Search falls back to PostgreSQL, facets restricted, the response carries `Warning: 199` | everything else |
 | **RabbitMQ** | The outbox backs up, derived data goes stale | **All** reads and writes — the user notices nothing beyond delayed thumbnails |
-| **Valkey** | Sessions invalid (re-login), rate limiting falls back to local counting | everything else |
-| **BlobStore / Nextcloud** | Uploads are queued, already loaded images come from the cache | everything else |
+| **Valkey** | Sessions invalid (re-login) · rate limiting falls back to per-instance counting, so with *n* instances the effective limit is *n* times the configured one · **in-flight OIDC logins fail** (state and PKCE verifier live here, [ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)) | everything else — **idempotency is unaffected**, because those records live in PostgreSQL, not here ([ADR-0009](../adr/0009-messaging-and-events.md)) |
+| **`plugin-blobstore-*` / Nextcloud** | Uploads are queued, already loaded images come from the cache | everything else |
+| **`plugin-smtp`** | No invitations, no password-reset mail, no security notifications. The administration UI states it rather than failing silently. A `minimal` installation runs without this plugin by design ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) | everything else |
+| **`egress-proxy`** | **Every** outbound call of every plugin stops at once — storage, mail, enrichment, webhooks, push. Reads and writes are unaffected; uploads queue as above. It is a deliberate chokepoint ([ADR-0027](../adr/0027-egress-enforcement.md)): one visible failure beats per-plugin enforcement that cannot be verified | everything that does not leave the deployment |
 | **ClamAV** | **Uploads are rejected** (`503`), already accepted blobs stay `PENDING_SCAN` and unretrievable; a background run catches the scan up. The only degradation level that blocks a user function entirely — deliberately, see [ADR-0024](../adr/0024-malware-scan.md) | everything except uploads |
 | **One plugin** | Only the function depending on it, visibly marked | everything else |
 | **PostgreSQL** | **Total outage.** The only component without a fallback — and the reason its backup is the only one that really counts | nothing |
@@ -105,6 +114,8 @@ cannot reconstruct without tracing.
 | Conspicuous failed logins | > 100/min overall or > 20 per account |
 | ClamAV unreachable (uploads blocked) | 5 min |
 | Malware found in an upload | immediately |
+| `egress-proxy` unreachable (every plugin's outbound calls stop) | 5 min |
+| A plugin attempts a host **not** in its manifest | immediately — it is either a misconfiguration or a plugin doing something it did not declare, and both are worth knowing at once |
 
 **Look at it next time:**
 

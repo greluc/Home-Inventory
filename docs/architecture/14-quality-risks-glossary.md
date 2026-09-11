@@ -18,6 +18,8 @@ like "nicely maintainable" deliberately do not appear.
 | S7 | A dependency receives a critical vulnerability | Reported within 24 h, the build blocked until it is fixed | CI, daily |
 | S8 | An attacker escapes from a plugin container | They are an unprivileged user without `sudo` on the host, with no access to other services | Rootless on both runtimes, CI check per REQ-SEC-083 ff. |
 | S9 | Someone adds a service with `privileged` or port 80 | **The build fails** | A CI check across Compose, Quadlet and Helm |
+| S10 | A core container attempts to reach any host outside the deployment | **The connection is refused** — there is no route and no configured target ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) | A CI network test against every core container. It is the test that would have caught the contradiction this scenario was written for: the rule was documented in five places while five shipped features broke it |
+| S11 | A plugin attempts a host its manifest does not declare | Refused by the egress proxy, logged with plugin and target, raised as an alert | A CI connectivity test ([ADR-0027](../adr/0027-egress-enforcement.md)) |
 
 ### Q2 Modularity · Q3 Extensibility · Q4 Maintainability
 
@@ -71,7 +73,7 @@ not a script on somebody's machine.
 
 | # | Risk | Impact | Likelihood | Countermeasure | Early warning sign |
 |---|---|---|---|---|---|
-| R1 | **Scope too large for one person.** Full offline sync, three API surfaces, OpenSearch, RabbitMQ, a plugin system and two apps add up to a multi-year project. | The project stalls unfinished | **high** | Four stages, each usable on its own. Stage 0 is deliberately small. After each stage the rest is re-assessed. | Stage 0 takes longer than planned |
+| R1 | **Scope too large for one person.** Full offline sync, three API surfaces, OpenSearch, RabbitMQ, a plugin system and two apps add up to a multi-year project. **[ADR-0028](../adr/0028-plugin-runtime-stage-1.md) made this worse**: the plugin runtime moved from stage 3 into stage 1, because after [ADR-0026](../adr/0026-core-outbound-via-plugins.md) mail and remote storage are plugins. Stage 1 is now the largest stage by a clear margin. | The project stalls unfinished | **high** | Stage 0 is still deliberately small and still carries no plugin runtime — it uses filesystem storage and has no mail. The re-assessment after each stage therefore still has a real decision point before the expensive part begins. **If stage 1 overruns, the fallback is to ship it in two halves** — the runtime plus `plugin-smtp` first, remote storage and OIDC after — rather than to weaken ADR-0026. | Stage 0 takes longer than planned; or stage 1's plugin runtime is not working end-to-end with `plugin-smtp` at the halfway point |
 | R2 | **Offline sync is underestimated.** The most expensive and most error-prone part. | Silent data loss — the worst failure this system can have | high | Property-based tests from the start; the conflict archive; stage 3, not earlier; falling back to "read cache + outbox" stays possible at any time | Test failures that cannot be reproduced |
 | R3 | **Module boundaries decay.** The shared kernel grows, `api` packages get bypassed. | Modularity only on paper | medium | Machine verification from day one; size monitoring of `platform`; the rule "three users, no decision" | `platform` grows between releases |
 | R4 | **In-process plugins become the norm.** More convenient, faster — and without a sandbox. | The first security hole in third-party code | medium | Off by default; no tenant path; a permanent notice in the UI; every example out-of-process | A first-party plugin "absolutely has to" be in-process |
@@ -115,6 +117,7 @@ worth revisiting:
 | **Cursor** | An opaque, signed pointer for pagination (API) resp. reconciliation position (sync) |
 | **Enrichment** | Supplementing metadata from external sources by code; produces **proposals**, not direct changes |
 | **Foreign code** | A code on the object that we did not issue (ISBN, EAN, GTIN) |
+| **Damm algorithm** | The check-symbol scheme used for the public code: detects every single-character error and every adjacent transposition, and unlike Crockford's modulo-37 keeps the symbol inside the 32-character alphabet |
 | **HLC** | Hybrid logical clock — orders events despite wrong device clocks |
 | **Item type** | A type defined at runtime with its own fields; versioned and inheritable |
 | **`item_attr_index`** | The derived side table holding the searchable attribute values; no runtime DDL |
@@ -122,7 +125,7 @@ worth revisiting:
 | **Modular monolith** | One deployment, many machine-verified module boundaries |
 | **Outbox** | The table events are written to in the same transaction as the data; a relay publishes them afterwards |
 | **Port** | A narrow interface behind which the replaceable parts live |
-| **Public code** | The printed short code (`7Q2-M4X-9KD`) — not the UUID |
+| **Public code** | The printed short code (`7Q2M-4X9K-D2F`) — 10 payload characters plus a Damm check symbol, not the UUID |
 | **Quadlet** | Describes containers as systemd units (`.container`, `.network`, `.volume`); systemd starts and supervises them directly, without a daemon |
 | **RLS** | Row-level security in PostgreSQL — the second line of defence, independent of the application |
 | **rootless** | Containers run inside a user namespace of an unprivileged host user; container `root` is nobody special on the host |

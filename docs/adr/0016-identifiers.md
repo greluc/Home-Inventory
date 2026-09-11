@@ -1,6 +1,12 @@
 # ADR-0016 — UUIDv7 internally, a separate public short code
 
-**Status:** Accepted · **Date:** 2026-09-11
+**Status:** Accepted, **partially superseded** · **Date:** 2026-09-11
+
+> **Part 2 superseded by [ADR-0030](0030-public-code-format.md)** — the printed code
+> is 10 payload characters with a **Damm** check symbol, not 8 with a Crockford
+> modulo-37 one. The reason it is not the UUID, and part 1 (UUIDv7 as the primary
+> key), stand unchanged. The entropy figures below are the superseded ones; the
+> current numbers are in ADR-0030.
 
 ## Context
 
@@ -29,7 +35,7 @@ globally unique, linked to an entity through a `CodeBinding` table.
 | **Print size** | 36 characters yield a QR code of version 3–4; 9 characters fit into version 1–2 and stay sharply readable on 25 × 10 mm |
 | **Readability** | A label must still be useful when the scan fails. You can type `7Q2-M4X-9KD`; you cannot type a UUID |
 | **Decoupling** | A label can be reassigned; the code hangs on a binding, not on the identity. The binding history remains |
-| **Information leakage** | UUIDv7 contains a timestamp. On a label that any visitor can scan, that is needlessly given away |
+| ~~Information leakage~~ | **Withdrawn 2026-09-11** (open point O12). The argument was self-defeating: the QR code prints the UUID in its fragment on the same label. The fragment is kept for offline resolution and the reason is dropped — see [10 §10.1](../architecture/10-identification-and-labels.md) and [ADR-0030](0030-public-code-format.md). The three reasons above carry the decision unchanged |
 
 The alphabet omits `I`, `L`, `O` and `U`: no confusing `0`/`O` or `1`/`I`, and no
 accidental profanity.

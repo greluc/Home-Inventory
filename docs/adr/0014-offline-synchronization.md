@@ -38,6 +38,40 @@ Where a data structure is conflict-free by nature (tags as a set, attachments,
 maintenance entries as an event list, relative quantity changes), CRDT-like rules
 are used **deliberately**. Just not everywhere.
 
+### The quantity rule needs intent, and the protocol now carries it
+
+*Decided 2026-09-11, resolving open point **O14**.*
+
+The resolution rule for consumables reads "add the deltas when both sides changed
+relatively". The **deltas** are derivable without any protocol support — the
+three-way compare already holds base, local and server, so `10 → 13` against
+`10 → 9` gives `10 + 3 − 1 = 12`. What is *not* derivable is the **intent**:
+"set it to 12" and "take two out" produce identical absolute values, and they
+deserve opposite merge behaviour. A stocktake correction must win outright; a
+withdrawal must accumulate.
+
+A change to a numeric field therefore carries `intent: SET | ADJUST`:
+
+| Intent | Meaning | Merge with a concurrent change |
+|---|---|---|
+| `ADJUST` | "I took two out" | Deltas are summed: `base + Δlocal + Δserver` |
+| `SET` | "I counted, there are twelve" | Treated as an ordinary scalar — two concurrent `SET`s conflict |
+| `SET` vs `ADJUST` | A count and a withdrawal crossed | The `SET` wins as the base, the `ADJUST` is applied to it. Someone who has just counted is the better authority, and the withdrawal still needs to be accounted for |
+
+The client derives the intent from the interaction, not from a dialog: the plus and
+minus controls and a scan in `LEND`/`RETURN` mode emit `ADJUST`; typing a number
+into the quantity field and the stocktake correction screen emit `SET`.
+
+**Why not derive deltas unconditionally**, which would have needed no protocol
+change at all: it silently corrupts the case the rule exists to protect. A user who
+counts the shelf and enters 12 while someone else withdraws one offline would end
+up with 11 — the withdrawal applied twice, once in the count they just took and
+once as a delta. That is a wrong number arrived at quietly, which is the failure
+class this whole chapter is built to avoid.
+
+Sync is stage 3, so the wire format is not published yet and this costs nothing
+today. After publication it would have been a contract change.
+
 ## Consequences
 
 - **The device must keep the base version.** Without it only "last writer wins"

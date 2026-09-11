@@ -72,7 +72,7 @@ slower on the network. The installation guide says so.
 | `netavark` / `aardvark-dns` | `netavark` is a `Depends`, **`aardvark-dns` is absent** and must be added | both hard dependencies of `podman` |
 | User D-Bus | package **`dbus-user-session`** — only a `Recommends` | standard component |
 | Mandatory access control | AppArmor | **SELinux, `enforcing` by default** |
-| Host firewall | `nftables` / `ufw` | `firewalld` — port 8080 must be opened explicitly for the reverse proxy |
+| Host firewall | `nftables` / `ufw` | `firewalld` — ports 8080 (`api`) **and** 8081 (`web`) must be opened explicitly for the reverse proxy |
 
 **The Debian side is the more error-prone one.** Four of the required packages are
 mere recommendations there; on the RHEL side they are dependencies or present
@@ -134,7 +134,10 @@ sudo apt install --yes podman uidmap passt dbus-user-session netavark aardvark-d
 # netavark, aardvark-dns and passt are hard dependencies of podman here, and
 # newuidmap comes from shadow-utils (base install). Plus firewalld.
 sudo dnf install -y podman
+# Two ports, not one: 8080 is api, 8081 is web. The reverse proxy reaches both
+# (04 §4.1), and opening only 8080 leaves the frontend unreachable.
 sudo firewall-cmd --permanent --add-port=8080/tcp --source=<reverse-proxy-CIDR>
+sudo firewall-cmd --permanent --add-port=8081/tcp --source=<reverse-proxy-CIDR>
 sudo firewall-cmd --reload
 
 # --- identical on every supported distribution from here on ----------------
@@ -153,13 +156,26 @@ sudo loginctl enable-linger homeinv
 # Check: cgroup v2 with delegated controllers
 cat /sys/fs/cgroup/user.slice/user-$(id -u homeinv).slice/cgroup.controllers
 # expected: cpu io memory pids
+
+# OpenSearch needs this, and it is a HOST setting: a rootless container cannot
+# raise it, and the service user has no sudo. Profiles standard and ha only.
+echo 'vm.max_map_count=262144' | sudo tee /etc/sysctl.d/99-homeinv-opensearch.conf
+sudo sysctl --system
 ```
 
 Without delegated `memory` and `cpu` controllers the resource limits do not take
 effect. The installation script checks this and **aborts with a clear message**
 rather than running silently without limits — likewise on a missing `newuidmap`,
-a missing `pasta`, a missing `subuid` allocation and a missing `linger`. Five
-checks, five clear messages; none of them a warning that gets overlooked.
+a missing `pasta`, a missing `subuid` allocation, a missing `linger`, and (in the
+`standard` and `ha` profiles) a `vm.max_map_count` below 262144. Six checks, six
+clear messages; none of them a warning that gets overlooked.
+
+> **`vm.max_map_count` is the one root action rootless cannot absorb.** Everything
+> else in this design runs as an unprivileged user; this single kernel parameter
+> is set once at install time by root and then never again. Hiding that fact would
+> not make it go away — it would only move the discovery to the first OpenSearch
+> start, where it appears as a stack trace rather than as a prerequisite. The
+> `minimal` profile has no OpenSearch and therefore does not need it at all.
 
 ## 6.4 Three supported ways of running it
 
@@ -310,14 +326,18 @@ systemctl --user enable --now docker
 **no** features that rootless cannot carry:
 
 ```yaml
-# Binding for every shipped service
+# Binding for every shipped service. `user` is the FIRST-PARTY value; upstream
+# images (postgres, opensearch, rabbitmq, valkey, clamav) carry their own uid and
+# their own writable paths, declared per service in deploy/services.yaml. The rule
+# is "not uid 0", not "uid 10001".
 user: "10001:10001"
 read_only: true
-tmpfs: [/tmp]
+tmpfs: [/tmp]                  # plus whatever the service declares
 cap_drop: [ALL]
 security_opt:
   - no-new-privileges:true
-restart: unless-stopped
+restart: unless-stopped        # generated from startOnBoot: true — the Compose
+                               # equivalent of Quadlet's WantedBy=default.target
 healthcheck: { ... }
 deploy:
   resources:
@@ -351,11 +371,14 @@ logging:
 | `rabbitmq` | `rabbitmq:4-management-alpine` | 256 / 512 MB | volume `mqdata` | internal |
 | `valkey` | `valkey/valkey:8-alpine` | 128 / 256 MB | volume (AOF) | internal |
 | `clamav` | `clamav/clamav` | 1 / 1.5 GB | volume `cvddata` (signatures) | plugins |
+| `egress-proxy` | own, minimal | 16 / 32 MB | none | plugins |
 | `plugin-*` | per plugin | 64 / 256 MB | plugin's own | plugins |
 
 **Baseline total** roughly 5 GB; peaks up to 7.5 GB. That fits the 8 GB VM — with
 less headroom than before the decision to make ClamAV mandatory
-([ADR-0024](../adr/0024-malware-scan.md)).
+([ADR-0024](../adr/0024-malware-scan.md)). The egress proxy and the first-party
+plugins add roughly 0.2–0.4 GB depending on how many are installed; a deployment
+using the filesystem `BlobStore` and no mail runs none of them.
 
 `api` and `worker` are **the same container image** with a different Spring
 profile. That keeps the version matrix at one and prevents worker and API from
@@ -365,15 +388,21 @@ drifting apart.
 
 Applies equally to Podman (`netavark`) and Docker:
 
-| Network | Reaches | Internet access |
+| Network | Reaches | Route out of the deployment |
 |---|---|---|
-| `edge` | `web`, `api` — the only place where anything listens outward | no |
-| `internal` | database, search, broker, cache | **no** (`internal: true` resp. `Internal=true`) |
-| `plugins` | plugin containers and `clamav` | **only** to the targets named in the manifest; for `clamav` only the signature mirror |
+| `edge` | `web`, `api` — the only place where anything listens outward | **no.** "Edge" means *has published ports*, not *can call out*. Published ports are forwarded into the container namespace and need no outward route (verification item **A5** in [ADR-0000](../adr/0000-open-points.md)) |
+| `internal` | database, search, broker, cache, `worker` | **no** (`internal: true` resp. `Internal=true`) |
+| `plugins` | plugin containers, `clamav`, `egress-proxy` | **only through `egress-proxy`**, and only to the hosts the granting plugin's manifest declared ([ADR-0027](../adr/0027-egress-enforcement.md)). Plugin containers get no gateway of their own |
 
-A plugin reaches PostgreSQL, OpenSearch or RabbitMQ **not at all**. It speaks
-gRPC with the core, nothing else. That is not a convention but network
-configuration — and verified in CI by a connectivity test.
+Two properties, both verified in CI by a connectivity test rather than asserted:
+
+- **A plugin reaches PostgreSQL, OpenSearch, RabbitMQ or Valkey not at all.** It
+  speaks gRPC with the core and HTTP with the proxy, nothing else.
+- **`api` and `worker` reach nothing outside the deployment.** After
+  [ADR-0026](../adr/0026-core-outbound-via-plugins.md) they have no external
+  target left to reach: object storage, mail, OIDC, webhooks and push are all
+  plugins. The test takes every core container, tries a known external host, and
+  expects a refusal.
 
 ```mermaid
 graph TB
@@ -399,8 +428,10 @@ graph TB
         end
         subgraph netPlug["Network: plugins (own UID range per plugin)"]
             CAV["clamav"]
+            EGP["egress-proxy<br/>allowlist per plugin"]
             PH1["plugin-isbn"]
-            PH2["plugin-brother-ql"]
+            PH2["plugin-blobstore-nextcloud"]
+            PH3["plugin-smtp"]
         end
     end
     BR --> RP
@@ -408,12 +439,17 @@ graph TB
     RP --> APP
     APP --> PG & KV & OS & MQ
     WRK --> PG & OS & MQ & CAV
-    APP -.->|mTLS| PH1 & PH2
-    WRK -.->|mTLS| PH1 & PH2
-    APP --> NC
-    WRK --> NC
-    PH1 -->|only this segment<br/>may reach the internet| Internet
+    APP -.->|mTLS| PH1 & PH2 & PH3
+    WRK -.->|mTLS| PH1 & PH2 & PH3
+    PH1 & PH2 & PH3 --> EGP
+    EGP -->|only this container<br/>may reach the internet| Internet
+    EGP --> NC
 ```
+
+Compared with the previous revision of this diagram, two arrows are gone:
+`APP --> NC` and `WRK --> NC`. They contradicted the sentence above them and were
+the visible half of the finding that produced
+[ADR-0026](../adr/0026-core-outbound-via-plugins.md).
 
 ## 6.8 Kubernetes
 
@@ -469,11 +505,19 @@ profiles. They change **no** application logic, only the active adapters.
 ([ADR-0024](../adr/0024-malware-scan.md)); it is the reason `minimal` also needs
 about 3 GB.
 
-| Profile | `search` | Events | Media | RAM | Purpose |
-|---|---|---|---|---|---|
-| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem | ~3 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
-| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 | ~5 GB | **The profile of this installation** |
-| `ha` | OpenSearch cluster | RabbitMQ cluster | S3 | ≥ 16 GB | Kubernetes, multiple instances |
+| Profile | `search` | Events | Media | Plugins | RAM | Purpose |
+|---|---|---|---|---|---|---|
+| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core) | none required | ~3 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
+| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ~5.4 GB | **The profile of this installation** |
+| `ha` | OpenSearch cluster | RabbitMQ cluster | S3 via plugin | as `standard` | ≥ 16 GB | Kubernetes, multiple instances |
+
+> **`minimal` is now genuinely self-contained.** With filesystem storage and no
+> mail it opens no connection outside the deployment at all — no proxy, no
+> plugins. That is a consequence of
+> [ADR-0026](../adr/0026-core-outbound-via-plugins.md) worth naming: the smallest
+> supported configuration is also the most isolated one. What it gives up is
+> invitations and password-reset mail, which such an installation typically does
+> not need.
 
 Moving `minimal` → `standard` is a configuration change plus an index build — no
 data loss, no migration.
@@ -504,7 +548,8 @@ data loss, no migration.
 | `HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE` | yes | Master key for envelope encryption ([ADR-0019](../adr/0019-sensitive-field-encryption.md)) |
 | `HOMEINV_PUBLIC_BASE_URL` | yes | Base for code resolution, links in e-mails, CORS, cookie domain. **⚠ This value is printed onto every label. Changing it later invalidates every label already printed** — see [10 §10.2.1](10-identification-and-labels.md). |
 | `HOMEINV_LEGACY_BASE_URLS` | no | Comma-separated list of former bases under which `/c/{code}` is still accepted, so old labels keep working after a domain change |
-| `HOMEINV_MEDIA_BASE_URL` | yes | **A dedicated hostname** for serving media |
+| `HOMEINV_MEDIA_BASE_URL` | yes | **A dedicated hostname** for serving media. Prefer a subdomain of the application host — with `Cross-Origin-Embedder-Policy: require-corp` a different registrable domain additionally needs `Cross-Origin-Resource-Policy: cross-origin` on every media response, or images fail to load ([12 §12.9](12-security.md)) |
+| `HOMEINV_PLUGIN_UI_BASE_URL` | no | A wildcard hostname for plugin UI panels, one subdomain per plugin ID (`<plugin-id>.plugins.inv.example.org`). Required only when a plugin with `ui:panel` is installed; without it the capability cannot be granted, and the administration UI says why (`REQ-PLG-012`) |
 | `HOMEINV_BLOBSTORE_TYPE` | no (`filesystem`) | `filesystem` / `s3` / `nextcloud` |
 | `HOMEINV_TRUSTED_PROXIES` | yes | CIDR list; `X-Forwarded-*` is honoured only from here |
 | `HOMEINV_REGISTRATION_MODE` | no (`invite_only`) | `invite_only` / `open` / `closed` |

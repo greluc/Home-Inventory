@@ -4,9 +4,10 @@
 
 A collection point for decisions not yet taken.
 
-> **As of 2026-09-11: no open decision remains.** All ten original points are
-> decided; the table stays as a record of what was decided, when and how. New
-> open points are added here.
+> **As of 2026-09-11: no open decision remains.** The architecture review of that
+> day closed eight questions, surfaced four more (O11–O14), and those four are now
+> decided too. The table below is the record of what was decided, when and how.
+> New open points are added here.
 
 ## Outstanding work (no open decisions)
 
@@ -18,41 +19,8 @@ table below, but they must not get lost either:
 | A1 | ~~Translating the documentation into English~~ — **done 2026-09-11.** The whole corpus was translated and the files renamed to English names (REQ-CON-002, REQ-CON-012). | — |
 | A2 | ~~Verifying the label geometries~~ — **done 2026-09-11.** Starter catalogue created ([`docs/reference/label-media.yaml`](../reference/label-media.yaml)): six formats verified, one explicitly marked as derived. **Remaining:** add the printable width of the Brother DK rolls from the SDK data sheet. | Open only for new formats |
 | A3 | ~~Verifying the Podman package versions~~ — **done 2026-09-11.** Checked across both package families: Debian 13 ships Podman **5.4.2**, Fedora 43–45 **5.8.4–6.1.0**, the RHEL family from 9.5 resp. 10 **≥ 5.0**. The version matrix, the per-family differences, the finding about `uidmap`/`passt`/`dbus-user-session` being mere *Recommends* and the SELinux analysis are in [06 §6.2](../architecture/06-deployment-view.md). | — |
-
-| A4 | **Licence compliance for Lucide.** The set is `ISC AND MIT` — see below; the obligations are known and the steps are listed there. Nothing is due while Lucide is only a package dependency. Due **with the first vendored SVG** and **with the first distributed build**. | See A4 notes |
-
-### A4 notes — what Lucide obliges us to do
-
-[Lucide](https://github.com/lucide-icons/lucide) is a fork of Feather, and its
-`LICENSE` is **one file containing two licences**:
-
-- **ISC**, © Lucide Contributors — for the set as a whole
-- **MIT**, © Cole Bemis 2013–present — for roughly 150 named icons inherited
-  from Feather, listed by name in that same file
-
-Both are permissive and both combine one-way into AGPL-3.0-or-later without
-friction. Neither demands attribution in the user interface, a "powered by", or
-any change to our own licence. What they do demand is that **the copyright and
-permission notice appears in all copies** — and that is the part that is easy to
-fail, because a minified bundle is a copy and the `LICENSE` sitting in this
-repository does not travel with it (REQ-CON-013).
-
-Concretely, when the time comes:
-
-1. **Ship the `LICENSE` whole and verbatim.** Copying only the ISC half is the
-   obvious mistake and it under-attributes the ≈150 MIT icons. The list of icon
-   names is part of the licence text, not decoration.
-2. **Record the set in the SBOM as `ISC AND MIT`** (REQ-CON-010), not as ISC.
-3. **Only when SVGs are vendored** into `web/`: add `LICENSES/ISC.txt` and
-   `LICENSES/MIT.txt` and annotate the files in [`REUSE.toml`](../../REUSE.toml).
-   Without that they are swept up by the `web/**` default and silently declared
-   AGPL-3.0-or-later — a false statement about someone else's work.
-   **Do not add those two licence files early**: `reuse lint` reports a licence
-   file that nothing references as an error, so they belong in the same commit
-   as the icons.
-4. **Keep the notice in the built artifacts** — bundle, container image, app
-   packages — and reachable from the running installation beside the version and
-   source link (REQ-CON-009, REQ-CON-013).
+| A4 | ~~Licence compliance for Lucide~~ — **decided and moved 2026-09-11.** It is a settled decision with dated obligations, not an open point, and belongs in an ADR: see [ADR-0034](0034-icon-set-and-no-third-party-hosts.md), which carries the full `ISC AND MIT` analysis and the four concrete steps. | Triggered by the first distributed build resp. the first vendored SVG |
+| A5 | **Verify that port publishing works from an internal network.** [ADR-0027](0027-egress-enforcement.md) gives the core no outbound route by putting every core segment on `internal`, relying on the runtime forwarding a published port into the container's namespace without a routed path outward. That must be confirmed under **rootless Podman with `pasta`** and under **rootless Docker**. If a runtime does not support it, the fallback is a minimal ingress container on a non-internal segment forwarding to the core on an internal one — the property is kept, the topology changes. Same class of item as `UserNS=auto` in [06 §6.5](../architecture/06-deployment-view.md). | Stage 0 — it decides the network layout |
 
 ## Decided points
 
@@ -68,3 +36,7 @@ Concretely, when the time comes:
 | O8 | ~~Valuation~~ — **decided:** **current value and replacement value** are kept and reported separately, plus an insurance report (REQ-LIFE-009/014/015/016). | — | **done** |
 | O9 | ~~Push notifications~~ — **decided:** Firebase and APNs, but as a **plugin** and with a **content-free payload** ([ADR-0023](0023-push-notifications.md)). The core keeps its "no outbound route" rule. | — | **done** |
 | O10 | ~~Accessibility level~~ — **decided:** WCAG 2.2 AA as the goal, verified automatically (`axe` in CI, keyboard operation, contrast, focus indication), **without** a formal conformance statement. | — | **done** |
+| O11 | ~~SMTP egress enforcement~~ — **decided:** the `egress-proxy` gains a plain **TCP forwarding mode** with an exact `host:port` allowlist from the manifest, alongside its HTTP/`CONNECT` mode ([ADR-0027 §3](0027-egress-enforcement.md)). One container, one allowlist source, one access log; STARTTLS and implicit TLS pass through untouched. Rejected: a second forwarder container (two sources, two logs), a minimal MTA (largest attack surface, duplicates the notification block's retry), and an unrestricted segment for `plugin-smtp` (no enforcement for the plugin that carries invitation tokens). | The egress proxy spoke only HTTP, and `plugin-smtp` became stage-1 infrastructure through [ADR-0028](0028-plugin-runtime-stage-1.md) | **done** |
+| O12 | ~~UUID in the QR fragment~~ — **decided:** the fragment **stays**, and the fourth reason in [10 §10.1](../architecture/10-identification-and-labels.md) ("information leakage") is **withdrawn**, because it contradicted the very label it was written about. Offline resolution works from *any* label, including one whose binding a device has never synchronised — that is worth more than concealing a creation timestamp. The disclosure is recorded as an accepted risk in [12 §12.3](../architecture/12-security.md) instead of going unmentioned; an operator who disagrees switches the tenant to the host-free code form. | The chapter argued against printing the UUID and then printed it | **done** |
+| O13 | ~~Where idempotency records live~~ — **decided:** in **PostgreSQL, in the same transaction as the record they protect** ([ADR-0009](0009-messaging-and-events.md)) — never in a cache. The same argument the outbox rests on: two stores cannot be made consistent by hoping, and here they need not be. Valkey may cache the lookup; it is never the source. | `REQ-API-005` is priority M for mobile clients, and it hung on a store whose loss was documented as harmless | **done** |
+| O14 | ~~Relative changes in the sync protocol~~ — **decided:** a change to a numeric field carries `intent: SET \| ADJUST` ([ADR-0014](0014-offline-synchronization.md)). Deriving deltas unconditionally would have needed no protocol change and was rejected: a stocktake correction concurrent with an offline withdrawal would then count the withdrawal twice — a wrong number arrived at quietly, which is the failure class that chapter exists to prevent. Free now; after the contract is published it would have been a breaking change. | The deltas were derivable from the three-way compare, the **intent** was not | **done** |

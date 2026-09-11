@@ -72,16 +72,19 @@ it is worth.
 
 1. A new row with the next free number in the matching area.
 2. Phrase it verifiably and state an acceptance condition.
-3. Assign a stage and record it in [04 Roadmap](04-roadmap-and-stages.md).
+3. Assign a stage in the **Stage** column. That column is the single source —
+   [04 Roadmap](04-roadmap-and-stages.md) describes each stage in prose and
+   derives its requirement list from here rather than repeating it, because the
+   two had already drifted apart in three places.
 4. If the requirement forces an architectural decision: write an ADR and link it.
 
 ## Count
 
 | File | Areas | Count |
 |---|---|---|
-| [01 Functional](01-functional.md) | CORE 42 · MED 13 · IDENT 18 · LBL 14 · ENR 9 · SRCH 10 · LIFE 17 · TEN 11 · AUTH 11 · API 11 · PLG 14 · SYNC 13 · NOTI 9 · PORT 8 | **200** |
-| [02 Non-functional](02-non-functional.md) | NFR 71 · CON 13 | **84** |
-| [03 Security and privacy](03-security-and-privacy.md) | SEC 93 · PRIV 15 | **108** |
-| **Total** | | **392** |
+| [01 Functional](01-functional.md) | CORE 42 · MED 13 · IDENT 18 · LBL 14 · ENR 9 · SRCH 10 · LIFE 17 · TEN 11 · AUTH 11 · API 11 · PLG 14 · SYNC 16 · NOTI 9 · PORT 8 | **203** |
+| [02 Non-functional](02-non-functional.md) | NFR 73 · CON 13 | **86** |
+| [03 Security and privacy](03-security-and-privacy.md) | SEC 96 · PRIV 15 | **111** |
+| **Total** | | **400** |
 
 As of 2026-09-11. The count is kept current with every addition.

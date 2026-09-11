@@ -64,7 +64,7 @@ touches.
 Docs-as-code, exactly like the Basetool repos:
 
 - **Requirements** live in [`docs/requirements/`](docs/requirements/README.md) as
-  `REQ-<AREA>-NNN` (385 of them). IDs are stable and never reused; a dropped requirement
+  `REQ-<AREA>-NNN` (400 of them). IDs are stable and never reused; a dropped requirement
   is marked `Withdrawn`, not deleted.
 - **Decisions** live in [`docs/adr/`](docs/adr/README.md) as numbered ADRs. **Every
   architecturally significant decision gets one, before or with the change that implements
@@ -103,8 +103,11 @@ Each of these is a decision with an ADR behind it. They look like details and ar
    container socket mounted anywhere, no port below 1024.
    ([ADR-0022](docs/adr/0022-rootless.md), REQ-SEC-083…090)
 5. **The core has no outbound route to the internet.** Every external call goes through a
-   plugin in the `plugins` network segment with an explicit host allowlist. That includes
-   push notifications ([ADR-0023](docs/adr/0023-push-notifications.md)).
+   plugin in the `plugins` network segment with an explicit host allowlist — object
+   storage, SMTP, OIDC, webhooks and push alike, with no exception
+   ([ADR-0026](docs/adr/0026-core-outbound-via-plugins.md)). The allowlist is enforced
+   by an egress proxy, because no container runtime can express a hostname rule on its
+   own ([ADR-0027](docs/adr/0027-egress-enforcement.md)).
 6. **In-process plugins are off by default and are not sandboxable.** Java 25 has no
    `SecurityManager`; a classloader separates namespaces, not privileges. Third-party code
    runs out-of-process over gRPC/mTLS, period.

@@ -1,0 +1,84 @@
+# ADR-0034 — Lucide as the icon set, and no third-party host for anything
+
+**Status:** Accepted · **Date:** 2026-09-11
+**Records:** `REQ-PRIV-015` and the icon decision in the design brief.
+**Moves here:** the Lucide licence analysis that was filed as note **A4** in
+[ADR-0000](0000-open-points.md) — it is a settled decision with obligations, not an
+open point, and ADR-0000 is for things that are still open.
+
+## Context
+
+Two decisions were made together in the design brief and recorded only there and
+as `REQ-PRIV-015`: the icon set is **Lucide**, and **no client asset comes from a
+third-party host — for anything, without exception**.
+
+They belong together because an icon set is the single most common reason a
+project quietly acquires a CDN dependency.
+
+## Decision
+
+### No third-party host
+
+Every client — web and apps — ships every asset it needs: fonts, icons,
+stylesheets, scripts, images, sounds. At runtime a client contacts **only its own
+instance**. The CSP enforces it with `default-src 'self'` as the floor, and the
+acceptance test is mechanical: load every view with an empty cache and observe
+requests to one origin.
+
+| Reason | |
+|---|---|
+| Privacy | A third-party host sees the user's IP address, the referring page and the timing of every visit. For a self-hosted inventory that is the whole point defeated |
+| Offline | `REQ-SYNC-001` requires the client to work with no network. An asset fetched on demand is missing exactly where the product is meant to work |
+| Supply chain | A CDN is remote code execution with a good reputation |
+| Consistency | It is the same rule as [ADR-0026](0026-core-outbound-via-plugins.md) applied to the client instead of the server. The system contacts nothing it does not ship or explicitly enable |
+
+### Lucide as the icon set
+
+1600+ icons, ISC/MIT, outline-only, on a 24 × 24 grid with
+`stroke="currentColor"`. Shipped **self-hosted as SVG** — never as an icon
+webfont, whose private-use-area glyphs a screen reader either skips or reads out
+as a stray character.
+
+Two properties follow from the drawing model and are design tokens, not defaults
+to inherit: `stroke-width` is stated **per icon size** (2 px on a 24 px grid reads
+heavy at 16 px in a dense table row and thin at 32 px), and the optical weight is
+tuned in **dark mode first**, because a light stroke on a dark ground blooms — and
+dark is our default ([ADR-0033](0033-dark-as-default-appearance.md)).
+
+Lucide is outline-only: there is no filled twin. Selected-versus-unselected must
+therefore come from colour, background or weight, never from swapping to a fill
+variant that does not exist.
+
+## The licence obligation, and where it is easy to fail
+
+Lucide's `LICENSE` is **one file containing two licences**:
+
+- **ISC**, © Lucide Contributors — the set as a whole
+- **MIT**, © Cole Bemis 2013–present — roughly 150 icons inherited from Feather,
+  listed **by name** in that same file
+
+Both combine one-way into AGPL-3.0-or-later without friction. Neither demands
+attribution in the user interface or a "powered by". What they demand is that the
+copyright and permission notice **appears in all copies** — and a minified bundle
+is a copy, while the `LICENSE` sitting in this repository is not part of it.
+
+| When | What is owed |
+|---|---|
+| Now, while Lucide is only a package dependency | Nothing |
+| With the first distributed build | The full `LICENSE`, verbatim, in the bundle, the container image and the app packages, reachable from the running installation beside the version and source link (`REQ-CON-009`, `REQ-CON-013`). **The list of icon names is part of the licence text, not decoration** — shipping only the ISC half under-attributes the ≈150 MIT icons |
+| In the SBOM (`REQ-CON-010`) | Recorded as `ISC AND MIT`, not as ISC |
+| With the first **vendored** SVG under `web/` | `LICENSES/ISC.txt` and `LICENSES/MIT.txt` plus annotations in [`REUSE.toml`](../../REUSE.toml). Without them the files are swept up by the `web/**` default and silently declared AGPL-3.0-or-later — a false statement about someone else's work. **Do not add those two licence files early:** `reuse lint` reports a licence file that nothing references as an error, so they belong in the same commit as the icons |
+
+## Consequences
+
+- **No web font by link, no icon pack on demand, no analytics beacon, no embedded
+  third-party frame** — and the CSP is what enforces it, so a regression fails CI
+  rather than shipping quietly.
+- **Self-hosting fonts and icons costs bundle size**, which is accepted. The
+  alternative costs privacy and offline capability, both of which are requirements.
+- **If an icon the application needs has no counterpart in Lucide**, it is recorded
+  in a list rather than substituted with something approximate — a deliberately
+  visible gap beats a silently wrong metaphor.
+- The obligations above are dated by trigger, not by calendar, so they cannot be
+  missed by being "not yet due": the first distributed build is the deadline for
+  the notice, and the first vendored SVG for the REUSE annotations.

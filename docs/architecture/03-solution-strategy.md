@@ -74,7 +74,7 @@ one that suffices is always chosen.
 | Level | Means | Examples | Risk |
 |---|---|---|---|
 | **1 — Configuration** | Data in the running system, no deployment | New item type with fields, location category, label template, role, saved search, webhook | low |
-| **2 — Out-of-process plugin** | Own process, gRPC over mTLS, own service account, declared capabilities | Printer integration, handheld-scanner bridge, ISBN/EAN resolver, foreign storage backend, any third-party development | medium, bounded by the process and permission boundary |
+| **2 — Out-of-process plugin** | Own process, gRPC over mTLS, own service account, declared capabilities, egress through the proxy | **Every outbound connection the system makes**: mail, remote object storage, federated login, webhooks, push, metadata resolvers, printer integrations, any third-party development ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) | medium, bounded by the process, network and permission boundary |
 | **3 — In-process plugin** | JAR in an isolated classloader, **signed and explicitly enabled only** | First-party extensions with high call volume, e.g. code generation | high — no sandbox on the JVM, see [ADR-0006](../adr/0006-plugin-runtime.md) |
 
 Both plugin levels serve **the same contract** (`home_inv.plugin.v1`). The core
@@ -205,6 +205,6 @@ requirements: [Roadmap](../requirements/04-roadmap-and-stages.md).
 | Stage | Content | Definition of done |
 |---|---|---|
 | **0 — MVP** | Login, one tenant, items with fixed fields, location tree, photos, full-text search, REST | An item can be created, photographed, stored and found again |
-| **1 — Core** | Type system, tags, roles and permissions, tenant administration, GraphQL, audit, import/export, trash | A tenant administrator configures types and permissions without a developer |
+| **1 — Core** | Type system, tags, roles and permissions, tenant administration, GraphQL, audit, import/export, trash — **and the plugin runtime with the first-party plugins** ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) | A tenant administrator configures types and permissions without a developer; an invitation mail goes out through `plugin-smtp` |
 | **2 — Identification** | UUID codes, QR generation, in-browser scanning, label templates, sheet printing (PDF), stocktake mode | A label sheet is printed, stuck on, scanned, and leads to the item |
-| **3 — Ecosystem** | Plugin runtime and SDK, ISBN/EAN resolvers, printer plugins, KMP apps, offline sync, webhooks | A third-party plugin runs without a core change; the app works a week offline and reconciles |
+| **3 — Ecosystem** | The **published** contract and SDK, ISBN/EAN resolvers, printer plugins, push channels, KMP apps, offline sync | An **external** author gets a plugin running from the published SDK alone; the app works a week offline and reconciles |

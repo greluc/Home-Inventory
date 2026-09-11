@@ -38,6 +38,8 @@ forbids database and repository access from the access blocks.
 ```
 /api/v1
 ├── /auth        /login /logout /refresh /mfa /passkeys /password-reset
+│             /authorize /token /revoke /clients      (OAuth 2.1, see below)
+├── /.well-known /oauth-authorization-server /jwks.json
 ├── /me          profile, devices, sessions, settings
 ├── /tenants     {id}/members {id}/invitations {id}/quotas {id}/settings {id}/export
 ├── /roles       tenant-owned roles and permissions
@@ -64,6 +66,16 @@ forbids database and repository access from the access blocks.
 
 Non-CRUD operations use the form `POST /resource/{id}:action` (a colon, as in
 Google AIP) — that keeps them distinguishable from sub-resources.
+
+> **`identity` is an OAuth 2.1 authorization server, not just a login endpoint.**
+> `REQ-AUTH-007` and `REQ-SEC-019` require the apps to authenticate through
+> Authorization Code + PKCE in the system browser, with no password in the app —
+> which needs `/authorize`, `/token`, a metadata document and a JWKS endpoint.
+> They were specified without ever appearing in this list, which made `identity`
+> look like a session service. It is not, and the difference is a substantial part
+> of that building block. Clients are registered by the operator
+> (`/auth/clients`); there is no dynamic client registration, because every client
+> here is one the operator installed.
 
 ### Querying, pagination, sorting
 
@@ -101,7 +113,7 @@ costs more than it is worth.
 | Mechanism | Rule |
 |---|---|
 | **ETag / If-Match** | Every single resource returns `ETag: "<version>"`. `PUT`/`PATCH`/`DELETE` **require** `If-Match`. A missing header → `428 Precondition Required`; a mismatch → `412`. There is no blind overwrite. |
-| **Idempotency-Key** | Every creating `POST` accepts `Idempotency-Key`. Key plus payload hash are kept for 24 h in Valkey. A repeat with the same payload → the original response; with a different payload → `409`. Indispensable for mobile clients on unreliable networks. |
+| **Idempotency-Key** | Every creating `POST` accepts `Idempotency-Key`. Key plus payload hash are written to **PostgreSQL in the same transaction as the record they protect** and retained 24 h ([ADR-0009](../adr/0009-messaging-and-events.md)) — so there is no window in which the entity exists and the key does not. A repeat with the same payload → the original response; with a different payload → `409`. Indispensable for mobile clients on unreliable networks, which is why it may not depend on a cache. |
 | **Client-generated IDs** | The client may supply `id` (UUIDv7). If it already exists with the same content, the result is `200` instead of `201`. A prerequisite for offline creation. |
 | **Bulk operations** | `POST /items:bulk` handles up to 500 entries, **partially successful**, with a status line per entry (a `207`-style payload) and an idempotency key per entry. |
 
@@ -136,7 +148,7 @@ resource exists, and never contain internal paths, SQL or stack traces.
 
 | Rule | Implementation |
 |---|---|
-| Authentication | `Authorization: Bearer <JWT>` (short-lived, 10 min) for apps and third-party systems. For the web additionally a `__Host-` cookie with `Secure`, `HttpOnly`, `SameSite=Strict` plus a CSRF token for state-changing calls. |
+| Authentication | `Authorization: Bearer <JWT>` (short-lived, 10 min) for apps and third-party systems. For the web a `__Host-` session cookie with `Secure`, `HttpOnly`, **`SameSite=Strict`** plus a CSRF token for state-changing calls — and, scoped to `/c` only, a second `__Secure-` cookie with `SameSite=Lax` that exists for one purpose: so a QR scan from a foreign camera app recognises the signed-in user instead of bouncing them to the login page. It grants no authority of its own ([ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)). |
 | CORS | The configured frontend origin only; never `*`, never a reflection of the request origin. |
 | Rate limiting | Per user, per tenant and per IP; the response is `429` with `Retry-After` and `RateLimit-*` headers. Login attempts and code resolution have their own, stricter limits. |
 | Payload limits | JSON max. 1 MB, bulk operations max. 500 entries, uploads through the dedicated tus path with its own limit. |
@@ -214,7 +226,7 @@ type Item {
 
 | Safeguard | Value |
 |---|---|
-| Depth limit | max. 10 |
+| Depth limit | max. 10 — which is **below** the default maximum location depth of 12 ([04 `locations`](04-building-blocks.md)). A deep tree therefore cannot be walked to its leaves in one query; `locationTree(rootId:, depth:)` is the intended path and pages by subtree. The mismatch is deliberate: raising the limit to 12 would raise the cost ceiling of every other query too |
 | Cost analysis | A budget per query; field costs declared; exceeding it → rejection **before** execution |
 | Persisted queries | In production only registered queries; free-form queries only for authenticated administrators and in development |
 | Introspection | Disabled in production (the schema ships with the documentation) |
@@ -279,14 +291,14 @@ GET /c/{code}
 | Case | Behaviour |
 |---|---|
 | Authenticated, permitted | Redirect to the item view |
-| Not authenticated | Redirect to login with a return target — **without** any information about the item |
+| Not authenticated | Redirect to login with a return target — **without** any information about the item. A signed-in user arriving by cross-site navigation *is* recognised, through the `__Secure-` cookie scoped to `/c` ([ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)); without it `SameSite=Strict` would send every scan from a foreign camera app to the login page |
 | Unknown code | A neutral page, "this code is not assigned" — identical to the response for a missing permission |
 | Legacy hostnames | `/c/{code}` is also accepted under the bases listed in `HOMEINV_LEGACY_BASE_URLS`, so labels keep working after a domain change ([10 §10.2.1](10-identification-and-labels.md)) |
-| Rate limiting | Strict per IP with increasing delay. The code has ≥ 40 bits of entropy, which makes enumeration hopeless. |
+| Rate limiting | Strict per IP with increasing delay. The code carries **50 bits** of entropy, so at 10⁶ issued codes a random guess hits with probability ≈ 1 : 1.1 · 10⁹ — that is what makes rate limiting sufficient rather than merely helpful ([ADR-0030](../adr/0030-public-code-format.md)). |
 | Logging | Every access to an unknown code is counted; conspicuous patterns raise an alert. |
 
 Additionally there is an **offline mode**: if the QR code carries the item UUID in
-the fragment alongside the URL (`…/c/7Q2M4X9#i=<uuid>`), the installed PWA or app
+the fragment alongside the URL (`…/c/7Q2M4X9KD2F#i=<uuid>`), the installed PWA or app
 can resolve the item from the local store without a network. Browsers do **not**
 send the fragment to the server, so it leaks nothing.
 

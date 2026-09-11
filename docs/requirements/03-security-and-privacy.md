@@ -13,14 +13,14 @@ to it are open.
 
 | ID | Requirement | Stage | Acceptance |
 |---|---|---|---|
-| REQ-SEC-001 | Every domain table carries `tenant_id` and has RLS with `ENABLE` **and** `FORCE`. | 1 | An automated check; a new table without RLS fails the build |
-| REQ-SEC-002 | The application role has **no** `BYPASSRLS`, **no** table ownership and **no** DDL rights. | 1 | A privilege check at startup, aborting on deviation |
-| REQ-SEC-003 | Migrations run under a separate role that is active only at startup. | 1 | Separate credentials, documented |
-| REQ-SEC-004 | The tenant context is set per transaction through `SET LOCAL` from the authenticated context — **never** from a request parameter. | 1 | Code review and a test |
-| REQ-SEC-005 | A missing tenant context yields **zero rows**, not foreign data. | 1 | A test without a set context |
-| REQ-SEC-006 | No connection returns to the pool with the tenant context still set. | 1 | A test across the pool |
-| REQ-SEC-007 | An automated **isolation proof** checks every table with two tenants and a wrongly set context. | 1 | Part of every CI run |
-| REQ-SEC-008 | Cross-tenant administration goes through explicit, logged `SECURITY DEFINER` functions with their own permission check. | 1 | The list of such functions is documented |
+| REQ-SEC-001 | Every domain table carries `tenant_id` and has RLS with `ENABLE` **and** `FORCE`. The only instance-wide tables are the four listed exhaustively in [07 §7.1](../architecture/07-data-model.md), each with a stated compensating control. | 0 | An automated check; a new table that is neither tenant-scoped with RLS nor on the documented exception list fails the build |
+| REQ-SEC-002 | The application role has **no** `BYPASSRLS`, **no** table ownership and **no** DDL rights. | 0 | A privilege check at startup, aborting on deviation |
+| REQ-SEC-003 | Migrations run under a separate role that is active only at startup. | 0 | Separate credentials, documented |
+| REQ-SEC-004 | The tenant context is set per transaction through `SET LOCAL` from the authenticated context — **never** from a request parameter. | 0 | Code review and a test |
+| REQ-SEC-005 | A missing tenant context yields **zero rows**, not foreign data. | 0 | A test without a set context |
+| REQ-SEC-006 | No connection returns to the pool with the tenant context still set. | 0 | A test across the pool |
+| REQ-SEC-007 | An automated **isolation proof** checks every table with two tenants and a wrongly set context. | 0 | Part of every CI run |
+| REQ-SEC-008 | Cross-tenant administration goes through explicit, logged `SECURITY DEFINER` functions with their own permission check. | 0 | The list of such functions is documented |
 | REQ-SEC-009 | The search index also filters mandatorily on `tenantId`; hits are always re-loaded from PostgreSQL. | 1 | A test with a tampered index entry |
 
 ## SEC-B — Authentication
@@ -35,9 +35,11 @@ to it are open.
 | REQ-SEC-015 | The second factor is mandatory for `OWNER` and `ADMIN`. | 1 | Assigning the role without it is rejected |
 | REQ-SEC-016 | Access tokens ≤ 10 min; refresh tokens rotating; detected reuse terminates all sessions. | 1 | A reuse-detection test |
 | REQ-SEC-017 | Web sessions through a `__Host-` cookie with `Secure`, `HttpOnly`, `SameSite=Strict`, plus a CSRF token for state-changing calls. | 0 | Cookie attributes verified |
+| REQ-SEC-094 | Code resolution uses a **second** cookie: `__Secure-` prefixed, `Path=/c`, `SameSite=Lax`, `Secure`, `HttpOnly`, referencing the same server-side session and granting **no** authority of its own. It is created and destroyed with the session and is revoked by remote sign-out. Its sole effect is that `GET /c/{code}` recognises a signed-in user arriving by cross-site navigation ([ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)). | 2 | The cookie is rejected on any path other than `/c`; presenting it alone to any other endpoint yields `401`; remote sign-out invalidates it; a scan from a foreign camera app reaches the item without a login round trip |
+| REQ-SEC-095 | The OIDC `state` and the PKCE verifier are stored **server-side**, keyed by a single-use handle carried in `state`. They are never placed in a cookie. | 1 | A replayed callback is rejected; the verifier appears in no cookie and in no log |
 | REQ-SEC-018 | Password reset: a single-use token, valid 30 min, terminates all sessions, notifies the old address. | 1 | The flow verified |
 | REQ-SEC-019 | Apps authenticate through OAuth 2.1 (code + PKCE) in the system browser; **no password in the app**. | 3 | The flow verified |
-| REQ-SEC-020 | No automatic linking of an OIDC account to an existing one by e-mail address alone. | 3 | Linking requires re-authentication |
+| REQ-SEC-020 | No automatic linking of an OIDC account to an existing one by e-mail address alone. | 1 | Linking requires re-authentication |
 | REQ-SEC-021 | Critical operations require re-confirmation of the second factor. | 1 | The list of operations documented and tested |
 
 ## SEC-C — Authorization
@@ -61,7 +63,7 @@ to it are open.
 | REQ-SEC-031 | Parameterised SQL only; dynamic SQL only through a builder with an allowlist for field and sort names. | 0 | ArchUnit forbids string concatenation in SQL |
 | REQ-SEC-032 | User input is canonicalised (Unicode NFC), control characters removed, lengths bounded. | 0 | A test with special characters |
 | REQ-SEC-033 | `dangerouslySetInnerHTML` is forbidden; user-generated Markdown is sanitised server-side, HTML removed. | 0 | A lint rule and a test |
-| REQ-SEC-034 | URLs from user input: `http`/`https` only, no internal address ranges, never fetched server-side, output with `rel="noopener noreferrer"`. | 1 | A test with SSRF patterns |
+| REQ-SEC-034 | URLs from user input: `http`/`https` only, no internal address ranges, **never fetched by the core**, output with `rel="noopener noreferrer"`. Where a user-supplied URL must be contacted at all — webhook delivery is the only case — it happens in `plugin-webhook`, whose egress passes the proxy: private, link-local and cloud-metadata ranges refused, the name resolved by the proxy rather than trusted from the caller, and re-checked on redirect ([ADR-0026](../adr/0026-core-outbound-via-plugins.md), [ADR-0027](../adr/0027-egress-enforcement.md)). | 0 | A test with SSRF patterns against both the core (must not fetch at all) and the proxy (must refuse the listed ranges and follow no redirect blindly) |
 | REQ-SEC-035 | Regular expressions from field definitions are checked for catastrophic backtracking and executed with a time limit. | 1 | A test with a known ReDoS pattern |
 | REQ-SEC-036 | The expression language in label templates is not Turing-complete and accesses only an allowlist of fields. | 2 | A test with injection patterns |
 
@@ -75,9 +77,9 @@ to it are open.
 | REQ-SEC-040 | A pixel limit before decoding (default 100 MP) against decompression bombs. | 0 | A test with an image bomb |
 | REQ-SEC-041 | Every image is **re-encoded**; embedded payloads are destroyed in the process. | 0 | A test with a polyglot file |
 | REQ-SEC-042 | EXIF including GPS is stripped; retention only on an explicit setting. | 0 | A test with a reference image |
-| REQ-SEC-043 | Media is served from a **dedicated hostname**, with `Content-Disposition: attachment`, `nosniff` and a CSP sandbox, without cookies. | 1 | Headers verified |
-| REQ-SEC-044 | Access only through signed, short-lived URLs (≤ 15 min), bound to the user and the media ID. | 1 | A test with an expired and with a foreign signature |
-| REQ-SEC-045 | PDFs are never displayed inline. | 1 | Verified |
+| REQ-SEC-043 | Media is served from a **dedicated hostname**, with `Content-Disposition: attachment`, `nosniff` and a CSP sandbox, without cookies. | 0 | Headers verified |
+| REQ-SEC-044 | Access only through signed, short-lived URLs (≤ 15 min), bound to the user and the media ID. | 0 | A test with an expired and with a foreign signature |
+| REQ-SEC-045 | PDFs are never displayed inline. | 0 | Verified |
 
 ## SEC-F — Secrets and encryption
 
@@ -95,20 +97,20 @@ to it are open.
 
 | ID | Requirement | Stage | Acceptance |
 |---|---|---|---|
-| REQ-SEC-053 | Third-party plugins run **out-of-process** only, in their own container with their own service account. | 3 | Network rules verified |
-| REQ-SEC-054 | Plugin containers reach neither PostgreSQL nor OpenSearch, RabbitMQ or Valkey. | 3 | A network test |
-| REQ-SEC-055 | Outbound connections only to the hosts named in the manifest, enforced in the network. | 3 | A test with a divergent target |
-| REQ-SEC-056 | Connections use mTLS with a pinned certificate fingerprint. | 3 | A test with a foreign certificate |
-| REQ-SEC-057 | Every `CoreApi` call re-checks the capability, the tenant scope and activation — no trust from the connection alone. | 3 | A test after revocation |
-| REQ-SEC-058 | In-process plugins are off by default, permitted only when signed, and not installable by tenant administrators. | 3 | A test |
-| REQ-SEC-059 | The administration UI permanently shows when in-process code is running, with publisher and fingerprint. | 3 | Visual check |
+| REQ-SEC-053 | Third-party plugins run **out-of-process** only, in their own container with their own service account. | 1 | Network rules verified |
+| REQ-SEC-054 | Plugin containers reach neither PostgreSQL nor OpenSearch, RabbitMQ or Valkey. | 1 | A network test |
+| REQ-SEC-055 | Outbound connections only to the hosts named in the manifest, enforced **outside the plugin** by the egress proxy — no container runtime can express a hostname rule, so the proxy is the enforcement point ([ADR-0027](../adr/0027-egress-enforcement.md)). Every attempt, permitted or refused, is logged with plugin, target and outcome. | 1 | A test with a divergent target: refused, logged, and the refusal visible as a metric |
+| REQ-SEC-056 | Connections use mTLS with a pinned certificate fingerprint. | 1 | A test with a foreign certificate |
+| REQ-SEC-057 | Every `CoreApi` call re-checks the capability, the tenant scope and activation — no trust from the connection alone. | 1 | A test after revocation |
+| REQ-SEC-058 | In-process plugins are off by default, permitted only when signed, and not installable by tenant administrators. | 1 | A test |
+| REQ-SEC-059 | The administration UI permanently shows when in-process code is running, with publisher and fingerprint. | 1 | Visual check |
 
 ## SEC-H — Transport, headers, rate limiting
 
 | ID | Requirement | Stage | Acceptance |
 |---|---|---|---|
-| REQ-SEC-060 | CSP without `unsafe-inline` and without `unsafe-eval`, with nonces and `require-trusted-types-for 'script'`. | 0 | A CI test against the expected policy |
-| REQ-SEC-061 | HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP, CORP and COEP are set. | 0 | A header check in CI |
+| REQ-SEC-060 | CSP without `unsafe-inline` and without `unsafe-eval`, with nonces and `require-trusted-types-for 'script'`, and with `frame-src`, `connect-src`, `worker-src` and `media-src` set explicitly — `default-src 'none'` otherwise silently disables plugin panels, offline media caching and the WASM scanner fallback ([12 §12.9](../architecture/12-security.md)). | 0 | A CI test against the expected policy **plus** a functional test per feature the policy must not break: a plugin panel loads, the service worker caches an image, the ZXing worker starts |
+| REQ-SEC-061 | HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP, CORP and COEP are set. With COEP `require-corp`, every embedded cross-origin response carries a CORP value that permits it. | 0 | A header check in CI; a startup check warns when the media host is not same-site with the application host, because `same-site` would then be the wrong CORP value |
 | REQ-SEC-062 | CORS restricted to the configured frontend origin; never `*`, never reflecting the request. | 0 | A test |
 | REQ-SEC-063 | `X-Forwarded-*` is honoured only from a configured address list. | 0 | A test with a forged header |
 | REQ-SEC-064 | Rate limiting per user, tenant and IP; login and code resolution with their own, stricter limits. | 1 | The response is `429` with `Retry-After` and `RateLimit-*` |
@@ -122,10 +124,11 @@ to it are open.
 |---|---|---|---|
 | REQ-SEC-068 | Every mutating action creates an audit entry with actor, tenant, action, resource, diff, IP, client and correlation ID. | 1 | A coverage check |
 | REQ-SEC-069 | The audit log is **append-only**; the application role has only `INSERT` and `SELECT`. | 1 | A privilege check |
-| REQ-SEC-070 | Every entry carries the hash of its predecessor; tampering is detectable. | 1 | A verification run over the chain |
+| REQ-SEC-070 | Every entry carries the hash of its predecessor **within the same tenant**; the first entry of a tenant chains from a genesis value derived from the tenant ID. A transaction producing several entries writes them as one chained run under a single lock acquisition ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)). | 1 | A verification run over each tenant's chain; a bulk operation of 500 items takes one lock acquisition, not 500 |
+| REQ-SEC-096 | An hourly **Merkle anchor** is computed over all entries of the window across all tenants and stored append-only, each anchor chaining to its predecessor. Anchors are never pruned. | 1 | Recomputing any window reproduces its anchor; removing or altering an entry makes the affected anchor and every later one disagree; a missing window raises a "look at it next time" alert |
 | REQ-SEC-071 | The log answers: "what did this account do in this period?" | 1 | The query exists and is verified |
 | REQ-SEC-072 | Impersonation ("view as user") is available only to the instance operator, with the second factor again, time-limited, in the audit log and visible to the affected user. | 1 | The flow verified |
-| REQ-SEC-073 | Plugin writes appear with the plugin as the actor. | 3 | Distinguishable |
+| REQ-SEC-073 | Plugin writes appear with the plugin as the actor. | 1 | Distinguishable |
 
 ## SEC-J — Supply chain and verification
 
@@ -153,9 +156,9 @@ to it are open.
 | REQ-SEC-088 | Plugin containers get their **own UID range** where feasible; where that is not viable, a separate service user per plugin. | 3 | Two plugins cannot see each other at host level |
 | REQ-SEC-089 | The container runtime's socket is mounted into **no** container. | 0 | A CI check |
 | REQ-SEC-090 | A plugin demanding elevated privileges, host networking or host device access is **not** supported. | 3 | Part of the contract test suite in the plugin SDK |
-| REQ-SEC-091 | **A malware scan is mandatory** (ClamAV through the `VirusScanner` port). "No scanner" is not a supported configuration. | 1 | Startup without a reachable scanner is reported; uploads stay blocked |
-| REQ-SEC-092 | The scan is **fail-closed**: a finding → the blob is discarded, `422`, an audit entry, a notification to the tenant administrator. Scanner unreachable or a timeout (60 s) → `503`, the blob stays `PENDING_SCAN` and unretrievable. | 1 | Both cases verified with an EICAR test file and with the scanner switched off |
-| REQ-SEC-093 | Signatures are updated daily; a signature age above 48 hours raises a warning. | 1 | The metric exists, the threshold takes effect |
+| REQ-SEC-091 | **A malware scan is mandatory** (ClamAV through the `VirusScanner` port). "No scanner" is not a supported configuration. | 0 | Startup without a reachable scanner is reported; uploads stay blocked |
+| REQ-SEC-092 | The scan is **fail-closed**: a finding → the blob is discarded, `422`, an audit entry, a notification to the tenant administrator. Scanner unreachable or a timeout (60 s) → `503`, the blob stays `PENDING_SCAN` and unretrievable. | 0 | Both cases verified with an EICAR test file and with the scanner switched off |
+| REQ-SEC-093 | Signatures are updated daily; a signature age above 48 hours raises a warning. | 0 | The metric exists, the threshold takes effect |
 
 ---
 
@@ -165,7 +168,7 @@ to it are open.
 |---|---|---|---|---|
 | REQ-PRIV-001 | The only mandatory data per user is e-mail, display name and language. | M | 0 | Registration asks for nothing more |
 | REQ-PRIV-002 | There is **no telemetry** and no analytics service, neither built in nor optional. | M | 0 | No outbound connection except through enabled plugins |
-| REQ-PRIV-003 | The core has **no outbound route to the internet**; external calls go through plugins only. | M | 3 | The network configuration verified |
+| REQ-PRIV-003 | The core has **no outbound route out of the deployment** — not to the internet and not to a host on the operator's own network. Object storage, mail, federated login, webhooks and push are all plugins ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). Connections to PostgreSQL, Valkey, OpenSearch, RabbitMQ and ClamAV are *inside* the deployment and are not outbound. | M | 0 | A CI network test takes **every** core container, attempts a known external host, and expects a refusal |
 | REQ-PRIV-004 | Access (Art. 15) and portability (Art. 20) are producible mechanically. | M | 1 | The archive is complete |
 | REQ-PRIV-005 | Account and tenant deletion with a 30-day grace period, revocation, and a completion report per building block. | M | 1 | An erasure certificate is produced |
 | REQ-PRIV-006 | IP addresses in application logs are removed after 7 days; in the audit log only for security-relevant events and truncated there. | M | 1 | The cleanup run verified |
@@ -176,5 +179,5 @@ to it are open.
 | REQ-PRIV-011 | On suspicion of personal data exposure, text templates for notification under Art. 33/34 are available. | S | 1 | Present |
 | REQ-PRIV-012 | A user can view their own data without having to ask the operator for help. | M | 1 | Self-service in the UI |
 | REQ-PRIV-013 | Where push through Firebase or APNs is used, the scope of the transmission (device token, timestamp, category) is disclosed in the UI; Google resp. Apple must be recorded as processors in the processing register. A template ships with the documentation. | M | 3 | The text exists and is shown before activation |
-| REQ-PRIV-015 | **No CDN, and no third-party host at all — for everything, without exception.** Every client (web and apps) ships every asset it needs — fonts, icons, stylesheets, scripts, images, maps, sounds — and at runtime contacts **only its own instance**. No web font by link, no icon pack on demand, no analytics beacon, no embedded third-party frame. A third-party host would see the user's IP address, the referring page and the timing of every visit, and the asset would be missing exactly where the application is meant to work: offline. The CSP enforces it, with `default-src 'self'` as the floor. | M | 1 | Loading every view with an empty cache produces requests to the instance's own origin only; the served CSP names no external host |
+| REQ-PRIV-015 | **No CDN, and no third-party host at all — for everything, without exception.** Every client (web and apps) ships every asset it needs — fonts, icons, stylesheets, scripts, images, maps, sounds — and at runtime contacts **only its own instance**. No web font by link, no icon pack on demand, no analytics beacon, no embedded third-party frame. A third-party host would see the user's IP address, the referring page and the timing of every visit, and the asset would be missing exactly where the application is meant to work: offline. The CSP enforces it. | M | 1 | Loading every view with an empty cache produces requests only to hostnames **this deployment serves** — the application host, `HOMEINV_MEDIA_BASE_URL` and, where used, `HOMEINV_PLUGIN_UI_BASE_URL`. The served CSP names no host the operator does not run; a literal `default-src 'self'` is **not** the criterion, because the media host is deliberately a separate origin ([12 §12.7](../architecture/12-security.md)) |
 | REQ-PRIV-014 | Device tokens are stored encrypted, deleted when a device is deregistered, and discarded after 180 days without contact. | M | 3 | A database dump contains no plaintext tokens; the expiry verified |

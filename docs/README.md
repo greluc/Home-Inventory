@@ -62,7 +62,7 @@ Each has its own ADR with rationale and alternatives.
 | 4 | Attribute storage | JSONB + an application-maintained index side table | [0004](adr/0004-attribute-storage-model.md) |
 | 5 | Identity | An own core + OIDC federation | [0005](adr/0005-identity.md) |
 | 6 | Plugin runtime | In-process **and** out-of-process behind one contract | [0006](adr/0006-plugin-runtime.md) |
-| 7 | Media storage | A `BlobStore` port: filesystem / S3 / Nextcloud | [0007](adr/0007-media-storage.md) |
+| 7 | Media storage | A `BlobStore` port: filesystem in the core, S3 / Nextcloud as plugins | [0007](adr/0007-media-storage.md), [0026](adr/0026-core-outbound-via-plugins.md), [0032](adr/0032-per-tenant-blob-addressing.md) |
 | 8 | Search | OpenSearch as a derived read model | [0008](adr/0008-search.md) |
 | 9 | Messaging | RabbitMQ + a transactional outbox | [0009](adr/0009-messaging-and-events.md) |
 | 10 | API surfaces | REST + read-only GraphQL outward, gRPC for plugins | [0010](adr/0010-api-surfaces.md) |
@@ -71,16 +71,25 @@ Each has its own ADR with rationale and alternatives.
 | 13 | Apps | Kotlin Multiplatform + Compose Multiplatform | [0013](adr/0013-mobile-apps.md) |
 | 14 | Offline | Full bidirectional sync | [0014](adr/0014-offline-synchronization.md) |
 | 15 | Deployment | Podman/Quadlet **and** Docker/Compose, both rootless; Helm as an equal | [0015](adr/0015-deployment.md), [0021](adr/0021-podman-quadlet.md) |
-| 16 | Identifiers | UUIDv7 internally, a separate public code | [0016](adr/0016-identifiers.md) |
+| 16 | Identifiers | UUIDv7 internally, a separate public code (10 characters + Damm) | [0016](adr/0016-identifiers.md), [0030](adr/0030-public-code-format.md) |
 | 17 | Persistence access | Spring Data JPA + `JdbcClient` for dynamic queries | [0017](adr/0017-persistence-access.md) |
 | 18 | Licence | AGPL-3.0-or-later | [0018](adr/0018-licensing.md) |
 | 19 | Secrets in digital goods | Per-tenant envelope encryption | [0019](adr/0019-sensitive-field-encryption.md) |
 | 20 | Configuration distribution | Tenant configuration as a synchronised aggregate | [0020](adr/0020-configuration-as-data.md) |
 | 21 | Way of running it | Podman with Quadlet on a par with Docker Compose | [0021](adr/0021-podman-quadlet.md) |
 | 22 | Rootless | Mandatory for **every** way of running it; rootful unsupported | [0022](adr/0022-rootless.md) |
-| 23 | Push | Firebase/APNs as a plugin, a payload without inventory data | [0023](adr/0023-push-notifications.md) |
+| 23 | Push | Firebase/APNs/Web Push as plugins, a payload without inventory data | [0023](adr/0023-push-notifications.md), [0026](adr/0026-core-outbound-via-plugins.md) |
 | 24 | Malware scan | ClamAV mandatory, fail-closed | [0024](adr/0024-malware-scan.md) |
 | 25 | Money | An in-house `Money` value type; no JavaMoney, no Joda-Money | [0025](adr/0025-money-representation.md) |
+| 26 | Outbound connections | **Every** external call leaves the core and becomes a plugin | [0026](adr/0026-core-outbound-via-plugins.md) |
+| 27 | Egress enforcement | Deny-all for the core, an allowlisting proxy per plugin segment | [0027](adr/0027-egress-enforcement.md) |
+| 28 | Stage plan | The plugin runtime is part of stage 1, not stage 3 | [0028](adr/0028-plugin-runtime-stage-1.md) |
+| 29 | Web session | `SameSite=Strict`, with code resolution and OIDC state decoupled | [0029](adr/0029-session-cookie-and-oidc-state.md) |
+| 31 | Audit chain | Per tenant, with an hourly instance-wide anchor | [0031](adr/0031-audit-chain-per-tenant.md) |
+| 33 | Appearance | Dark by default everywhere; light is opt-in | [0033](adr/0033-dark-as-default-appearance.md) |
+| 34 | Icons and assets | Lucide, self-hosted; no third-party host for anything | [0034](adr/0034-icon-set-and-no-third-party-hosts.md) |
 
 Open points and outstanding work are collected in
-[ADR-0000](adr/0000-open-points.md).
+[ADR-0000](adr/0000-open-points.md). **No decision is currently open**; what
+remains there is outstanding *work*, most notably verifying that port publishing
+behaves as assumed on an internal network under both container runtimes (A5).

@@ -37,12 +37,14 @@ graph TB
         MQ[["RabbitMQ"]]
         KV[("Valkey")]
     end
-    subgraph Z4["Zone 4 — foreign code"]
-        PL["plugin-host"]
+    subgraph Z4["Zone 4 — foreign and outbound code"]
+        PL["plugin-host<br/>0..n"]
+        EP["egress-proxy<br/>allowlist per plugin"]
     end
     subgraph Z5["Zone 5 — third-party systems"]
-        NC["Nextcloud"]
+        NC["Nextcloud / S3"]
         EXT["Metadata sources"]
+        SMTP["SMTP, OIDC,<br/>push, webhooks"]
     end
 
     B -->|"① TLS, authN"| RP
@@ -50,9 +52,18 @@ graph TB
     RP -->|"②"| API
     API -->|"③ RLS, own role"| PG
     API -->|"④ mTLS, capabilities"| PL
-    PL -->|"⑤ target list"| EXT
-    API -->|"⑥ app password"| NC
+    PL --> EP
+    EP -->|"⑤ target list"| EXT
+    EP -->|"⑤"| NC
+    EP -->|"⑤"| SMTP
 ```
+
+**There is no arrow from Zone 2 to Zone 5.** That is the whole point of
+[ADR-0026](../adr/0026-core-outbound-via-plugins.md): every connection leaving the
+deployment starts in Zone 4 and passes ⑤. Earlier versions of this diagram drew a
+boundary ⑥ (`app` → Nextcloud, on an app password) while the surrounding text
+claimed the core could not reach the internet. Both could not be true; the arrow
+is gone and the claim is now the one that holds.
 
 | Boundary | Checks on crossing |
 |---|---|
@@ -60,8 +71,7 @@ graph TB
 | ② Zone 1 → 2 | Authentication, CSRF, origin check, schema validation, **authorization**, setting the tenant context |
 | ③ Zone 2 → 3 | A dedicated DB role without DDL and without `BYPASSRLS`, RLS active, parameterised queries only |
 | ④ Zone 2 ↔ 4 | mTLS, capability check **per call**, deadline, payload limit, bulkhead, circuit breaker |
-| ⑤ Zone 4 → 5 | Outbound connections only to the manifest's target list, enforced in the network |
-| ⑥ Zone 2 → 5 | A dedicated Nextcloud app password with access to **exactly one** folder |
+| ⑤ Zone 4 → 5 | The **only** way out of the deployment. Outbound goes through the egress proxy, which applies the granting plugin's manifest allowlist and logs every attempt, permitted or refused ([ADR-0027](../adr/0027-egress-enforcement.md)). Credentials for the target — the Nextcloud app password with access to exactly one folder, SMTP and OIDC secrets — belong to the plugin, not to the core, which narrows what a core compromise yields |
 
 **Everything runs rootless.** No container and no container daemon runs as `root`
 on the host ([ADR-0022](../adr/0022-rootless.md)). An escape from zone 4 — the
@@ -69,10 +79,16 @@ only place where foreign code runs — is therefore confined to an unprivileged
 service user without `sudo`. Under Podman there is moreover no daemon at all, and
 hence no root-equivalent socket.
 
-**The core must not reach the internet.** `app-api` and `app-worker` sit in
-networks without an outbound route; external calls happen exclusively through
-plugins in zone 4. That confines the impact of SSRF to a container with no data
-access.
+**The core does not reach the internet — and now that is true.** `app-api` and
+`app-worker` sit only on segments with no route out of the deployment, and after
+[ADR-0026](../adr/0026-core-outbound-via-plugins.md) they have no external target
+left to reach: object storage, mail, federated login, webhooks and push all became
+plugins. The property is verified rather than asserted — a CI test takes every
+core container, tries every external host, and expects a refusal.
+
+That is what confines **SSRF** to Zone 4. Webhook delivery is the one place where a
+tenant supplies the URL, and it now happens inside a container that holds no data,
+holds no database credential, and can only reach hosts its manifest declared.
 
 ## 12.3 Threats by STRIDE
 
@@ -86,13 +102,15 @@ catalogue.
 | | A forged plugin | mTLS with a pinned certificate fingerprint, signed artifacts |
 | **T** Tampering | Mass assignment | Separate input types per use case; no binding onto entities; unknown fields are **rejected**, not ignored |
 | | IDOR / addressing foreign objects | Authorization on the loaded object, never on the ID alone; RLS as the second line; `404` instead of `403` for foreign objects |
-| | A tampered audit log | Append-only, hash chain, the application role without `UPDATE`/`DELETE` |
+| | A tampered audit log | Append-only, the application role without `UPDATE`/`DELETE`, a hash chain **per tenant**, and an hourly Merkle anchor across all tenants. The chain alone would only prove that nobody careless touched it — whoever can rewrite rows can recompute a chain. The anchor is the part that cannot be reproduced ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)) |
 | **R** Repudiation | "That was not me" | Audit with actor, time, IP, client, correlation ID; plugin writes recorded with the plugin as actor |
 | **I** Information disclosure | Cross-tenant access | RLS with `FORCE`, application authorization, an automated isolation proof across all tables |
 | | GPS in photos | EXIF stripping by default |
-| | Enumerating public codes | ≥ 40 bits of randomness, rate limiting, a neutral response for unknown codes |
+| | **A label discloses its item's creation time** — the QR fragment carries the UUIDv7, and UUIDv7 embeds a timestamp. **Accepted** (open point O12, decided 2026-09-11): offline resolution from any label is worth more than hiding a creation date, and the disclosure is bounded — nothing about the object, the tenant or its value follows from it. An operator who disagrees switches the tenant to the host-free code form, which carries no fragment | — |
+| | Enumerating public codes | **50 bits** of randomness ([ADR-0030](../adr/0030-public-code-format.md)) — at 10⁶ issued codes a guess hits with probability ≈ 1 : 1.1 · 10⁹ · rate limiting with increasing delay · a neutral response for unknown codes, identical to the one for a missing permission |
 | | Revealing error messages | A uniform error format without internals; different causes yield identical responses |
 | | Timing differences at login | Constant-time comparison, a dummy hash operation for unknown accounts |
+| | **SSRF — a tenant points the system at an address of their choosing** (a webhook target, a resolver host). Classic escalation: the cloud metadata endpoint, a service on the internal network, a port scan by timing | The core makes **no** outbound connection at all ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)), so there is nothing to coerce. Delivery happens in a plugin that holds no data and no database credential, and whose only route out is the egress proxy with its declared allowlist ([ADR-0027](../adr/0027-egress-enforcement.md)). The proxy refuses private, link-local and metadata ranges outright, resolves the name itself rather than trusting the caller, and re-checks on redirect |
 | **D** Denial of service | Expensive queries | Cost analysis for GraphQL, result limits, a request timeout, rate limiting per tenant |
 | | Image bombs (decompression bombs) | A pixel limit before decoding, memory and time limits in the image process, processing in the worker |
 | | A slow plugin | Deadline, bulkhead, circuit breaker |
@@ -112,7 +130,9 @@ catalogue.
 | Federation | OIDC Authorization Code + PKCE. Linking an external account to an existing one only after re-authentication. No automatic account linking by e-mail address alone — that is a known takeover route. |
 | Registration | Default `invite_only`. An invitation is a single-use, time-limited token bound to the e-mail address. |
 | Reset | A single-use token, valid 30 min, consumption invalidates all sessions, a notification goes to the old address |
-| Web session | A `__Host-` cookie, `Secure`, `HttpOnly`, `SameSite=Strict`, server-side in Valkey, absolute maximum 30 days, idle 7 days |
+| Web session | A `__Host-` cookie, `Secure`, `HttpOnly`, **`SameSite=Strict`**, server-side in Valkey, absolute maximum 30 days, idle 7 days |
+| Code resolution | A second cookie, `__Secure-` prefixed with `Path=/c` and `SameSite=Lax`, referencing the same server-side session. `Strict` withholds the session cookie on a cross-site top-level navigation — which is exactly what a QR scan from a foreign camera app is, and it is the system's primary lookup path. The narrow cookie restores recognition on that one path without weakening the session cookie everywhere. It cannot carry the `__Host-` prefix, because that prefix mandates `Path=/` ([ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)) |
+| OIDC `state` and PKCE verifier | **Server-side, never in a cookie.** A single-use, high-entropy handle travels in the `state` parameter; the callback looks the verifier up and consumes it. Stricter than a state cookie in two ways — the verifier never reaches the browser, and a replayed callback fails |
 | App / third party | OAuth 2.1: Authorization Code + PKCE through the system browser. **No** password in the app. Access token 10 min, refresh token rotating with reuse detection. |
 | Machine access | Service accounts with tokens, scoped to a tenant and permissions, with an expiry date, shown in clear exactly once |
 | Re-confirmation | Critical operations require the second factor again (granting permissions, deleting a tenant, exporting, plugin capabilities, viewing `sensitive` fields) |
@@ -158,7 +178,7 @@ The riskiest input in the system.
 |---|---|
 | 1 | A size limit enforced **before** reading (default 25 MB) |
 | 2 | Type detection through magic bytes; the client-reported extension and MIME type are discarded |
-| 3 | An allowlist: JPEG, PNG, WebP, AVIF, HEIC, PDF, TXT, CSV. **SVG is rejected** (active content). |
+| 3 | An allowlist: JPEG, PNG, WebP, AVIF, PDF, TXT, CSV. **SVG is rejected** (active content). **HEIC is accepted at the API boundary but transcoded to AVIF on ingest and never stored as HEIC** — decoding it needs `libheif`, a comparatively young dependency with a poor CVE record, so it runs inside the image worker's memory and time limits and its output, not its input, is what is kept. |
 | 4 | A pixel limit before decoding (default 100 MP) against decompression bombs |
 | 5 | **Re-encoding** of every image through libvips — reliably destroys embedded payloads |
 | 6 | EXIF removed entirely, **especially GPS**. Retention only on an explicit tenant setting, with a warning. |
@@ -185,10 +205,12 @@ The riskiest input in the system.
 
 ```
 Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-{r}';
-  style-src 'self' 'nonce-{r}'; img-src 'self' https://media.example.org data:;
-  connect-src 'self'; font-src 'self'; frame-ancestors 'none';
-  base-uri 'none'; form-action 'self'; object-src 'none';
-  require-trusted-types-for 'script'
+  style-src 'self' 'nonce-{r}'; img-src 'self' {MEDIA_ORIGIN} data: blob:;
+  connect-src 'self' {MEDIA_ORIGIN}; font-src 'self';
+  frame-src {PLUGIN_UI_ORIGIN}; worker-src 'self' blob:;
+  manifest-src 'self'; media-src 'self' {MEDIA_ORIGIN};
+  frame-ancestors 'none'; base-uri 'none'; form-action 'self';
+  object-src 'none'; require-trusted-types-for 'script'
 Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
@@ -198,13 +220,41 @@ Cross-Origin-Resource-Policy: same-site
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
+`{MEDIA_ORIGIN}` and `{PLUGIN_UI_ORIGIN}` are substituted at startup from
+`HOMEINV_MEDIA_BASE_URL` and `HOMEINV_PLUGIN_UI_BASE_URL`. They are the
+deployment's own hostnames, not third-party hosts — which is what `REQ-PRIV-015`
+means by "no external host": no host the operator does not run.
+
+**Four directives are present because the previous policy silently disabled
+features it was written to protect.** They are listed rather than quietly added:
+
+| Directive | Why it is needed |
+|---|---|
+| `frame-src {PLUGIN_UI_ORIGIN}` | `frame-src` falls back to `child-src` and then to `default-src`, which is `'none'`. Without this directive **no plugin UI panel can load at all** (`REQ-PLG-012`) — the feature was specified and the policy forbade it |
+| `connect-src … {MEDIA_ORIGIN}` | The service worker fetches media to populate the offline cache ([11 §11.6](11-offline-synchronization.md)). `<img>` loads are covered by `img-src`, but a `fetch()` is not — with `connect-src 'self'` alone, **offline images would never be cached** |
+| `worker-src 'self' blob:` | The ZXing-WASM fallback runs in a web worker ([10 §10.3](10-identification-and-labels.md)); bundlers instantiate workers from a `blob:` URL |
+| `img-src … blob:` | Camera frames and locally captured photos are rendered from `blob:` URLs before upload |
+
 `camera=(self)` is necessary — without it scanning does not work. Everything else
 is switched off. **No `unsafe-inline`, no `unsafe-eval`**: the Vite build is set
 up accordingly, and a CI test compares the served CSP against an expected string.
 
-Plugin UI panels (`ui:panel`) run in an `iframe` with `sandbox` and their own
-origin; communication goes through `postMessage` with a verified origin and a
-fixed message schema.
+> **`Cross-Origin-Embedder-Policy: require-corp` constrains the media hostname.**
+> Every cross-origin response the page embeds must carry a `Cross-Origin-Resource-Policy`
+> that permits it. `same-site` suffices **only if the media host is a subdomain of
+> the same registrable domain** (`media.inv.example.org` next to `inv.example.org`).
+> A media host on a different registrable domain must send
+> `Cross-Origin-Resource-Policy: cross-origin` instead, or every image silently
+> fails to load. The installation guide states this next to
+> `HOMEINV_MEDIA_BASE_URL`, and a startup check warns when the two hosts are not
+> same-site.
+
+Plugin UI panels (`ui:panel`) run in an `iframe` with `sandbox` on **their own
+origin** (`HOMEINV_PLUGIN_UI_BASE_URL`, one subdomain per plugin ID); communication
+goes through `postMessage` with a verified origin and a fixed message schema. The
+panel document sends its own CSP with `frame-ancestors` restricted to the
+application origin — the main page's `frame-ancestors 'none'` protects the
+application from being framed and says nothing about what it may frame itself.
 
 ## 12.10 Supply chain
 

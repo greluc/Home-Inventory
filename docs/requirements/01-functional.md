@@ -77,17 +77,17 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 |---|---|---|---|---|
 | REQ-MED-001 | Photos and documents can be attached to items and locations. | M | 0 | Upload and display work |
 | REQ-MED-002 | An item has a **primary image** shown in lists. | M | 0 | The primary image is selectable; the first image is the default |
-| REQ-MED-003 | Permitted formats: JPEG, PNG, WebP, AVIF, HEIC, PDF, TXT, CSV. **SVG is rejected.** | M | 0 | Uploading an SVG file is rejected |
+| REQ-MED-003 | Permitted formats: JPEG, PNG, WebP, AVIF, PDF, TXT, CSV. HEIC is **accepted and transcoded to AVIF on ingest**; it is never stored in its original form. **SVG is rejected.** | M | 0 | Uploading an SVG file is rejected; an uploaded HEIC file is retrievable only as AVIF; no stored blob has a HEIC magic number |
 | REQ-MED-004 | The type is detected from **magic bytes**; the extension and the reported MIME type are discarded. | M | 0 | A renamed executable is rejected |
 | REQ-MED-005 | Images are **re-encoded** server-side; thumbnails at 200 px, 1024 px and max 4096 px are generated. | M | 0 | All derivatives present after upload |
 | REQ-MED-006 | **EXIF data including GPS is stripped.** Retention only on an explicit tenant setting. | M | 0 | A reference image contains no coordinates after upload |
-| REQ-MED-007 | Blobs are **content-addressed** (SHA-256); duplicates are stored once. | M | 0 | A second upload of the same file consumes no additional storage |
+| REQ-MED-007 | Blobs are **content-addressed within a tenant** (`sha256/<tenantId>/<hash>`); a tenant's duplicates are stored once. Deduplication **never** spans tenants ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)). | M | 0 | A second upload of the same file by the same tenant consumes no additional storage; the same file uploaded by a **second** tenant produces an independent object, is scanned in its own right, and reveals nothing about the first tenant holding it |
 | REQ-MED-008 | Uploads are **resumable** (tus) and survive network changes. | M | 1 | An interrupted upload is continued, not restarted |
-| REQ-MED-009 | Storage is replaceable through the `BlobStore` port; filesystem, S3 and **Nextcloud (WebDAV)** ship with the product. | M | 1 | All three pass the same adapter test suite |
-| REQ-MED-010 | Media is served only through **signed, short-lived URLs**, from a dedicated hostname. | M | 1 | Direct access without a signature is rejected |
+| REQ-MED-009 | Storage is replaceable through the `BlobStore` port. `filesystem` is an **in-core** adapter; S3 and **Nextcloud (WebDAV)** ship as **first-party plugins**, because they open a connection outside the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). | M | 1 | All three pass the same adapter test suite, in-core and plugin alike; a network test shows the core itself reaching neither S3 nor Nextcloud |
+| REQ-MED-010 | Media is served only through **signed, short-lived URLs**, from a dedicated hostname. | M | 0 | Direct access without a signature is rejected |
 | REQ-MED-011 | A blob is removed only when no link remains — with a grace period. | M | 1 | Reference counting verified; the cleanup run removes only orphans |
 | REQ-MED-012 | Photos can be taken offline and are uploaded later. | M | 3 | Capture in flight mode, upload after the network returns |
-| REQ-MED-013 | **Every** upload is scanned for malware before release. Until the result arrives the blob is `PENDING_SCAN` and not retrievable. | M | 1 | No retrieval before the scan completes; see REQ-SEC-091 ff. |
+| REQ-MED-013 | **Every** upload is scanned for malware before release. Until the result arrives the blob is `PENDING_SCAN` and not retrievable. | M | 0 | No retrieval before the scan completes; see REQ-SEC-091 ff. |
 
 ---
 
@@ -95,7 +95,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-IDENT-001 | Every physical item can be given a **public short code** (Crockford Base32, 8 characters + a check character). | M | 2 | The code is generatable, globally unique, and the check character catches typos |
+| REQ-IDENT-001 | Every physical item can be given a **public short code**: Crockford Base32, **10 payload characters (50 bits) plus a Damm check symbol** from the same alphabet ([ADR-0030](../adr/0030-public-code-format.md)). | M | 2 | The code is generatable and globally unique; the check symbol rejects every single-character error **and** every adjacent transposition; the symbol is always one of the 32 alphabet characters; known test vectors reproduce the published quasigroup table |
 | REQ-IDENT-002 | Codes can be generated and printed **in advance**, before the item exists. | M | 2 | 24 unassigned codes are generatable and printable |
 | REQ-IDENT-003 | An unassigned code is bound to an item by scanning it. | M | 2 | A scan in `ASSIGN` mode binds the code |
 | REQ-IDENT-004 | A code can be **reassigned**; the binding history is preserved. | S | 2 | The old binding is visible in the history |
@@ -198,7 +198,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-TEN-001 | All data belongs to a tenant; the separation is secured through RLS independently of the application logic. | M | 1 | The automated isolation proof across every table |
+| REQ-TEN-001 | All data belongs to a tenant; the separation is secured through RLS independently of the application logic. | M | 0 | The automated isolation proof across every table |
 | REQ-TEN-002 | An entitled user can create **any number of tenants**, bounded by a quota. | M | 1 | Creation and quota enforcement verified |
 | REQ-TEN-003 | Users are members of several tenants and switch without re-authenticating. | M | 1 | Switching in the UI and through the API |
 | REQ-TEN-004 | Invitations are single-use, time-limited and bound to an e-mail address. | M | 1 | Reuse is rejected |
@@ -220,8 +220,8 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-AUTH-002 | Second factor through TOTP and WebAuthn/passkeys. | M | 1 | Both usable; recovery codes single-use |
 | REQ-AUTH-003 | The second factor is **mandatory** for `OWNER` and `ADMIN`. | M | 1 | Assigning the role without one is rejected |
 | REQ-AUTH-004 | Registration by invitation only by default (`invite_only`). | M | 1 | Open registration is an explicit operator setting |
-| REQ-AUTH-005 | OIDC federation through the `IdentityProvider` port (Authorization Code + PKCE). | S | 3 | Login through an external provider works |
-| REQ-AUTH-006 | **No automatic account linking** by e-mail address alone. | M | 3 | Linking requires re-authentication |
+| REQ-AUTH-005 | OIDC federation through the `IdentityProvider` port (Authorization Code + PKCE), served by `plugin-oidc` ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). `state` and the PKCE verifier are held **server-side**, never in a cookie ([ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)). | S | 1 | Login through an external provider works; a replayed callback fails because the handle is single-use |
+| REQ-AUTH-006 | **No automatic account linking** by e-mail address alone. | M | 1 | Linking requires re-authentication |
 | REQ-AUTH-007 | Apps and third-party systems use OAuth 2.1 with PKCE through the system browser; **no password in the app**. | M | 3 | The flow is verified |
 | REQ-AUTH-008 | Access tokens valid 10 min; refresh tokens rotating with reuse detection. | M | 1 | Reuse terminates all of the user's sessions |
 | REQ-AUTH-009 | The user sees their active sessions and devices and can terminate them individually. | M | 1 | Remote sign-out takes effect within 10 min |
@@ -238,12 +238,12 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-API-002 | Generated clients for TypeScript (web) and Kotlin (KMP) compile in CI. | M | 1 | Both builds green |
 | REQ-API-003 | Errors follow RFC 9457 with a stable `type` URI, a `traceId` and field paths. | M | 0 | Uniform across every endpoint |
 | REQ-API-004 | `ETag`/`If-Match` on single resources; a missing header → `428`, a conflict → `412`. | M | 1 | Blind overwriting is impossible |
-| REQ-API-005 | `Idempotency-Key` on every creating `POST`, valid for 24 h. | M | 1 | A repeat returns the original result |
+| REQ-API-005 | `Idempotency-Key` on every creating `POST`, valid for 24 h. The record is written **in the same transaction as the entity it protects**, in PostgreSQL — never in a cache ([ADR-0009](../adr/0009-messaging-and-events.md)). | M | 1 | A repeat returns the original result; a repeat **after the cache has been cleared** still returns the original result rather than creating a second record |
 | REQ-API-006 | A read-only **GraphQL** surface with depth and cost limits and persisted queries. | S | 1 | No mutations exist |
-| REQ-API-007 | A **gRPC** contract `home_inv.plugin.v1` for plugins, with `buf lint` and `buf breaking` in CI. | M | 3 | A break fails the build |
+| REQ-API-007 | A **gRPC** contract `home_inv.plugin.v1` for plugins, with `buf lint` and `buf breaking` in CI. | M | 1 | A break fails the build |
 | REQ-API-008 | The major version in the path; breaks only with a new major version and at least 12 months of parallel operation. | M | 1 | `oasdiff` in CI; `Deprecation`/`Sunset` headers |
 | REQ-API-009 | Usage per endpoint, version and client is measured. | M | 1 | The metric exists; it is the basis for shutdown decisions |
-| REQ-API-010 | **Webhooks** with a signature, retries and a delivery log. | S | 3 | The receiver can verify the signature |
+| REQ-API-010 | **Webhooks** with a signature, retries and a delivery log, delivered by `plugin-webhook` — never by the core, which fetches no user-supplied URL (`REQ-SEC-034`). The signature scheme is part of the plugin contract: HMAC-SHA256 over timestamp and body, in a named header, with the timestamp inside the signed material so a capture cannot be replayed. | S | 1 | The receiver can verify the signature; a replayed delivery outside the tolerance window is rejected; a network test shows the core reaching no webhook target |
 | REQ-API-011 | Live updating of open views through SSE. | S | 1 | A change by another user appears without a reload |
 
 ---
@@ -252,19 +252,19 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-PLG-001 | Extension points as ports: `CodeFormat`, `ScanSource`, `LabelRenderer`, `PrintTarget`, `LabelMediaProvider`, `MetadataResolver`, `BlobStore`, `SearchIndex`, `NotificationChannel`, `IdentityProvider`, `ImageProcessor`, `VirusScanner`, `ValuationProvider`, `ImportMapper`. | M | 3 | At least one shipped implementation per port |
-| REQ-PLG-002 | Out-of-process plugins over gRPC with mTLS are the **default** for third-party code. | M | 3 | An example plugin in Java and in Python runs |
-| REQ-PLG-003 | In-process plugins are **off** by default and permitted only for signed artifacts explicitly enabled by the operator. | M | 3 | A tenant administrator cannot install them |
-| REQ-PLG-004 | Every plugin brings a signed **manifest** with its contract range, ports, capabilities and settings. | M | 3 | An unsigned plugin only with an explicit operator setting |
-| REQ-PLG-005 | Capabilities are granted **per tenant**; without a grant nothing is possible. | M | 3 | A call without the capability is rejected and logged |
-| REQ-PLG-006 | A manifest change adding a capability resets the consent. | M | 3 | No silent privilege escalation |
-| REQ-PLG-007 | Every plugin call has a deadline, a payload limit, a bulkhead and a circuit breaker. | M | 3 | A slow plugin does not block the core |
-| REQ-PLG-008 | A plugin with an incompatible contract version is disabled and reported; the core starts normally. | M | 3 | Foreign code can never prevent startup |
+| REQ-PLG-001 | Extension points as ports: `CodeFormat`, `ScanSource`, `LabelRenderer`, `PrintTarget`, `LabelMediaProvider`, `MetadataResolver`, `BlobStore`, `SearchIndex`, `NotificationChannel`, `IdentityProvider`, `ImageProcessor`, `VirusScanner`, `ValuationProvider`, `ImportMapper`. | M | 1 | At least one shipped implementation per port |
+| REQ-PLG-002 | Out-of-process plugins over gRPC with mTLS are the **default** for third-party code. | M | 1 | An example plugin in Java and in Python runs |
+| REQ-PLG-003 | In-process plugins are **off** by default and permitted only for signed artifacts explicitly enabled by the operator. | M | 1 | A tenant administrator cannot install them |
+| REQ-PLG-004 | Every plugin brings a signed **manifest** with its contract range, ports, capabilities and settings. | M | 1 | An unsigned plugin only with an explicit operator setting |
+| REQ-PLG-005 | Capabilities are granted **per tenant**; without a grant nothing is possible. | M | 1 | A call without the capability is rejected and logged |
+| REQ-PLG-006 | A manifest change adding a capability resets the consent. | M | 1 | No silent privilege escalation |
+| REQ-PLG-007 | Every plugin call has a deadline, a payload limit, a bulkhead and a circuit breaker. | M | 1 | A slow plugin does not block the core |
+| REQ-PLG-008 | A plugin with an incompatible contract version is disabled and reported; the core starts normally. | M | 1 | Foreign code can never prevent startup |
 | REQ-PLG-009 | An SDK is provided: Java, Python, the protobuf module, a **contract test suite**, a project template. | M | 3 | `homeinv-plugin init` produces a runnable scaffold |
-| REQ-PLG-010 | A new code format plugin runs **without a single line of core change**. | M | 3 | An automated test in CI following [09 §9.10](../architecture/09-extensibility-and-plugins.md) |
-| REQ-PLG-011 | Plugin writes appear in the audit log **with the plugin as the actor**. | M | 3 | Distinguishable from user actions |
+| REQ-PLG-010 | A new code format plugin runs **without a single line of core change**. | M | 1 | An automated test in CI following [09 §9.10](../architecture/09-extensibility-and-plugins.md) |
+| REQ-PLG-011 | Plugin writes appear in the audit log **with the plugin as the actor**. | M | 1 | Distinguishable from user actions |
 | REQ-PLG-012 | Plugin UI panels (`ui:panel`) run in a sandboxed `iframe` with their own origin. | S | 3 | Communication only through `postMessage` with a verified origin |
-| REQ-PLG-013 | There is **no** installation from inside the running system out of the internet. | M | 3 | Installation stays an operator action |
+| REQ-PLG-013 | There is **no** installation from inside the running system out of the internet. | M | 1 | Installation stays an operator action |
 | REQ-PLG-014 | A curated list of known plugins exists as `PLUGINS.md` in the repository (name, publisher, ports, manifest URL, certificate fingerprint, contract version, licence). Admission by pull request after passing the contract test suite. The head of the list makes clear that the project **neither distributes nor counter-signs nor assures security**. | S | 3 | The list exists; the admission criteria are documented |
 
 ---
@@ -286,6 +286,9 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-SYNC-011 | The user sees their devices with the last reconciliation and any unsent changes, and can wipe them remotely. | M | 3 | A remote wipe first transmits unsent changes where possible |
 | REQ-SYNC-012 | Configuration and permissions are **download only**, never edited offline. | M | 3 | Offline editing is not offered in the UI at all |
 | REQ-SYNC-013 | Property-based tests with n simulated devices show that no record disappears without a conflict record. | M | 3 | The test run is part of CI |
+| REQ-SYNC-014 | `/sync/pull` is filtered **per principal**, not merely per tenant: every entry passes the same authorization check as a REST read of that entity, including location-subtree scope. | M | 3 | A user scoped to one subtree receives no entry from outside it — verified against the raw `change_log`, not against the API response |
+| REQ-SYNC-015 | `sensitive` field values never appear in a sync payload or tombstone, by the same rule as REST and GraphQL. | M | 3 | A shared test across REST, GraphQL and sync asserts the field is **absent**, not masked |
+| REQ-SYNC-016 | A change to a numeric field carries its **intent** (`SET` or `ADJUST`); the client derives it from the interaction, never from a dialog. Two `ADJUST`s merge by summing deltas, two `SET`s conflict, a `SET` against an `ADJUST` takes the `SET` as base ([ADR-0014](../adr/0014-offline-synchronization.md)). | M | 3 | A stocktake correction concurrent with an offline withdrawal yields the counted value minus the withdrawal — **not** the withdrawal applied twice |
 
 ---
 
@@ -294,12 +297,12 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
 | REQ-NOTI-001 | Reminder rules consist of a saved search, a time offset and a channel — as **data**, not code. | M | 1 | A rule is creatable in the UI |
-| REQ-NOTI-002 | Channels through the `NotificationChannel` port; e-mail and webhook ship with the product. | M | 1 | Further channels as plugins |
+| REQ-NOTI-002 | Channels through the `NotificationChannel` port. **Every** channel is a plugin — including e-mail and webhook — because every one of them leaves the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). `plugin-smtp` and `plugin-webhook` ship as first-party plugins. | M | 1 | Both run as plugins; a network test shows the core reaching neither an SMTP server nor a webhook target |
 | REQ-NOTI-003 | Triggers at least: warranty expiry, maintenance interval, return date, minimum stock, licence expiry, stocktake discrepancy. | S | 1 | An acceptance test per trigger |
-| REQ-NOTI-004 | Security-relevant account events are always reported by e-mail and cannot be switched off. | M | 1 | Password change, a new second factor, a new device, remote sign-out |
+| REQ-NOTI-004 | Security-relevant account events are always reported by e-mail and cannot be switched off **by a user or a tenant administrator**. They do depend on `plugin-smtp` being installed by the operator; an installation without it has no mail at all, and the administration UI states that rather than dropping notifications silently ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)). | M | 1 | Password change, a new second factor, a new device, remote sign-out — each delivered; with the plugin absent, the UI shows the reduced state |
 | REQ-NOTI-005 | Delivery attempts are logged, with retries and dead-lettering. | S | 1 | A failed delivery is visible |
 | REQ-NOTI-006 | Users configure per channel and per kind what they receive. | S | 1 | The settings take effect |
-| REQ-NOTI-007 | Push on mobile devices goes through `NotificationChannel` **plugins** (Firebase, APNs) in the `plugins` network segment with a fixed target list. The core keeps its "no outbound route" rule. | M | 3 | A network test: the core cannot reach `fcm.googleapis.com`; the plugin reaches only its target list |
+| REQ-NOTI-007 | Push goes through `NotificationChannel` **plugins** — Firebase, APNs **and Web Push/VAPID**, which reaches the browser vendors' push endpoints and is therefore no more "core-safe" than the other two ([ADR-0023](../adr/0023-push-notifications.md), [ADR-0026](../adr/0026-core-outbound-via-plugins.md)). | M | 3 | A network test: **no core container** reaches any external host; each push plugin reaches only the hosts in its manifest, enforced by the egress proxy |
 | REQ-NOTI-008 | The push payload contains **no inventory data** — only an identifier and a category (`reminder`, `security`, `conflict`). The app fetches the content through the authenticated API. | M | 3 | A captured push message contains neither item name nor location, amount or tenant name |
 | REQ-NOTI-009 | Push requires three separate opt-ins: the operator installs the plugin, the tenant administrator grants `network:outbound`, the user switches it on. Everything keeps working without push (e-mail and fetch). | M | 3 | Each level verified individually; switching off at any level takes effect |
 

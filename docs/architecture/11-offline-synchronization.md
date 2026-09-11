@@ -76,6 +76,11 @@ POST /api/v1/sync/push
       "baseVersion": 7,                   // 0 = newly created
       "payload":    { "name": "Cordless drill", "attributes": { … } },
       "changedFields": ["name", "attributes.condition"],
+      "intent":     { "quantity": "ADJUST" },   // SET | ADJUST, per numeric field.
+                                                // Absent means SET — "set it to 12"
+                                                // and "take two out" look identical
+                                                // in an absolute payload, and they
+                                                // merge differently (ADR-0014).
       "occurredAt": "2026-09-11T09:14:22.481Z",
       "hlc":        "2026-09-11T09:14:22.481Z-0003-0199d3…"
     }
@@ -133,7 +138,9 @@ GET /api/v1/sync/pull?since=148277&limit=500
 | Ordering | Strictly by `seq`. The device applies in exactly that order. |
 | Echo suppression | Entries with the device's own `originDeviceId` are skipped — saves bandwidth and prevents self-conflicts |
 | Cursor too old | `410 Gone` with `type: …/cursor-expired` → the device performs a full seeding. This is why the change log and the tombstones must be retained (30–365 days, default 90). |
-| Permission change | If a user loses access to a subtree, the affected entries appear as tombstones — the device removes them locally. Otherwise a copy would remain on the device. |
+| **Authorization** | The change log is written once per tenant, but it is **read per principal**. Every entry passes the same `AccessControl` check as a REST read of that entity — subtree scope (`REQ-TEN-007`) included — before it is put on the wire. Tenant filtering alone is **not** sufficient: a `VIEWER` scoped to "garage" would otherwise receive the whole tenant in `payload`. |
+| **Field visibility** | `sensitive` fields are **removed** from every `payload` and every `tombstone`, by the same rule as REST and GraphQL (`REQ-SEC-027`). The server never ships a licence key to a device, regardless of what the device would do with it — [11.7](#117-devices) says the PWA does not *store* them, which is a second line, not the first. |
+| **Permission change** | When a principal loses access to a subtree, the entries they can no longer see appear **to that device** as tombstones, so the local copy is removed. These are synthesised per device from the permission change, not read from the shared log — the log has no per-principal dimension and cannot carry them. |
 
 ## 11.4 Conflict detection and resolution
 
@@ -164,7 +171,7 @@ version is the price local storage pays, and it is worth it.
 | Sets (tags, relations) | **Union** of additions, **union** of removals; a removal wins over a concurrent addition | That matches expectation; corresponds to a 2P-set |
 | Attachments (media) | Union — a photo is never lost through a conflict | |
 | Location | Both moved → **conflict**, with both paths offered | An item is in exactly one place; only a human can decide that |
-| Quantity (consumables) | **Add the deltas** when both sides changed relatively (`+3` and `−1` → `+2`) | Counting operations are additive by nature |
+| Quantity (consumables) | Governed by `intent`. Two `ADJUST`s → **the deltas are summed** (`+3` and `−1` → `+2`). Two `SET`s → conflict, like any scalar. `SET` against `ADJUST` → the `SET` is taken as the base and the `ADJUST` applied on top | Counting operations are additive; a stocktake correction is not. Deriving this from the values alone is impossible — both look the same in an absolute payload, and guessing wrong makes a withdrawal count twice ([ADR-0014](../adr/0014-offline-synchronization.md)) |
 | Append-only lists (maintenance entries, scans, stocktake results) | Union, sorted by time, deduplicated by ID | They are events, not states — conflict-free |
 | Lifecycle | A fixed precedence: `PURGED` > `DISPOSED`/`SOLD` > `TRASHED` > `ARCHIVED` > `LENT` > `ACTIVE` | A disposal should not lose to a concurrent edit |
 | `sensitive` fields (licence keys) | Always a **conflict**, never automatic | Silently overwritten secrets are not recoverable |
@@ -234,7 +241,7 @@ sequenceDiagram
 
 | Rule | |
 |---|---|
-| Content addressing | The hash makes the upload idempotent. A photo sent twice costs storage once. |
+| Content addressing | The hash makes the upload idempotent **within the tenant** ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)) — which is the whole of the offline catch-up case: the same device re-sending the same photo. A photo sent twice costs storage once. |
 | Resumption | The tus protocol — an upload survives a network change and an app restart |
 | Ordering | Metadata first, binary afterwards. The item is visible immediately; the image carries a "on this device only" marker until it is uploaded. |
 | Local budget | A configurable storage budget per device (default 2 GB). On reaching it the least recently viewed thumbnails are discarded — **never** captures that have not been uploaded yet. |

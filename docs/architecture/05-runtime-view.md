@@ -67,36 +67,44 @@ sequenceDiagram
     participant C as Client
     participant R as rest
     participant M as media
-    participant B as BlobStore<br/>(Nextcloud)
+    participant PB as plugin-blobstore<br/>(Nextcloud)
+    participant B as Nextcloud
     participant MQ as RabbitMQ
     participant W as worker
     participant IP as ImageProcessor
 
     C->>R: POST /api/v1/media/uploads (size, SHA-256, type)
     R->>M: beginUpload()
-    M->>M: quota, MIME pre-check, duplicate by hash?
-    alt A blob with this hash already exists
+    M->>M: quota, MIME pre-check, duplicate by hash<br/>WITHIN THIS TENANT?
+    alt This tenant already holds a scanned blob with this hash
         M-->>C: 200 + existing mediaId (no upload needed)
     else new
         M-->>C: 201 + upload URL (tus, resumable)
         C->>R: PATCH upload URL (bytes, in chunks)
         R->>M: appendChunk()
         M->>M: check magic bytes, size limit
-        M->>B: PUT sha256/<hash>
-        M->>MQ: MediaUploaded
+        M->>PB: PUT sha256/<tenantId>/<hash>   [gRPC, mTLS]
+        PB->>B: WebDAV via egress-proxy
+        M->>MQ: MediaUploaded (state PENDING_SCAN)
     end
 
     MQ->>W: MediaUploaded
     W->>IP: malware scan, re-encode, strip EXIF
     W->>IP: thumb 200, preview 1024, full 4096
-    W->>B: PUT derivatives
+    W->>PB: PUT derivatives
     W->>MQ: MediaVariantsReady
     MQ-->>C: SSE → the view refreshes itself
 ```
 
 **Demonstrates:** content addressing makes repeated uploads (offline catch-up,
-network drop) free and idempotent. Image processing sits outside the request
-path. The `BlobStore` port makes Nextcloud replaceable.
+network drop) free and idempotent — **within the tenant**
+([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)). The duplicate check in
+the first branch consults the tenant's own namespace only; a hash known from
+elsewhere yields nothing, and never skips the mandatory scan. Image processing
+sits outside the request path. Nextcloud is reached by a plugin, not by the core
+([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) — which is why the storage
+backend is replaceable **and** why a core compromise does not hand over the
+Nextcloud app password.
 
 ## 5.3 Scanning and resolving a code
 
@@ -118,7 +126,7 @@ sequenceDiagram
     R->>ID: resolve(rawScan)
     ID->>PR: lookup(CodeFormat, tenant) → by priority
     ID->>P1: claims(raw)?
-    P1-->>ID: yes → PublicCode "7Q2-M4X-9"
+    P1-->>ID: yes → PublicCode "7Q2M-4X9K-D2F"
     ID->>ID: look up CodeBinding
     alt bound
         ID->>INV: resolve ItemRef
@@ -193,7 +201,7 @@ sequenceDiagram
     EN->>PR: lookup(MetadataResolver, scheme=ISBN, tenant)
     PR->>PR: capability "network:outbound" granted?
     EN->>P: resolve("978-…")  [gRPC, deadline 5 s, circuit breaker]
-    P->>EXT: HTTPS
+    P->>EXT: HTTPS via egress-proxy<br/>(refused unless the host is in the manifest)
     EXT-->>P: title, author, publisher, year, cover URL
     P-->>EN: ResolvedMetadata + provenance + confidence
     EN->>EN: apply FieldMapping to the target type
@@ -267,6 +275,7 @@ sequenceDiagram
 
     A->>SY: GET /api/v1/sync/pull?since=cursor
     SY->>DB: change_log from cursor (tenant-filtered)
+    SY->>SY: per entry: AccessControl check for THIS principal,<br/>strip sensitive fields, synthesise tombstones for<br/>anything newly out of scope
     SY-->>A: changes + tombstones + new cursor
 ```
 
