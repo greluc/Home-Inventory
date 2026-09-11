@@ -1,0 +1,36 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory web
+Requires=homeinv-api.service
+After=homeinv-api.service
+
+[Container]
+ContainerName=homeinv-web
+Image=ghcr.io/greluc/home-inv-web:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-edge.network
+Network=homeinv-frontend.network
+Tmpfs=/tmp
+Tmpfs=/var/cache/nginx
+Tmpfs=/var/run
+PublishPort=8080:8080
+HealthCmd=/healthcheck
+HealthInterval=15s
+HealthStartPeriod=30s
+
+[Service]
+MemoryMax=256M
+MemoryLow=64M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

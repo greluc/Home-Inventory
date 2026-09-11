@@ -1,0 +1,36 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory rabbitmq
+
+[Container]
+ContainerName=homeinv-rabbitmq
+Image=docker.io/library/rabbitmq:4-management-alpine
+User=999:999
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Volume=homeinv-mqdata.volume:/var/lib/rabbitmq
+Tmpfs=/tmp
+Tmpfs=/var/log/rabbitmq
+Tmpfs=/etc/rabbitmq
+Environment=RABBITMQ_DEFAULT_USER=homeinv
+Environment=RABBITMQ_DEFAULT_PASS_FILE=/run/secrets/mq-password
+Secret=mq-password,type=mount
+HealthCmd=rabbitmq-diagnostics -q ping
+HealthInterval=20s
+HealthStartPeriod=60s
+
+[Service]
+MemoryMax=512M
+MemoryLow=256M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

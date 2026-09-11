@@ -1,0 +1,56 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory worker
+Requires=homeinv-postgres.service
+After=homeinv-postgres.service
+Requires=homeinv-clamav.service
+After=homeinv-clamav.service
+Requires=homeinv-blobstore.service
+After=homeinv-blobstore.service
+
+[Container]
+ContainerName=homeinv-worker
+Image=ghcr.io/greluc/home-inv:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Network=homeinv-scanner.network
+Tmpfs=/tmp
+Environment=SPRING_PROFILES_ACTIVE=worker,${HOMEINV_PROFILE}
+Environment=MANAGEMENT_SERVER_PORT=8090
+Environment=MANAGEMENT_SERVER_ADDRESS=${INTERNAL_ADDR}
+Environment=HOMEINV_DB_MIGRATE_ON_START=false
+Environment=HOMEINV_PUBLIC_BASE_URL=${HOMEINV_PUBLIC_BASE_URL}
+Environment=HOMEINV_MEDIA_BASE_URL=${HOMEINV_MEDIA_BASE_URL}
+Environment=HOMEINV_BLOBSTORE_ENDPOINT=blobstore:8100
+Environment=HOMEINV_BLOBSTORE_FINGERPRINT=${HOMEINV_BLOBSTORE_FINGERPRINT}
+Environment=HOMEINV_VALKEY_USER=homeinv
+Environment=HOMEINV_MQ_USER=homeinv
+Environment=HOMEINV_SEARCH_USER=homeinv
+Secret=db-password,type=mount
+Secret=data-key,type=mount
+Secret=url-signing-key,type=mount
+Secret=valkey-password,type=mount
+Secret=mq-password,type=mount
+Secret=search-password,type=mount
+Secret=mtls-core,type=mount
+HealthCmd=/usr/bin/healthcheck
+HealthInterval=15s
+HealthStartPeriod=90s
+Notify=healthy
+
+[Service]
+MemoryMax=1536M
+MemoryLow=512M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

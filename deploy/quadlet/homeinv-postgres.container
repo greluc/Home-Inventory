@@ -1,0 +1,35 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory postgres
+
+[Container]
+ContainerName=homeinv-postgres
+Image=docker.io/library/postgres:18-alpine
+User=70:70
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Volume=homeinv-pgdata.volume:/var/lib/postgresql/data
+Volume=homeinv-pgwal.volume:/var/lib/homeinv/wal-archive
+Tmpfs=/tmp
+Tmpfs=/var/run/postgresql
+Secret=db-password,type=mount
+Secret=db-migration-password,type=mount
+HealthCmd=pg_isready
+HealthInterval=10s
+HealthStartPeriod=30s
+
+[Service]
+MemoryMax=2G
+MemoryLow=1G
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,32 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory migrate
+Requires=homeinv-postgres.service
+After=homeinv-postgres.service
+
+[Container]
+ContainerName=homeinv-migrate
+Image=ghcr.io/greluc/home-inv:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Tmpfs=/tmp
+Environment=SPRING_PROFILES_ACTIVE=migrate
+Environment=HOMEINV_DB_MIGRATE_ON_START=true
+Secret=db-migration-password,type=mount
+
+[Service]
+MemoryMax=512M
+MemoryLow=256M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

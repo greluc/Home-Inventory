@@ -1,0 +1,15 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory volume kvdata
+
+[Volume]
+VolumeName=homeinv-kvdata
+
+[Install]
+WantedBy=default.target

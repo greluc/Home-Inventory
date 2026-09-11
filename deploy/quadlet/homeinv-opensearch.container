@@ -1,0 +1,39 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory opensearch
+
+[Container]
+ContainerName=homeinv-opensearch
+Image=docker.io/opensearchproject/opensearch:3
+User=1000:1000
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Volume=homeinv-osdata.volume:/usr/share/opensearch/data
+Tmpfs=/tmp
+Tmpfs=/usr/share/opensearch/logs
+Tmpfs=/usr/share/opensearch/config
+Environment=OPENSEARCH_INITIAL_ADMIN_PASSWORD=/run/secrets/opensearch-admin-password
+Environment=DISABLE_INSTALL_DEMO_CONFIG=true
+Environment=bootstrap.memory_lock=false
+Secret=opensearch-admin-password,type=mount
+Secret=search-password,type=mount
+Secret=mtls-search,type=mount
+HealthCmd=curl -fsS -k https://localhost:9200/_cluster/health
+HealthInterval=20s
+HealthStartPeriod=120s
+
+[Service]
+MemoryMax=2G
+MemoryLow=1536M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

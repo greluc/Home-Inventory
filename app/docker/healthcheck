@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The health command both runtimes call (deploy/services.yaml).
+#
+# It asks the management port, not the traffic port. Readiness is about whether
+# the application can serve; the traffic port answers 401 to an unauthenticated
+# request whether the application is healthy or not, which would make a perfectly
+# broken instance look fine.
+#
+# curl rather than a JVM. The first version of this file ran `java -` with the
+# source on stdin, which is elegant and wrong: it spawns a JVM and a compiler
+# every fifteen seconds, in every container, on a machine whose whole budget is
+# two gigabytes. A 1 MB binary costs less than that does — and on a `minimal`
+# profile the checks alone would have been a measurable share of the CPU.
+set -eu
+
+PORT="${MANAGEMENT_SERVER_PORT:-8090}"
+
+# --fail turns a 503 into a non-zero exit; without it curl reports success for
+# having successfully received a failure.
+exec curl --fail --silent --show-error --max-time 3 \
+    "http://127.0.0.1:${PORT}/actuator/health/readiness"

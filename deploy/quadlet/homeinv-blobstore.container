@@ -1,0 +1,32 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory blobstore
+
+[Container]
+ContainerName=homeinv-blobstore
+Image=ghcr.io/greluc/home-inv-blobstore:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Volume=homeinv-blobdata.volume:/var/lib/homeinv/blobs
+Tmpfs=/tmp
+Secret=mtls-blobstore,type=mount
+HealthCmd=/healthcheck
+HealthInterval=30s
+HealthStartPeriod=30s
+
+[Service]
+MemoryMax=128M
+MemoryLow=32M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

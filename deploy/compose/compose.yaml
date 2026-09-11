@@ -1,0 +1,473 @@
+# GENERATED FROM ../services.yaml — DO NOT EDIT.
+#
+# Run `python deploy/generate.py` after changing the matrix. CI regenerates
+# this file and fails on any difference, so an edit here is lost and noticed
+# rather than lost and not (REQ-NFR-063).
+
+
+name: home-inv
+
+services:
+  web:
+    image: ghcr.io/greluc/home-inv-web:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - edge
+      - frontend
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/healthcheck"]
+      interval: 15s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+
+  api:
+    image: ghcr.io/greluc/home-inv:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+      - frontend
+    environment:
+      SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
+      MANAGEMENT_SERVER_PORT: "8090"
+      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
+      HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
+      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
+      HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
+      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"
+      HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
+      HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_USER: "homeinv"
+      HOMEINV_SEARCH_USER: "homeinv"
+    secrets:
+      - db-password
+      - data-key
+      - jwt-key
+      - url-signing-key
+      - valkey-password
+      - mq-password
+      - search-password
+      - mtls-core
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrate:
+        condition: service_healthy
+      blobstore:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/bin/healthcheck"]
+      interval: 15s
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+        reservations:
+          memory: 768m
+
+  worker:
+    image: ghcr.io/greluc/home-inv:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+      - scanner
+    environment:
+      SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
+      MANAGEMENT_SERVER_PORT: "8090"
+      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
+      HOMEINV_DB_MIGRATE_ON_START: "false"
+      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
+      HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
+      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"
+      HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
+      HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_USER: "homeinv"
+      HOMEINV_SEARCH_USER: "homeinv"
+    secrets:
+      - db-password
+      - data-key
+      - url-signing-key
+      - valkey-password
+      - mq-password
+      - search-password
+      - mtls-core
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+      blobstore:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/bin/healthcheck"]
+      interval: 15s
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+        reservations:
+          memory: 512m
+
+  migrate:
+    image: ghcr.io/greluc/home-inv:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+    environment:
+      SPRING_PROFILES_ACTIVE: "migrate"
+      HOMEINV_DB_MIGRATE_ON_START: "true"
+    secrets:
+      - db-migration-password
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+  postgres:
+    image: docker.io/library/postgres:18-alpine
+    user: "70:70"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+    secrets:
+      - db-password
+      - db-migration-password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - pgwal:/var/lib/homeinv/wal-archive
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 10s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+
+  valkey:
+    image: docker.io/valkey/valkey:8-alpine
+    user: "999:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+    secrets:
+      - valkey-password
+    volumes:
+      - kvdata:/data
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "valkey-cli ping"]
+      interval: 10s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+
+  blobstore:
+    image: ghcr.io/greluc/home-inv-blobstore:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+    secrets:
+      - mtls-blobstore
+    volumes:
+      - blobdata:/var/lib/homeinv/blobs
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "/healthcheck"]
+      interval: 30s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
+  clamav:
+    image: docker.io/clamav/clamav:stable
+    user: "100:101"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - scanner
+    volumes:
+      - cvddata:/var/lib/clamav
+    tmpfs:
+      - /tmp
+      - /run/clamav
+      - /var/log/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+        reservations:
+          memory: 1g
+
+  egress-proxy:
+    image: ghcr.io/greluc/home-inv-egress-proxy:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - scanner
+      - egress
+    tmpfs:
+      - /tmp
+      - /var/run
+    healthcheck:
+      test: ["CMD", "/healthcheck"]
+      interval: 30s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 32m
+        reservations:
+          memory: 16m
+
+  opensearch:
+    image: docker.io/opensearchproject/opensearch:3
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      - internal
+    environment:
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "/run/secrets/opensearch-admin-password"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      bootstrap.memory_lock: "false"
+    secrets:
+      - opensearch-admin-password
+      - search-password
+      - mtls-search
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    tmpfs:
+      - /tmp
+      - /usr/share/opensearch/logs
+      - /usr/share/opensearch/config
+    healthcheck:
+      test: ["CMD", "curl -fsS -k https://localhost:9200/_cluster/health"]
+      interval: 20s
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1536m
+
+  rabbitmq:
+    image: docker.io/library/rabbitmq:4-management-alpine
+    user: "999:999"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      - internal
+    environment:
+      RABBITMQ_DEFAULT_USER: "homeinv"
+      RABBITMQ_DEFAULT_PASS_FILE: "/run/secrets/mq-password"
+    secrets:
+      - mq-password
+    volumes:
+      - mqdata:/var/lib/rabbitmq
+    tmpfs:
+      - /tmp
+      - /var/log/rabbitmq
+      - /etc/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics -q ping"]
+      interval: 20s
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+networks:
+  edge:
+  egress:
+  internal:
+    internal: true
+  frontend:
+    internal: true
+  scanner:
+    internal: true
+
+volumes:
+  pgdata:
+  pgwal:
+  osdata:
+  mqdata:
+  kvdata:
+  cvddata:
+  blobdata:
+
+secrets:
+  db-password:
+    file: ../secrets/db-password
+  db-migration-password:
+    file: ../secrets/db-migration-password
+  data-key:
+    file: ../secrets/data-key
+  jwt-key:
+    file: ../secrets/jwt-key
+  url-signing-key:
+    file: ../secrets/url-signing-key
+  valkey-password:
+    file: ../secrets/valkey-password
+  mq-password:
+    file: ../secrets/mq-password
+  search-password:
+    file: ../secrets/search-password
+  mtls-core:
+    file: ../secrets/mtls-core
+  mtls-blobstore:
+    file: ../secrets/mtls-blobstore
+  mtls-search:
+    file: ../secrets/mtls-search
+  opensearch-admin-password:
+    file: ../secrets/opensearch-admin-password

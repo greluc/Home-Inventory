@@ -1,0 +1,32 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory egress-proxy
+
+[Container]
+ContainerName=homeinv-egress-proxy
+Image=ghcr.io/greluc/home-inv-egress-proxy:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-scanner.network
+Network=homeinv-egress.network
+Tmpfs=/tmp
+Tmpfs=/var/run
+HealthCmd=/healthcheck
+HealthInterval=30s
+HealthStartPeriod=30s
+
+[Service]
+MemoryMax=32M
+MemoryLow=16M
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

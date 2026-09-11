@@ -1,0 +1,33 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory clamav
+
+[Container]
+ContainerName=homeinv-clamav
+Image=docker.io/clamav/clamav:stable
+User=100:101
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-scanner.network
+Volume=homeinv-cvddata.volume:/var/lib/clamav
+Tmpfs=/tmp
+Tmpfs=/run/clamav
+Tmpfs=/var/log/clamav
+HealthCmd=clamdcheck.sh
+HealthInterval=60s
+HealthStartPeriod=300s
+
+[Service]
+MemoryMax=1536M
+MemoryLow=1G
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
