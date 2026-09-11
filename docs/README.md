@@ -26,6 +26,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | the **design system** | [Design system brief](design/design-system-brief.md) — the system itself is in [`design-system/`](../design-system/) |
 | the **project website** | [`website/`](../website/), with the pre-render request in [design/](design/website-prerender-request.md) |
 | the **error and degradation tokens** clients branch on | [`problem-types.yaml`](reference/problem-types.yaml) · [`degraded-reasons.yaml`](reference/degraded-reasons.yaml) |
+| the **plugin states** an operator sees | [`plugin-health-states.yaml`](reference/plugin-health-states.yaml) |
 
 ## Layout
 
@@ -35,7 +36,8 @@ docs/
 ├── adr/              architecture decisions, numbered consecutively
 ├── design/           the briefs behind the design system and the website — the system
 │                  itself is at ../design-system/ (it is source, not docs)
-├── reference/        reference data: label geometries, the `problem.type`
+├── reference/        reference data: label geometries, plugin health states,
+│                  the `problem.type`
 │                  registry, the `degradedReason` registry
 └── requirements/     a verifiable requirements catalogue with stable IDs
 ```
@@ -107,6 +109,7 @@ Each has its own ADR with rationale and alternatives.
 | 45 | Recovery point | The WAL archive is its own volume — without it RPO ≤ 15 min is the last daily dump | [0045](adr/0045-wal-archive-volume.md) |
 | 46 | Audit retention | The chain is truncatable and the truncation is recorded, so retention and tampering stop looking alike | [0046](adr/0046-truncatable-audit-chain.md) |
 | 47 | Fallback full text | Two generated `tsvector` columns, German and English — `simple` does no stemming | [0047](adr/0047-bilingual-search-vectors.md) |
+| 48 | Remote storage | No managed folders or permissions at the remote — the credential stays scoped to one folder | [0048](adr/0048-no-managed-remote-folders.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open** — the

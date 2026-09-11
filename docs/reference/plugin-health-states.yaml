@@ -1,0 +1,211 @@
+# Home Inventory — the health states of an outbound plugin
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR THE SET OF PLUGIN HEALTH STATES.
+#
+# [13 §13.11](../architecture/13-operations-and-observability.md) requires the
+# operator UI to show "the plugin list with state, error rate and granted
+# capabilities per tenant", and 13 §13.7 meters plugin health once a minute.
+# Neither said what a *state* is. This file says.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS IS NOT degraded-reasons.yaml
+#
+# `degradedReason` is for the **client**: a 200 whose content is correct and only
+# poorer (ADR-0039). These states are for the **operator**: what is wrong with an
+# integration and what to do about it. The two are related but not the same set,
+# and conflating them produces either an operator UI that says "degraded" without
+# saying why, or a client branching on an operator's diagnosis.
+#
+# Each state below therefore names its client-visible counterpart explicitly,
+# under `clientSees`. Several states collapse to the same `degradedReason`, which
+# is the point: the client needs to know that an upload is queued, the operator
+# needs to know whether the password was revoked or the allowlist is wrong,
+# because those have nothing in common except the symptom.
+#
+# ---------------------------------------------------------------------------
+# WHERE THIS SET COMES FROM
+#
+# Adapted from the health-status catalogue of the OpenProject–Nextcloud
+# integration, which is the same problem — a project managing a remote storage
+# it does not own — after several years in production
+# (<https://www.openproject.org/docs/system-admin-guide/files/external-file-storages/health-status/>).
+# ADR-0048 records what was taken and what was deliberately not.
+#
+# Two of the states below have no OpenProject counterpart, because they come
+# from our own architecture: `EGRESS_DENIED` (ADR-0027 gives the core no
+# outbound route, so a host absent from the manifest allowlist fails in a way
+# that *looks* like a network fault and is not) and `CONTRACT_MISMATCH`.
+#
+# ---------------------------------------------------------------------------
+# THE RULE BEHIND `PROVISIONING_INCOMPLETE`
+#
+# OpenProject states that its setup "expects either all entities to exist with
+# correct permissions or none to exist — partial states cause errors." That is
+# worth taking literally and is the reason this state exists rather than being
+# folded into `INSUFFICIENT_PRIVILEGES`. A half-provisioned target is not a
+# degraded integration; it is an integration that must not be used, because the
+# half that works will happily accept writes the other half cannot serve.
+# REQ-PLG-015 makes the check mandatory and fail-closed.
+# ---------------------------------------------------------------------------
+
+schemaVersion: 1
+updated: 2026-09-11
+
+# The states an outbound plugin (`plugin-blobstore-*`, `plugin-smtp`,
+# enrichment resolvers) reports to the core, and the core to the operator UI.
+states:
+
+  - state: OK
+    fault: false
+    summary: >
+      Reachable, authenticated, and the last call in the observation window
+      succeeded.
+    operatorAction: none
+    clientSees: nothing
+
+  - state: NOT_CONFIGURED
+    fault: false
+    summary: >
+      The plugin is installed but has no target or no credentials yet. It has
+      never worked, as opposed to having stopped working.
+    operatorAction: >
+      Configure it, or remove it. Nothing is broken.
+    clientSees: >
+      Depends on the port: `notifications-unavailable` for a channel,
+      `media-upload-queued` for a store.
+    notes: >
+      A `minimal` installation runs without `plugin-smtp` **by design**
+      (ADR-0028), so this is a steady state there and must not raise an alert.
+      The operator UI shows it as configured-off, not as a fault — the same
+      distinction `notifications-unavailable` already makes for clients.
+
+  - state: PROVISIONING_INCOMPLETE
+    fault: true
+    summary: >
+      The remote target exists only in part: the folder is there but the app
+      password cannot write to it, the bucket exists but not the agreed prefix,
+      the mailbox authenticates but refuses the envelope sender.
+    operatorAction: >
+      Complete or remove the half-built target. Do not "fix it later" — see the
+      note.
+    clientSees: media-upload-queued
+    notes: >
+      **Fail-closed: the plugin refuses service in this state rather than
+      working partially** (REQ-PLG-015). The failure mode this prevents is the
+      expensive one: writes are accepted against the half that works, and the
+      half that does not is discovered when someone tries to read them back.
+    sources:
+      - "OpenProject: setup 'expects either all entities to exist with correct permissions or none'"
+
+  - state: CREDENTIALS_REJECTED
+    fault: true
+    summary: >
+      Authentication failed. The Nextcloud app password was revoked, the S3 key
+      rotated out of band, the token expired.
+    operatorAction: >
+      Re-issue the credential and put it in the secret store. The plugin picks it
+      up on restart; it does not read secrets per call.
+    clientSees: media-upload-queued
+    notes: >
+      Distinct from `INSUFFICIENT_PRIVILEGES` on purpose. Here the remote does
+      not know who we are; there it knows and says no. The first is a rotation
+      the operator forgot, the second is a permission someone changed.
+
+  - state: INSUFFICIENT_PRIVILEGES
+    fault: true
+    summary: >
+      Authenticated, and the operation was refused. The app password lost write
+      access to its one folder, or the bucket policy changed.
+    operatorAction: >
+      Restore the right on the remote. Do **not** widen the credential's scope
+      beyond the one folder — REQ-SEC-052 is the point, not an obstacle.
+    clientSees: media-upload-queued
+
+  - state: DESTINATION_UNREACHABLE
+    fault: true
+    summary: >
+      The host did not answer: DNS, routing, a closed port, or a TLS chain the
+      plugin does not trust.
+    operatorAction: >
+      Check name resolution and the certificate chain from **inside the plugin
+      container**, not from a workstation. The plugin segment has its own view of
+      the network by design.
+    clientSees: media-upload-queued
+    notes: >
+      A private CA whose root the plugin image does not carry looks exactly like
+      an outage. OpenProject reports the same class of failure and notes it
+      "fails silently" when proxies and certificates are misconfigured — which is
+      why this state exists rather than a log line.
+
+  - state: EGRESS_DENIED
+    fault: true
+    summary: >
+      The `egress-proxy` refused the destination: the host is not on the
+      allowlist in the plugin's manifest, or the capability was never granted for
+      this tenant.
+    operatorAction: >
+      Amend the manifest allowlist and re-grant the capability. This is a
+      configuration decision, deliberately not something the plugin can widen by
+      itself.
+    clientSees: media-upload-queued
+    notes: >
+      **This is the state most likely to be misdiagnosed.** It presents as a
+      connection failure and is an authorization decision — the fix is in our own
+      configuration, not on the remote or in the network. It has no OpenProject
+      counterpart because OpenProject has no egress proxy (ADR-0027).
+
+  - state: TARGET_CONFLICT
+    fault: true
+    summary: >
+      A name at the destination is taken by something that is not ours — a folder
+      of the same name created by hand, an object where a prefix is expected.
+    operatorAction: >
+      Resolve the collision at the remote. The plugin never overwrites a target
+      it did not create.
+    clientSees: media-upload-queued
+    sources:
+      - "OpenProject health status: 'Folder naming conflicts when items already exist'"
+
+  - state: QUOTA_EXHAUSTED
+    fault: true
+    summary: >
+      The remote accepted the request and has no room: the Nextcloud quota is
+      full, the object store rejects writes.
+    operatorAction: >
+      Raise the quota at the remote, or reduce what is stored. Our own per-tenant
+      quota is a different limit and reports separately.
+    clientSees: media-upload-queued
+
+  - state: CONTRACT_MISMATCH
+    fault: true
+    summary: >
+      The plugin speaks a major version of `home_inv.plugin.v1` that this core
+      does not serve.
+    operatorAction: >
+      Update the plugin, or pin the core version until you can. The contract
+      keeps a previous major served for at least six months, so this is
+      recoverable rather than urgent.
+    clientSees: >
+      Depends on the port, as for `NOT_CONFIGURED` — the plugin is simply absent
+      from the core's point of view.
+    notes: >
+      No OpenProject counterpart: their integration versions the two products
+      together, ours versions a contract that third parties implement.
+
+# ---------------------------------------------------------------------------
+# Deliberately NOT states
+# ---------------------------------------------------------------------------
+excluded:
+  - state: SLOW
+    why: >
+      Latency is a metric with a threshold, not a state. `plugin-blobstore-*`
+      against Nextcloud is slow by nature (risk R11); a state that is true most
+      of the time teaches the operator to ignore the column.
+
+  - state: FOLDER_PERMISSIONS_OUT_OF_SYNC
+    why: >
+      This is OpenProject's central state and we have no equivalent, because we
+      do not manage permissions at the remote at all. ADR-0048 explains why that
+      is a decision rather than an omission: our credential has access to exactly
+      one folder (REQ-SEC-052), and managing foreign permissions would require
+      administrative rights at the remote.

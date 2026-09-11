@@ -207,7 +207,10 @@ An operator UI shows, without detouring through log files:
 
 - System state per dependency with its degradation level
 - Outbox and queue backlog
-- The plugin list with state, error rate and granted capabilities per tenant
+- The plugin list with state, error rate and granted capabilities per tenant.
+  **State is a token** from
+  [`docs/reference/plugin-health-states.yaml`](../reference/plugin-health-states.yaml),
+  not prose (REQ-NFR-079), and a fault state carries the operator action with it
 - The tenant list with occupancy and quota usage
 - The last backup and the last **successful restore verification**
 - Open conflicts across all tenants

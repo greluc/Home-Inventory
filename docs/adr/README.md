@@ -69,3 +69,4 @@ Date: YYYY-MM-DD
 | [0045](0045-wal-archive-volume.md) | The WAL archive is a volume of its own, or the recovery point objective is fiction | Accepted |
 | [0046](0046-truncatable-audit-chain.md) | The audit chain is truncatable, and per-tenant retention has a mechanism | Accepted |
 | [0047](0047-bilingual-search-vectors.md) | Two generated search vectors, German and English, instead of `simple` | Accepted |
+| [0048](0048-no-managed-remote-folders.md) | No OpenProject-style managed folders at the remote storage | Accepted |
