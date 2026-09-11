@@ -1,0 +1,36 @@
+/*
+ * SPDX-FileCopyrightText: Lucas Greuloch
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+package de.greluc.homeinv.media.api;
+
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * What a client learns about a stored file.
+ *
+ * <p>Deliberately no bytes and no unsigned path. {@code urls} carries signed, short-lived links per
+ * variant and nothing else (REQ-MED-010); a field with a raw path would be a field that bypasses the
+ * signature, the expiry and the dedicated hostname at once.
+ *
+ * <p>When the scan has not finished, {@code urls} is empty rather than absent. A client showing a
+ * placeholder needs to know the upload exists and is not yet retrievable, which is a different state
+ * from "no such file" (REQ-MED-013).
+ *
+ * @param id the media object
+ * @param mediaType the detected type, never the declared one
+ * @param byteSize the size of the original
+ * @param widthPx the width for an image, or {@code null}
+ * @param heightPx the height for an image, or {@code null}
+ * @param scanState where the scan stands; only {@code CLEAN} yields URLs
+ * @param urls variant name to signed URL, empty until the scan says clean
+ */
+public record MediaView(
+    UUID id,
+    String mediaType,
+    long byteSize,
+    Integer widthPx,
+    Integer heightPx,
+    String scanState,
+    Map<String, String> urls) {}

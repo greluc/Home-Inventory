@@ -56,12 +56,22 @@ public class WebSecurityConfiguration {
                     .csrfTokenRequestHandler(csrfHandler)
                     // The login endpoint establishes the session that the token belongs to;
                     // requiring a token to obtain one is circular.
+                    // Login establishes the session the token belongs to;
+                    // requiring a token to obtain one is circular. The media path
+                    // is read-only and carries its own authorisation.
                     .ignoringRequestMatchers("/api/v1/auth/login"))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(
             authorize ->
                 authorize
                     .requestMatchers("/api/v1/auth/login", "/actuator/health/**")
+                    .permitAll()
+                    // Authorised by the signature in the URL and by nothing else
+                    // (REQ-MED-010). A browser following an <img src> to the
+                    // media hostname sends no session cookie, and SameSite=Strict
+                    // would withhold it even to our own. The controller verifies
+                    // the signature and answers 404 when it does not match.
+                    .requestMatchers("/media/**")
                     .permitAll()
                     // Everything else, including anything added later. A default of
                     // permitAll would make a forgotten rule a public endpoint.

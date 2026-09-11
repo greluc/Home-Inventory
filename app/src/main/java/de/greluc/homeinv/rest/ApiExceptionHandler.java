@@ -8,6 +8,10 @@ import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.media.api.MalwareDetectedException;
+import de.greluc.homeinv.media.api.PayloadTooLargeException;
+import de.greluc.homeinv.media.api.ScannerUnavailableException;
+import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -192,6 +196,88 @@ public class ApiExceptionHandler {
         "Malformed request",
         "The pagination cursor is not valid for this query. Start from the first page.",
         request);
+  }
+
+  /**
+   * Answers an upload the scanner rejected.
+   *
+   * <p>The signature is logged and never returned. An uploader who learns which payloads this
+   * scanner detects learns it one upload at a time.
+   *
+   * @param exception the rejection
+   * @param request the request
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(MalwareDetectedException.class)
+  public ProblemDetail handleMalware(MalwareDetectedException exception, HttpServletRequest request) {
+    log.warn("Upload rejected by the malware scanner: {}", exception.getSignature());
+    return problem(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        URI.create("https://home-inv.example/problems/malware-detected"),
+        "Malware detected",
+        "The malware scan rejected this upload.",
+        request);
+  }
+
+  /**
+   * Answers an upload that could not be scanned.
+   *
+   * <p>A {@code 503} and not a {@code 422}: the upload may be fine, the system could not say so, and
+   * the client should retry rather than conclude the file is bad (ADR-0024).
+   *
+   * @param exception the failure
+   * @param request the request
+   * @return a {@code 503} problem detail
+   */
+  @ExceptionHandler(ScannerUnavailableException.class)
+  public ProblemDetail handleScannerDown(
+      ScannerUnavailableException exception, HttpServletRequest request) {
+    log.error("The malware scanner is unavailable; uploads are refused", exception);
+    return problem(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        URI.create("https://home-inv.example/problems/scan-unavailable"),
+        "Scan unavailable",
+        "Uploads are refused while the malware scanner cannot be reached. Try again shortly.",
+        request);
+  }
+
+  /**
+   * Answers an upload beyond a size or pixel limit.
+   *
+   * @param exception the rejection, carrying which limit and what was presented
+   * @param request the request
+   * @return a {@code 413} problem detail
+   */
+  @ExceptionHandler(PayloadTooLargeException.class)
+  public ProblemDetail handleTooLarge(
+      PayloadTooLargeException exception, HttpServletRequest request) {
+    return problem(
+        HttpStatus.PAYLOAD_TOO_LARGE,
+        ProblemTypes.PAYLOAD_TOO_LARGE,
+        "Payload too large",
+        exception.getMessage(),
+        request);
+  }
+
+  /**
+   * Answers an upload whose detected type is not on the allowlist.
+   *
+   * @param exception the rejection, carrying what was detected
+   * @param request the request
+   * @return a {@code 422} problem detail naming the detected type
+   */
+  @ExceptionHandler(UnsupportedMediaTypeException.class)
+  public ProblemDetail handleUnsupportedType(
+      UnsupportedMediaTypeException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            ProblemTypes.VALIDATION_FAILED,
+            "Validation failed",
+            exception.getMessage(),
+            request);
+    problem.setProperty("detectedType", exception.getDetectedType());
+    return problem;
   }
 
   /**
