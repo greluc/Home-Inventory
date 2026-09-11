@@ -28,7 +28,7 @@ through a hardened instance reachable from the internet.
 | Full-text search (PostgreSQL), cursor pagination | OpenSearch, facets, saved searches |
 | A REST API `/api/v1` with OpenAPI and problem details | GraphQL, gRPC, webhooks |
 | The web PWA (read and write, online) | Offline operation |
-| **Both container runtimes rootless** (Podman/Quadlet and Docker/Compose), the service matrix, migrations, health endpoints, logging | Helm, OpenSearch, RabbitMQ |
+| **Both container runtimes rootless** (Podman/Quadlet and Docker/Compose), the service matrix, migrations, health endpoints, logging · **the broker and the `worker` role**, because `REQ-MED-005` generates derivatives asynchronously in the worker and two processes cannot hand work to each other without one ([ADR-0051](../adr/0051-broker-in-stage-0.md)) | Helm, OpenSearch |
 | **All security foundations**: the RLS schema, CSP served by `web` with hashes **and `trusted-types`**, upload hardening, parameterised queries, the authorization scaffolding, the network segmentation with the management port bound to `internal`, **a credential on every datastore and `web` on its own two-member segment** ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)), **the WAL archive volume** ([ADR-0045](../adr/0045-wal-archive-volume.md)) and **the URL signing key** | — |
 
 **Binding requirements:** every requirement whose **Stage** column reads `0`.
@@ -89,7 +89,7 @@ tags and roles themselves — without a developer and without a restart.
 | **Tags** | Tags, groups, merging |
 | **Lifecycle** | Warranty, maintenance log, lending, sale, disposal, trash, history with restore, value reporting (purchase price, current value, replacement value, the insurance report) |
 | **Search** | OpenSearch with facets, filters, sorting, saved searches, the PostgreSQL fallback |
-| **Events** | The outbox, RabbitMQ, the worker role |
+| **Events** | The domain event catalogue, the consumer contracts, replay and the dead-letter handling. The **outbox, RabbitMQ and the `worker` role are stage 0** since [ADR-0051](../adr/0051-broker-in-stage-0.md) — media derivative generation needed them, and a delivery mechanism built for one feature and deleted for the next would have cost about what the broker costs |
 | **Plugin runtime** | Registry, manifests, signature verification, the per-tenant capability model, lifecycle, health, gRPC over mTLS, bulkheads and circuit breakers, the **per-plugin network segments** ([ADR-0037](../adr/0037-per-plugin-network-segments.md)), and the **plugin-facing half of the egress proxy** — its manifest-driven allowlist, the per-segment interfaces and the TCP forwarding mode. The proxy container itself already exists from stage 0, for the scanner ([ADR-0036](../adr/0036-scanner-egress.md)). Moved here from stage 3 ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) because the core makes no outbound connection any more — so mail, remote storage and federated login are all plugins, and stage 1 needs all three |
 | **First-party plugins** | `plugin-smtp`, `plugin-blobstore-s3`, `plugin-blobstore-nextcloud`, `plugin-webhook`, `plugin-oidc` — built against the same contract third parties get in stage 3, which is what proves the contract before it is published |
 | **Media** | S3 and **Nextcloud adapters as plugins**, resumable upload, reference counting, the mandatory malware scan |
@@ -168,7 +168,7 @@ graph TD
 | Type system (1) | Enrichment (3) | Without target fields there is nothing to map onto |
 | Type system (1) | Offline validation (3) | The client validates against the generated JSON Schema |
 | Codes (2) | Labels, stocktake, moving (2) | Everything hangs on the code |
-| Outbox and RabbitMQ (1) | Plugin event delivery (1) | Plugins receive events |
+| Outbox and RabbitMQ (**0**) | Plugin event delivery (1) | Plugins receive events. The broker moved to stage 0 with [ADR-0051](../adr/0051-broker-in-stage-0.md), so this constraint is satisfied before stage 1 begins |
 | Plugin runtime (1) | Invitations, password reset, remote storage (1) | Mail and object storage are plugins ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) — this is the ordering constraint that moved the runtime forward |
 | Plugin runtime (1) | The published SDK (3) | The contract is exercised by first-party plugins before it is opened |
 | Tenants and roles (1) | Per-tenant capabilities (3) | Capabilities are granted per tenant |

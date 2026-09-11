@@ -22,8 +22,10 @@ added — without touching the core.
 
 ## Status
 
-**Design phase.** This repository contains the architecture, the requirements
-catalogue and the binding design system. There is no code yet.
+**Stage 0 is being implemented.** The architecture, the requirements catalogue
+and the binding design system are complete and remain the source of truth. The
+application, the web client and the deployment descriptions are now being built
+against them; there is no release yet and nothing to install.
 
 ## Documentation
 
@@ -72,8 +74,9 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 ```
 
 Each directory carries a `README.md` explaining what belongs there, what does
-not, and which stage fills it. Most are empty today — deliberately: the
-architecture is finished, the implementation is not started.
+not, and which stage fills it. The ones a later stage fills — `cla/`,
+`plugin-api/`, `plugin-sdk/`, `proto/` — are still empty, and deliberately so:
+contracts before implementations.
 
 ## Taking part
 

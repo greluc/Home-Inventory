@@ -25,10 +25,11 @@ exception** — do not "correct" the short identifiers to match it, and name the
 container image explicitly in CI, because derived from the repository it would
 read `home-inventory`.
 
-> **Status: design phase. There is no code yet.** The deliverable in this repo today is
-> the architecture and the requirements catalogue. Do not invent build commands, file
-> paths, or class names that do not exist — if something is not in `docs/`, it has not
-> been decided.
+> **Status: stage 0 is being implemented.** `app/`, `web/`, `blobstore/`, `deploy/` and
+> `api/` hold real code and real generated artefacts; `cla/`, `plugin-api/`, `plugin-sdk/`
+> and `proto/` are still empty and belong to later stages. Do not invent build commands,
+> file paths or class names that do not exist — if something is neither in `docs/` nor in
+> the tree, it has not been decided.
 
 ## The documentation is the project (HARD RULE — read before every task)
 

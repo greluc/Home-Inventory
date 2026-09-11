@@ -48,15 +48,16 @@ screenshot, because there is no UI to screenshot yet.
 | **<https://github.com/lucide-icons/lucide>** | the icon set, vendored as SVG into `assets/icons/` with its combined `ISC AND MIT` licence |
 | **<https://github.com/google/fonts>** (`ofl/ibmplexsans`, `ofl/ibmplexmono`) | the self-hosted type, OFL 1.1 |
 
-> **Read the repository.** The architecture documents are unusually complete for
-> a project in its design phase, and every screen here has a chapter behind it.
+> **Read the repository.** The architecture documents were complete before the
+> first line of code, and every screen here has a chapter behind it.
 > If you are extending this system, read `docs/requirements/01-functional.md` and
 > `docs/architecture/07-data-model.md` before inventing a surface.
 
-**Status of the source:** the repository is *design phase*. `web/`, `app/` and
-the rest are deliberately empty. There is therefore **no existing UI, no existing
-stylesheet and no existing component library** to copy — the visual decisions in
-this system are new, but every *domain* decision is quoted from the docs.
+**Status of the source:** this system was designed while `web/` and `app/` were
+still empty. There was therefore **no existing UI, no existing stylesheet and no
+existing component library** to copy — the visual decisions in it are new, but
+every *domain* decision is quoted from the docs. `web/` now holds a client, and
+it is built from these tokens rather than the other way round.
 
 **There is no logo.** The repository contains no wordmark or brand mark. None was
 invented. Wherever a mark would go, the product name is set in IBM Plex Sans

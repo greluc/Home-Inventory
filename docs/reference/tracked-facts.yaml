@@ -92,7 +92,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 49
+    value: 52
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points
@@ -207,8 +207,8 @@ computed:
   - id: profileMemory
     compute: "sums of memoryReservation / memoryLimit per profile in deploy/services.yaml, excluding lifecycle: oneShot and counting no plugin"
     value:
-      minimalReservation: "3.5"
-      minimalLimit: "7.2"
+      minimalReservation: "3.7"
+      minimalLimit: "7.7"
       standardReservation: "5.2"
       standardLimit: "9.7"
     pattern: '(?:≈|about)\s*\*{0,2}(\d+\.\d)\s*GB'
@@ -218,7 +218,7 @@ computed:
       (0.2–0.4 GB), a table estimate (2.5 GB). The corpus already followed that by habit
       and it is stated here so the check can rely on it. It has a second, deliberate
       effect: a SUPERSEDED figure quoted inside a correction note is written without the
-      marker, so quoting "3.4 GB and 5.4 GB, against ≈ 3.5 GB" does not trip the gate —
+      marker, so quoting "3.4 GB and 5.4 GB, against ≈ 3.7 GB" does not trip the gate —
       which is what lets a document explain its own history without being punished for it.
     notes: >
       The conventions are the trap, not the arithmetic. `migrate` is one-shot and is not in

@@ -409,9 +409,9 @@ logging:
 
 | | `minimal` | `standard` |
 |---|---|---|
-| Services | web, api, worker, **blobstore**, postgres, valkey, clamav, egress-proxy | + opensearch, rabbitmq, first-party plugins |
-| Sum of **reservations** | ≈ **3.5 GB** | ≈ **5.2 GB** (+ 64 MB per plugin) |
-| Sum of **limits** | ≈ **7.2 GB** | ≈ **9.7 GB** (+ 256 MB per plugin) |
+| Services | web, api, worker, **blobstore**, postgres, valkey, **rabbitmq**, clamav, egress-proxy | + opensearch, first-party plugins |
+| Sum of **reservations** | ≈ **3.7 GB** | ≈ **5.2 GB** (+ 64 MB per plugin) |
+| Sum of **limits** | ≈ **7.7 GB** | ≈ **9.7 GB** (+ 256 MB per plugin) |
 | VM | ≥ 8 GB | ≥ 8 GB |
 
 **The reservations are the budget; the limits deliberately over-commit.** That is
@@ -714,7 +714,7 @@ about 3 GB.
 
 | Profile | `search` | Events | Media | Plugins | RAM (reserved) | Purpose |
 |---|---|---|---|---|---|---|
-| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ≈ 3.5 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
+| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ≈ 3.7 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
 | `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ≈ 5.2 GB (+ 64 MB per plugin) | **The profile of this installation** |
 | `ha` | OpenSearch cluster | RabbitMQ cluster | S3 via plugin | as `standard` | ≥ 16 GB | Kubernetes, multiple instances |
 
@@ -734,7 +734,7 @@ about 3 GB.
 > does make passes the same proxy and the same access log as everywhere else.
 
 > **These two figures disagreed with the rest of the corpus until 2026-09-11.** They read
-> 3.4 GB and 5.4 GB, against ≈ 3.5 GB and ≈ 5.2 GB in [6.7](#67-services-and-sizing),
+> 3.4 GB and 5.4 GB, against ≈ 3.7 GB and ≈ 5.2 GB in [6.7](#67-services-and-sizing),
 > `REQ-NFR-009` and [`deploy/services.yaml`](../../deploy/services.yaml) — and 5.4 was
 > precisely the superseded convention that folded three first-party plugins into the
 > reservation total while leaving them out of the limit total. `REQ-NFR-009` measures

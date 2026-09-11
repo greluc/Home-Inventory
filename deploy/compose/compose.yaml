@@ -401,6 +401,7 @@ services:
       - no-new-privileges:true
     restart: on-failure
     profiles:
+      - minimal
       - standard
       - ha
     networks:

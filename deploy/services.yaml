@@ -490,7 +490,7 @@ services:
           its daily signature updates — the exact dependency ADR-0036 removes.
     notes: >
       Mandatory in every profile — the malware scan cannot be deselected
-      (ADR-0024). It is why the minimal profile reserves about 3.5 GB rather than 1.5 —
+      (ADR-0024). It is why the minimal profile reserves about 3.7 GB rather than 1.5 —
       the figure in the budget block below, computed from the rows in this file.
       Its signature updates were the one dependency nothing traced: this segment is
       internal, the proxy did not run in `minimal`, and the proxy's allowlist was
@@ -626,7 +626,12 @@ services:
       RABBITMQ_DEFAULT_PASS_FILE: /run/secrets/mq-password   # the image reads _FILE here
     resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
     health: { command: "rabbitmq-diagnostics -q ping", interval: 20s, startPeriod: 60s }
-    profiles: [standard, ha]
+    # In `minimal` since ADR-0051. REQ-MED-005 generates media derivatives
+    # asynchronously in `worker`, and `api` and `worker` are separate processes:
+    # without a broker there is no route from the one that accepts the upload to the
+    # one that is named as doing the work. It was in `standard` and up, which left a
+    # stage-0 requirement with an execution site it could not reach.
+    profiles: [minimal, standard, ha]
     notes: >
       This service had no credential until ADR-0044, and the omission was not merely a
       weakness: the built-in `guest` account is restricted to loopback, so api and worker

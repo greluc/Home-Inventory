@@ -64,9 +64,12 @@ Date: YYYY-MM-DD
 | [0040](0040-no-cross-origin-isolation.md) | `Cross-Origin-Embedder-Policy` is dropped; `COOP` and `CORP` stay | Accepted |
 | [0041](0041-migration-as-its-own-service.md) | Migration is its own one-shot service, on every runtime | Accepted |
 | [0042](0042-edge-is-not-internal.md) | A published port needs a non-internal segment; `web` becomes the ingress | Accepted, amended by 0044 |
-| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044 |
+| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044, 0050 |
 | [0044](0044-internal-is-not-a-trust-boundary.md) | `internal` is not a trust boundary: every datastore authenticates, and `web` leaves it | Accepted |
 | [0045](0045-wal-archive-volume.md) | The WAL archive is a volume of its own, or the recovery point objective is fiction | Accepted |
 | [0046](0046-truncatable-audit-chain.md) | The audit chain is truncatable, and per-tenant retention has a mechanism | Accepted |
 | [0047](0047-bilingual-search-vectors.md) | Two generated search vectors, German and English, instead of `simple` | Accepted |
 | [0048](0048-no-managed-remote-folders.md) | No OpenProject-style managed folders at the remote storage | Accepted |
+| [0049](0049-openapi-generated-from-the-implementation.md) | The OpenAPI document is generated from the implementation, with a drift check | Accepted |
+| [0050](0050-blobstore-service-in-rust.md) | The `blobstore` service is written in Rust | Accepted |
+| [0051](0051-broker-in-stage-0.md) | RabbitMQ moves to stage 0, because a stage-0 requirement needs the worker | Accepted |

@@ -5,10 +5,12 @@ so that your work does not bounce on a formality.
 
 ## Where the project stands
 
-**Design phase. There is no code yet.** What this repository holds today is the
-architecture, the decisions behind it and a requirements catalogue. That is
-deliberate: for a system with multi-tenancy, offline sync and third-party plugin
-code, the expensive mistakes are made before the first line of code.
+**Stage 0 is being implemented.** The architecture, the decisions behind it and
+the requirements catalogue came first and are complete — deliberately: for a
+system with multi-tenancy, offline sync and third-party plugin code, the
+expensive mistakes are made before the first line of code. They are now the
+specification the implementation is measured against, and they move with it in
+the same pull request.
 
 The most valuable contributions right now are therefore:
 

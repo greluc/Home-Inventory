@@ -2,9 +2,9 @@
 
 ## Supported versions
 
-**No release exists yet.** The project is in its design phase; there is no code
-and therefore nothing deployed to attack. This policy is published now so that
-the process exists before it is needed rather than after.
+**No release exists yet.** Stage 0 is being implemented; there is no published
+image and nothing deployed to attack. This policy is published now so that the
+process exists before it is needed rather than after.
 
 Once releases begin, this table states what is supported:
 
