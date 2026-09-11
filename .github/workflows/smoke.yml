@@ -1,0 +1,177 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The gate that cannot run anywhere else.
+#
+# REQ-NFR-064: the same smoke suite runs **rootless** under Podman, **rootless**
+# under Docker, and against `kind` — and a change that works under only one
+# runtime breaks the build. This is the one requirement no developer workstation
+# can demonstrate: rootless is a Linux concept, and a Windows or macOS runtime
+# runs in a virtual machine where "rootless" says nothing about the host.
+#
+# It is therefore a separate workflow rather than a job in CI: it is slower, it
+# needs its own setup per runtime, and when it fails the answer is usually about
+# the deployment rather than about the code.
+
+name: Rootless smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'app/Dockerfile'
+      - 'app/docker/**'
+      - '.github/workflows/smoke.yml'
+  # Runtimes and base images change underneath us; a weekly run finds that
+  # before a release does.
+  schedule:
+    - cron: '0 4 * * 1'
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rootless:
+    name: ${{ matrix.runtime }} (rootless)
+    runs-on: ubuntu-latest
+    strategy:
+      # Both are run to completion. Cancelling the second on the first failure
+      # would hide exactly the case this matrix exists to find: a change that
+      # works under one runtime and not the other.
+      fail-fast: false
+      matrix:
+        runtime: [podman, docker]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: pip install pyyaml
+
+      # The host prerequisites for rootless operation. Debian's podman only
+      # *recommends* uidmap, passt and dbus-user-session, and does not ship
+      # aardvark-dns at all — so an install with --no-install-recommends silently
+      # produces a podman that cannot run rootless (06 §6.2). Named explicitly
+      # for that reason.
+      - name: Install the runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          if [ "${{ matrix.runtime }}" = "podman" ]; then
+            sudo apt-get install -y podman uidmap passt dbus-user-session aardvark-dns
+            podman --version
+            # Proof, not assumption: a rootful podman would pass every test below
+            # and mean nothing.
+            test "$(id -u)" -ne 0
+            podman info --format '{{.Host.Security.Rootless}}' | grep -qx true
+          else
+            # Docker's rootless mode is a separate installation from the daemon
+            # the runner already has.
+            sudo apt-get install -y uidmap dbus-user-session
+            curl -fsSL https://get.docker.com/rootless | sh
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+            echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+          fi
+
+      - name: Confirm the daemon is rootless
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.runtime }}" = "docker" ]; then
+            systemctl --user start docker || true
+            for _ in $(seq 1 30); do docker info > /dev/null 2>&1 && break; sleep 1; done
+            # Docker reports rootless as a security option. Without this check a
+            # fallback to the rootful daemon would go unnoticed, and the job would
+            # claim to prove something it had not.
+            docker info --format '{{.SecurityOptions}}' | grep -q rootless
+          fi
+          echo "runtime is rootless"
+
+      - name: The descriptions still match the matrix
+        run: python deploy/generate.py --check
+
+      - name: Generate the secrets this profile needs
+        run: |
+          set -euo pipefail
+          mkdir -p deploy/secrets
+          # Test-only material, in a runner that is destroyed with the job. Real
+          # deployments mount these from a secret store; the point of generating
+          # them here is that a missing secret must abort startup, and the smoke
+          # test needs to get past that deliberately rather than by accident.
+          for name in db-password db-migration-password data-key jwt-key \
+                      url-signing-key valkey-password; do
+            head -c 48 /dev/urandom | base64 -w0 > "deploy/secrets/$name"
+          done
+
+      - name: Build the application image
+        run: |
+          ${{ matrix.runtime }} build -f app/Dockerfile -t home-inv:smoke .
+
+      # The smoke test proper: bring the minimal profile up, wait for the API to
+      # report ready, and take it down. What it proves is narrow and worth
+      # proving — that the generated description describes something that starts.
+      - name: Bring up the minimal profile
+        working-directory: deploy/compose
+        env:
+          HOMEINV_PROFILE: minimal
+          HOMEINV_PUBLIC_BASE_URL: http://localhost:8080
+          HOMEINV_MEDIA_BASE_URL: http://localhost:8081
+          INTERNAL_ADDR: 0.0.0.0
+          HOMEINV_TRUSTED_PROXIES: 127.0.0.1/32
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.runtime }}" = "podman" ]; then
+            podman compose --profile minimal up -d
+          else
+            docker compose --profile minimal up -d
+          fi
+
+      - name: The API becomes ready
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if ${{ matrix.runtime }} exec homeinv-api /usr/bin/healthcheck > /dev/null 2>&1; then
+              echo "ready after ${attempt}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the API never became ready"
+          ${{ matrix.runtime }} compose --profile minimal logs --tail 100 || true
+          exit 1
+
+      # The check that makes the rest of this job mean something: the containers
+      # are running as a mapped, unprivileged user. A stack that starts as root
+      # under a rootless runtime is a stack that will start as root under a
+      # rootful one too.
+      - name: Nothing inside runs as root
+        run: |
+          set -euo pipefail
+          fail=0
+          for container in $(${{ matrix.runtime }} ps --format '{{.Names}}'); do
+            uid=$(${{ matrix.runtime }} exec "$container" id -u 2>/dev/null || echo skip)
+            [ "$uid" = "skip" ] && continue
+            echo "$container: uid $uid"
+            if [ "$uid" = "0" ]; then
+              echo "::error::$container runs as uid 0"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Logs on failure
+        if: failure()
+        working-directory: deploy/compose
+        run: ${{ matrix.runtime }} compose --profile minimal logs --tail 200 || true
+
+      - name: Tear down
+        if: always()
+        working-directory: deploy/compose
+        run: ${{ matrix.runtime }} compose --profile minimal down -v || true

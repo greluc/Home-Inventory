@@ -1,0 +1,210 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The gates that need no container runtime beyond Docker.
+#
+# Every job here fails the build rather than warning. A gate that warns is a gate
+# that is ignored within a month, and each of these exists because the rule it
+# checks is one nobody can hold in their head across a year of changes.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first one irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          # The toolchain decides what the code is compiled against; this is only
+          # what Gradle itself runs on. Pinned anyway, so a runner image change
+          # cannot alter the build.
+          java-version: '25'
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # The integration tests start PostgreSQL and Valkey through Testcontainers,
+      # against the same images the deployment uses. H2 is forbidden: JSONB,
+      # ltree and row-level security behave differently, which is exactly where
+      # the bugs would be (CLAUDE.md, Build).
+      - name: Build, test and verify the architecture
+        run: ./gradlew --no-daemon build
+
+      - name: Publish the test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: app/build/reports/tests/test
+          retention-days: 7
+
+  deployment:
+    name: Deployment descriptions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - run: pip install pyyaml
+
+      # REQ-NFR-063. The generated files are committed so a reader can see them,
+      # which means they can also be edited - and an edit that survives is an
+      # edit that has diverged from the matrix everything else reads.
+      - name: The generated files match services.yaml
+        run: python deploy/generate.py --check
+
+      # REQ-SEC-085 and the forbidden list in the matrix. Checked over the
+      # rendered text rather than the matrix, because what runs is the rendered
+      # text: a generator bug that dropped `read_only` would leave the matrix
+      # perfectly correct.
+      - name: No forbidden setting reaches a runtime description
+        run: |
+          set -euo pipefail
+          files=$(find deploy/quadlet -name '*.container'; echo deploy/compose/compose.yaml)
+          fail=0
+          check() {
+            if grep -nEH "$2" $files > /dev/null 2>&1; then
+              echo "::error::forbidden: $1"
+              grep -nEH "$2" $files || true
+              fail=1
+            fi
+          }
+          check "privileged"              '^\s*privileged\s*:\s*true|Privileged=true'
+          check "cap_add"                 '^\s*cap_add|AddCapability='
+          check "host pid namespace"      '^\s*pid\s*:\s*.?host|PidsHost'
+          check "host network"            'network_mode\s*:\s*.?host|Network=host'
+          check "running as root"         'user\s*:\s*.?(root|0:0)|User=(root|0:0)'
+          check "SELinux label disabled"  'SecurityLabelDisable\s*=\s*true'
+          check "container socket mount"  '(docker|podman)\.sock'
+          # Host ports below 1024 (REQ-NFR-061): TLS terminates at the external
+          # reverse proxy, so nothing here needs a privileged port.
+          if grep -hoE '(PublishPort=|- ")([0-9]+):' $files | grep -oE '[0-9]+' \
+             | awk '$1 < 1024 { print; found=1 } END { exit !found }'; then
+            echo "::error::forbidden: a published host port below 1024"
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] && echo "No forbidden setting in any generated description."
+          exit $fail
+
+      - name: Compose accepts every profile
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          for profile in minimal standard ha; do
+            docker compose --profile "$profile" config > /dev/null
+            echo "profile $profile: valid"
+          done
+
+  image:
+    name: Application image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Built but not pushed on a pull request. The point here is that it builds
+      # and that what it produces obeys the rules - publishing is a release
+      # concern.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/Dockerfile
+          push: false
+          load: true
+          tags: home-inv:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ADR-0022: non-root inside the container is one of the two independent
+      # levels, and it is the one an image can be held to.
+      - name: The image does not run as root
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect home-inv:ci --format '{{.Config.User}}')
+          echo "image user: ${user:-<empty>}"
+          case "$user" in
+            ""|root|0|0:0) echo "::error::the image runs as root"; exit 1 ;;
+          esac
+
+      # O29: the ImageProcessor is libvips, driven as a subprocess. An image
+      # without it starts perfectly and fails on the first photo.
+      - name: libvips is present
+        run: docker run --rm --entrypoint vips home-inv:ci --version
+
+  documentation:
+    name: Documentation rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # REQ-CON-014: British English, with two carve-outs that would break things
+      # if "corrected" - technical identifiers keep their technology's spelling,
+      # and verbatim third-party text is never edited.
+      - name: British English in the prose
+        run: |
+          set -uo pipefail
+          # American spellings only, and only ones with no technical meaning here.
+          # Three traps are avoided deliberately:
+          #
+          #  - `color`, `catalog` and `labeling` are absent: they are identifiers in
+          #    this codebase - the CSS property, the catalog schema, the labeling
+          #    schema.
+          #  - `licence` and `centred` are **British** and were on this list by
+          #    mistake until the first dry run caught them. `license` is absent too,
+          #    because it is the correct British *verb*: "licensed under Apache-2.0".
+          #  - a line carrying `spelling-exempt` is skipped, for the few places that
+          #    quote the exceptions in order to document them.
+          pattern='\b(behaviors?|organiz(e|ed|ing|ation)|analyz(e|ed|ing)|fulfill|defense|centered)\b'
+          files=$(git ls-files '*.md' \
+            | grep -v '^LICENSE' \
+            | grep -v '^LICENSES/' \
+            | grep -v '^CODE_OF_CONDUCT.md' \
+            | grep -v '^design-system/' \
+            | grep -v '^website/')
+          if grep -nEHi "$pattern" $files | grep -v 'spelling-exempt'; then
+            echo "::error::American spelling in prose (REQ-CON-014)"
+            exit 1
+          fi
+          echo "No American spelling found in the prose."
+
+      # Every relative link in the corpus resolves. A dead link in a document
+      # that calls itself the single source of truth is worse than no document.
+      - name: No dead relative link
+        run: |
+          set -uo pipefail
+          fail=0
+          for f in $(git ls-files '*.md' | grep -v '^design-system/' | grep -v '^website/'); do
+            d=$(dirname "$f")
+            grep -oE '\]\([^)]+\)' "$f" | tr -d '])' | sed 's|^(||' \
+              | grep -vE '^https?:|^#|^mailto:' | sed 's/#.*//' \
+              | while read -r link; do
+                  [ -z "$link" ] && continue
+                  if [ ! -e "$d/$link" ]; then
+                    echo "::error file=$f::dead link: $link"
+                    exit 1
+                  fi
+                done || fail=1
+          done
+          [ "$fail" -eq 0 ] && echo "Every relative link resolves."
+          exit $fail

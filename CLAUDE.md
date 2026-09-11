@@ -193,7 +193,7 @@ Each of these is a decision with an ADR behind it. They look like details and ar
      a spec, or a tool.
   2. **Verbatim third-party text is never edited.** `CODE_OF_CONDUCT.md` (the
      Contributor Covenant), `LICENSE` and `LICENSES/**` contain American
-     spellings — *behaviors*, *honor*, *center*, *Organization* — and they stay.
+     spellings — *behaviors*, *honor*, *center*, *Organization* — and they stay. <!-- spelling-exempt: quoted in order to forbid editing them -->
      Editing a licensed document to fit our style guide misrepresents it.
 
 ## Where things go
