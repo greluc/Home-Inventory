@@ -8,9 +8,12 @@ One workflow exists: [`pages.yml`](pages.yml), which publishes the project
 website. It is here ahead of the others because it has something to do that does
 not need a build — and because it carries a real gate: it greps the assembled
 site for resources loaded from another host and fails, which is REQ-PRIV-015
-enforced rather than asserted. It stays inert until `website/index.html` exists.
+enforced rather than asserted.
 
-Everything else is still to come — there is no code to build yet. This file
+Everything else is still to come — there is no application to build yet. **The two
+documentation gates below are no longer waiting on anything**: they read Markdown, this
+directory is live, and A4b's rule has already been run by hand with its findings closed,
+so both open clean. This file
 records what those workflows will have to do, so that the gates are not invented
 ad hoc later.
 

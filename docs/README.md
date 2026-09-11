@@ -116,12 +116,14 @@ had left `pending`, which is an open decision wearing a different hat: one of th
 the status code for an oversized payload, was load-bearing for a **stage-0**
 requirement.
 
-What remains there is outstanding **work**, and every item of it waits on a CI workflow or
-a build that does not exist yet — this repository has no code. Three things: running the
-connectivity suite under rootless Podman and `kind` (**A5**), emitting the generated
-`freshclam.conf` from the service matrix (**A6**), and the two documentation gates
-specified in [`.github/workflows/README.md`](../.github/workflows/README.md) — the ADR
-back-link check (**A4b**) and the unbacked-claim check (**A7**). A5 is **not** an
+What remains there is outstanding **work**, of two kinds. **A5** (running the connectivity
+suite under rootless Podman and `kind`) and **A6** (emitting the generated `freshclam.conf`
+from the service matrix) need a stack to start and a generator to run, and neither exists
+yet. The two documentation gates — the ADR back-link check (**A4b**) and the
+unbacked-claim check (**A7**), both specified in
+[`.github/workflows/README.md`](../.github/workflows/README.md) — **need nothing**: they
+read Markdown, and since `pages.yml` this directory is live. A4b's rule has been run by
+hand and its findings closed, so it opens clean. A5 is **not** an
 unverified assumption: it was measured under Docker, found false, and the topology was
 corrected ([ADR-0042](adr/0042-edge-is-not-internal.md)); what is outstanding is
 confirming the corrected shape on the other two runtimes. **A2 is closed**, for Dymo as

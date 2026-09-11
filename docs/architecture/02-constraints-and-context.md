@@ -217,8 +217,9 @@ recorded there with its rationale — the last three being the conditions
 [`problem-types.yaml`](../reference/problem-types.yaml) had left `pending`, one of which
 a **stage-0** requirement depended on.
 
-What remains is outstanding **work**, and all of it waits on something this repository does
-not have yet — a CI workflow, or a build:
+What remains is outstanding **work**. Two items wait on something this repository does not
+have yet — a stack to start, a generator to run. Two do not: the documentation gates read
+Markdown, and since `pages.yml` the workflows directory is live.
 
 - **A5** — the connectivity suite under **rootless Podman with `pasta` and under
   `kind`**. Port publishing on an internal segment was *not* merely unverified:
@@ -232,9 +233,11 @@ not have yet — a CI workflow, or a build:
   [`deploy/expected/clamav-freshclam.conf`](../../deploy/expected/clamav-freshclam.conf).
 - **A4b** and **A7** — the two documentation gates, fully specified in
   [`.github/workflows/README.md`](../../.github/workflows/README.md): the ADR back-link
-  check and the unbacked-claim check. They read Markdown and need no build, which is why
-  they are the first two workflows this project gets. A4b would have caught the missing
-  back-links found on 2026-09-11 in [ADR-0026](../adr/0026-core-outbound-via-plugins.md).
+  check and the unbacked-claim check. They read Markdown and need no build, and the
+  workflows directory now exists, so **nothing blocks them**. A4b's rule was run by hand on
+  2026-09-11 and the nine omissions it found are closed — including the back-links missing
+  from [ADR-0026](../adr/0026-core-outbound-via-plugins.md) — so the gate opens clean
+  rather than with a backlog.
 
 **A2 is closed.** The Brother DK figures came from Brother's raster reference; the Dymo
 ones do not exist — that series carries the printable area as per-roll runtime data, not
