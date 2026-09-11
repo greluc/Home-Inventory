@@ -15,7 +15,13 @@
 -- ---------------------------------------------------------------------------
 -- `ltree` carries the materialised location path (07 §7.4). Without it the
 -- subtree query degrades to recursion, which is the thing the design avoids.
-CREATE EXTENSION IF NOT EXISTS ltree;
+--
+-- SCHEMA public is not decoration. An extension lands in whatever the running
+-- role's default schema happens to be, and the migrator's is Flyway's own — so
+-- without this the `ltree` type would be `flyway.ltree`, reachable only by
+-- whoever has that schema on their search_path. It has to live somewhere every
+-- role can see it, and `public` is the one schema that is always there.
+CREATE EXTENSION IF NOT EXISTS ltree SCHEMA public;
 
 -- `uuidv7()` is built into PostgreSQL 18 and needs no extension (ADR-0016).
 -- If this fails, the server is older than the one this project supports, and

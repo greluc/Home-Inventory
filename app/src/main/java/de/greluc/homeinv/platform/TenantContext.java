@@ -85,6 +85,31 @@ public final class TenantContext {
   }
 
   /**
+   * Runs {@code body} with {@code tenantId} established and returns its result.
+   *
+   * <p>The value-returning twin of {@link #runAs}, with the same restore-rather-than-clear
+   * behaviour, so a nested scope cannot leave the outer one holding the inner tenant.
+   *
+   * @param tenantId the tenant to act for; must not be {@code null}
+   * @param body the work to run
+   * @param <T> what the body produces
+   * @return the result of {@code body}
+   */
+  public static <T> T callAs(UUID tenantId, java.util.function.Supplier<T> body) {
+    UUID previous = CURRENT.get();
+    CURRENT.set(java.util.Objects.requireNonNull(tenantId, "tenantId"));
+    try {
+      return body.get();
+    } finally {
+      if (previous == null) {
+        CURRENT.remove();
+      } else {
+        CURRENT.set(previous);
+      }
+    }
+  }
+
+  /**
    * Clears the tenant of the current thread.
    *
    * <p>Called when a request ends. A thread handing back to the pool with a tenant still set would

@@ -42,6 +42,8 @@ CREATE ROLE homeinv_bootstrap WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE N
 -- The migrator has to be able to hand ownership of that function over.
 GRANT homeinv_bootstrap TO homeinv_migrator;
 
--- Nobody gets the public schema. A table created there by accident would carry
--- no policy at all.
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
+-- Nobody may CREATE in the public schema: a table created there by accident
+-- would carry no policy at all. USAGE stays, and must - the `ltree` extension
+-- lives there, and a role that cannot see the schema cannot use the type its
+-- own columns are declared with.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;

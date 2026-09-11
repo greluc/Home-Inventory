@@ -64,4 +64,18 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
    */
   @Query("select count(i) > 0 from Item i where i.tenantId = :tenantId and i.id = :id")
   boolean existsForTenant(@Param("tenantId") UUID tenantId, @Param("id") UUID id);
+
+  /**
+   * Whether a location still holds a live item.
+   *
+   * <p>Serves the {@code ItemLocationUsage} port. It lives here rather than as a query in
+   * {@code locations} because no block reads another block's schema (REQ-NFR-021).
+   *
+   * @param tenantId the tenant
+   * @param locationId the location
+   * @return {@code true} when at least one live item names it
+   */
+  @Query("select count(i) > 0 from Item i where i.tenantId = :tenantId "
+      + "and i.locationId = :locationId and i.deletedAt is null")
+  boolean existsLiveInLocation(@Param("tenantId") UUID tenantId, @Param("locationId") UUID locationId);
 }

@@ -7,6 +7,8 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.identity.application.InvalidCredentialsException;
 import de.greluc.homeinv.identity.application.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.application.ItemAlreadyExistsException;
+import de.greluc.homeinv.locations.application.LocationNotEmptyException;
+import de.greluc.homeinv.locations.domain.TooDeepException;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -125,6 +127,47 @@ public class ApiExceptionHandler {
             "Too many failed login attempts. Try again shortly.",
             request);
     problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
+    return problem;
+  }
+
+  /**
+   * Answers a deletion refused because the location is not empty.
+   *
+   * @param exception the refusal, carrying why
+   * @param request the request
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(LocationNotEmptyException.class)
+  public ProblemDetail handleLocationNotEmpty(
+      LocationNotEmptyException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.CONFLICT,
+            ProblemTypes.RESOURCE_EXISTS,
+            "Location not empty",
+            exception.getMessage(),
+            request);
+    problem.setProperty("locationId", exception.getLocationId().toString());
+    return problem;
+  }
+
+  /**
+   * Answers a location that would sit deeper than the tree allows.
+   *
+   * @param exception the refusal, carrying the limit
+   * @param request the request
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(TooDeepException.class)
+  public ProblemDetail handleTooDeep(TooDeepException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            ProblemTypes.VALIDATION_FAILED,
+            "Validation failed",
+            exception.getMessage(),
+            request);
+    problem.setProperty("maxDepth", exception.getMaxDepth());
     return problem;
   }
 
