@@ -114,3 +114,8 @@ desktop.ini
 *.local
 *.log
 logs/
+
+# The built web bundle. nginx/default.conf is NOT ignored: it is generated but
+# committed, because CI compares it against a fresh build and a reader should be
+# able to see the policy that is actually served.
+web/dist/

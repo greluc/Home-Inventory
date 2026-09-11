@@ -152,6 +152,62 @@ jobs:
       - name: libvips is present
         run: docker run --rm --entrypoint vips home-inv:ci --version
 
+  web:
+    name: Web client
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # `ci`, not `install`: it installs exactly the lockfile and fails if the
+      # two disagree, which is the difference between a reproducible build and
+      # one that happens to work today (REQ-SEC-074).
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # ADR-0038: the policy names the hash of the inline theme bootstrap, and
+      # the bootstrap is in the shell. A change to either without the other is a
+      # page that fails in the browser with a blocked script - so it fails here
+      # instead.
+      - name: The served CSP matches the built bundle
+        run: npm run csp:check
+
+      - name: The CSP has not been weakened
+        run: |
+          set -euo pipefail
+          policy=$(grep -o 'Content-Security-Policy "[^"]*"' nginx/default.conf)
+          echo "$policy"
+          for forbidden in "unsafe-inline" "unsafe-eval" "strict-dynamic" "Cross-Origin-Embedder-Policy"; do
+            if grep -q "$forbidden" nginx/default.conf; then
+              echo "::error::the policy contains $forbidden"
+              exit 1
+            fi
+          done
+          # REQ-SEC-061 makes COEP's reappearance a failure (ADR-0040), and
+          # `trusted-types default` must stay beside the requirement: without it,
+          # policy creation is unrestricted and anything achieving script
+          # execution can mint its own (ADR-0038).
+          for required in "require-trusted-types-for 'script'" "trusted-types default" "default-src 'none'" "frame-ancestors 'none'"; do
+            if ! echo "$policy" | grep -q "$required"; then
+              echo "::error::the policy is missing: $required"
+              exit 1
+            fi
+          done
+          echo "The policy carries everything it must and nothing it must not."
+
   documentation:
     name: Documentation rules
     runs-on: ubuntu-latest

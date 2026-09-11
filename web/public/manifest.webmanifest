@@ -1,0 +1,12 @@
+{
+  "name": "Home Inventory",
+  "short_name": "Inventar",
+  "description": "Selbst gehostete Inventarverwaltung für physische und digitale Gegenstände.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "de",
+  "background_color": "#131619",
+  "theme_color": "#131619",
+  "icons": []
+}

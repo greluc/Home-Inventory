@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de" data-theme-pending>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Home Inventory</title>
+
+    <!--
+      Dark is the shipped default on every platform, and `prefers-color-scheme` is
+      deliberately not consulted (ADR-0033, REQ-NFR-040). The authoritative value is
+      the user profile; localStorage is a mirror of it, written after the profile
+      loads and read here — because the profile arrives over the network and the
+      first paint does not wait for the network.
+
+      This is the one inline script in the application. It exists because any other
+      placement is too late: a class applied by React runs after the first paint, and
+      a light-preferring user would see a dark flash on every single load. The CSP
+      authorises it by hash, not by nonce (ADR-0038) — the content is fixed at build
+      time, and naming what is authorised beats authorising whatever turns up.
+
+      Changing a single character of it changes the hash, and the CI check that
+      recomputes the hash from the built bundle will fail until the policy is
+      regenerated. That is the intended coupling.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("homeinv.theme");
+          document.documentElement.setAttribute("data-theme", stored === "light" ? "light" : "dark");
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+        document.documentElement.removeAttribute("data-theme-pending");
+      })();
+    </script>
+
+    <meta name="theme-color" content="#131619" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      Home Inventory braucht JavaScript. Die Anwendung ist eine installierbare
+      Web-App, die auch ohne Netz funktionieren soll – das geht nicht ohne.
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

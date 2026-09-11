@@ -1,0 +1,120 @@
+/*
+ * SPDX-FileCopyrightText: Lucas Greuloch
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * The application stylesheet.
+ *
+ * Static CSS with custom properties, never CSS-in-JS: the CSP forbids
+ * `unsafe-inline`, which rules out emotion and styled-components because both
+ * inject `<style>` at runtime (ADR-0038, web/README.md).
+ *
+ * The tokens below are a stage-0 subset written by hand. The binding set is
+ * `design-system/tokens/tokens.json` (ADR-0035, REQ-NFR-075), and generating this
+ * file from it is the next step - stated here rather than left implicit, because a
+ * hand-written token is exactly the drift that requirement exists to prevent.
+ */
+
+:root,
+:root[data-theme="dark"] {
+  --surface: #131619;
+  --surface-raised: #1b1f24;
+  --border: #2a3038;
+  --text: #e8ebed;
+  --text-muted: #9aa4ae;
+  --accent: #4c8dff;
+  --accent-text: #0a0d10;
+  --danger: #ff6b6b;
+}
+
+:root[data-theme="light"] {
+  --surface: #ffffff;
+  --surface-raised: #f4f6f8;
+  --border: #d5dbe1;
+  --text: #14181c;
+  --text-muted: #5c6670;
+  --accent: #1a66d6;
+  --accent-text: #ffffff;
+  --danger: #b3261e;
+}
+
+/* Until the inline bootstrap has run, nothing paints. It runs in the head and
+   finishes before the first paint, so this is invisible - and it is what stops a
+   light-preferring user from seeing a dark flash (ADR-0033). */
+html[data-theme-pending] body {
+  visibility: hidden;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: 15px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shell { max-width: 70rem; margin: 0 auto; padding: 1rem; }
+
+.bar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.bar h1 { font-size: 1.1rem; margin: 0; }
+.bar-actions { display: flex; align-items: center; gap: .75rem; }
+
+.search { display: block; margin: 1rem 0; }
+.search input { width: 100%; }
+
+input, textarea, button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .5rem .625rem;
+  /* REQ-NFR-071: hit-target size follows the pointer, not the width. A tablet
+     with a keyboard is wide and still touch. */
+  min-height: 2.75rem;
+}
+
+@media (pointer: fine) { input, textarea, button { min-height: 2.25rem; } }
+
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  /* Two-tone, so the ring is visible on both themes without relying on colour
+     alone to carry the meaning (WCAG 2.2 AA). */
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+label { display: block; margin-bottom: .75rem; }
+label input, label textarea { display: block; width: 100%; margin-top: .25rem; }
+
+.items { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.items th, .items td { text-align: left; padding: .5rem .5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.items th { color: var(--text-muted); font-weight: 600; font-size: .85rem; }
+.items .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.name { display: block; }
+.description { display: block; font-size: .85rem; }
+
+.muted { color: var(--text-muted); }
+.error { color: var(--danger); }
+
+.new-item { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 3px; padding: 1rem; margin-top: 1rem; }
+.row { display: flex; gap: .5rem; }
+
+.login { display: grid; place-items: center; min-height: 100dvh; padding: 1rem; }
+.login-card { width: min(24rem, 100%); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; }
+.login-head { display: flex; align-items: baseline; justify-content: space-between; }
+.login-head h1 { font-size: 1.15rem; margin: 0 0 1rem; }
+.login button[type="submit"] { width: 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+
+/* Visible to a screen reader, not on screen. `display: none` would hide it from
+   both, which is the usual mistake. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
