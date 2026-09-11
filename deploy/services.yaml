@@ -230,6 +230,11 @@ services:
                                                  # (ADR-0037, REQ-SEC-099).
     env:
       SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
+      # The database coordinates. Declared here and nowhere else: the application
+      # has no default for them, which is what makes a missing one abort startup
+      # instead of silently reaching for localhost (REQ-NFR-046).
+      HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
+      HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"           # bindTo, resolved by the generator
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
@@ -264,8 +269,8 @@ services:
     # not have worked at all — its `guest` account is restricted to loopback.
     secrets:
       - db-password
-      - data-key
-      - jwt-key
+      - data-encryption-master-key
+      - jwt-signing-key
       - url-signing-key          # signs media URLs (REQ-MED-010) and pagination cursors
                                  # (08 §8.2). Both were specified as signed and neither
                                  # had a key in this file.
@@ -289,6 +294,8 @@ services:
       - { container: 8090, host: null, bindTo: internal }      # same reasoning as api
     env:
       SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
+      HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
+      HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
       HOMEINV_DB_MIGRATE_ON_START: "false"       # validates the schema, never changes it
@@ -303,7 +310,7 @@ services:
       HOMEINV_SEARCH_USER: "homeinv"
     secrets:
       - db-password
-      - data-key
+      - data-encryption-master-key
       - url-signing-key          # the worker renders label artifacts and signs their URLs
       - valkey-password
       - mq-password
@@ -333,8 +340,10 @@ services:
     env:
       SPRING_PROFILES_ACTIVE: "migrate"
       HOMEINV_DB_MIGRATE_ON_START: "true"
+      HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
+      HOMEINV_DB_MIGRATION_USER: "homeinv_migrator"           # owns the schema, ADR-0041
     # THE ONLY SERVICE THAT GETS THE MIGRATION CREDENTIAL (ADR-0041, REQ-SEC-101).
-    # No data-key, no jwt-key: Flyway performs DDL and reads no tenant data.
+    # No data-encryption-master-key, no jwt-signing-key: Flyway performs DDL and reads no tenant data.
     secrets: [db-migration-password]
     tmpfs: ["/tmp"]
     dependsOn: [postgres]
@@ -351,13 +360,28 @@ services:
       failing the "every service declares a health check" rule.
 
   postgres:
-    image: { name: docker.io/library/postgres, tag: "18-alpine", digest: "TODO" }
+    # Our own image, and only because of the init scripts. They create the five
+    # roles the isolation design rests on, they have to be inside the container
+    # before its first start, and the only two ways in are a bind mount — which
+    # ADR-0022 forbids — or a layer. See deploy/images/postgres/Dockerfile.
+    image: { name: ghcr.io/greluc/home-inv-postgres, digest: "TODO" }
     user: "70:70"                 # the image's own postgres user; 10001 breaks initdb
     networks: [internal]
     volumes:
       - { name: pgdata, path: /var/lib/postgresql/data }
       - { name: pgwal,  path: /var/lib/homeinv/wal-archive }   # ADR-0045
     tmpfs: ["/tmp", "/var/run/postgresql"]          # the unix socket lives here
+    env:
+      POSTGRES_DB: "homeinv"                        # without it the database is `postgres`
+                                                    # and HOMEINV_DB_URL points at nothing
+      POSTGRES_PASSWORD_FILE: "${SECRET_FILE:postgres-superuser-password}"
+      # The superuser password is NOT db-password. That one belongs to homeinv_app,
+      # which is NOBYPASSRLS by design; handing the same string to the superuser
+      # would mean the least privileged role and the most privileged one share a
+      # credential, and a leak of the first would be a leak of the second.
+    settingsDelivery: postgresArgs                  # rendered as `-c key=value`, so the
+                                                    # settings stay visible in the
+                                                    # generated files rather than in a layer
     settings:
       # RPO <= 15 min (REQ-NFR-014) is WAL archiving or it is nothing. The target is a
       # second runtime-managed volume, because a read-only root filesystem and the
@@ -369,7 +393,7 @@ services:
       archive_command: "test ! -f /var/lib/homeinv/wal-archive/%f && cp %p /var/lib/homeinv/wal-archive/%f"
       archive_timeout: "900"     # 900 s = the RPO ceiling, so an idle instance still
                                  # closes a segment inside the window
-    secrets: [db-password, db-migration-password]
+    secrets: [postgres-superuser-password, db-password, db-migration-password]
     resources: { memoryReservation: 1Gi, memoryLimit: 2Gi }
     health: { command: "pg_isready", interval: 10s }
     profiles: [minimal, standard, ha]
@@ -640,9 +664,23 @@ services:
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
-  db-password:               { required: true }
+  #
+  # Every one of these is also NAMED to the service that needs it, as
+  # HOMEINV_<NAME>_FILE holding the mount path. That derivation is in the
+  # generator, so a secret cannot be mounted and left unreachable.
+  postgres-superuser-password:
+    required: true
+    kind: random
+    services: [postgres]
+    notes: >
+      The cluster superuser, used by initdb and by nothing afterwards. Separate from
+      db-password on purpose: homeinv_app is NOBYPASSRLS and owns nothing, and sharing
+      a string between it and the one role that can do anything would make the whole
+      privilege separation a matter of nobody trying.
+  db-password:               { required: true, kind: random }
   db-migration-password:
     required: true
+    kind: random
     services: [migrate, postgres]
     notes: >
       Two mounts, and the difference between them is the point (ADR-0041,
@@ -653,35 +691,40 @@ secrets:
       service holds it: not api, not worker. That is what the CI check asserts,
       and it is the property that keeps a compromise of the internet-facing
       process away from the one role that can rewrite an RLS policy.
-  data-key:                  { required: true, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
-  jwt-key:                   { required: true, notes: "Ed25519 pair; two active versions during rotation." }
+  data-encryption-master-key:                  { required: true, kind: random, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
+  jwt-signing-key:                   { required: true, kind: ed25519, notes: "Ed25519 pair; two active versions during rotation." }
   url-signing-key:
     required: true
+    kind: random
     services: [api, worker]
     notes: >
       Signs the short-lived media URLs of REQ-MED-010 and the opaque pagination cursors
       of 08 §8.2. Both were specified as signed from stage 0 and neither named a key,
-      so there was nothing for an implementer to sign with. Separate from jwt-key on
+      so there was nothing for an implementer to sign with. Separate from jwt-signing-key on
       purpose: that one is an identity key with its own rotation, and a URL signature
       should not be forgeable by anything that can mint a token.
   valkey-password:
     required: true
+    kind: random
     services: [valkey, api, worker]
     notes: "ACL password for the single `homeinv` user; `default` is disabled (ADR-0044)."
   mq-password:
     required: true
-    profiles: [standard, ha]
+    kind: random
+    profiles: [minimal, standard, ha]     # follows rabbitmq into `minimal` (ADR-0051)
     services: [rabbitmq, api, worker]
     notes: >
       RabbitMQ had no credential at all, and `guest` is loopback-only — the generated
       stack could not connect (ADR-0044).
   search-password:
     required: true
+    kind: random
     profiles: [standard, ha]
     services: [opensearch, api, worker]
     notes: "The core's OpenSearch client user, distinct from the admin account (ADR-0044)."
   mtls-core:
     required: true
+    kind: mtls-client
     services: [api, worker]
     notes: >
       Client identity for gRPC over mTLS towards `blobstore` and towards every plugin
@@ -689,6 +732,7 @@ secrets:
       same contract.
   mtls-blobstore:
     required: true
+    kind: mtls-server
     services: [blobstore]
     notes: >
       Server identity for the in-deployment BlobStore, pinned by fingerprint in
@@ -696,6 +740,7 @@ secrets:
       no authentication; ADR-0044 gives it the one the plugin adapters already had.
   mtls-search:
     required: true
+    kind: mtls-server
     profiles: [standard, ha]
     services: [opensearch]
     notes: >
@@ -704,6 +749,7 @@ secrets:
       the health check called https://.
   opensearch-admin-password:
     required: true
+    kind: random
     profiles: [standard, ha]
     notes: >
       Required by OpenSearch since 2.12; no default exists. **The one documented exception

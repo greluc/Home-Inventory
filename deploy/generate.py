@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import re
+import shlex
 import sys
 
 try:
@@ -39,6 +40,13 @@ HERE = pathlib.Path(__file__).parent
 MATRIX = HERE / "services.yaml"
 COMPOSE_OUT = HERE / "compose" / "compose.yaml"
 QUADLET_DIR = HERE / "quadlet"
+GENERATED_DIR = HERE / "generated"
+
+# A generated file is delivered through each runtime's SECRET mount, because a
+# read-only root filesystem and the no-bind-mount rule (ADR-0022) leave no other
+# way to get a file into a container. It is not thereby a secret; only the
+# delivery path is shared with one.
+SECRET_PLACEHOLDER = "@SECRET:{name}@"
 
 BANNER = (
     "# GENERATED FROM ../services.yaml — DO NOT EDIT.\n"
@@ -47,6 +55,111 @@ BANNER = (
     "# this file and fails on any difference, so an edit here is lost and noticed\n"
     "# rather than lost and not (REQ-NFR-063).\n"
 )
+
+
+# The scanner's configuration. Compared byte for byte against
+# deploy/expected/clamav-freshclam.conf, which was written before this generator
+# existed precisely so that it could be wrong against something.
+FRESHCLAM_TEMPLATE = """# GENERATED — do not edit. Source: deploy/services.yaml, services.clamav.egress
+#
+# THIS FILE IS A FIXTURE, NOT A LIVE CONFIGURATION. It is the exact output the
+# generator must produce for the `clamav` service's `files[]` entry
+# (A6 in docs/adr/0000-open-points.md, ADR-0036). The generator is compared
+# against it in CI, the same way the Quadlet units and compose.yaml are compared
+# against their own expected output (REQ-NFR-063).
+#
+# It is here because "contracts before implementations" (01 §1.5, principle 3):
+# the artifact is specified now, so the generator has something to be wrong
+# against rather than something to invent.
+#
+# Delivered read-only at {target} through each runtime's file
+# mount — `podman secret … type=mount`, a Docker secret, a Kubernetes ConfigMap.
+# It is NOT a secret; only the delivery path is shared with secrets, because it
+# is the one mechanism all three runtimes have for getting a file into a
+# container with a read-only root filesystem and no bind mounts (ADR-0022).
+
+DatabaseDirectory /var/lib/clamav
+UpdateLogFile /dev/stdout
+LogTime yes
+Foreground yes
+
+# WHY A PROXY AT ALL, AND WHY IT IS CONFIGURED HERE RATHER THAN IN THE ENVIRONMENT
+#
+# The scanner sits on the `scanner` segment, which is internal and has no
+# gateway. Its only route out is the {proxy}, which for this one reason runs
+# in every profile and carries the mirror as a fixed deployment allowlist entry
+# (ADR-0036, REQ-SEC-097).
+#
+# freshclam does NOT read HTTPS_PROXY from the environment the way the plugin
+# SDKs do — it reads these two keys. That single fact is why this file has to
+# exist at all, and why the scanner is the one service in the stack that needs a
+# generated config rather than an environment variable.
+HTTPProxyServer {proxy}
+HTTPProxyPort {port}
+
+# The mirror. DatabaseMirror is a hostname on purpose: it resolves to rotating
+# CDN addresses, which is exactly the case ADR-0027 cites for allowlisting by
+# name rather than by CIDR.
+DatabaseMirror {mirror}
+
+# Daily, as 13 §13.8 requires. A signature age above 48 h is an alert
+# (REQ-SEC-093); a failed fetch appears in the proxy's access log attributed to
+# `clamav`, so the alert has a cause and not only a symptom.
+Checks 1
+
+# Fail visibly rather than quietly: without these, a proxy that refuses the host
+# looks like a slow update rather than a blocked one.
+ConnectTimeout 30
+ReceiveTimeout 60
+"""
+
+VALKEY_ACL_TEMPLATE = """# GENERATED FROM ../services.yaml — DO NOT EDIT.
+#
+# A TEMPLATE. `deploy/setup.sh` replaces the placeholder below with the content
+# of the `valkey-password` secret and writes the result into deploy/secrets/,
+# which is git-ignored. The password is not in this repository and must not be.
+#
+# Valkey held no credential at all until ADR-0044, which meant every session and
+# every rate-limit counter was readable by anything that could open port 6379 on
+# `internal` — `web` included, at the time.
+
+# The built-in account is off. Leaving it on with `nopass` is the default, and
+# it is how an authenticated Valkey ends up accepting anonymous commands anyway.
+user default off
+
+# One user, allowed exactly what sessions, the login throttle and the short-lived
+# OIDC state need. After ADR-0044 the only members of `internal` that can reach
+# the port are `api` and `worker`.
+user {user} on >{password} ~* +@all
+"""
+
+OPENSEARCH_USERS_TEMPLATE = """# GENERATED FROM ../services.yaml — DO NOT EDIT.
+#
+# A TEMPLATE. `deploy/setup.sh` replaces each placeholder with the bcrypt hash of
+# the matching secret. No password and no hash is in this repository.
+#
+# DISABLE_INSTALL_DEMO_CONFIG removes the demo users as well as the demo
+# certificates, and nothing replaced either — so without this file the cluster
+# has no account at all (ADR-0044).
+
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+admin:
+  hash: "{admin}"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Cluster administration. Deliberately not the account api and worker use."
+
+homeinv:
+  hash: "{client}"
+  reserved: true
+  backend_roles:
+    - "homeinv_client"
+  description: "The core's client. Read and write on the tenant indices, nothing else."
+"""
 
 
 def load() -> dict:
@@ -71,6 +184,33 @@ def resolve_secrets(value: str) -> str:
     return SECRET_FILE.sub(lambda m: f"/run/secrets/{m.group(1)}", str(value))
 
 
+def secret_environment(service: dict) -> dict[str, str]:
+    """The ``HOMEINV_*_FILE`` variables for the secrets a service mounts.
+
+    A mounted secret is a file, and the application is told where it is by an
+    environment variable naming the *path* — never by one holding the value
+    (06 §6.11, REQ-SEC-050). The derivation is mechanical: ``db-password``
+    becomes ``HOMEINV_DB_PASSWORD_FILE``. It is mechanical on purpose, so that a
+    new secret cannot be mounted and left unreachable, which is the state every
+    secret in this matrix was in until 2026-09-11 — mounted by both runtimes and
+    named by no variable, so the application resolved ``${HOMEINV_DB_PASSWORD}``
+    to nothing and refused to start.
+
+    :param service: one service from the matrix
+    :return: variable name to mount path, in the order the secrets are declared
+    """
+    # Only the services running OUR image read these. `postgres` mounts
+    # db-password too, but it is told where by POSTGRES_PASSWORD_FILE and its own
+    # init script; handing it HOMEINV_* variables would be noise that reads like
+    # configuration.
+    if service.get("role") not in {"api", "worker", "migrate"}:
+        return {}
+    return {
+        "HOMEINV_" + name.upper().replace("-", "_") + "_FILE": f"/run/secrets/{name}"
+        for name in service.get("secrets", [])
+    }
+
+
 def memory(value: str, target: str) -> str:
     """Translates a Kubernetes-style memory quantity for one runtime.
 
@@ -89,6 +229,255 @@ def memory(value: str, target: str) -> str:
         return quantity
     stripped = quantity[:-1]                      # 768Mi -> 768M
     return stripped.lower() if target == "compose" else stripped.upper()
+
+
+def file_secret_name(service: str, target: str) -> str:
+    """The secret name a service's generated file is mounted under.
+
+    :param service: the service the file belongs to
+    :param target: the absolute path inside the container
+    :return: a name usable as a Compose secret and as a Podman secret
+    """
+    return f"{service}-{pathlib.PurePosixPath(target).name}"
+
+
+def freshclam_conf(matrix: dict) -> str:
+    """Renders the scanner's configuration from the matrix.
+
+    `freshclam` does not read `HTTPS_PROXY` from the environment the way the
+    plugin SDKs do; it reads `HTTPProxyServer` and `HTTPProxyPort` from its own
+    file. That one fact is why the scanner is the only service in the stack that
+    needs a generated configuration rather than an environment variable
+    (ADR-0036, REQ-SEC-097).
+
+    Every value below comes from the matrix: the proxy from ``clamav.egress.via``,
+    its port from that service's own port declaration, and the mirror from the
+    deployment allowlist entry the egress block names. The output is compared
+    against ``deploy/expected/clamav-freshclam.conf``, which was written before
+    this generator existed so that the generator had something to be wrong
+    against.
+
+    :param matrix: the parsed matrix
+    :return: the file content
+    """
+    clamav = matrix["services"]["clamav"]
+    egress = clamav["egress"]
+    proxy_name = egress["via"]
+    proxy = matrix["services"][proxy_name]
+    proxy_port = proxy["ports"][0]["container"]
+    entry = next(e for e in proxy["allowlist"]["deployment"]
+                 if e["id"] == egress["allowlistEntry"])
+    mirror = entry["hosts"][0]
+    target = clamav["files"][0]["target"]
+
+    return FRESHCLAM_TEMPLATE.format(
+        target=target, proxy=proxy_name, port=proxy_port, mirror=mirror)
+
+
+def valkey_acl(matrix: dict) -> str:
+    """Renders the Valkey ACL, with the password left as a placeholder.
+
+    The password is not in this repository and never will be, so what is
+    generated is a template; ``deploy/setup.sh`` substitutes the operator's
+    secret into it before the stack starts. Everything that is a *decision* —
+    which users exist, what they may do, that ``default`` is off — is generated
+    and therefore checked.
+
+    :param matrix: the parsed matrix
+    :return: the template content
+    """
+    user = matrix["services"]["api"]["env"]["HOMEINV_VALKEY_USER"]
+    return VALKEY_ACL_TEMPLATE.format(
+        user=user, password=SECRET_PLACEHOLDER.format(name="valkey-password"))
+
+
+def opensearch_internal_users(matrix: dict) -> str:
+    """Renders the OpenSearch internal users, with the passwords as placeholders.
+
+    ``DISABLE_INSTALL_DEMO_CONFIG`` removes the demo users as well as the demo
+    certificates, and nothing replaced either — so without this file the service
+    has no account at all (ADR-0044).
+
+    :param matrix: the parsed matrix
+    :return: the template content
+    """
+    return OPENSEARCH_USERS_TEMPLATE.format(
+        admin=SECRET_PLACEHOLDER.format(name="opensearch-admin-password"),
+        client=SECRET_PLACEHOLDER.format(name="search-password"))
+
+
+def generated_files(matrix: dict) -> dict[pathlib.Path, str]:
+    """Every file a service needs delivered into it, rendered.
+
+    :param matrix: the parsed matrix
+    :return: output path to content
+    """
+    renderers = {
+        ("clamav", "egress"): freshclam_conf,
+        ("valkey", "secrets"): valkey_acl,
+        ("opensearch", "secrets"): opensearch_internal_users,
+    }
+    outputs: dict[pathlib.Path, str] = {}
+    for name, service in matrix["services"].items():
+        for entry in service.get("files") or []:
+            if entry.get("source"):
+                # A directory of certificates, delivered from a secret as it
+                # stands. There is nothing to render: the secret IS the content.
+                continue
+            render = renderers.get((name, entry.get("generatedFrom")))
+            if render is None:
+                # A declared file nothing renders would be mounted as an empty
+                # secret, fail at run time, and look like the image's fault.
+                raise SystemExit(
+                    f"services.yaml declares {name}:{entry['target']} as generatedFrom "
+                    f"{entry.get('generatedFrom')!r} and generate.py has no renderer for it.")
+            outputs[GENERATED_DIR / file_secret_name(name, entry["target"])] = render(matrix)
+    return outputs
+
+
+def delivered_files(service: dict, name: str) -> list[tuple[str, str]]:
+    """The (secret name, mount target) pairs a service's files turn into.
+
+    :param service: one service from the matrix
+    :param name: the service's name
+    :return: one pair per declared file
+    """
+    return [(entry.get("source") or file_secret_name(name, entry["target"]), entry["target"])
+            for entry in service.get("files") or []]
+
+
+def settings_arguments(service: dict) -> list[str]:
+    """The container command a service's ``settings`` block turns into.
+
+    Only ``postgresArgs`` produces a command; an ``env`` service carries its
+    settings as environment variables instead, which is what its image reads. A
+    settings block with no declared delivery fails the build rather than being
+    dropped — the symptom of dropping it is WAL archiving that is configured in
+    every document and running nowhere (ADR-0045).
+
+    :param service: one service from the matrix
+    :return: the command, or an empty list
+    """
+    if not service.get("settings"):
+        return []
+    if service.get("settingsDelivery") != "postgresArgs":
+        return []
+    command = ["postgres"]
+    for key, value in service["settings"].items():
+        command += ["-c", f"{key}={value}"]
+    return command
+
+
+def settings_environment(service: dict) -> dict[str, str]:
+    """A service's ``settings`` block as environment variables.
+
+    :param service: one service from the matrix
+    :return: the variables, or an empty mapping
+    """
+    if not service.get("settings") or service.get("settingsDelivery") != "env":
+        return {}
+    return {key: str(value) for key, value in service["settings"].items()}
+
+
+def host_prerequisites(matrix: dict) -> str:
+    """Renders the sysctl checks the matrix declares, as a shell fragment.
+
+    A host prerequisite is a setting no rootless container can make for itself —
+    ``vm.max_map_count`` is the one the matrix carries today, and OpenSearch does
+    not start without it. Generating the check keeps the list in
+    ``services.yaml`` rather than in a script that has to be remembered when a
+    service is added.
+
+    :param matrix: the parsed matrix
+    :return: a POSIX shell fragment defining ``check_host_prerequisites``
+    """
+    lines = [
+        "# GENERATED FROM ../services.yaml — DO NOT EDIT.",
+        "#",
+        "# Sourced by setup.sh. Each entry is a setting a rootless container cannot",
+        "# make for itself, so it is a one-time root action at install time and the",
+        "# only sensible thing the setup script can do about it is refuse to",
+        "# continue with a clear sentence (REQ-NFR-060).",
+        "",
+        "# The profile decides which checks apply: vm.max_map_count is OpenSearch's,",
+        "# and OpenSearch does not run in `minimal`. Demanding it there would teach",
+        "# an operator that the script's output is advisory.",
+        "check_host_prerequisites() {",
+        "    profile=${1:-minimal}",
+        "    missing=0",
+    ]
+    for name, service in matrix["services"].items():
+        for prerequisite in service.get("hostPrerequisites") or []:
+            key = prerequisite["key"]
+            value = prerequisite["value"]
+            profiles = "|".join(service.get("profiles") or [])
+            lines += [
+                f"    # required by: {name} (profiles: {profiles.replace('|', ', ')})",
+                f'    case "$profile" in {profiles})',
+                f'    actual=$(sysctl -n {key} 2>/dev/null || echo 0)',
+                f'    if [ "$actual" -lt {value} ]; then',
+                f'        echo "MISSING: {key} is $actual, and {name} needs at least {value}." >&2',
+                '        echo "         It is a HOST setting; a rootless container cannot set it." >&2',
+                f'        echo "         Fix: echo {key}={value} | sudo tee /etc/sysctl.d/99-home-inv.conf" >&2',
+                '        echo "              sudo sysctl --system" >&2',
+                "        missing=1",
+                "    fi",
+                "    ;; esac",
+            ]
+    lines += [
+        "    return $missing",
+        "}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def secret_catalogue(matrix: dict) -> str:
+    """Renders the secret names and kinds as a shell fragment.
+
+    ``setup.sh`` has to create these before anything starts, and "create a
+    secret" means three different things here: 32 random bytes, an Ed25519 key
+    pair, or a certificate signed by the deployment's own CA. Guessing wrong
+    produces a file the service accepts and cannot use, so the kind comes from
+    the matrix rather than from the name.
+
+    Generated rather than parsed, because the alternative is YAML parsing in
+    POSIX shell on a host where nothing is installed yet.
+
+    :param matrix: the parsed matrix
+    :return: a shell fragment defining ``SECRET_KINDS``
+    """
+    lines = [
+        "# GENERATED FROM ../services.yaml — DO NOT EDIT.",
+        "#",
+        "# Sourced by setup.sh. One line per secret: `<name> <kind>`.",
+        "",
+        "SECRET_KINDS='"
+        + "\n".join(f"{name} {spec['kind']}" for name, spec in matrix["secrets"].items())
+        + "'",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def check_settings_delivery(matrix: dict) -> None:
+    """Fails when a service declares settings that reach nothing.
+
+    :param matrix: the parsed matrix
+    :raises SystemExit: when a settings block has no declared delivery
+    """
+    for name, spec in matrix["secrets"].items():
+        if not spec.get("kind"):
+            raise SystemExit(
+                f"services.yaml declares the secret {name} without a `kind:`. "
+                f"setup.sh would not know whether to generate random bytes, a key pair "
+                f"or a certificate, and a wrong guess produces a file the service "
+                f"accepts and cannot use.")
+    for name, service in matrix["services"].items():
+        if service.get("settings") and not service.get("settingsDelivery"):
+            raise SystemExit(
+                f"services.yaml gives {name} a `settings:` block and no `settingsDelivery:`. "
+                f"It would be generated into nothing and take effect nowhere.")
 
 
 def compose(matrix: dict) -> str:
@@ -133,14 +522,30 @@ def compose(matrix: dict) -> str:
             for network in service["networks"]:
                 lines.append(f"      - {network}")
 
-        if service.get("env"):
-            lines.append("    environment:")
-            for key, value in service["env"].items():
-                lines.append(f"      {key}: \"{resolve_secrets(value)}\"")
+        command = settings_arguments(service)
+        if command:
+            lines.append("    command: [" + ", ".join(f"\"{part}\"" for part in command) + "]")
 
-        if service.get("secrets"):
+        environment = {}
+        for key, value in (service.get("env") or {}).items():
+            environment[key] = resolve_secrets(value)
+        environment.update(settings_environment(service))
+        environment.update(secret_environment(service))
+        if environment:
+            lines.append("    environment:")
+            for key, value in environment.items():
+                lines.append(f"      {key}: \"{value}\"")
+
+        files = delivered_files(service, name)
+        if service.get("secrets") or files:
             lines.append("    secrets:")
-            for secret in service["secrets"]:
+            # A delivered file is mounted at a path of its own; a plain secret
+            # lands at /run/secrets/<name>, which is what the application's
+            # HOMEINV_*_FILE variables point at.
+            for secret, target in files:
+                lines.append(f"      - source: {secret}")
+                lines.append(f"        target: {target}")
+            for secret in service.get("secrets", []):
                 lines.append(f"      - {secret}")
 
         if service.get("volumes"):
@@ -168,7 +573,14 @@ def compose(matrix: dict) -> str:
             lines.append("    depends_on:")
             for dependency in service["dependsOn"]:
                 lines.append(f"      {dependency}:")
-                lines.append("        condition: service_healthy")
+                # A one-shot has no health check and never becomes healthy, so
+                # `service_healthy` on it would block its dependants for ever.
+                # What is actually required of `migrate` is that it EXITED 0
+                # before `api` starts (ADR-0041, 06 §6.12).
+                if matrix["services"][dependency].get("lifecycle") == "oneShot":
+                    lines.append("        condition: service_completed_successfully")
+                else:
+                    lines.append("        condition: service_healthy")
 
         health = service.get("health")
         if health and health.get("command"):
@@ -207,6 +619,12 @@ def compose(matrix: dict) -> str:
     lines.append("")
 
     lines.append("secrets:")
+    for service_name, service in matrix["services"].items():
+        for secret, _ in delivered_files(service, service_name):
+            if secret in matrix["secrets"]:
+                continue
+            lines.append(f"  {secret}:")
+            lines.append(f"    file: ../secrets/{secret}")
     for name in matrix["secrets"]:
         # Files, not environment variables: an environment variable is readable by
         # anything that can list the process and survives in crash dumps.
@@ -271,8 +689,21 @@ def quadlet(matrix: dict) -> dict[str, str]:
             body.append(f"Tmpfs={path}")
         for key, value in (service.get("env") or {}).items():
             body.append(f"Environment={key}={resolve_secrets(value)}")
+        for key, value in settings_environment(service).items():
+            body.append(f"Environment={key}={value}")
+        for key, value in secret_environment(service).items():
+            body.append(f"Environment={key}={value}")
         for secret in service.get("secrets", []):
             body.append(f"Secret={secret},type=mount")
+        for secret, target in delivered_files(service, name):
+            body.append(f"Secret={secret},type=mount,target={target}")
+        command = settings_arguments(service)
+        if command:
+            # systemd splits Exec= on whitespace, and `archive_command` contains
+            # some. Quoted, or PostgreSQL starts with an archive command that is
+            # the first word of one - and WAL archiving silently does nothing,
+            # which is the failure ADR-0045 exists to prevent.
+            body.append("Exec=" + " ".join(shlex.quote(part) for part in command))
         for port in service.get("ports") or []:
             if port.get("host"):
                 body.append(f"PublishPort={port['host']}:{port['container']}")
@@ -303,6 +734,31 @@ def quadlet(matrix: dict) -> dict[str, str]:
     return files
 
 
+def check_expected_fixtures(matrix: dict) -> None:
+    """Compares a rendered file against the fixture the matrix names for it.
+
+    ``services.clamav.files[0].expected`` points at a file that was written
+    before this generator existed, so that the generator had something to be
+    wrong against rather than something to invent. Comparing here rather than
+    only in CI means the failure arrives at the moment the renderer changes.
+
+    :param matrix: the parsed matrix
+    :raises SystemExit: when a rendered file differs from its fixture
+    """
+    rendered = generated_files(matrix)
+    for name, service in matrix["services"].items():
+        for entry in service.get("files") or []:
+            fixture = entry.get("expected")
+            if not fixture:
+                continue
+            path = GENERATED_DIR / file_secret_name(name, entry["target"])
+            expected = (HERE / fixture).read_text(encoding="utf-8")
+            if rendered.get(path) != expected:
+                raise SystemExit(
+                    f"The rendered {path.name} differs from the fixture {fixture} that "
+                    f"services.yaml names as its expected output.")
+
+
 def main() -> int:
     """Writes or checks the generated files.
 
@@ -314,9 +770,14 @@ def main() -> int:
     args = parser.parse_args()
 
     matrix = load()
+    check_settings_delivery(matrix)
+    check_expected_fixtures(matrix)
     outputs = {COMPOSE_OUT: compose(matrix)}
     for filename, content in quadlet(matrix).items():
         outputs[QUADLET_DIR / filename] = content
+    outputs.update(generated_files(matrix))
+    outputs[GENERATED_DIR / "host-prerequisites.sh"] = host_prerequisites(matrix)
+    outputs[GENERATED_DIR / "secret-kinds.sh"] = secret_catalogue(matrix)
 
     drifted = []
     for path, content in outputs.items():

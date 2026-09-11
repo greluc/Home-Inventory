@@ -7,6 +7,10 @@ Everything needed to run Home Inventory.
 | [`services.yaml`](services.yaml) | **The source of truth** for the deployment topology |
 | [`quadlet/`](quadlet/) | Podman rootless — systemd units, **generated** |
 | [`compose/`](compose/) | Docker rootless — `compose.yaml`, **generated** |
+| [`generated/`](generated/) | Files that must be *inside* a container — **generated** |
+| [`images/`](images/) | The one derived image: PostgreSQL with the role scripts baked in |
+| [`postgres/initdb/`](postgres/initdb/) | The role definitions the whole isolation design rests on |
+| [`expected/`](expected/) | Fixtures the generator is compared against |
 | [`helm/`](helm/) | Kubernetes — hand-written, **validated** against the matrix |
 
 ## The one rule
@@ -31,6 +35,7 @@ Host prerequisites, the per-distribution differences and the version matrix:
 
 ## Status
 
-Seed. The matrix reflects the architecture; nothing generates from it yet,
-because there is nothing to deploy. Image digests read `TODO` on purpose — a tag
-in their place would quietly defeat the digest-pinning rule.
+`generate.py` renders 27 files from the matrix and CI compares every one of them.
+Image digests still read `TODO` on purpose — a tag in their place would quietly
+defeat the digest-pinning rule, and they are filled in when the first images are
+published.

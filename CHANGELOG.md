@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **One command brings the stack up.** `deploy/setup.sh` checks the host
+  prerequisites a rootless deployment needs and refuses to continue without them,
+  generates every secret the service matrix declares — random bytes, key pairs
+  and certificates, each according to its declared kind — and renders the
+  configuration files that have to live *inside* a container.
+
 - The architecture as 14 arc42-oriented chapters, covering the building blocks,
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and

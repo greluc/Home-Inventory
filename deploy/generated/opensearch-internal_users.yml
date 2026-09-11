@@ -1,0 +1,26 @@
+# GENERATED FROM ../services.yaml — DO NOT EDIT.
+#
+# A TEMPLATE. `deploy/setup.sh` replaces each placeholder with the bcrypt hash of
+# the matching secret. No password and no hash is in this repository.
+#
+# DISABLE_INSTALL_DEMO_CONFIG removes the demo users as well as the demo
+# certificates, and nothing replaced either — so without this file the cluster
+# has no account at all (ADR-0044).
+
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+admin:
+  hash: "@SECRET:opensearch-admin-password@"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Cluster administration. Deliberately not the account api and worker use."
+
+homeinv:
+  hash: "@SECRET:search-password@"
+  reserved: true
+  backend_roles:
+    - "homeinv_client"
+  description: "The core's client. Read and write on the tenant indices, nothing else."

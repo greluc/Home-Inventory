@@ -21,6 +21,9 @@ Network=homeinv-internal.network
 Tmpfs=/tmp
 Environment=SPRING_PROFILES_ACTIVE=migrate
 Environment=HOMEINV_DB_MIGRATE_ON_START=true
+Environment=HOMEINV_DB_URL=jdbc:postgresql://postgres:5432/homeinv
+Environment=HOMEINV_DB_MIGRATION_USER=homeinv_migrator
+Environment=HOMEINV_DB_MIGRATION_PASSWORD_FILE=/run/secrets/db-migration-password
 Secret=db-migration-password,type=mount
 
 [Service]

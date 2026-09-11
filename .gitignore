@@ -119,3 +119,7 @@ logs/
 # committed, because CI compares it against a fresh build and a reader should be
 # able to see the policy that is actually served.
 web/dist/
+
+# Rendered deployment secrets: the operator's real values, substituted into the
+# templates in deploy/generated/. Never committed — the templates are.
+deploy/secrets/

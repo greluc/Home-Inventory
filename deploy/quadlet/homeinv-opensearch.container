@@ -26,6 +26,8 @@ Environment=bootstrap.memory_lock=false
 Secret=opensearch-admin-password,type=mount
 Secret=search-password,type=mount
 Secret=mtls-search,type=mount
+Secret=opensearch-internal_users.yml,type=mount,target=/usr/share/opensearch/config/opensearch-security/internal_users.yml
+Secret=mtls-search,type=mount,target=/usr/share/opensearch/config/certificates
 HealthCmd=curl -fsS -k https://localhost:9200/_cluster/health
 HealthInterval=20s
 HealthStartPeriod=120s

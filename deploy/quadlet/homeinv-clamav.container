@@ -20,6 +20,7 @@ Volume=homeinv-cvddata.volume:/var/lib/clamav
 Tmpfs=/tmp
 Tmpfs=/run/clamav
 Tmpfs=/var/log/clamav
+Secret=clamav-freshclam.conf,type=mount,target=/etc/clamav/freshclam.conf
 HealthCmd=clamdcheck.sh
 HealthInterval=60s
 HealthStartPeriod=300s

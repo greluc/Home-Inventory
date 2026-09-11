@@ -290,7 +290,7 @@ Environment=HOMEINV_DB_PASSWORD_FILE=/run/secrets/db-password
                                                  # NO migration credential here —
                                                  # only homeinv-migrate gets it (ADR-0041)
 Secret=homeinv-db-password,type=mount,target=/run/secrets/db-password
-Secret=homeinv-data-key,type=mount,target=/run/secrets/data-key
+Secret=homeinv-data-encryption-master-key,type=mount,target=/run/secrets/data-encryption-master-key
 
 User=10001:10001                                 # non-root INSIDE the container
 ReadOnly=true
