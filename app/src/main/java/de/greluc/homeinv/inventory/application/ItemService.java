@@ -13,6 +13,8 @@ import de.greluc.homeinv.platform.TenantContext;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,27 +42,32 @@ public class ItemService {
   private final Clock clock;
 
   /**
-   * Creates an item.
+   * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
-   * (ADR-0016). That makes a collision a case the API must answer rather than a constraint
-   * violation surfacing as a {@code 500}, so it is checked before the insert. The check and the
-   * insert are in one transaction; a concurrent creator loses on the unique constraint, which is
-   * the correct outcome and still not a {@code 500} because the id is the client's own.
+   * (ADR-0016). A repeat of a creation whose answer the client never saw is therefore not an error:
+   * the same id with the <em>same</em> content returns the existing item and says so, which is what
+   * lets a client retry safely while {@code Idempotency-Key} is still stage 1 (REQ-API-005). The
+   * same id with different content is a genuine conflict.
    *
    * @param command what to create
    * @param actor the authenticated user, recorded in the audit columns
-   * @return the created item as the published view
-   * @throws ItemAlreadyExistsException when the tenant already has an item with that id
+   * @return the item and whether this call is what created it, which decides 201 versus 200
+   * @throws ItemAlreadyExistsException when the id exists in this tenant with different content
    * @throws IllegalArgumentException when an invariant of {@link Item#create} is violated
    */
   @Transactional
-  public ItemView create(CreateItemCommand command, UUID actor) {
+  public CreateResult create(CreateItemCommand command, UUID actor) {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
 
-    if (items.existsForTenant(tenantId, id)) {
-      throw new ItemAlreadyExistsException(id);
+    Optional<Item> existing = items.findAny(tenantId, id);
+    if (existing.isPresent()) {
+      Item found = existing.get();
+      if (!sameContent(found, command)) {
+        throw new ItemAlreadyExistsException(id);
+      }
+      return new CreateResult(toView(found), false);
     }
 
     Instant now = Instant.now(clock);
@@ -80,8 +87,40 @@ public class ItemService {
 
     items.save(item);
     log.debug("Item {} created in tenant {}", id, tenantId);
-    return toView(item);
+    return new CreateResult(toView(item), true);
   }
+
+  /**
+   * Whether an existing item already says what the command asks for.
+   *
+   * <p>Compares the fields a creation sets, and nothing else: timestamps and the version differ by
+   * definition on a repeat, and comparing them would make every retry a conflict.
+   *
+   * @param item the item already stored
+   * @param command the creation being attempted again
+   * @return {@code true} when the two describe the same item
+   */
+  private static boolean sameContent(Item item, CreateItemCommand command) {
+    BigDecimal wanted = command.quantity() != null ? command.quantity() : BigDecimal.ONE;
+    return Objects.equals(item.getItemTypeVersionId(), command.itemTypeVersionId())
+        && Objects.equals(item.getName(), command.name())
+        && Objects.equals(item.getDescription(), command.description())
+        && item.getKind() == command.kind()
+        && Objects.equals(item.getLocationId(), command.locationId())
+        // compareTo, not equals: BigDecimal.equals is scale-sensitive, so 1 and
+        // 1.0 would count as different content and turn a retry into a conflict.
+        && item.getQuantity().compareTo(wanted) == 0
+        && Objects.equals(item.getQuantityUnit(), command.quantityUnit());
+  }
+
+  /**
+   * The outcome of a creation.
+   *
+   * @param item the item, whether just created or found already present
+   * @param created {@code true} when this call created it, which decides {@code 201} versus
+   *     {@code 200}
+   */
+  public record CreateResult(ItemView item, boolean created) {}
 
   /**
    * Reads one item.
@@ -101,27 +140,22 @@ public class ItemService {
   /**
    * Changes an item.
    *
+   * <p>Stage 0 has no concurrency control on the wire: {@code ETag}/{@code If-Match} is
+   * {@code REQ-API-004} and reads stage 1, so there is no header in which a client could tell the
+   * server which version it was editing. The {@code version} column is nevertheless maintained —
+   * {@code 07 §7.1} requires it on every domain table, and stage 1 turns it into the entity tag
+   * without a migration.
+   *
    * @param id the item
    * @param command the new values
-   * @param expectedVersion the version the client last saw, echoed back so a concurrent edit is
-   *     detected instead of silently overwritten
    * @param actor the authenticated user
    * @return the changed item
    * @throws NotFoundException when the tenant has no such live item
-   * @throws StaleItemException when the item changed since {@code expectedVersion}
    */
   @Transactional
-  public ItemView update(UUID id, UpdateItemCommand command, long expectedVersion, UUID actor) {
+  public ItemView update(UUID id, UpdateItemCommand command, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
-
-    // Checked here rather than left to Hibernate's @Version so the caller gets a
-    // named failure with both versions in it. An OptimisticLockException surfaces
-    // as a 500 unless something maps it, and what it means to the user — "somebody
-    // else edited this" — is lost by then.
-    if (item.getVersion() != expectedVersion) {
-      throw new StaleItemException(id, expectedVersion, item.getVersion());
-    }
 
     item.update(
         command.name(),

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.inventory.application.ItemAlreadyExistsException;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -52,6 +53,30 @@ public class ApiExceptionHandler {
         "Not found",
         "No such " + exception.getResource() + " is visible to you.",
         request);
+  }
+
+  /**
+   * Answers a creation whose id is taken by something else.
+   *
+   * <p>Only reachable because the client may choose the id (ADR-0016). An identical creation is not
+   * an error and never gets here — it returns the existing item with a {@code 200}.
+   *
+   * @param exception the conflict, carrying the id
+   * @param request the request
+   * @return a {@code 409} problem detail naming the id
+   */
+  @ExceptionHandler(ItemAlreadyExistsException.class)
+  public ProblemDetail handleAlreadyExists(
+      ItemAlreadyExistsException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.CONFLICT,
+            ProblemTypes.RESOURCE_EXISTS,
+            "Resource exists",
+            "An item with this id already exists in this tenant with different content.",
+            request);
+    problem.setProperty("id", exception.getId().toString());
+    return problem;
   }
 
   /**

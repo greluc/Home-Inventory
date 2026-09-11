@@ -58,6 +58,15 @@ public final class ProblemTypes {
    */
   public static final URI VALIDATION_FAILED = URI.create(NS + "validation-failed");
 
+  /**
+   * {@code 409} — a creating {@code POST} supplied an id that exists with different content.
+   *
+   * <p>The same id with the <em>same</em> content is not an error: it returns {@code 200} instead of
+   * {@code 201}, which is what makes a retried creation safe when the client never saw the first
+   * answer (REQ-CORE-001).
+   */
+  public static final URI RESOURCE_EXISTS = URI.create(NS + "resource-exists");
+
   /** {@code 429} — a per-user, per-tenant or per-IP rate limit was reached. */
   public static final URI RATE_LIMITED = URI.create(NS + "rate-limited");
 }
