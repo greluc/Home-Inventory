@@ -13,6 +13,9 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.security)
+    // Argon2id (REQ-SEC-010). Spring Security's encoder has no implementation of
+    // its own and silently is not there without this.
+    implementation(libs.bouncycastle)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.actuator)
 

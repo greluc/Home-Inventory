@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.identity.application.InvalidCredentialsException;
+import de.greluc.homeinv.identity.application.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.application.ItemAlreadyExistsException;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -76,6 +78,53 @@ public class ApiExceptionHandler {
             "An item with this id already exists in this tenant with different content.",
             request);
     problem.setProperty("id", exception.getId().toString());
+    return problem;
+  }
+
+  /**
+   * Answers a login that failed.
+   *
+   * <p>One answer for every reason: unknown address, wrong password, locked account. Not logged
+   * here — the service already logged the actual reason, which an operator needs and a caller
+   * must not have (REQ-SEC-016).
+   *
+   * @param exception the failure
+   * @param request the request
+   * @return a {@code 401} problem detail
+   */
+  @ExceptionHandler(InvalidCredentialsException.class)
+  public ProblemDetail handleInvalidCredentials(
+      InvalidCredentialsException exception, HttpServletRequest request) {
+    return problem(
+        HttpStatus.UNAUTHORIZED,
+        ProblemTypes.UNAUTHENTICATED,
+        "Unauthenticated",
+        "The e-mail address or password is not correct.",
+        request);
+  }
+
+  /**
+   * Answers a login the throttle is holding back.
+   *
+   * <p>Carries {@code Retry-After} in seconds, so a client waits the right amount instead of
+   * retrying immediately and making the delay grow. Distinct from a wrong password on purpose: a
+   * client that cannot tell them apart will hammer.
+   *
+   * @param exception the throttle decision, carrying the remaining wait
+   * @param request the request
+   * @return a {@code 429} problem detail with the wait in seconds
+   */
+  @ExceptionHandler(TooManyAttemptsException.class)
+  public ProblemDetail handleTooManyAttempts(
+      TooManyAttemptsException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.TOO_MANY_REQUESTS,
+            ProblemTypes.RATE_LIMITED,
+            "Too many attempts",
+            "Too many failed login attempts. Try again shortly.",
+            request);
+    problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
     return problem;
   }
 

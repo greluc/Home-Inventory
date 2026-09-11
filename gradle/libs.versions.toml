@@ -15,6 +15,10 @@ postgresql = "42.7.13"
 
 lombok = "1.18.48"
 
+# Spring Security's Argon2PasswordEncoder delegates to BouncyCastle; without it,
+# REQ-SEC-010 cannot be satisfied at all.
+bouncycastle = "1.86"
+
 # Test-only
 testcontainers = "2.0.5"
 archunit = "1.5.0"
@@ -40,6 +44,7 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 
 # --- Test ------------------------------------------------------------------
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
