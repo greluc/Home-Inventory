@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap — Home Inventory</title>
+<meta name="description" content="Design phase: the architecture is finished, the implementation is not started. Four stages, each usable and deployable on its own.">
+<meta name="theme-color" content="#131619">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Roadmap — Home Inventory">
+<meta property="og:description" content="Design phase: the architecture is finished, the implementation is not started. Four stages, each usable and deployable on its own.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%231a66d6'/%3E%3Ctext x='16' y='22' font-family='IBM Plex Sans,system-ui,sans-serif' font-size='15' font-weight='600' fill='%23ffffff' text-anchor='middle'%3EHI%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="design-system/styles.css">
+<link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem("homeinv.theme")||"dark";if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></a>
+    <nav class="sitenav" aria-label="Site">
+        <a href="index.html">Overview</a>
+        <a href="features.html">Features</a>
+        <a href="roadmap.html" aria-current="page">Roadmap</a>
+        <a href="install.html">Install</a>
+        <a href="docs.html">Docs</a>
+    </nav>
+    <div class="head-end">
+      <button type="button" class="hi-iconbtn" id="theme-toggle" title="Switch to the light appearance" aria-label="Switch to the light appearance"><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="sun"><circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2"></path> <path d="M12 20v2"></path> <path d="m4.93 4.93 1.41 1.41"></path> <path d="m17.66 17.66 1.41 1.41"></path> <path d="M2 12h2"></path> <path d="M20 12h2"></path> <path d="m6.34 17.66-1.41 1.41"></path> <path d="m19.07 4.93-1.41 1.41"></path></svg><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="moon" hidden><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg><span class="hi-sr">Appearance</span></button>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory"><span>GitHub</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section class="wrap sec sec--lead stack">
+  <span class="eyebrow">Roadmap</span>
+  <h1 style="max-width:20ch">Design phase. No code yet.</h1>
+  <p class="lead">The architecture is finished and the implementation has not started. There is no release, no container image and nothing to install today — the repository holds the design, and the directories that will hold the code are deliberately empty. Contracts before implementations.</p>
+  <div class="cols--tight cols" style="margin-top:8px">
+<div class="card"><span class="num">14</span><span class="small muted">architecture chapters, arc42-oriented</span></div>
+<div class="card"><span class="num">44</span><span class="small muted">decision records, each with its alternatives</span></div>
+<div class="card"><span class="num">4</span><span class="small muted">stages, each deployable on its own</span></div>
+<div class="card"><span class="num">0</span><span class="small muted">open decisions — the remainder is outstanding work</span></div>
+  </div>
+</section>
+
+<section class="wrap sec stack--lg" style="display:flex;flex-direction:column">
+  <h2>Four stages</h2>
+  <p>No stage is half a product waiting for the next one. Each is usable and deployable on its own, and after each the remainder is re-assessed — the scope is large for one person, and that is a named risk rather than an optimistic silence.</p>
+<article class="panel" style="background:var(--surface-raised)">
+  <header style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:18px 20px;border-bottom:1px solid var(--border-subtle);background:var(--surface-sunken)">
+    <span class="muted" style="font-family:var(--font-mono);font-size:var(--fs-75);letter-spacing:var(--ls-code)">Stage 0</span>
+    <h3>MVP — capture and find</h3>
+    <span style="color:var(--accent-fg);background:var(--accent-tint);border:1px solid var(--accent-solid);margin-left:auto;padding:3px 8px;border-radius:var(--radius-1);font-size:var(--fs-75);font-weight:var(--fw-medium);letter-spacing:var(--ls-wide);white-space:nowrap">Next up</span>
+  </header>
+  <div class="stack" style="padding:20px;gap:16px">
+    <p><strong>Done when:</strong> an item can be created, photographed, stored and found again — through a hardened instance reachable from the internet.</p>
+    <div class="cols--wide cols">
+      <div class="stack" style="gap:8px"><span class="eyebrow">Included</span><ul class="facts" style="gap:6px"><li><span class="bullet">·</span><span>Password login, sessions, rate limiting</span></li>
+<li><span class="bullet">·</span><span>Items with five fixed fields, and a location tree with fixed categories</span></li>
+<li><span class="bullet">·</span><span>Photos and documents: re-encoding, EXIF stripping, thumbnails, signed URLs — and the mandatory malware scan</span></li>
+<li><span class="bullet">·</span><span>Full-text search in PostgreSQL, cursor pagination</span></li>
+<li><span class="bullet">·</span><span>REST /api/v1 with OpenAPI and problem details</span></li>
+<li><span class="bullet">·</span><span>The web PWA, online</span></li>
+<li><span class="bullet">·</span><span>Both container runtimes rootless, migrations, health endpoints</span></li>
+<li><span class="bullet">·</span><span>All security foundations: row-level security, CSP, upload hardening, network segmentation</span></li></ul></div>
+      <div class="stack" style="gap:8px"><span class="eyebrow">Not yet</span><ul class="facts muted" style="gap:6px"><li><span class="bullet">·</span><span>Second factor, OIDC, invitations</span></li>
+<li><span class="bullet">·</span><span>The configurable type system</span></li>
+<li><span class="bullet">·</span><span>Notes and purchase data</span></li>
+<li><span class="bullet">·</span><span>OpenSearch, facets, saved searches</span></li>
+<li><span class="bullet">·</span><span>GraphQL, gRPC, webhooks</span></li>
+<li><span class="bullet">·</span><span>Offline operation</span></li>
+<li><span class="bullet">·</span><span>Helm, RabbitMQ</span></li></ul></div>
+    </div>
+  </div>
+</article>
+<article class="panel" style="background:var(--surface-raised)">
+  <header style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:18px 20px;border-bottom:1px solid var(--border-subtle);background:var(--surface-sunken)">
+    <span class="muted" style="font-family:var(--font-mono);font-size:var(--fs-75);letter-spacing:var(--ls-code)">Stage 1</span>
+    <h3>Core — configurable and multi-tenant</h3>
+    <span style="color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border-default);margin-left:auto;padding:3px 8px;border-radius:var(--radius-1);font-size:var(--fs-75);font-weight:var(--fw-medium);letter-spacing:var(--ls-wide);white-space:nowrap">Planned</span>
+  </header>
+  <div class="stack" style="padding:20px;gap:16px">
+    <p><strong>Done when:</strong> a tenant administrator sets up types, fields, location categories, tags and roles themselves — without a developer and without a restart.</p>
+    <div class="cols--wide cols">
+      <div class="stack" style="gap:8px"><span class="eyebrow">The product</span><ul class="facts" style="gap:6px"><li><span class="bullet">·</span><span>Item types and location categories with free fields, inheritance, versioning, generated JSON Schema</span></li>
+<li><span class="bullet">·</span><span>Tenants, memberships, invitations, roles, subtree scoping, field visibility, quotas</span></li>
+<li><span class="bullet">·</span><span>Second factor with TOTP and passkeys, session overview, service accounts</span></li>
+<li><span class="bullet">·</span><span>Lifecycle: warranty, maintenance log, lending, sale, disposal, trash, history with restore</span></li>
+<li><span class="bullet">·</span><span>Value reporting — purchase price, current value, replacement value, the insurance report</span></li>
+<li><span class="bullet">·</span><span>Import and export: CSV with mapping profile and dry run, Homebox and InvenTree profiles, GDPR access</span></li></ul></div>
+      <div class="stack" style="gap:8px"><span class="eyebrow">The plumbing</span><ul class="facts muted" style="gap:6px"><li><span class="bullet">·</span><span>JSONB attribute storage plus the index side table and its reconciliation</span></li>
+<li><span class="bullet">·</span><span>OpenSearch with facets and a PostgreSQL fallback</span></li>
+<li><span class="bullet">·</span><span>The transactional outbox, RabbitMQ, the worker role</span></li>
+<li><span class="bullet">·</span><span>The plugin runtime: registry, signed manifests, per-tenant capabilities, gRPC over mTLS, per-plugin network segments</span></li>
+<li><span class="bullet">·</span><span>First-party plugins: SMTP, S3, Nextcloud, webhook, OIDC</span></li>
+<li><span class="bullet">·</span><span>Audit log with a hash chain · metrics, tracing, backup with automated restore verification</span></li></ul></div>
+    </div>
+  </div>
+</article>
+<article class="panel" style="background:var(--surface-raised)">
+  <header style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:18px 20px;border-bottom:1px solid var(--border-subtle);background:var(--surface-sunken)">
+    <span class="muted" style="font-family:var(--font-mono);font-size:var(--fs-75);letter-spacing:var(--ls-code)">Stage 2</span>
+    <h3>Identification — label, scan, stocktake</h3>
+    <span style="color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border-default);margin-left:auto;padding:3px 8px;border-radius:var(--radius-1);font-size:var(--fs-75);font-weight:var(--fw-medium);letter-spacing:var(--ls-wide);white-space:nowrap">Planned</span>
+  </header>
+  <div class="stack" style="padding:20px;gap:16px">
+    <p><strong>Done when:</strong> a label sheet is printed, stuck on, scanned, and leads to the item — and a stocktake in the cellar works.</p>
+    <div class="cols--wide cols">
+      <div class="stack" style="gap:8px"><span class="eyebrow">Codes and paper</span><ul class="facts" style="gap:6px"><li><span class="bullet">·</span><span>The public short code: pre-issuing, binding, reassignment, resolution at /c/{code}</span></li>
+<li><span class="bullet">·</span><span>QR shipped, the CodeFormat port in place</span></li>
+<li><span class="bullet">·</span><span>Label templates with a bounded expression language</span></li>
+<li><span class="bullet">·</span><span>The label media catalogue with verification flags, start offset and a calibration sheet</span></li>
+<li><span class="bullet">·</span><span>The print job as an aggregate; PDF shipped, the PrintTarget port open</span></li></ul></div>
+      <div class="stack" style="gap:8px"><span class="eyebrow">In the cellar</span><ul class="facts muted" style="gap:6px"><li><span class="bullet">·</span><span>Browser camera with BarcodeDetector and a ZXing fallback</span></li>
+<li><span class="bullet">·</span><span>Continuous scan mode and HID handheld scanners</span></li>
+<li><span class="bullet">·</span><span>Foreign codes: EAN, UPC, ITF-14, ISBN</span></li>
+<li><span class="bullet">·</span><span>Stocktake mode with a discrepancy report</span></li>
+<li><span class="bullet">·</span><span>Moving mode with sealable mobile locations</span></li>
+<li><span class="bullet">·</span><span>The Helm chart, tested in CI against kind with a restricted profile</span></li></ul></div>
+    </div>
+  </div>
+</article>
+<article class="panel" style="background:var(--surface-raised)">
+  <header style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:18px 20px;border-bottom:1px solid var(--border-subtle);background:var(--surface-sunken)">
+    <span class="muted" style="font-family:var(--font-mono);font-size:var(--fs-75);letter-spacing:var(--ls-code)">Stage 3</span>
+    <h3>Ecosystem — open the contract, apps, offline</h3>
+    <span style="color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border-default);margin-left:auto;padding:3px 8px;border-radius:var(--radius-1);font-size:var(--fs-75);font-weight:var(--fw-medium);letter-spacing:var(--ls-wide);white-space:nowrap">Planned</span>
+  </header>
+  <div class="stack" style="padding:20px;gap:16px">
+    <p><strong>Done when:</strong> an external author, working only from the published SDK, gets a plugin running without a core change — and the app works a week offline and then reconciles without loss.</p>
+    <div class="cols--wide cols">
+      <div class="stack" style="gap:8px"><span class="eyebrow">Opening up</span><ul class="facts" style="gap:6px"><li><span class="bullet">·</span><span>home_inv.plugin.v1 is published and becomes binding under the six-month rule</span></li>
+<li><span class="bullet">·</span><span>SDKs for Java and Python, the contract test suite, a project template, three example plugins</span></li>
+<li><span class="bullet">·</span><span>Metadata enrichment: ISBN and EAN resolvers, the proposal model, field mapping</span></li>
+<li><span class="bullet">·</span><span>Further ports: printers, Bluetooth scanners, push channels, valuation providers</span></li></ul></div>
+      <div class="stack" style="gap:8px"><span class="eyebrow">Apps and offline</span><ul class="facts muted" style="gap:6px"><li><span class="bullet">·</span><span>Kotlin Multiplatform apps with Compose, OAuth 2.1 with PKCE, camera and scanner</span></li>
+<li><span class="bullet">·</span><span>Full bidirectional reconciliation with the three-way compare</span></li>
+<li><span class="bullet">·</span><span>Conflict records and their resolution, property-based tests</span></li>
+<li><span class="bullet">·</span><span>Device management with remote wipe, the media upload queue</span></li>
+<li><span class="bullet">·</span><span>The web PWA offline: IndexedDB, a service worker, local search</span></li></ul></div>
+    </div>
+  </div>
+</article>
+</section>
+
+<section class="wrap sec stack--lg" style="display:flex;flex-direction:column">
+  <div class="stack" style="gap:14px">
+    <h2>What has to come first</h2>
+    <p>The order is not a preference. Each of these is a dependency that would have to be unpicked later at a much higher price.</p>
+    <div class="panel"><div class="hi-tablewrap hi-scroll-thin"><table class="hi-table"><caption class="hi-sr">Hard ordering constraints</caption><thead><tr><th scope="col" style="width:28%">First</th><th scope="col" style="width:30%">Then</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><td><span class="hi-truncate" style="display:block">Type system (1)</span></td><td><span class="hi-truncate" style="display:block">Metadata enrichment (3)</span></td><td><span class="hi-truncate" style="display:block">Without target fields there is nothing to map onto</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Type system (1)</span></td><td><span class="hi-truncate" style="display:block">Offline validation (3)</span></td><td><span class="hi-truncate" style="display:block">The client validates against the generated JSON Schema</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Codes (2)</span></td><td><span class="hi-truncate" style="display:block">Labels, stocktake, moving (2)</span></td><td><span class="hi-truncate" style="display:block">Everything hangs on the code</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Outbox and RabbitMQ (1)</span></td><td><span class="hi-truncate" style="display:block">Plugin events (1)</span></td><td><span class="hi-truncate" style="display:block">Plugins receive events</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Plugin runtime (1)</span></td><td><span class="hi-truncate" style="display:block">Invitations, password reset, remote storage (1)</span></td><td><span class="hi-truncate" style="display:block">Mail and object storage are plugins</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Change log (3)</span></td><td><span class="hi-truncate" style="display:block">The apps (3)</span></td><td><span class="hi-truncate" style="display:block">Without a reconciliation protocol there is no offline app</span></td></tr>
+</tbody></table></div></div>
+  </div>
+  <div class="cols--wide cols">
+    <div class="card"><h4>Deliberately deferred</h4><p class="small">Offline operation, GraphQL, OpenSearch, the published plugin contract, the Helm chart, the tenant interface. Each is cheap to add later and expensive to get wrong early.</p></div>
+    <div class="card"><h4>Deliberately not deferred</h4><p class="small">Row-level security, the authorisation scaffolding, the content security policy, upload hardening, module boundaries with machine verification, multilingual support, cursor pagination, a trace id in every response — and rootless on both container runtimes. All of it is expensive later and cheap now.</p></div>
+  </div>
+</section>
+
+<section class="wrap sec">
+  <div class="cta">
+    <div class="stack" style="flex:1 1 340px;min-width:0;gap:10px">
+      <h2 style="font-size:var(--fs-500);line-height:var(--lh-500)">The most useful thing you can do right now</h2>
+      <p>Find a hole in the design. Before there is code, a wrong assumption costs a paragraph; afterwards it costs a migration. Issue templates exist for bug reports, feature requests, documentation and design feedback.</p>
+    </div>
+    <div class="actions">
+      <a class="hi-btn hi-btn--primary" href="https://github.com/greluc/Home-Inventory/issues/new/choose"><span>Open an issue</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory/blob/main/CONTRIBUTING.md"><span>Contributing</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer class="site-foot">
+  <div class="wrap top">
+    <div class="stack" style="gap:10px">
+      <span class="brand" style="cursor:default"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></span>
+      <p class="small muted" style="max-width:34ch">Self-hosted inventory for physical and digital items. Run it on your own machine, or do not run it at all.</p>
+      <code class="muted" style="font-size:var(--fs-75)">greluc/Home-Inventory</code>
+    </div>
+    <nav>
+      <span class="eyebrow">Project</span>
+      <a href="https://github.com/greluc/Home-Inventory">Repository</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Documentation</span>
+      <a href="docs.html">Document map</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/architecture">Architecture</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/adr">Decisions</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/requirements">Requirements</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Legal</span>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/LICENSE">AGPL-3.0-or-later</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/SECURITY.md">Security policy</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/cla">Contributor agreement</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/REUSE.toml">REUSE / per-file licensing</a>
+    </nav>
+  </div>
+  <div class="bottom">
+    <div class="wrap">
+      <span>Core AGPL-3.0-or-later · plugin API, SDKs and protobuf contract Apache-2.0 · documentation CC BY-SA 4.0.</span>
+      <span style="margin-left:auto">Type: IBM Plex, OFL 1.1 · Icons: Lucide, ISC AND MIT.</span>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>

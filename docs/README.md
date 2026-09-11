@@ -23,7 +23,8 @@ contradicts the implementation is a defect and gets corrected immediately.
 | **operations, backup, monitoring** | [13 Operations](architecture/13-operations-and-observability.md) |
 | **quality goals, risks, terms** | [14 Quality, Risks, Glossary](architecture/14-quality-risks-glossary.md) |
 | **implementable requirements** | [Requirements catalogue](requirements/) |
-| the **design system** | [Design system brief](design/design-system-brief.md) |
+| the **design system** | [Design system brief](design/design-system-brief.md) — the system itself is in [`design-system/`](../design-system/) |
+| the **project website** | [`website/`](../website/), with the pre-render request in [design/](design/website-prerender-request.md) |
 | the **error and degradation tokens** clients branch on | [`problem-types.yaml`](reference/problem-types.yaml) · [`degraded-reasons.yaml`](reference/degraded-reasons.yaml) |
 
 ## Layout
@@ -32,7 +33,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 docs/
 ├── architecture/     arc42-oriented system description (01–14)
 ├── adr/              architecture decisions, numbered consecutively
-├── design/           the brief that produced the design system — the system
+├── design/           the briefs behind the design system and the website — the system
 │                  itself is at ../design-system/ (it is source, not docs)
 ├── reference/        reference data: label geometries, the `problem.type`
 │                  registry, the `degradedReason` registry

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Features — Home Inventory</title>
+<meta name="description" content="Configurable types, nested storage locations, QR codes and label printing, scanning and stocktake, offline synchronisation, the plugin contract, security and the API surfaces.">
+<meta name="theme-color" content="#131619">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Features — Home Inventory">
+<meta property="og:description" content="Configurable types, nested storage locations, QR codes and label printing, scanning and stocktake, offline synchronisation, the plugin contract, security and the API surfaces.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%231a66d6'/%3E%3Ctext x='16' y='22' font-family='IBM Plex Sans,system-ui,sans-serif' font-size='15' font-weight='600' fill='%23ffffff' text-anchor='middle'%3EHI%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="design-system/styles.css">
+<link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem("homeinv.theme")||"dark";if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></a>
+    <nav class="sitenav" aria-label="Site">
+        <a href="index.html">Overview</a>
+        <a href="features.html" aria-current="page">Features</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="install.html">Install</a>
+        <a href="docs.html">Docs</a>
+    </nav>
+    <div class="head-end">
+      <button type="button" class="hi-iconbtn" id="theme-toggle" title="Switch to the light appearance" aria-label="Switch to the light appearance"><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="sun"><circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2"></path> <path d="M12 20v2"></path> <path d="m4.93 4.93 1.41 1.41"></path> <path d="m17.66 17.66 1.41 1.41"></path> <path d="M2 12h2"></path> <path d="M20 12h2"></path> <path d="m6.34 17.66-1.41 1.41"></path> <path d="m19.07 4.93-1.41 1.41"></path></svg><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="moon" hidden><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg><span class="hi-sr">Appearance</span></button>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory"><span>GitHub</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section class="wrap sec sec--lead stack">
+  <span class="eyebrow">Features</span>
+  <h1>Seven things this is actually for.</h1>
+  <p class="lead">Everything below is specified in the repository — in fourteen architecture chapters, forty-four decision records and a numbered requirements catalogue. What is not yet built is marked on the <a href="roadmap.html">roadmap</a>.</p>
+  <nav class="anchors" aria-label="Sections"><a href="#types">Types</a><a href="#locations">Locations</a><a href="#codes">Codes and labels</a><a href="#scanning">Scanning</a><a href="#offline">Offline</a><a href="#plugins">Plugins</a><a href="#security">Security and API</a></nav>
+</section>
+
+<section class="wrap sec sec--rule stack--lg" id="types" style="display:flex;flex-direction:column;scroll-margin-top:76px">
+  <div class="split">
+    <div class="a stack" style="gap:14px">
+      <h2>Fields you define, not fields somebody chose for you</h2>
+      <p>A tenant administrator creates item types and location categories with their own fields — no developer, no restart, no migration. Types inherit, they are versioned, and each version generates the JSON Schema that both the server and the offline clients validate against.</p>
+      <ul class="facts">
+        <li><span class="bullet">·</span><span>Sixteen field types, each with a defined control and six states</span></li>
+        <li><span class="bullet">·</span><span>Value lists and type templates, so a category does not have to be invented twice</span></li>
+        <li><span class="bullet">·</span><span>Stored as JSONB plus an application-maintained index table — configurable and still queryable</span></li>
+        <li><span class="bullet">·</span><span>There is no fixed item form. There is a renderer and this table.</span></li>
+      </ul>
+    </div>
+    <figure class="b" style="flex:1 1 380px">
+      <div class="card" style="gap:14px">
+        <div class="hi-field">
+  <label class="hi-field__label" for="f-name"><span>Name</span></label>
+  <div class="hi-field__control"><div class="hi-readonly">Cordless drill GSB 18V-55</div></div>
+  
+</div>
+        <div class="hi-field">
+  <label class="hi-field__label" for="f-value"><span>Replacement value</span></label>
+  <div class="hi-field__control"><div class="hi-readonly" style="font-variant-numeric:tabular-nums">€149.00</div></div>
+  <div class="hi-field__help" id="f-value-help">For the insurance report</div>
+</div>
+        <div class="hi-field">
+  <label class="hi-field__label" for="f-loc"><span>Location</span></label>
+  <div class="hi-field__control"><div class="hi-readonly hi-col" style="align-items:flex-start;gap:0"><span>Shelf B</span><span class="hi-ref__path hi-truncate">House › Cellar › Workshop</span></div></div>
+  
+</div>
+        <div class="hi-field">
+  <label class="hi-field__label" for="f-secret"><span>Licence key</span></label>
+  <div class="hi-field__control"><div class="hi-restricted hi-hatch"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect> <path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg><span>No permission for this field</span></div></div>
+  
+</div>
+      </div>
+      <figcaption>Four of the sixteen types, rendered from a type definition. The last one is restricted: a hatch and a sentence, never a row of dots — dots would tell you how long the secret is.</figcaption>
+    </figure>
+  </div>
+  <div class="panel"><div class="hi-tablewrap hi-scroll-thin"><table class="hi-table"><caption class="hi-sr">Field types and their controls</caption><thead><tr><th scope="col" style="width:26%">Field type</th><th scope="col" style="width:24%">Control</th><th scope="col">Why that one</th></tr></thead><tbody>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">text · multiline</span></td><td><span class="hi-truncate" style="display:block">TextInput</span></td><td><span class="hi-truncate" style="display:block">Multiline grows, single-line does not</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">integer · decimal</span></td><td><span class="hi-truncate" style="display:block">TextInput</span></td><td><span class="hi-truncate" style="display:block">Right-aligned, with tabular figures</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">url · email</span></td><td><span class="hi-truncate" style="display:block">TextInput</span></td><td><span class="hi-truncate" style="display:block">A leading glyph and a format check</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">money</span></td><td><span class="hi-truncate" style="display:block">MoneyInput</span></td><td><span class="hi-truncate" style="display:block">Amount plus an attached currency cell</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">quantity</span></td><td><span class="hi-truncate" style="display:block">QuantityInput</span></td><td><span class="hi-truncate" style="display:block">The same anatomy as money — on purpose</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">boolean</span></td><td><span class="hi-truncate" style="display:block">Checkbox</span></td><td><span class="hi-truncate" style="display:block">Not a switch: a switch claims it is already saved</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">date · datetime</span></td><td><span class="hi-truncate" style="display:block">DateInput</span></td><td><span class="hi-truncate" style="display:block">The native picker: right on every platform, and offline</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">enum</span></td><td><span class="hi-truncate" style="display:block">Select / ComboBox</span></td><td><span class="hi-truncate" style="display:block">Above twelve options it becomes a search</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">multi-enum</span></td><td><span class="hi-truncate" style="display:block">TagInput</span></td><td><span class="hi-truncate" style="display:block">Chips wrap downward, never sideways</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">reference</span></td><td><span class="hi-truncate" style="display:block">ReferenceInput</span></td><td><span class="hi-truncate" style="display:block">Leaf name plus path; the picker follows the width</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">secret</span></td><td><span class="hi-truncate" style="display:block">SecretInput</span></td><td><span class="hi-truncate" style="display:block">“Wert verborgen” — never a row of dots</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">file</span></td><td><span class="hi-truncate" style="display:block">FileInput</span></td><td><span class="hi-truncate" style="display:block">A drop zone that is also a 44 px target</span></td></tr>
+</tbody></table></div></div>
+</section>
+
+<section class="wrap sec sec--rule split" id="locations" style="scroll-margin-top:76px">
+  <div class="a stack" style="gap:14px">
+    <h2>A box inside a box inside a cellar</h2>
+    <p>Storage locations nest to any depth, each with its own category and its own configurable fields. The path is what identifies a thing — so the breadcrumb collapses from the middle and keeps the last two segments, because “Shelf B” without “Workshop” is not an answer.</p>
+    <ul class="facts">
+      <li><span class="bullet">·</span><span>Counts on every node, so you can see where the mass sits</span></li>
+      <li><span class="bullet">·</span><span>Mobile locations that can be sealed — a moving box is a location that travels</span></li>
+      <li><span class="bullet">·</span><span>Moving mode: scan the box, scan the room, everything inside follows</span></li>
+      <li><span class="bullet">·</span><span>At tablet width the tree collapses above the contents; on a phone it is its own route</span></li>
+    </ul>
+  </div>
+  <figure class="b">
+    <div class="card" style="padding:10px 6px"><nav class="hi-tree" aria-label="Storage locations"><ul role="tree">
+<li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 0 * var(--space-200))"><span class="hi-tree__twisty" data-open="true"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"></path></svg></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path> <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span class="hi-tree__label">House</span><span class="hi-tree__count">3,211</span></button><ul>
+  <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 1 * var(--space-200))"><span class="hi-tree__twisty" data-open="true"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"></path></svg></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 21V10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v11"></path> <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 1.132-1.803l7.95-3.974a2 2 0 0 1 1.837 0l7.948 3.974A2 2 0 0 1 22 8z"></path> <path d="M6 13h12"></path> <path d="M6 17h12"></path></svg><span class="hi-tree__label">Cellar</span><span class="hi-tree__count">988</span></button><ul>
+    <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 2 * var(--space-200))"><span class="hi-tree__twisty" data-open="true"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"></path></svg></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"></path> <path d="m7 16.5-4.74-2.85"></path> <path d="m7 16.5 5-3"></path> <path d="M7 16.5v5.17"></path> <path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"></path> <path d="m17 16.5-5-3"></path> <path d="m17 16.5 4.74-2.85"></path> <path d="M17 16.5v5.17"></path> <path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"></path> <path d="M12 8 7.26 5.15"></path> <path d="m12 8 4.74-2.85"></path> <path d="M12 13.5V8"></path></svg><span class="hi-tree__label">Workshop</span><span class="hi-tree__count">412</span></button><ul>
+      <li><button type="button" class="hi-tree__row" aria-current="true" style="padding-left:calc(var(--space-100) + 3 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path> <path d="m3.3 7 8.7 5 8.7-5"></path> <path d="M12 22V12"></path></svg><span class="hi-tree__label">Shelf B</span><span class="hi-tree__count">88</span></button></li>
+      <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 3 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path> <path d="m3.3 7 8.7 5 8.7-5"></path> <path d="M12 22V12"></path></svg><span class="hi-tree__label">Cabinet 2</span><span class="hi-tree__count">41</span></button></li>
+      <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 3 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"></path> <path d="M12 22V12"></path> <polyline points="3.29 7 12 12 20.71 7"></polyline> <path d="m7.5 4.27 9 5.15"></path></svg><span class="hi-tree__label">Moving box 7 (sealed)</span><span class="hi-tree__count">23</span></button></li>
+    </ul></li>
+    <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 2 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path> <path d="m3.3 7 8.7 5 8.7-5"></path> <path d="M12 22V12"></path></svg><span class="hi-tree__label">Pantry</span><span class="hi-tree__count">233</span></button></li>
+    <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 2 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="20" height="5" x="2" y="3" rx="1"></rect> <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path> <path d="M10 12h4"></path></svg><span class="hi-tree__label">Archive</span><span class="hi-tree__count">343</span></button></li>
+  </ul></li>
+  <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 1 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg><span class="hi-tree__label">Ground floor</span><span class="hi-tree__count">1,204</span></button></li>
+  <li><button type="button" class="hi-tree__row" style="padding-left:calc(var(--space-100) + 1 * var(--space-200))"><span class="hi-tree__spacer"></span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg><span class="hi-tree__label">Garage</span><span class="hi-tree__count">277</span></button></li>
+</ul></li></ul></nav></div>
+    <figcaption>Nodes truncate on one line: a wrapping tree loses its indent reading.</figcaption>
+  </figure>
+</section>
+
+<section class="wrap sec sec--rule split" id="codes" style="scroll-margin-top:76px">
+  <div class="a stack" style="gap:14px">
+    <h2>Codes you can print, and read out loud</h2>
+    <p>The public code is ten characters of Crockford Base32 plus a Damm check symbol — the alphabet has no I, L, O or U, so nothing can be misread as something else. It is not the database key: internally everything is UUIDv7, and the printed code can be pre-issued, bound later and reassigned.</p>
+    <ul class="facts">
+      <li><span class="bullet">·</span><span>Print a sheet of blanks first, stick them on, bind them when you scan</span></li>
+      <li><span class="bullet">·</span><span>A label media catalogue with verification flags, start offset and a calibration sheet</span></li>
+      <li><span class="bullet">·</span><span>Templates with a bounded expression language; the print job is an aggregate with a state machine</span></li>
+      <li><span class="bullet">·</span><span>Resolution at <code>/c/{code}</code> answers the same way for an unknown code and a forbidden one</span></li>
+    </ul>
+    <p class="small muted">The preview is dark-on-light in both appearances. An inverted code does not scan reliably, and a print preview is a picture of paper.</p>
+  </div>
+  <figure class="b" style="align-items:flex-start">
+    <div class="hi-labelprev" style="--mm:3.7795px">
+  <div class="hi-paperstrap"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path> <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"></path> <rect x="6" y="14" width="12" height="8" rx="1"></rect></svg><span>Print preview · to scale · 70 × 37 mm</span></div>
+  <div class="hi-labelprev__sheet" style="width:264.56px;height:139.84px">
+    <div class="hi-labelprev__el" style="left:4px;top:17.01px;width:105.83px;height:105.83px"><div class="hi-codeplate hi-codeplate--inline"><svg class="hi-codeplate__glyph" width="105.83" height="105.83" viewBox="0 0 29 29" role="img" aria-label="QR code 7Q2-M4X-9KD" shape-rendering="crispEdges"><rect width="29" height="29" fill="var(--code-quiet)"></rect><rect x="4" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="4" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="5" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="6" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="7" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="8" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="9" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="10" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="11" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="12" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="13" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="14" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="15" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="15" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="15" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="15" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="15" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="16" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="17" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="18" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="19" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="19" width="1" height="1" fill="var(--code-ink)"></rect><rect x="5" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="20" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="22" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="23" y="21" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="7" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="14" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="22" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="10" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="13" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="15" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="18" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="20" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="24" y="23" width="1" height="1" fill="var(--code-ink)"></rect><rect x="4" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="6" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="8" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="9" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="11" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="12" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="16" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="17" y="24" width="1" height="1" fill="var(--code-ink)"></rect><rect x="21" y="24" width="1" height="1" fill="var(--code-ink)"></rect></svg></div></div>
+    <span class="hi-labelprev__quiet" style="left:4px;top:17.01px;width:105.83px;height:105.83px"></span>
+    <div class="hi-labelprev__el hi-labelprev__text" style="left:115.83px;top:5px;right:4px">
+      <div style="font-size:12.85px;font-weight:600;margin-bottom:1.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cordless drill GSB 18V-55</div>
+      <div style="font-size:9.83px;margin-bottom:1.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cellar › Workshop › Shelf B</div>
+      <div style="font-size:9.83px;margin-bottom:1.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Tools · 18 V battery</div>
+      <div style="font-family:var(--font-mono);font-size:9.83px;letter-spacing:var(--ls-code);margin-top:1.5px">7Q2-M4X-9KD</div>
+    </div>
+  </div>
+  <div class="hi-labelprev__ruler"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"></path> <path d="m14.5 12.5 2-2"></path> <path d="m11.5 9.5 2-2"></path> <path d="m8.5 6.5 2-2"></path> <path d="m17.5 15.5 2-2"></path></svg><span>Avery Zweckform 3474 · module size 0.50 mm</span></div>
+</div>
+    <figcaption>Avery Zweckform 3474, 70 × 37 mm, to scale. Below 0.33 mm module size the preview warns instead of guessing — phone cameras stop reading reliably there.</figcaption>
+  </figure>
+</section>
+
+<section class="wrap sec sec--rule split" id="scanning" style="scroll-margin-top:76px">
+  <div class="a stack" style="gap:14px">
+    <h2>Scanning is a mode, not a screen</h2>
+    <p>The same overlay serves five jobs; you pick one before you start, and the scanner keeps running. In the browser it uses the native barcode detector with a ZXing fallback; a HID handheld scanner types into the same session.</p>
+    <ul class="facts" style="gap:6px">
+<li><strong>Look up.</strong> Scan a code, land on the item.</li>
+<li><strong>Bind.</strong> A pre-issued blank becomes this item's code.</li>
+<li><strong>Move.</strong> Scan the thing, then scan where it now lives.</li>
+<li><strong>Stocktake.</strong> Count against an expected list, report the difference.</li>
+<li><strong>Capture.</strong> Create the item from the code you just stuck on.</li>
+    </ul>
+    <ul class="facts">
+      <li><span class="bullet">·</span><span>Foreign codes are recognised and can be bound: EAN, UPC, ITF-14, ISBN</span></li>
+      <li><span class="bullet">·</span><span>Stocktake mode counts against an expected list and ends in a discrepancy report</span></li>
+      <li><span class="bullet">·</span><span>Four distinct tones and haptics, because in a cellar you are not looking at the screen</span></li>
+      <li><span class="bullet">·</span><span>On a phone every control sits in the bottom 140 px — the band a thumb reaches</span></li>
+    </ul>
+  </div>
+  <figure class="b">
+    <div class="card" style="gap:12px">
+      <div class="hi-msg hi-msg--success" role="status"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle> <path d="m16 9-5.5 5.5L8 12"></path></svg><div class="hi-msg__body"><div class="hi-msg__title">Captured · 7Q2-M4X-9KD</div><div>Cordless drill GSB 18V-55 — Cellar › Workshop › Shelf B</div></div></div>
+      <div class="hi-msg hi-msg--warning" role="status"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path> <path d="M12 9v4"></path> <path d="M12 17h.01"></path></svg><div class="hi-msg__body"><div class="hi-msg__title">Already counted</div><div>This code was captured earlier in this session. Two short tones, no second entry.</div></div></div>
+      <div class="hi-msg hi-msg--info" role="status"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle> <path d="M12 16v-4"></path> <path d="M12 8h.01"></path></svg><div class="hi-msg__body"><div class="hi-msg__title">Foreign code recognised · EAN-13</div><div>4006381333931 belongs to no item yet. Bind it to one?</div></div></div>
+    </div>
+    <figcaption>The three answers a scan can give. Each carries an icon and a word — never a colour alone.</figcaption>
+  </figure>
+</section>
+
+<section class="wrap sec sec--rule split" id="offline" style="scroll-margin-top:76px">
+  <div class="a stack" style="gap:14px">
+    <h2>A week offline, then an honest reconciliation</h2>
+    <p>The apps and the web client keep working without a network. When the connection returns, each change is pushed and comes back with one of five outcomes; only a real disagreement becomes a decision for you, field by field, with a three-way compare against the last common state.</p>
+    <div class="tokens">
+      <span style="border:1px solid var(--state-success-border);color:var(--state-success-fg);background:var(--state-success-bg)">APPLIED</span>
+      <span style="border:1px solid var(--state-success-border);color:var(--state-success-fg);background:var(--state-success-bg)">MERGED</span>
+      <span style="border:1px solid var(--state-conflict-border);color:var(--state-conflict-fg);background:var(--state-conflict-bg)">CONFLICT</span>
+      <span style="border:1px solid var(--state-danger-border);color:var(--state-danger-fg);background:var(--state-danger-bg)">REJECTED</span>
+      <span style="border:1px solid var(--border-default);color:var(--text-muted);background:var(--surface-sunken)">DUPLICATE</span>
+    </div>
+    <ul class="facts">
+      <li><span class="bullet">·</span><span>Merge rules per field kind: a counter adds up, a set unions, a text field asks</span></li>
+      <li><span class="bullet">·</span><span>The server version stays valid until you decide — nothing is silently overwritten</span></li>
+      <li><span class="bullet">·</span><span>Photos queue separately and upload with a determinate progress, not a spinner</span></li>
+      <li><span class="bullet">·</span><span>Devices are listed, can be deregistered, and can be wiped remotely</span></li>
+    </ul>
+  </div>
+  <div class="b stack" style="gap:12px;flex:1 1 380px">
+    <span class="hi-conflict__progress"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="18" cy="18" r="3"></circle> <circle cx="6" cy="6" r="3"></circle> <path d="M6 21V9a9 9 0 0 0 9 9"></path></svg><span id="conflict-count">1 of 3 fields decided</span></span>
+    <div data-conflicts class="stack" style="gap:12px">
+      <section class="hi-conflict__field">
+    <header class="hi-conflict__label"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="18" cy="18" r="3"></circle> <circle cx="6" cy="6" r="3"></circle> <path d="M6 21V9a9 9 0 0 0 9 9"></path></svg><span>Name</span></header>
+    <div class="hi-conflict__options">
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--base" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 14 4 9l5-5"></path> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg><span>Common ancestor</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">Cordless drill GSB 18V</span>
+      <span class="hi-conflict__optsub">As of 2 September</span>
+    </button>
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--mine" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect> <path d="M12 18h.01"></path></svg><span>This device</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">Cordless drill GSB 18V-55</span>
+      <span class="hi-conflict__optsub">Changed offline, 6 September</span>
+    </button>
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--theirs" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect> <rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect> <line x1="6" x2="6.01" y1="6" y2="6"></line> <line x1="6" x2="6.01" y1="18" y2="18"></line></svg><span>Server</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">Cordless drill, blue</span>
+      <span class="hi-conflict__optsub">Server, 7 September</span>
+    </button>
+    </div>
+    
+  </section>
+      <section class="hi-conflict__field">
+    <header class="hi-conflict__label"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="18" cy="18" r="3"></circle> <circle cx="6" cy="6" r="3"></circle> <path d="M6 21V9a9 9 0 0 0 9 9"></path></svg><span>Location</span></header>
+    <div class="hi-conflict__options">
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--base" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 14 4 9l5-5"></path> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg><span>Common ancestor</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">Cellar › Workshop</span>
+      
+    </button>
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--mine" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect> <path d="M12 18h.01"></path></svg><span>This device</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">Cellar › Workshop › Shelf B</span>
+      <span class="hi-conflict__optsub">Scanned while moving</span>
+    </button>
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--theirs" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect> <rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect> <line x1="6" x2="6.01" y1="6" y2="6"></line> <line x1="6" x2="6.01" y1="18" y2="18"></line></svg><span>Server</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">Garage › High rack</span>
+      <span class="hi-conflict__optsub">From another device</span>
+    </button>
+    </div>
+    
+  </section>
+      <section class="hi-conflict__field" data-resolved="true">
+    <header class="hi-conflict__label"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle> <path d="m16 9-5.5 5.5L8 12"></path></svg><span>Quantity</span></header>
+    <div class="hi-conflict__options">
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--base" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 14 4 9l5-5"></path> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg><span>Common ancestor</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">2 pcs</span>
+      
+    </button>
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--mine" aria-pressed="true">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect> <path d="M12 18h.01"></path></svg><span>This device</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto"><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">3 pcs</span>
+      
+    </button>
+      <button type="button" class="hi-conflict__opt hi-conflict__opt--theirs" aria-pressed="false">
+      <span class="hi-conflict__optmeta"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect> <rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect> <line x1="6" x2="6.01" y1="6" y2="6"></line> <line x1="6" x2="6.01" y1="18" y2="18"></line></svg><span>Server</span><svg class="hi-icon hi-icon--14 conflict-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="margin-left:auto" hidden><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span class="hi-conflict__optval">3 pcs</span>
+      
+    </button>
+    </div>
+    <p class="hi-conflict__auto"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 7 17l-5-5"></path> <path d="m22 10-7.5 7.5L13 16"></path></svg>Both sides count the same — merged automatically.</p>
+  </section>
+    </div>
+    <p class="small muted">Pick a side. On a phone these three options become full-width cards, one field at a time, with an “x of y decided” counter.</p>
+  </div>
+</section>
+
+<section class="wrap sec sec--rule split" id="plugins" style="scroll-margin-top:76px">
+  <div class="a stack" style="gap:14px">
+    <h2>Every outbound connection is a plugin</h2>
+    <p>The core talks to nothing outside the deployment. Mail, object storage, push, federated login and metadata lookups are plugins — each with a signed manifest, its own network segment, its own allowlist on the egress proxy, and capabilities granted per tenant. A plugin that misbehaves trips a circuit breaker, not the application.</p>
+    <p>The contract is <code>home_inv.plugin.v1</code> over gRPC with mTLS, and the plugin API is Apache-2.0 so you can license your plugin however you like. It is proved by first-party plugins before it is published.</p>
+  </div>
+  <div class="b panel" style="flex:1 1 380px"><div class="hi-tablewrap hi-scroll-thin"><table class="hi-table"><caption class="hi-sr">Ports and what attaches to them</caption><thead><tr><th scope="col" style="width:34%">Port</th><th scope="col">What attaches there</th></tr></thead><tbody>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">BlobStore</span></td><td><span class="hi-truncate" style="display:block">Filesystem in the core · S3/MinIO and Nextcloud as plugins</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">CodeFormat</span></td><td><span class="hi-truncate" style="display:block">QR shipped, further symbologies pluggable</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">PrintTarget</span></td><td><span class="hi-truncate" style="display:block">PDF shipped, label printers as plugins</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">ScanSource</span></td><td><span class="hi-truncate" style="display:block">Camera and HID in the core, Bluetooth scanners as plugins</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">MetadataResolver</span></td><td><span class="hi-truncate" style="display:block">ISBN and EAN lookup with a proposal model</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">ValuationProvider</span></td><td><span class="hi-truncate" style="display:block">Replacement values from external sources</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">Notification</span></td><td><span class="hi-truncate" style="display:block">plugin-smtp, plugin-webhook, Firebase, APNs, Web Push</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">Identity</span></td><td><span class="hi-truncate" style="display:block">plugin-oidc for federated login</span></td></tr>
+</tbody></table></div></div>
+</section>
+
+<section class="wrap sec sec--rule stack--lg" id="security" style="display:flex;flex-direction:column;scroll-margin-top:76px">
+  <div class="split">
+    <div class="a stack" style="gap:14px">
+      <h2>Security that was not retrofitted</h2>
+      <p>Row-level security, the authorisation scaffolding, the content security policy and upload hardening are in the first stage, before the features that would have to be rewritten around them. The malware scan is mandatory and fail-closed in every profile — if the scanner is unreachable, the upload is refused rather than waved through.</p>
+      <div class="cols--tight cols">
+<div class="card" style="flex-direction:row;gap:10px;padding:12px;border-color:var(--border-subtle)"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path> <path d="M16 3.128a4 4 0 0 1 0 7.744"></path> <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path> <circle cx="9" cy="7" r="4"></circle></svg><span class="small">Row-level security per tenant, enforced in PostgreSQL, not in a service layer</span></div>
+<div class="card" style="flex-direction:row;gap:10px;padding:12px;border-color:var(--border-subtle)"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg><span class="small">A strict content security policy with hashes — no inline scripts, no third-party host</span></div>
+<div class="card" style="flex-direction:row;gap:10px;padding:12px;border-color:var(--border-subtle)"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle> <path d="M4.929 4.929 19.07 19.071"></path></svg><span class="small">Deny-all egress for the core; every plugin segment has its own allowlist</span></div>
+<div class="card" style="flex-direction:row;gap:10px;padding:12px;border-color:var(--border-subtle)"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path> <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle></svg><span class="small">Per-tenant envelope encryption for secret fields in digital goods</span></div>
+<div class="card" style="flex-direction:row;gap:10px;padding:12px;border-color:var(--border-subtle)"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path> <path d="M9 10h6"></path> <path d="M12 13V7"></path> <path d="M9 17h6"></path></svg><span class="small">An append-only audit log with a hash chain and an hourly anchor</span></div>
+<div class="card" style="flex-direction:row;gap:10px;padding:12px;border-color:var(--border-subtle)"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect> <rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect> <line x1="6" x2="6.01" y1="6" y2="6"></line> <line x1="6" x2="6.01" y1="18" y2="18"></line></svg><span class="small">Rootless on every runtime; the management port is bound to the internal network</span></div>
+      </div>
+    </div>
+    <figure class="b" style="flex:1 1 360px">
+      <div class="code"><pre><span style="color:var(--text-primary)">HTTP/1.1 404 Not Found</span>
+Content-Type: application/problem+json
+
+{
+  "type": "https://home-inv.example/problems/<span style="color:var(--accent-fg)">not-found</span>",
+  "title": "Not found",
+  "status": 404,
+  "traceId": "0199c2f1-8d4e-7b1a-9f30-6c2f1b4ae7d2"
+}</pre></div>
+      <figcaption>One token for “does not exist” and for “you may not see it”. A test asserts the two produce byte-identical responses — otherwise the error body becomes an oracle for what exists. Every response carries a <code>traceId</code>.</figcaption>
+    </figure>
+  </div>
+  <div class="cols">
+    <div class="card"><h4>REST · /api/v1</h4><span class="small">OpenAPI 3.1, written before the code. Cursor pagination, ETag and If-Match, idempotency keys, server-sent events.</span></div>
+    <div class="card"><h4>GraphQL · read-only</h4><span class="small">For views that would otherwise be six round trips. Writing stays with REST, where the rules live.</span></div>
+    <div class="card"><h4>gRPC · plugins</h4><span class="small">Internal only, mTLS, the versioned <code>home_inv.plugin.v1</code> contract with a sunset policy.</span></div>
+  </div>
+</section>
+
+<section class="wrap sec">
+  <div class="cta">
+    <p>None of this is installable yet. The order of work, and what “done” means for each stage, is on the roadmap.</p>
+    <div class="actions">
+      <a class="hi-btn hi-btn--primary" href="roadmap.html"><span>See the roadmap</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"></path> <path d="m12 5 7 7-7 7"></path></svg></a>
+      <a class="hi-btn hi-btn--secondary" href="install.html"><span>Planned install paths</span></a>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer class="site-foot">
+  <div class="wrap top">
+    <div class="stack" style="gap:10px">
+      <span class="brand" style="cursor:default"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></span>
+      <p class="small muted" style="max-width:34ch">Self-hosted inventory for physical and digital items. Run it on your own machine, or do not run it at all.</p>
+      <code class="muted" style="font-size:var(--fs-75)">greluc/Home-Inventory</code>
+    </div>
+    <nav>
+      <span class="eyebrow">Project</span>
+      <a href="https://github.com/greluc/Home-Inventory">Repository</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Documentation</span>
+      <a href="docs.html">Document map</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/architecture">Architecture</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/adr">Decisions</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/requirements">Requirements</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Legal</span>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/LICENSE">AGPL-3.0-or-later</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/SECURITY.md">Security policy</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/cla">Contributor agreement</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/REUSE.toml">REUSE / per-file licensing</a>
+    </nav>
+  </div>
+  <div class="bottom">
+    <div class="wrap">
+      <span>Core AGPL-3.0-or-later · plugin API, SDKs and protobuf contract Apache-2.0 · documentation CC BY-SA 4.0.</span>
+      <span style="margin-left:auto">Type: IBM Plex, OFL 1.1 · Icons: Lucide, ISC AND MIT.</span>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>

@@ -42,6 +42,10 @@ commit".
   catalogue: the stable error codes an API response can carry, and the tokens that
   say a result was served in a degraded mode. Both were referred to as documented
   sets that did not exist.
+- A project website for GitHub Pages ([`website/`](website/)): five pre-rendered
+  pages that work with JavaScript switched off, dark by default, and loading
+  nothing from any host but their own — which a CI gate checks rather than
+  assumes.
 - A verified starter catalogue of label geometries
   ([`docs/reference/label-media.yaml`](docs/reference/label-media.yaml)), with a
   per-format flag distinguishing measured geometries from calculated ones.

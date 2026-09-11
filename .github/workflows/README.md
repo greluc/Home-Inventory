@@ -4,8 +4,15 @@ CI and release workflows.
 
 ## Status
 
-Empty — there is no code to build yet. This file records what the workflows will
-have to do, so that the gates are not invented ad hoc later.
+One workflow exists: [`pages.yml`](pages.yml), which publishes the project
+website. It is here ahead of the others because it has something to do that does
+not need a build — and because it carries a real gate: it greps the assembled
+site for resources loaded from another host and fails, which is REQ-PRIV-015
+enforced rather than asserted. It stays inert until `website/index.html` exists.
+
+Everything else is still to come — there is no code to build yet. This file
+records what those workflows will have to do, so that the gates are not invented
+ad hoc later.
 
 ## The gates, already decided
 

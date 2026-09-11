@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation — Home Inventory</title>
+<meta name="description" content="Fourteen architecture chapters, 44 decision records, a verifiable requirements catalogue, reference registries and the binding design system.">
+<meta name="theme-color" content="#131619">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Documentation — Home Inventory">
+<meta property="og:description" content="Fourteen architecture chapters, 44 decision records, a verifiable requirements catalogue, reference registries and the binding design system.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%231a66d6'/%3E%3Ctext x='16' y='22' font-family='IBM Plex Sans,system-ui,sans-serif' font-size='15' font-weight='600' fill='%23ffffff' text-anchor='middle'%3EHI%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="design-system/styles.css">
+<link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem("homeinv.theme")||"dark";if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></a>
+    <nav class="sitenav" aria-label="Site">
+        <a href="index.html">Overview</a>
+        <a href="features.html">Features</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="install.html">Install</a>
+        <a href="docs.html" aria-current="page">Docs</a>
+    </nav>
+    <div class="head-end">
+      <button type="button" class="hi-iconbtn" id="theme-toggle" title="Switch to the light appearance" aria-label="Switch to the light appearance"><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="sun"><circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2"></path> <path d="M12 20v2"></path> <path d="m4.93 4.93 1.41 1.41"></path> <path d="m17.66 17.66 1.41 1.41"></path> <path d="M2 12h2"></path> <path d="M20 12h2"></path> <path d="m6.34 17.66-1.41 1.41"></path> <path d="m19.07 4.93-1.41 1.41"></path></svg><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="moon" hidden><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg><span class="hi-sr">Appearance</span></button>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory"><span>GitHub</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section class="wrap sec sec--lead split">
+  <div class="a stack">
+    <span class="eyebrow">Documentation</span>
+    <h1 style="max-width:22ch">Right now, the documentation is the project.</h1>
+    <p class="lead">It is the source of truth for the design and travels with every change in the same unit of work. A document that contradicts the implementation is a defect, not a stale file.</p>
+    <div class="actions">
+      <a class="hi-btn hi-btn--primary" href="https://github.com/greluc/Home-Inventory/blob/main/docs/README.md"><span>Start at the map</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory"><span>The repository</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+  <div class="b card" style="gap:12px">
+    <h3>Conventions</h3>
+    <ul class="stack small" style="gap:10px">
+      <li><strong>Language.</strong> English for documentation, decisions and every identifier in code, API, database and protocols. The interface ships German and English, with English as the fallback.</li>
+      <li><strong>Diagrams.</strong> Mermaid, inline in the Markdown. No separate tool, no binary artifacts.</li>
+      <li><strong>Identifiers.</strong> Requirements and decisions carry stable numbers that are never reused. A dropped requirement is marked withdrawn, not deleted.</li>
+      <li><strong>Cross-references.</strong> Documents point at each other rather than repeating. What is written twice drifts.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="wrap sec sec--rule stack--lg" style="display:flex;flex-direction:column">
+  <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+    <h2>Architecture</h2>
+    <span class="small muted">arc42-oriented, fourteen chapters</span>
+  </div>
+  <div class="cols" style="gap:8px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/01-introduction-and-goals.md">
+  <span class="no">01</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Introduction and goals</span><span class="small muted">What the system is, and why it exists</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/02-constraints-and-context.md">
+  <span class="no">02</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Constraints and context</span><span class="small muted">What is settled, and what is deliberately still open</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/03-solution-strategy.md">
+  <span class="no">03</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Solution strategy</span><span class="small muted">The broad strokes, before the detail</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/04-building-blocks.md">
+  <span class="no">04</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Building blocks</span><span class="small muted">What the system consists of</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/05-runtime-view.md">
+  <span class="no">05</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Runtime view</span><span class="small muted">How it behaves while it runs</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/06-deployment-view.md">
+  <span class="no">06</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Deployment view</span><span class="small muted">Where it runs, and the version matrix</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/07-data-model.md">
+  <span class="no">07</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Data model</span><span class="small muted">Tables, attributes, the change log</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/08-api-contract.md">
+  <span class="no">08</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">API contract</span><span class="small muted">REST, GraphQL, errors, versioning</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/09-extensibility-and-plugins.md">
+  <span class="no">09</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Extensibility and plugins</span><span class="small muted">Ports, manifests, capabilities, isolation</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/10-identification-and-labels.md">
+  <span class="no">10</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Identification and labels</span><span class="small muted">Codes, scanning, label media, printing</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/11-offline-synchronisation.md">
+  <span class="no">11</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Offline synchronisation</span><span class="small muted">Push, pull, the three-way compare</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/12-security.md">
+  <span class="no">12</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Security</span><span class="small muted">The whole concept, not a checklist</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/13-operations-and-observability.md">
+  <span class="no">13</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Operations and observability</span><span class="small muted">Backup, restore verification, metrics, runbooks</span></span>
+</a>
+<a class="linkrow" href="https://github.com/greluc/Home-Inventory/blob/main/docs/architecture/14-quality-risks-glossary.md">
+  <span class="no">14</span>
+  <span class="stack" style="gap:2px;min-width:0"><span style="font-size:var(--fs-200);font-weight:var(--fw-medium)">Quality, risks, glossary</span><span class="small muted">Quality goals, named risks, the vocabulary</span></span>
+</a>
+  </div>
+</section>
+
+<section class="wrap sec sec--rule split">
+  <div class="a stack" style="gap:16px">
+    <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+      <h2>Decisions</h2>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/adr" style="margin-left:auto;font-size:var(--fs-200)">All 44 records</a>
+    </div>
+    <p>Every load-bearing choice has its own record with the rationale and the alternatives that were rejected. Ten that explain most of the rest:</p>
+    <div class="stack" style="gap:6px">
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0002-modular-monolith.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0002</span><span class="small">A modular monolith with a plugin system, not microservices</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0004-attribute-storage-model.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0004</span><span class="small">Attributes in JSONB plus an application-maintained index table</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0014-offline-synchronisation.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0014</span><span class="small">Full bidirectional offline synchronisation</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0016-identifiers.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0016</span><span class="small">UUIDv7 internally, a separate public code for print</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0018-licensing.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0018</span><span class="small">AGPL-3.0-or-later for the core, Apache-2.0 for the plugin API</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0022-rootless.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0022</span><span class="small">Rootless is mandatory; rootful is unsupported</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0024-malware-scan.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0024</span><span class="small">The malware scan is mandatory and fail-closed</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0026-core-outbound-via-plugins.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0026</span><span class="small">Every outbound connection leaves the core and becomes a plugin</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0030-public-code-format.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0030</span><span class="small">Ten characters of Crockford Base32 plus a Damm check symbol</span>
+</a>
+<a class="linkrow" style="padding:10px 12px" href="https://github.com/greluc/Home-Inventory/blob/main/docs/adr/0033-dark-as-default-appearance.md">
+  <span class="no" style="color:var(--accent-fg)">ADR-0033</span><span class="small">Dark by default everywhere; light is opt-in</span>
+</a>
+    </div>
+  </div>
+  <div class="b stack" style="gap:16px">
+    <div class="card">
+      <h3>Requirements</h3>
+      <p class="small">A numbered, verifiable catalogue with stable identifiers and a stage column that drives the plan.</p>
+      <div class="stack small" style="gap:6px">
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/requirements/01-functional.md">01 · Functional</a>
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/requirements/02-non-functional.md">02 · Non-functional</a>
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/requirements/03-security-and-privacy.md">03 · Security and privacy</a>
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/requirements/04-roadmap-and-stages.md">04 · Stages and sequence</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Reference data</h3>
+      <p class="small">The registries clients branch on, kept as data rather than prose.</p>
+      <div class="stack small" style="gap:6px">
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/reference/problem-types.yaml">problem-types.yaml — the RFC 9457 registry</a>
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/reference/degraded-reasons.yaml">degraded-reasons.yaml — what got worse, and why</a>
+        <a href="https://github.com/greluc/Home-Inventory/blob/main/docs/reference/label-media.yaml">label-media.yaml — label geometries</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap sec sec--rule split">
+  <div class="a stack" style="gap:14px">
+    <h2>The design system</h2>
+    <p>Binding, not a reference. One token source generates both the web stylesheet and the Compose theme, so the clients cannot drift apart. Dark is the shipped default on every platform and light is one click away; the breakpoints are Material 3 window size classes, so web and native agree on what “expanded” means. This website is built from it.</p>
+    <div class="actions">
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory/tree/main/design-system"><span>The system</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory/blob/main/docs/design/design-system-brief.md"><span>The brief behind it</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+  <div class="b card">
+    <h3>Taking part</h3>
+    <div class="stack small" style="gap:8px">
+      <span><a href="https://github.com/greluc/Home-Inventory/blob/main/CONTRIBUTING.md">Contributing</a> — what the project expects. The most valuable contribution today is a hole in the design.</span>
+      <span><a href="https://github.com/greluc/Home-Inventory/blob/main/SECURITY.md">Security policy</a> — never open a public issue for a vulnerability; use private reporting.</span>
+      <span><a href="https://github.com/greluc/Home-Inventory/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a> — Contributor Covenant 3.0.</span>
+      <span><a href="https://github.com/greluc/Home-Inventory/blob/main/PLUGINS.md">Known plugins</a> — a curated list, not a distribution channel.</span>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer class="site-foot">
+  <div class="wrap top">
+    <div class="stack" style="gap:10px">
+      <span class="brand" style="cursor:default"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></span>
+      <p class="small muted" style="max-width:34ch">Self-hosted inventory for physical and digital items. Run it on your own machine, or do not run it at all.</p>
+      <code class="muted" style="font-size:var(--fs-75)">greluc/Home-Inventory</code>
+    </div>
+    <nav>
+      <span class="eyebrow">Project</span>
+      <a href="https://github.com/greluc/Home-Inventory">Repository</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Documentation</span>
+      <a href="docs.html">Document map</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/architecture">Architecture</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/adr">Decisions</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/requirements">Requirements</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Legal</span>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/LICENSE">AGPL-3.0-or-later</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/SECURITY.md">Security policy</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/cla">Contributor agreement</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/REUSE.toml">REUSE / per-file licensing</a>
+    </nav>
+  </div>
+  <div class="bottom">
+    <div class="wrap">
+      <span>Core AGPL-3.0-or-later · plugin API, SDKs and protobuf contract Apache-2.0 · documentation CC BY-SA 4.0.</span>
+      <span style="margin-left:auto">Type: IBM Plex, OFL 1.1 · Icons: Lucide, ISC AND MIT.</span>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>

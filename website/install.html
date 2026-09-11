@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install — Home Inventory</title>
+<meta name="description" content="The three planned deployment paths — Podman with Quadlet, Docker with Compose, Kubernetes with Helm — all rootless. Nothing is installable yet.">
+<meta name="theme-color" content="#131619">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Install — Home Inventory">
+<meta property="og:description" content="The three planned deployment paths — Podman with Quadlet, Docker with Compose, Kubernetes with Helm — all rootless. Nothing is installable yet.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%231a66d6'/%3E%3Ctext x='16' y='22' font-family='IBM Plex Sans,system-ui,sans-serif' font-size='15' font-weight='600' fill='%23ffffff' text-anchor='middle'%3EHI%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="design-system/styles.css">
+<link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem("homeinv.theme")||"dark";if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></a>
+    <nav class="sitenav" aria-label="Site">
+        <a href="index.html">Overview</a>
+        <a href="features.html">Features</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="install.html" aria-current="page">Install</a>
+        <a href="docs.html">Docs</a>
+    </nav>
+    <div class="head-end">
+      <button type="button" class="hi-iconbtn" id="theme-toggle" title="Switch to the light appearance" aria-label="Switch to the light appearance"><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="sun"><circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2"></path> <path d="M12 20v2"></path> <path d="m4.93 4.93 1.41 1.41"></path> <path d="m17.66 17.66 1.41 1.41"></path> <path d="M2 12h2"></path> <path d="M20 12h2"></path> <path d="m6.34 17.66-1.41 1.41"></path> <path d="m19.07 4.93-1.41 1.41"></path></svg><svg class="hi-icon hi-icon--20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-glyph="moon" hidden><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg><span class="hi-sr">Appearance</span></button>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory"><span>GitHub</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section class="wrap sec sec--lead stack">
+  <span class="eyebrow">Installation</span>
+  <h1>How you will run it.</h1>
+  <p class="lead">Three supported paths, all rootless, all described by one service matrix. The commands below are placeholders for the shape of the thing — the real ones land with the first release.</p>
+  <div class="hi-msg hi-msg--warning" role="status"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path> <path d="M12 9v4"></path> <path d="M12 17h.01"></path></svg><div class="hi-msg__body"><div class="hi-msg__title">Nothing to install today</div><div>No container image is published and no release exists. The image digests in the service matrix read <code>TODO</code> on purpose: a tag in their place would quietly defeat the digest-pinning rule.</div></div></div>
+</section>
+
+<section class="wrap sec stack--lg" style="display:flex;flex-direction:column">
+  <h2>Choose a runtime</h2>
+  <div class="hi-tabs" role="tablist" aria-label="Installation path" data-tabs>
+  <button type="button" role="tab" class="hi-tab" data-tab="podman" aria-selected="true"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect> <rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect> <line x1="6" x2="6.01" y1="6" y2="6"></line> <line x1="6" x2="6.01" y1="18" y2="18"></line></svg><span>Podman + Quadlet</span></button>
+  <button type="button" role="tab" class="hi-tab" data-tab="docker" aria-selected="false"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path> <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"></path> <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"></path></svg><span>Docker Compose</span></button>
+  <button type="button" role="tab" class="hi-tab" data-tab="helm" aria-selected="false"><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"></path> <path d="m7 16.5-4.74-2.85"></path> <path d="m7 16.5 5-3"></path> <path d="M7 16.5v5.17"></path> <path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"></path> <path d="m17 16.5-5-3"></path> <path d="m17 16.5 4.74-2.85"></path> <path d="M17 16.5v5.17"></path> <path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"></path> <path d="M12 8 7.26 5.15"></path> <path d="m12 8 4.74-2.85"></path> <path d="M12 13.5V8"></path></svg><span>Kubernetes (Helm)</span></button>
+</div>
+  <div class="split">
+    <div class="a stack" style="gap:12px">
+<div data-panel="podman" class="stack" style="gap:12px">
+  <h3>Podman ≥ 5 with Quadlet</h3>
+  <p>The reference path. Quadlet turns container units into systemd units, so the instance starts with the machine, restarts under systemd's rules and runs entirely in your user session.</p>
+  <div class="code">
+    <div class="bar"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path> <path d="M12 9v4"></path> <path d="M12 17h.01"></path></svg><span>Planned — these commands do not work yet</span></div>
+    <pre># planned — not available yet
+mkdir -p ~/.config/containers/systemd
+
+curl -LO https://github.com/greluc/Home-Inventory/releases/latest/download/homeinv-quadlet.tar.gz
+tar -xzf homeinv-quadlet.tar.gz -C ~/.config/containers/systemd
+
+cp homeinv.env.example ~/.config/homeinv/homeinv.env   # set HOMEINV_*
+systemctl --user daemon-reload
+systemctl --user start homeinv.target
+
+loginctl enable-linger "$USER"   # survive a logout</pre>
+  </div>
+  <ul class="facts"><li><span class="bullet">·</span><span>Generated from deploy/services.yaml — never hand-edited</span></li>
+<li><span class="bullet">·</span><span>Rootless by construction: no daemon, no root, no bind mounts</span></li>
+<li><span class="bullet">·</span><span>The migration service runs once per start, before the api unit</span></li></ul>
+</div>
+<div data-panel="docker" class="stack" style="gap:12px">
+  <h3>Docker with Compose v2, rootless</h3>
+  <p>An equal path, not a fallback. Same images, same environment keys, same limits — Docker must be installed in rootless mode; the rootful daemon is unsupported.</p>
+  <div class="code">
+    <div class="bar"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path> <path d="M12 9v4"></path> <path d="M12 17h.01"></path></svg><span>Planned — these commands do not work yet</span></div>
+    <pre># planned — not available yet
+curl -LO https://github.com/greluc/Home-Inventory/releases/latest/download/compose.yaml
+curl -LO https://github.com/greluc/Home-Inventory/releases/latest/download/.env.example
+
+cp .env.example .env   # set HOMEINV_*
+docker compose up -d
+
+docker compose logs -f homeinv-migration</pre>
+  </div>
+  <ul class="facts"><li><span class="bullet">·</span><span>Generated from the same service matrix; a hand-written deviation fails CI</span></li>
+<li><span class="bullet">·</span><span>Named volumes only — a bind mount would reintroduce host ownership</span></li>
+<li><span class="bullet">·</span><span>Published ports come from the web service alone; everything else is internal</span></li></ul>
+</div>
+<div data-panel="helm" class="stack" style="gap:12px">
+  <h3>Kubernetes with Helm</h3>
+  <p>Hand-written rather than generated, and validated against the matrix: same services, same environment keys, same limits. Tested in CI against kind with the restricted PodSecurity profile and user namespaces.</p>
+  <div class="code">
+    <div class="bar"><svg class="hi-icon hi-icon--14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path> <path d="M12 9v4"></path> <path d="M12 17h.01"></path></svg><span>Planned — these commands do not work yet</span></div>
+    <pre># planned — not available yet
+helm repo add home-inv https://greluc.github.io/Home-Inventory/charts
+helm repo update
+
+helm show values home-inv/home-inv &gt; values.yaml   # then edit
+helm install home-inv home-inv/home-inv -f values.yaml -n home-inv --create-namespace</pre>
+  </div>
+  <ul class="facts"><li><span class="bullet">·</span><span>Arrives with stage 2 — the two container runtimes carry operation first</span></li>
+<li><span class="bullet">·</span><span>The chart disciplines statelessness: api and worker hold nothing on disk</span></li>
+<li><span class="bullet">·</span><span>PostgreSQL, OpenSearch and RabbitMQ are yours to provide or to run in-cluster</span></li></ul>
+</div>
+    </div>
+    <div class="b stack" style="gap:16px">
+      <div class="card"><h4>Rootless, without exception</h4><p class="small">No supported path runs a container daemon or a container as root on the host. That is not a hardening preference — it is why the application listens on 8080 and why there is not a single bind mount in the deployment directory.</p></div>
+      <div class="card"><h4>One source, three renderings</h4><p class="small"><code>deploy/services.yaml</code> is edited; the Quadlet units and <code>compose.yaml</code> are generated from it, and a hand-written deviation fails the drift check. The Helm chart is too different in shape to generate, so it is validated against the same matrix instead.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap sec stack--lg" style="display:flex;flex-direction:column">
+  <h2>Before you start</h2>
+  <div class="panel"><div class="hi-tablewrap hi-scroll-thin"><table class="hi-table"><caption class="hi-sr">Prerequisites</caption><thead><tr><th scope="col" style="width:24%">What</th><th scope="col">Requirement</th></tr></thead><tbody>
+<tr><td><span class="hi-truncate" style="display:block">Container runtime</span></td><td><span class="hi-truncate" style="display:block">Podman ≥ 5 with Quadlet, or Docker with Compose v2 — rootless in both cases</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Kubernetes</span></td><td><span class="hi-truncate" style="display:block">A cluster with the restricted PodSecurity profile and user namespaces</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Database</span></td><td><span class="hi-truncate" style="display:block">PostgreSQL 18 — row-level security, JSONB, uuidv7()</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Distributions</span></td><td><span class="hi-truncate" style="display:block">Debian ≥ 13 · Ubuntu ≥ 26.04 LTS · Fedora ≥ 43 · RHEL, CentOS Stream, Rocky, Alma ≥ 9.5 resp. ≥ 10</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Network</span></td><td><span class="hi-truncate" style="display:block">One hostname with TLS. The web service is the ingress and the only one that publishes a port</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Media</span></td><td><span class="hi-truncate" style="display:block">A volume for the BlobStore. No bind mounts — anywhere</span></td></tr>
+<tr><td><span class="hi-truncate" style="display:block">Outbound</span></td><td><span class="hi-truncate" style="display:block">Only the egress proxy may leave the deployment; in the smallest profile with exactly one allowlist entry, for the virus signatures</span></td></tr>
+</tbody></table></div></div>
+</section>
+
+<section class="wrap sec stack--lg" style="display:flex;flex-direction:column">
+  <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+    <h2>What you will be running</h2>
+    <span class="small muted" style="margin-left:auto">Ten services, not one container</span>
+  </div>
+  <div class="panel"><div class="hi-tablewrap hi-scroll-thin"><table class="hi-table"><caption class="hi-sr">Services in the deployment</caption><thead><tr><th scope="col" style="width:20%">Service</th><th scope="col">Role</th><th scope="col" class="hi-num" style="width:14%">From stage</th></tr></thead><tbody>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">web</span></td><td><span class="hi-truncate" style="display:block">The ingress: serves the PWA and the CSP headers — the only published port</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">api</span></td><td><span class="hi-truncate" style="display:block">The REST and GraphQL surface, stateless</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">migration</span></td><td><span class="hi-truncate" style="display:block">A one-shot service; no long-running process holds DDL rights</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">postgres</span></td><td><span class="hi-truncate" style="display:block">PostgreSQL 18 with row-level security</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">blobstore</span></td><td><span class="hi-truncate" style="display:block">The filesystem BlobStore as its own service, so api and worker stay stateless</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">clamav</span></td><td><span class="hi-truncate" style="display:block">The mandatory malware scan, fail-closed</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">egress-proxy</span></td><td><span class="hi-truncate" style="display:block">The only way out, with an allowlist per segment</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">0</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">worker</span></td><td><span class="hi-truncate" style="display:block">Events, background runs, housekeeping</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">1</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">rabbitmq</span></td><td><span class="hi-truncate" style="display:block">Quorum queues for the transactional outbox</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">1</span></td></tr>
+<tr><td class="hi-code"><span class="hi-truncate" style="display:block">opensearch</span></td><td><span class="hi-truncate" style="display:block">The derived read model for search and facets</span></td><td class="hi-num"><span class="hi-truncate" style="display:block">1</span></td></tr>
+</tbody></table></div></div>
+  <p class="small muted">The stage column says when a service first appears. A stage-0 installation runs seven of them; OpenSearch and RabbitMQ arrive with stage 1, when there is something to index and something to queue.</p>
+</section>
+
+<section class="wrap sec">
+  <div class="cta">
+    <div class="stack" style="flex:1 1 340px;min-width:0;gap:10px">
+      <h2 style="font-size:var(--fs-500);line-height:var(--lh-500)">Get told when it is installable</h2>
+      <p>There is no mailing list and no newsletter. Watch the repository's releases — that is the same signal the author gets.</p>
+    </div>
+    <div class="actions">
+      <a class="hi-btn hi-btn--primary" href="https://github.com/greluc/Home-Inventory/releases"><span>Watch releases</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+      <a class="hi-btn hi-btn--secondary" href="https://github.com/greluc/Home-Inventory/tree/main/deploy"><span>The service matrix</span><svg class="hi-icon hi-icon--16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer class="site-foot">
+  <div class="wrap top">
+    <div class="stack" style="gap:10px">
+      <span class="brand" style="cursor:default"><span class="mark">HI</span><span>Home&nbsp;Inventory</span></span>
+      <p class="small muted" style="max-width:34ch">Self-hosted inventory for physical and digital items. Run it on your own machine, or do not run it at all.</p>
+      <code class="muted" style="font-size:var(--fs-75)">greluc/Home-Inventory</code>
+    </div>
+    <nav>
+      <span class="eyebrow">Project</span>
+      <a href="https://github.com/greluc/Home-Inventory">Repository</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Documentation</span>
+      <a href="docs.html">Document map</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/architecture">Architecture</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/adr">Decisions</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/docs/requirements">Requirements</a>
+    </nav>
+    <nav>
+      <span class="eyebrow">Legal</span>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/LICENSE">AGPL-3.0-or-later</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/SECURITY.md">Security policy</a>
+      <a href="https://github.com/greluc/Home-Inventory/tree/main/cla">Contributor agreement</a>
+      <a href="https://github.com/greluc/Home-Inventory/blob/main/REUSE.toml">REUSE / per-file licensing</a>
+    </nav>
+  </div>
+  <div class="bottom">
+    <div class="wrap">
+      <span>Core AGPL-3.0-or-later · plugin API, SDKs and protobuf contract Apache-2.0 · documentation CC BY-SA 4.0.</span>
+      <span style="margin-left:auto">Type: IBM Plex, OFL 1.1 · Icons: Lucide, ISC AND MIT.</span>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>

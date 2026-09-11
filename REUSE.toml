@@ -23,6 +23,7 @@ path = [
   "design-system/**",
   "deploy/**",
   "api/**",
+  "website/**",
   ".github/**",
 ]
 precedence = "aggregate"
