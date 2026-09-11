@@ -44,7 +44,7 @@ port, never an implementation.
 | `PrintTarget` | Artifact → printer | Download (**in-core** — writes to the `BlobStore`, opens nothing), CUPS/IPP, Brother QL over the network, Zebra over TCP 9100, Dymo |
 | `LabelMediaProvider` | Contribute label geometries | Avery Zweckform catalogue (**in-core**, it is data), Herma, continuous rolls |
 | `MetadataResolver` | Code → metadata | ISBN (Open Library, DNB), EAN/GTIN (Open Food Facts, GS1), MPN, Discogs, TMDB, IGDB |
-| `BlobStore` | Binary storage | Filesystem (**in-core**, the default) · S3/MinIO and **Nextcloud/WebDAV** as **first-party plugins** · FTP, Backblaze |
+| `BlobStore` | Binary storage | Filesystem (**in-core**, the default — the adapter is in the core image and writes to the in-deployment `blobstore` service, which holds the volume so `api` and `worker` stay stateless; the same shape as the ClamAV row below, and not a plugin, because it opens nothing outside the deployment, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) · S3/MinIO and **Nextcloud/WebDAV** as **first-party plugins** · FTP, Backblaze |
 | `SearchIndex` | Index and search | OpenSearch (**in-core** — part of the deployment, not an external host), PostgreSQL (**in-core**), Meilisearch, Typesense |
 | `NotificationChannel` | Deliver a message | **Every channel is a plugin**, because every one of them talks to a host outside the deployment: SMTP, webhook, Web Push/VAPID, Firebase, APNs (all **first-party plugins**) · ntfy, Matrix, Signal |
 | `IdentityProvider` | Federated login | OIDC (**first-party plugin**), LDAP, SAML |

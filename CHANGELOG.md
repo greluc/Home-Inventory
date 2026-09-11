@@ -25,10 +25,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 412 numbered, testable requirements across
+- A requirements catalogue with 415 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 42 architecture decision records, each with its alternatives and consequences —
+- 43 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
@@ -38,6 +38,10 @@ commit".
   appearance everywhere with light one click away, 48 components, self-hosted
   IBM Plex and Lucide icons, and a measured contrast ratio for every colour pair
   in both themes.
+- **Two registries that clients can program against**, alongside the label
+  catalogue: the stable error codes an API response can carry, and the tokens that
+  say a result was served in a degraded mode. Both were referred to as documented
+  sets that did not exist.
 - A verified starter catalogue of label geometries
   ([`docs/reference/label-media.yaml`](docs/reference/label-media.yaml)), with a
   per-format flag distinguishing measured geometries from calculated ones.
@@ -47,6 +51,38 @@ commit".
 
 ### Changed
 
+- **Photos and documents now have somewhere to live.** The default media store —
+  the only one a small installation has — had no volume anywhere in the
+  deployment and no backup entry, so in that configuration uploads had nowhere to
+  be written and nothing to be restored from. It is now a small service of its
+  own, which also keeps the application containers stateless.
+- **Full-text search promises what it can deliver at each stage.** The first
+  release searches names and descriptions; notes, custom field values, tags and
+  storage paths join it with the next one, in both the fast index and the
+  fallback — so a small installation without the search server is not left behind.
+- **Anyone allowed to see licence keys and similar secrets now needs a second
+  factor.** Re-confirming with a second factor was already required before such a
+  field is revealed, but only administrators were obliged to have one.
+- **The browser is no longer asked to commit your whole domain.** The strict
+  transport header ships without the `preload` flag: the protection it actually
+  provides stays, while enrolling a domain in the browsers' permanent preload
+  list — slow to undo, and binding on every other service you run under the same
+  domain — becomes a step you take deliberately.
+- **Storing a licence key has a defined format.** The encryption was decided; the
+  exact bytes were not, and they cannot be changed once the first secret is
+  written. Key rotation no longer means rewriting stored values.
+- **Requests now pass through the web container without losing anything.** Size
+  limits, timeouts, live-update streaming and the visitor's real IP address are
+  specified across that hop — the last of which decides whether rate limiting and
+  the audit log record the visitor or the server in front of them.
+- **Dymo label geometries stay marked unverified, and now say why.** Dymo does not
+  publish printable areas per label the way Brother does; the printer reads them
+  from the roll. For those labels the calibration sheet is the path, and the
+  software says so instead of implying a missing lookup.
+- **The first release's item now has one description instead of four.** What
+  fields a newly created item carries was written down differently in the
+  requirements, the roadmap and the data model; notes, purchase details and
+  condition arrive with the second release, where they always belonged.
 - **Every connection leaving the deployment is now made by a plugin.** Object
   storage on S3 or Nextcloud, outgoing mail, federated login, webhooks and push
   are no longer part of the core image. An installation using local file storage

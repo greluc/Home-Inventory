@@ -22,7 +22,7 @@ through a hardened instance reachable from the internet.
 |---|---|
 | Password login, sessions, rate limiting | Second factor, OIDC, invitations |
 | **One** tenant (the model is multi-tenant, the UI shows one) | Tenant administration, roles beyond admin/user |
-| Items with **fixed** fields (name, description, quantity, note, purchase data) | The configurable type system |
+| Items with **fixed** fields — name, description, kind, type reference, quantity with unit (`REQ-CORE-002`, and the columns `inventory.item` actually carries) | The configurable type system · **notes** (`REQ-CORE-014`, stage 1) · **purchase data** (`REQ-LIFE-001`, stage 1) · **condition**, which is a tag or a type field, not a fixed column |
 | A location tree with fixed categories | Category configuration, mobile locations |
 | Photos and documents: upload, re-encoding, EXIF stripping, thumbnails, the **mandatory malware scan** — with the `egress-proxy` it needs for its signatures ([ADR-0036](../adr/0036-scanner-egress.md)) — serving through signed URLs from the media hostname, `BlobStore` (filesystem, in-core) | S3 and Nextcloud adapters (they are plugins), resumable upload |
 | Full-text search (PostgreSQL), cursor pagination | OpenSearch, facets, saved searches |
@@ -32,6 +32,14 @@ through a hardened instance reachable from the internet.
 | **All security foundations**: the RLS schema, CSP served by `web` with hashes, upload hardening, parameterised queries, the authorization scaffolding, the network segmentation with the management port bound to `internal` | — |
 
 **Binding requirements:** every requirement whose **Stage** column reads `0`.
+
+> **The fixed-field list above was a fourth description of the same thing** and
+> agreed with none of the other three (open point **O19**, decided 2026-09-11).
+> It named *note* and *purchase data* as stage-0 fields while `REQ-CORE-014` and
+> `REQ-LIFE-001` both say stage 1; `REQ-CORE-002` named *condition*, which has no
+> column and no type system at stage 0; and the `inventory.item` DDL in
+> [07 §7.3](../architecture/07-data-model.md) had none of the three. All four now
+> say the same five fields.
 
 > That list used to be spelled out here as well, and the two had already drifted
 > apart in three places — `REQ-NFR-063` was listed as stage 0 while its row said

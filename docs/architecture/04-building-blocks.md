@@ -21,7 +21,7 @@ graph TB
         OS[("OpenSearch<br/>derived")]
         MQ[["RabbitMQ"]]
         KV[("Valkey<br/>cache, sessions, limits")]
-        BLOB[("BlobStore<br/><i>filesystem, in-core</i>")]
+        BLOB[("<b>blobstore</b><br/><i>the default store, own service</i>")]
     end
 
     EXT{{"Anything outside<br/>the deployment"}}
@@ -50,7 +50,9 @@ webhooks and push are not absent — they are reached through `plugin-host`, and
 only ever through `egress-proxy`
 ([ADR-0026](../adr/0026-core-outbound-via-plugins.md),
 [ADR-0027](../adr/0027-egress-enforcement.md)). The in-core `BlobStore` is the
-filesystem adapter, which opens no socket.
+filesystem adapter, which opens no socket outside the deployment — it writes to the
+`blobstore` service on `internal`, which holds the volume so that `api` and `worker`
+stay stateless ([ADR-0043](../adr/0043-blobstore-as-its-own-service.md)).
 
 **Important:** `api` and `worker` are the **same container image** with a
 different Spring profile. That keeps the version matrix at one and prevents
@@ -58,9 +60,10 @@ worker and API from drifting apart.
 
 | Unit | State | Scaling | Note |
 |---|---|---|---|
-| `web` | none | arbitrary (static) | Serves the application shell **and every security header** — the CSP, HSTS, COOP/CORP/COEP, `Referrer-Policy`, `Permissions-Policy`. Serving the bundle from the operator's reverse proxy instead is **not supported**: the header set would then live outside this repository and `REQ-SEC-060`'s CI comparison would have nothing to compare ([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md)) |
+| `web` | none | arbitrary (static) | Serves the application shell **and every security header** — the CSP, HSTS, COOP and CORP, `Referrer-Policy`, `Permissions-Policy` — and **not** `Cross-Origin-Embedder-Policy`, which [ADR-0040](../adr/0040-no-cross-origin-isolation.md) drops and `REQ-SEC-061` makes CI fail on if it reappears. Serving the bundle from the operator's reverse proxy instead is **not supported**: the header set would then live outside this repository and `REQ-SEC-060`'s CI comparison would have nothing to compare ([ADR-0038](../adr/0038-csp-delivery-and-first-paint.md)) |
 | `app` (api) | none | horizontal | Sessions in Valkey, no local files |
 | `app` (worker) | none | horizontal | Consumes RabbitMQ, competing consumers |
+| `blobstore` | volume `blobdata` | one per deployment | The default media store. It exists so that the `filesystem` adapter has somewhere to write **without** making `api` and `worker` stateful — a shared mount there would have cost `REQ-NFR-008`. In-deployment infrastructure behind a port, exactly like `clamd` behind `VirusScanner`; not a plugin, because it opens nothing outside the deployment ([ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) |
 | `plugin-host` | plugin's own | per plugin | Own service account, own UID range, **own network segment**, no route out except through the proxy ([ADR-0037](../adr/0037-per-plugin-network-segments.md)) |
 | `egress-proxy` | none | one per deployment | The single chokepoint for every outbound connection, in **every** profile — `minimal` has no plugins but does have a scanner that needs its signatures ([ADR-0036](../adr/0036-scanner-egress.md)). Holds no credentials and terminates no TLS — it sees host and port, never content. One interface per plugin segment, so the caller is identified by topology rather than by a claimed source address |
 
@@ -83,6 +86,7 @@ graph TB
         INV["inventory"]
         LOC["locations"]
         TAG["tagging"]
+        AUD["audit"]
     end
 
     subgraph Supp["Supporting blocks (extractable)"]
@@ -94,7 +98,6 @@ graph TB
         SYN["sync"]
         NOT["notification"]
         IMP["portability"]
-        AUD["audit"]
     end
 
     subgraph Base["Base"]
@@ -130,6 +133,22 @@ graph TB
 
 Solid arrows are synchronous calls into the target's `api` package. Dashed arrows
 are events. **There is no cycle** — CI verifies that.
+
+> **`audit` sits in the core group, and that is a correction** (open point
+> **O18**, decided 2026-09-11). It was drawn among the extractable blocks while
+> `inventory` calls `AuditService` **synchronously inside the item transaction**
+> ([4.3](#43-level-3--building-block-catalogue),
+> [05 §5.1](05-runtime-view.md)) — extracted, that would be a remote call held
+> open across a database transaction, which is precisely the property
+> [03 §3.6.2](03-solution-strategy.md) uses to argue against microservices in the
+> first place. `REQ-SEC-070` compounds it: a transaction producing several audit
+> entries writes them as one chained run under a **single lock acquisition**, and
+> a hash chain computed across a service boundary is not that.
+>
+> Eight blocks are consistency-critical, eight are supporting, two are base —
+> still eighteen. The three previously unclassified blocks are now each on one
+> side: `audit` here, `identification` and `portability` extractable with triggers
+> named in [03 §3.6.4](03-solution-strategy.md).
 
 ## 4.3 Level 3 — Building block catalogue
 
@@ -439,6 +458,7 @@ translates protocol into use-case call and back.
 | `audit` | audit | Append-only, own permissions, partitioned by month |
 | `plugins` | plugins | |
 | `outbox` | (cross-cutting) | Spring Modulith event publication registry |
+| `crypto` | (cross-cutting) | The wrapped per-tenant data keys ([ADR-0019](../adr/0019-sensitive-field-encryption.md)). Several blocks encrypt, so it belongs to none of them — and not to `platform`, which has no schema. The same argument as `idempotency` below |
 | `idempotency` | (cross-cutting) | `Idempotency-Key` → the first response ([07 §7.8](07-data-model.md)). It belongs to no block, because every block writes it inside its own transaction — and not to `platform`, which has no schema and no database access |
 
 **Rule:** every block owns its schema. A block never reads or writes in another

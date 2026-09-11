@@ -65,11 +65,19 @@ defaults:
 # asserts "uid != 0 and readOnlyRootFilesystem: true", not a fixed number.
 
 networks:
-  # NO segment gives the core a route out of the deployment (ADR-0026). "edge"
-  # means "has published ports", not "can call out" — a published port is
-  # forwarded into the container namespace and needs no outward route.
-  # See A5 in ADR-0000: that this holds under rootless Podman/pasta and rootless
-  # Docker is a verification item, with a named fallback if it does not.
+  # `api` and `worker` get no route out of the deployment (ADR-0026). Exactly two
+  # containers do have one, and both are named below rather than glossed: `web`,
+  # because a published port measurably requires a non-internal segment, and
+  # `egress-proxy`, because that is its function (ADR-0042, REQ-SEC-102).
+  #
+  # MEMBERSHIP IS DECLARED ONCE, in each service's own `networks:` key below.
+  # This block declares only each segment's PROPERTIES. It used to carry a
+  # `members:` list as well — the same fact in two places, populated for three
+  # of the four concrete segments and omitted for `internal`, which has the most
+  # members of all. That is the drift this file exists to prevent, in this file.
+  # The `plugin-<id>` entry keeps its member list because there it is a
+  # GENERATION RULE for segments that do not exist yet, not a second copy of a
+  # fact stated elsewhere.
   #
   # ZONE 4 IS NOT ONE ROOM (ADR-0037). There used to be a single `plugins`
   # segment holding every plugin, clamav, the proxy, api and worker. On it, a
@@ -87,10 +95,9 @@ networks:
   edge:
     internal: false             # web only. Publishes 8080 and proxies to api over
                                 # `internal`. api publishes NOTHING and is not here.
-    members: [web]
   egress:
     internal: false             # egress-proxy only — the route the chokepoint needs.
-    members: [egress-proxy]     # It sat on internal segments alone until 2026-09-11,
+                                # It sat on internal segments alone until 2026-09-11,
                                 # which meant the one component whose job is the
                                 # outbound call could not make one.
   internal:
@@ -99,7 +106,6 @@ networks:
                                 # else — see api.ports below.
   scanner:
     internal: true
-    members: [worker, clamav, egress-proxy]
     egressVia: egress-proxy     # freshclam only, to the deployment allowlist
                                 # entry below (ADR-0036). `api` is deliberately
                                 # absent: the scan runs in the worker, never in
@@ -129,6 +135,12 @@ volumes:
   mqdata:   { service: rabbitmq }
   kvdata:   { service: valkey }
   cvddata:  { service: clamav }
+  blobdata: { service: blobstore }   # the default media store. It had NO volume and
+                                     # no backup row until 2026-09-11 (ADR-0043):
+                                     # `filesystem` is the default BlobStore and the
+                                     # only one `minimal` has, while api and worker
+                                     # were declared stateless with a read-only root
+                                     # filesystem — so the bytes had nowhere to go.
 
 services:
 
@@ -192,6 +204,18 @@ services:
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"           # bindTo, resolved by the generator
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
+      # The other two REQUIRED non-secret variables of 06 §6.11. They were listed
+      # as required there and declared nowhere here, so the generated units would
+      # have omitted them — and the first is printed onto physical labels.
+      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"   # required, REQ-IDENT-015.
+                                                             # ⚠ printed onto every label;
+                                                             # changing it later invalidates
+                                                             # every printed one (10 §10.2.1)
+      HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"     # required, REQ-MED-010. Its
+                                                             # same-site relationship to the
+                                                             # application host is checked at
+                                                             # startup (REQ-SEC-061)
+      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # the in-deployment store, ADR-0043
     # NO db-migration-password. It is mounted into the one-shot `migrate` service
     # and nowhere else (ADR-0041, REQ-SEC-101): homeinv_migrator owns the tables
     # and can rewrite an RLS policy, and mounting it into a long-running,
@@ -200,7 +224,7 @@ services:
     # against one it does not expect.
     secrets: [db-password, data-key, jwt-key]
     tmpfs: ["/tmp"]
-    dependsOn: [postgres, valkey, migrate]      # migrate must have exited 0
+    dependsOn: [postgres, valkey, migrate, blobstore]   # migrate must have exited 0
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
@@ -218,12 +242,17 @@ services:
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
       HOMEINV_DB_MIGRATE_ON_START: "false"       # validates the schema, never changes it
+      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"   # the worker RENDERS the labels
+                                                             # (05 §5.4), so it needs the base
+                                                             # that gets printed on them
+      HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
+      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # ADR-0043
     secrets: [db-password, data-key]
     tmpfs: ["/tmp"]
     # rabbitmq exists only in standard and ha (see its own `profiles`). A flat
     # dependsOn would generate Requires=homeinv-rabbitmq.service into the minimal
     # profile, where that unit does not exist — the stack would not start.
-    dependsOn: [postgres, clamav]
+    dependsOn: [postgres, clamav, blobstore]
     dependsOnByProfile:
       standard: [rabbitmq]
       ha:       [rabbitmq]
@@ -291,6 +320,42 @@ services:
       login. Idempotency records deliberately do NOT live here: they are written to
       PostgreSQL in the same transaction as the record they protect (ADR-0009), so
       a Valkey outage cannot produce a duplicate.
+
+  blobstore:
+    image: { name: ghcr.io/greluc/home-inv-blobstore, digest: "TODO" }
+    networks: [internal]          # NOT a plugin segment and NOT egress-capable. It is
+                                  # in-deployment infrastructure behind a port, exactly
+                                  # like clamd behind `VirusScanner` — the core's
+                                  # `filesystem` BlobStore adapter stays IN-CORE and
+                                  # talks to this service (ADR-0043). It opens no socket
+                                  # outside the deployment, so ADR-0026 does not make it
+                                  # a plugin.
+    ports:
+      - { container: 8100, host: null }   # gRPC, the same BlobStore contract the
+                                          # plugin-blobstore-* plugins implement.
+                                          # Never published to the host.
+    volumes: [{ name: blobdata, path: /var/lib/homeinv/blobs }]
+    tmpfs: ["/tmp"]
+    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    health: { command: "/healthcheck", interval: 30s }
+    profiles: [minimal, standard, ha]
+    notes: >
+      THE DEFAULT MEDIA STORE, and until 2026-09-11 it existed in no topology at
+      all. `filesystem` is the default BlobStore and the only one `minimal` has,
+      but there was no volume for it anywhere in this file, no mount on api or
+      worker, and both are declared stateless with readOnlyRootFilesystem: true —
+      so in `minimal` every photo and document had nowhere to be written and no
+      backup row in 06 §6.13.
+
+      Giving api and worker a shared volume instead would have been the smaller
+      change and would have cost REQ-NFR-008: two api instances cannot share a
+      local filesystem. Holding the volume in one small service keeps api and
+      worker stateless and keeps the `ha` profile honest. It runs in every
+      profile, because the filesystem adapter stays the default in every profile
+      — `standard` may point media at plugin-blobstore-nextcloud, but print job
+      artifacts (10 §10.6) and anything written before a plugin is granted still
+      land here, and a profile-conditional service is not something this matrix
+      can express.
 
   clamav:
     image: { name: docker.io/clamav/clamav, tag: "stable", digest: "TODO" }
@@ -364,6 +429,13 @@ services:
       deployment:
         - id: clamav-signature-mirror
           caller: clamav
+          hosts: [database.clamav.net]
+          # The host belongs HERE, because REQ-SEC-097 says the proxy reads this
+          # list from this file, and the generated freshclam fixture
+          # (expected/clamav-freshclam.conf) emits `DatabaseMirror
+          # database.clamav.net` while declaring services.clamav.egress as its
+          # source. The entry carried id, caller and reason and no target, so
+          # neither the proxy nor the generator could have derived it.
           reason: >
             ClamAV is in-deployment infrastructure with no manifest, no capability
             grant and no per-tenant consent, so it cannot use source 1. The mirror
@@ -478,6 +550,10 @@ required:
   - db-migration-password is mounted only into `migrate` (which uses it) and
     `postgres` (which creates the role with it at first init) — into no
     long-running application service
+  - every service that persists state declares a volume for it, and every such
+    volume has a row in the backup table of 06 §6.13. `blobdata` had neither
+    until 2026-09-11 (ADR-0043), which left the default media store with no
+    place to write and nothing to restore from
   # Topology properties, checked by the connectivity test rather than by reading
   # this file (ADR-0037, REQ-SEC-098/099)
   - every plugin sits on its own segment, alone among plugins
@@ -493,8 +569,17 @@ required:
 budget:
   # Stated because the sum of limits deliberately exceeds the VM, and a figure
   # nobody can derive from the table is worse than none (06 §6.7).
-  minimal:  { reservations: ~3.4Gi, limits: ~6.9Gi }
-  standard: { reservations: ~5.4Gi, limits: ~9.4Gi, plusPerPlugin: 256Mi }
+  #
+  # The figures below are the sums of the per-service values in this file, with
+  # NO plugin counted — plugins are added separately by `plusPerPlugin`, for
+  # reservations AND limits. The previous figures mixed the two conventions:
+  # `standard`'s reservation total silently included three first-party plugins
+  # while its limit total did not, and `minimal`'s limit total was 0.25 Gi below
+  # what its own rows add up to. REQ-NFR-009 measures against these numbers, so
+  # they are computed, not estimated. They include `blobstore` (ADR-0043).
+  minimal:  { reservations: ~3.5Gi, limits: ~7.2Gi }
+  standard: { reservations: ~5.2Gi, limits: ~9.7Gi,
+              plusPerPlugin: { reservation: 64Mi, limit: 256Mi } }
   vm:       ">= 8Gi"
   note: >
     The reservations are the budget; the limits over-commit on purpose. Each limit

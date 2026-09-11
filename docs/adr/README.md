@@ -21,7 +21,7 @@ Date: YYYY-MM-DD
 
 | ADR | Title | Status |
 |---|---|---|
-| [0000](0000-open-points.md) | Open points | ongoing — **one open (O15)** |
+| [0000](0000-open-points.md) | Open points | ongoing — **no open decision** |
 | [0001](0001-backend-platform.md) | Java 25 and Spring Boot 4 as the backend platform | Accepted |
 | [0002](0002-modular-monolith.md) | A modular monolith instead of microservices | Accepted |
 | [0003](0003-multi-tenancy.md) | Multi-tenancy from the start, access by invitation | Accepted |
@@ -36,7 +36,7 @@ Date: YYYY-MM-DD
 | [0012](0012-web-frontend.md) | React with TypeScript and Vite as a PWA | Accepted, amended by 0038 |
 | [0013](0013-mobile-apps.md) | Kotlin Multiplatform and Compose Multiplatform | Accepted |
 | [0014](0014-offline-synchronisation.md) | Full bidirectional sync with a three-way compare | Accepted, extended (O14) |
-| [0015](0015-deployment.md) | Docker Compose primary, Helm maintained as an equal | Partially superseded by 0021, 0022 |
+| [0015](0015-deployment.md) | Docker Compose primary, Helm maintained as an equal | Partially superseded by 0021, 0022; its topology by 0036, 0037, 0042 |
 | [0016](0016-identifiers.md) | UUIDv7 internally, a separate public short code | Partially superseded by 0030 |
 | [0017](0017-persistence-access.md) | Spring Data JPA for aggregates, JdbcClient for dynamic queries | Accepted |
 | [0018](0018-licensing.md) | AGPL-3.0-or-later for the core, Apache-2.0 for the plugin API | Accepted |
@@ -59,8 +59,9 @@ Date: YYYY-MM-DD
 | [0035](0035-design-system.md) | The delivered design system is binding, and `tokens.json` is its single source | Accepted |
 | [0036](0036-scanner-egress.md) | The malware scanner gets a route out; the egress proxy runs in every profile | Accepted |
 | [0037](0037-per-plugin-network-segments.md) | One network segment per plugin, and the management port out of their reach | Accepted |
-| [0038](0038-csp-delivery-and-first-paint.md) | The CSP is delivered by `web` with hashes; the theme is mirrored locally | Accepted |
+| [0038](0038-csp-delivery-and-first-paint.md) | The CSP is delivered by `web` with hashes; the theme is mirrored locally | Accepted, amended by 0040 |
 | [0039](0039-degraded-response-signalling.md) | Degradation is signalled in the payload; the `Warning` header is dropped | Accepted |
 | [0040](0040-no-cross-origin-isolation.md) | `Cross-Origin-Embedder-Policy` is dropped; `COOP` and `CORP` stay | Accepted |
 | [0041](0041-migration-as-its-own-service.md) | Migration is its own one-shot service, on every runtime | Accepted |
 | [0042](0042-edge-is-not-internal.md) | A published port needs a non-internal segment; `web` becomes the ingress | Accepted |
+| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted |

@@ -37,8 +37,14 @@ price.
 - **CI must enforce the boundaries.** Without automatic verification a modular
   monolith decays. These checks are not optional and not switchable off (risk R3
   in [14](../architecture/14-quality-risks-glossary.md)).
-- Six blocks are cut so that they can be extracted; a trigger is named for each.
-  Seven stay together permanently.
+- **Eight** blocks are cut so that they can be extracted; a trigger is named for
+  each. **Eight** stay together permanently. *(This read "six … seven" until
+  2026-09-11 — thirteen of the sixteen functional blocks, with `identification`,
+  `portability` and `audit` in neither group. Decided as open point **O18**:
+  the first two are extractable and now carry triggers; `audit` is **not**, because
+  `inventory` calls `AuditService` synchronously inside the item transaction and
+  `REQ-SEC-070` chains a transaction's entries under one lock acquisition —
+  [03 §3.6.4](../architecture/03-solution-strategy.md).)*
 - Scaling happens through multiple instances of the same artifact in the `api`
   and `worker` roles, not through splitting.
 - The size of the shared kernel `platform` is monitored — it is the typical point

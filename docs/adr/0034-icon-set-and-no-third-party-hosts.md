@@ -21,9 +21,23 @@ project quietly acquires a CDN dependency.
 
 Every client — web and apps — ships every asset it needs: fonts, icons,
 stylesheets, scripts, images, sounds. At runtime a client contacts **only its own
-instance**. The CSP enforces it with `default-src 'self'` as the floor, and the
-acceptance test is mechanical: load every view with an empty cache and observe
-requests to one origin.
+instance**. The CSP enforces it — with `default-src 'none'` and each fetch
+directive named explicitly ([12 §12.9](../architecture/12-security.md)), not with
+`default-src 'self'`; and the acceptance test is mechanical: load every view with
+an empty cache and observe that every request goes to a hostname **this
+deployment serves**.
+
+> **Two corrections to the paragraph above, made 2026-09-11.** It said
+> `default-src 'self'` was "the floor" and that the test observes "requests to one
+> origin". Both were wrong against the policy actually in force, and
+> `REQ-PRIV-015` already says so: `default-src 'none'` is stricter than `'self'`
+> and is what [12 §12.9](../architecture/12-security.md) serves, and a literal
+> `default-src 'self'` is explicitly **not** the criterion — because the media
+> host is deliberately a **separate origin** ([12 §12.7](../architecture/12-security.md)),
+> as is `HOMEINV_PLUGIN_UI_BASE_URL` where a plugin panel is installed. The rule
+> is *no host the operator does not run*, which is three origins here, not one.
+> A test written to the old wording would have failed on the design's own media
+> host.
 
 | Reason | |
 |---|---|

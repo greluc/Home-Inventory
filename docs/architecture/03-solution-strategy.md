@@ -55,8 +55,8 @@ inventory/
 
 The cut follows the domain, not the technology. There are no global
 "controller / service / repository" layers, but 18 building blocks each with its
-own internal layering: the seven consistency-critical ones, the nine supporting
-ones, plus `plugins` and `platform`. The four access blocks (`rest`, `graphql`,
+own internal layering: the **eight** consistency-critical ones, the **eight**
+supporting ones, plus `plugins` and `platform`. The four access blocks (`rest`, `graphql`,
 `grpc`, `events-stream`) are not counted — they hold no domain logic, own no
 schema and decide nothing
 ([04 §4.4](04-building-blocks.md)). The full catalogue is in
@@ -147,10 +147,23 @@ extraction gets evaluated — not before.
 | `labeling` (rendering) | events only + the `LabelRenderer` port | PDF/bitmap generation becomes memory-hungry enough to need its own limits |
 | `notification` | events only | Delivery volume justifies its own scaling and rate control |
 | `sync` | events + read access through `api` | Very many mobile clients create connection load that disturbs the API path |
+| `identification` | the `CodeAssignment` port + events | Code resolution volume — a public, unauthenticated, rate-limited path ([08 §8.6](08-api-contract.md)) — starts competing with authenticated API traffic for the same instances |
+| `portability` | events + read access through `api` | A full tenant export with media (`REQ-PORT-003`) regularly runs long enough to need its own memory and time limits, the way `labeling` does |
 
 **Not extractable** — deliberately: `identity`, `tenancy`, `authorization`,
-`catalog`, `inventory`, `locations`, `tagging`. These seven form the
+`catalog`, `inventory`, `locations`, `tagging`, **`audit`**. These eight form the
 consistency-critical core and stay inside one transaction boundary.
+
+> **Three blocks were in neither list until 2026-09-11** (open point **O18**).
+> [04 §4.2](04-building-blocks.md) labelled all nine supporting blocks
+> *extractable*, this table named six with a trigger, and
+> [ADR-0002](../adr/0002-modular-monolith.md) said *"six … seven stay together"* —
+> thirteen of sixteen. `identification` and `portability` have gained triggers
+> above. `audit` moved the other way, and it is the one that was labelled wrongly
+> rather than merely left out: `inventory` calls `AuditService` **synchronously
+> inside the item transaction** ([05 §5.1](05-runtime-view.md)), and `REQ-SEC-070`
+> requires a transaction's several audit entries to be chained under one lock
+> acquisition. Neither survives a service boundary.
 
 ## 3.7 Data strategy
 

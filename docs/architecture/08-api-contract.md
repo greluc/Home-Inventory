@@ -150,8 +150,18 @@ results are correct, only poorer. `503` stays reserved for "this will not work".
 }
 ```
 
-**Rules:** `type` is a stable, documented URI — clients branch on it, not on the
-text. `title`/`detail` are localised (`Accept-Language`). `traceId` connects the
+**The set of `type` values is a registry, not a convention.** It lives at
+[`docs/reference/problem-types.yaml`](../reference/problem-types.yaml), is
+generated into the OpenAPI document, and is guarded by `oasdiff`: a new token is
+a minor change, a removed one or a changed status code is breaking
+([8.3](#83-versioning)). The companion registry for `meta.degradedReason` is
+[`degraded-reasons.yaml`](../reference/degraded-reasons.yaml). Until 2026-09-11
+neither set was enumerated anywhere — three tokens appeared in worked examples
+and a client author had no list to program against.
+
+**Rules:** `type` is a stable, documented URI — **fixed for the product, not per
+deployment**, or a client talking to two instances could not branch on it at all.
+Clients branch on it, not on the text. `title`/`detail` are localised (`Accept-Language`). `traceId` connects the
 response to the server log. Error messages **never** reveal whether a foreign
 resource exists, and never contain internal paths, SQL or stack traces.
 
@@ -209,7 +219,7 @@ headers above already carry the same information in parseable form
 | Minimum period between deprecation and shutdown | **12 months** for the main API, 6 months for the plugin contract |
 | Parallel operation | `v1` and `v2` run side by side; `v2` is an adapter onto the same application layer, not a second implementation |
 | Visibility | Usage of deprecated endpoints is collected as a metric per tenant and client — shutdown happens only when usage is zero or the period has elapsed |
-| Announcement | Changelog, `Warning` header, a notice in the UI for tenant administrators |
+| Announcement | Changelog, the three headers above, a notice in the UI for tenant administrators. **Not** a `Warning` header — this row still named one three lines under the paragraph that drops it ([ADR-0039](../adr/0039-degraded-response-signalling.md), `REQ-API-012`) |
 
 ## 8.4 GraphQL
 

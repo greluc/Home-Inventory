@@ -5,6 +5,12 @@
 [04 §4.1](../architecture/04-building-blocks.md),
 [ADR-0012](0012-web-frontend.md), [ADR-0033](0033-dark-as-default-appearance.md)
 
+> **Amended by [ADR-0040](0040-no-cross-origin-isolation.md):**
+> `Cross-Origin-Embedder-Policy` is **not** sent. §1 below lists it among the
+> headers `web` emits; that half is withdrawn. Everything else in §1 — that `web`
+> serves the shell **and** the header set, from configuration in this repository —
+> stands, and is the whole point of the section.
+
 ## Context
 
 Three decisions were each sound and could not all be true at once.
@@ -47,9 +53,12 @@ it, and no component able to produce one. None of the three was wrong on its own
 
 The option *"can also be served directly by the reverse proxy"* in
 [04 §4.1](../architecture/04-building-blocks.md) is **withdrawn**. The CSP, HSTS,
-COOP/CORP/COEP, `Referrer-Policy` and `Permissions-Policy` are emitted by the
+COOP, CORP, `Referrer-Policy` and `Permissions-Policy` are emitted by the
 `web` container, from configuration that lives in this repository and is compared
-against an expected string in CI (`REQ-SEC-060`).
+against an expected string in CI (`REQ-SEC-060`). *(This list read
+"COOP/CORP/COEP" until 2026-09-11;
+[ADR-0040](0040-no-cross-origin-isolation.md) drops COEP, and `REQ-SEC-061` now
+makes the CI comparison **fail if it reappears**.)*
 
 That is the whole reason. A header set an operator writes into their own proxy
 config cannot be tested here, and a policy nobody tests is a policy that drifts

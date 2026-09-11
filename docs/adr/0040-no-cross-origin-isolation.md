@@ -3,7 +3,14 @@
 **Status:** Accepted · **Date:** 2026-09-11
 **Resolves:** O15 in [ADR-0000](0000-open-points.md)
 **Amends:** [12 §12.9](../architecture/12-security.md), `REQ-SEC-061`,
-[09 §9.4](../architecture/09-extensibility-and-plugins.md), `REQ-PLG-012`
+[09 §9.4](../architecture/09-extensibility-and-plugins.md), `REQ-PLG-012`,
+[04 §4.1](../architecture/04-building-blocks.md), [ADR-0038 §1](0038-csp-delivery-and-first-paint.md)
+
+> **The last two were added on 2026-09-11**, after a review found COEP still
+> listed in both. This list is what a reader follows to find every place a
+> decision reaches, and two places it reached were missing from it — which is
+> exactly how a withdrawn header survives in a corpus that has already withdrawn
+> it twice over.
 
 ## Context
 

@@ -5,7 +5,21 @@
 > **Amended by [ADR-0021](0021-podman-quadlet.md)** (Podman with Quadlet is now
 > supported as an equal) and **tightened by [ADR-0022](0022-rootless.md)**
 > (rootless is mandatory, rootful Docker is no longer supported). The affected
-> rows are marked below. Everything else stands unchanged.
+> rows are marked below.
+>
+> **The network topology in the last consequence is superseded three times over**
+> and is left standing only as the record of what was once decided. It reads
+> *"three network segments (`edge`, `internal`, `plugins`); the core has no
+> outbound route to the internet"*. Current state:
+> [ADR-0036](0036-scanner-egress.md) adds the `scanner` segment and an
+> `egress-proxy` in every profile · [ADR-0037](0037-per-plugin-network-segments.md)
+> replaces the single `plugins` segment with **one per plugin** ·
+> [ADR-0042](0042-edge-is-not-internal.md) establishes, on measurement, that
+> `edge` and `egress` are **not** internal and that `web` — not `api` — is the
+> ingress. The live topology is [06 §6.7](../architecture/06-deployment-view.md)
+> and [`deploy/services.yaml`](../../deploy/services.yaml).
+>
+> Everything else stands unchanged.
 
 ## Context
 

@@ -203,12 +203,58 @@ rolls:
       here against 408/306/6 there — so the raster origin is per medium, never a
       constant.
 
+  # ---------------------------------------------------------------------------
+  # DYMO — AND WHY THESE TWO STAY UNVERIFIED, WHICH IS A FINDING AND NOT A TODO
+  #
   # The two Dymo entries were `verified: true` until 2026-09-11 and are now
   # `false` — not because anything about them changed, but because the rule did.
   # Adding the printable area to the definition of "verified" (see the header)
-  # made a field mandatory that these entries never carried. Downgrading them is
-  # the honest consequence; leaving them at `true` under the new rule would have
-  # meant the flag stopped meaning one thing.
+  # made a field mandatory that these entries never carried.
+  #
+  # A2 in ADR-0000 then said the figures "have to come from Dymo's SDK
+  # documentation the way Brother's came from Brother's". They were looked for on
+  # 2026-09-11, in the right document, and THEY ARE NOT THERE — for a structural
+  # reason that is worth more than the numbers would have been.
+  #
+  # Source: DYMO LabelWriter 550 Series Printers Technical Reference Manual,
+  # © 2021 Sanford, L.P., download.dymo.com (retrieved 2026-09-11). What it does
+  # give, verbatim:
+  #
+  #   - 300 dpi on every 550-series model.
+  #   - The 57 mm print head has **672 individually addressable dots**, and the
+  #     default is **84 bytes per line** (84 × 8 = 672). Cross-check:
+  #     672 × 25.4/300 = 56.9 mm, which agrees with "57 mm" — the same arithmetic
+  #     check that confirmed the Brother table was read correctly.
+  #   - The 5XL's 101 mm head uses 1248 dots. (1248 × 25.4/300 = 105.7 mm, which
+  #     does not agree with "101 mm". The discrepancy is in DYMO's own text and is
+  #     recorded, not reconciled. Irrelevant here: both entries below are far
+  #     narrower than 57 mm.)
+  #
+  # And the finding: **DYMO publishes no per-label printable-area table at all.**
+  # Where Brother prints one row per die-cut medium, the 550 series carries
+  # "Printable area horizontal offset" and "Printable area vertical offset" as
+  # u16 millimetre fields in the DATA THE PRINTER READS FROM THE ROLL, alongside
+  # label length, label width, liner width, label count, length of roll and
+  # production date (ESC-command response, bytes 44-47). The printable area is
+  # per-roll runtime data there, not a document constant.
+  #
+  # THREE CONSEQUENCES, and they are design input rather than catalogue trivia:
+  #
+  #  1. These two entries stay `verified: false`, and not provisionally. There is
+  #     no document to promote them from. That is a different state from
+  #     brother-dk-11209, whose row simply was not in the reference we read.
+  #  2. A `PrintTarget` plugin for a 550-series LabelWriter can ASK the printer,
+  #     and should: it is better evidence than any catalogue entry, because it
+  #     comes from the roll actually loaded. The plugin contract has room for it —
+  #     `ListPrinters` already returns printer-reported data (08 §8.5).
+  #  3. For the 450 series and for anyone printing these media on a third-party
+  #     printer, the calibration sheet is the only path, which is exactly what
+  #     `verified: false` already requires before a bulk print (REQ-LBL-004).
+  #
+  # So A2 is closed for Dymo the way it was closed for Brother: by reading the
+  # manufacturer's own technical reference. The answer is that the figure does not
+  # exist in the form the catalogue wanted it.
+  # ---------------------------------------------------------------------------
   - id: dymo-99012
     vendor: Dymo
     articleNumber: "99012"
@@ -219,13 +265,16 @@ rolls:
     printable: null         # NOT sourced — see the note
     verified: false
     verifiedOn: 2026-09-11
-    sources: ["Dymo product data / retail data sheet — 36 × 89 mm"]
+    sources:
+      - "Dymo product data / retail data sheet — 36 × 89 mm"
+      - "DYMO LabelWriter 550 Series Technical Reference Manual (Sanford, L.P., 2021), checked 2026-09-11: 300 dpi, 57 mm head = 672 dots / 84 bytes per line; **no per-label printable-area table**"
     notes: >
-      The medium's dimensions are evidenced; the **printable area is not**. Dymo
-      LabelWriter media has unprintable margins of its own, and the figures have
-      to come from Dymo's SDK documentation the way the Brother ones came from
-      Brother's. Until then the calibration sheet is required before a bulk print,
-      which is exactly what `verified: false` already means.
+      The medium's dimensions are evidenced; the **printable area is not, and
+      cannot be from a document** — DYMO treats it as per-roll data the printer
+      reads from the medium, not as a published constant (see the block above).
+      A 550-series `PrintTarget` plugin can ask the printer for it; everything
+      else needs the calibration sheet, which is what `verified: false` already
+      requires before a bulk print.
 
   - id: dymo-11354
     vendor: Dymo
@@ -237,8 +286,10 @@ rolls:
     printable: null         # NOT sourced — see dymo-99012
     verified: false
     verifiedOn: 2026-09-11
-    sources: ["Dymo product data / retail data sheet — 32 × 57 mm"]
-    notes: "Printable area not sourced, as for dymo-99012."
+    sources:
+      - "Dymo product data / retail data sheet — 32 × 57 mm"
+      - "As dymo-99012: the 550-series technical reference publishes no per-label printable area"
+    notes: "Printable area not obtainable from a document, as for dymo-99012."
 
 # ---------------------------------------------------------------------------
 # Not included yet — deliberately, not forgotten

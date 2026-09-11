@@ -64,7 +64,7 @@ touches.
 Docs-as-code, exactly like the Basetool repos:
 
 - **Requirements** live in [`docs/requirements/`](docs/requirements/README.md) as
-  `REQ-<AREA>-NNN` (412 of them). IDs are stable and never reused; a dropped requirement
+  `REQ-<AREA>-NNN` (415 of them). IDs are stable and never reused; a dropped requirement
   is marked `Withdrawn`, not deleted. The count is kept current in
   [`docs/requirements/README.md`](docs/requirements/README.md) — that table is the
   source, this line follows it.
@@ -79,7 +79,9 @@ Docs-as-code, exactly like the Basetool repos:
   (@greluc)** AND the requirement must be **amended first**. When in doubt, stop and ask.
 - Open decisions are collected in [`ADR-0000`](docs/adr/0000-open-points.md), together
   with decided-but-not-yet-done work. As of 2026-09-11 **no open decision remains** —
-  check it before proposing something that looks undecided, because it probably is not.
+  the review pass of that day raised five (O18–O22) and the `problem.type`
+  registry a sixth (O23), and all six were decided. Check it before proposing
+  something that looks undecided, because it probably is not.
 
 ## Rules that are load-bearing (do not silently soften these)
 

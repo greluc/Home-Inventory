@@ -194,7 +194,7 @@ The riskiest input in the system.
 | 5 | **Re-encoding** of every image through libvips — reliably destroys embedded payloads |
 | 6 | EXIF removed entirely, **especially GPS**. Retention only on an explicit tenant setting, with a warning. |
 | 7 | **A mandatory malware scan** (ClamAV through the `VirusScanner` port), **fail-closed**: on a finding the blob is discarded; if the scanner is unreachable the upload is rejected with `503` and the blob stays `PENDING_SCAN` and unretrievable ([ADR-0024](../adr/0024-malware-scan.md)). |
-| 8 | Storage under `sha256/<hash>`, outside any web root |
+| 8 | Storage under `sha256/<tenantId>/<hash>`, outside any web root — content-addressed **within a tenant**, never across ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)). A global namespace would have been an existence oracle across the tenant boundary and would have let a second tenant inherit the first one's malware verdict |
 | 9 | Serving from a **dedicated hostname** (`HOMEINV_MEDIA_BASE_URL`), with `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, without cookies |
 | 10 | Access only through signed, short-lived URLs (15 min), bound to the user and the media ID |
 | 11 | PDFs are **never** displayed inline, only offered for download |
@@ -227,13 +227,35 @@ Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-{bootstra
   manifest-src 'self'; media-src 'self' {MEDIA_ORIGIN};
   frame-ancestors 'none'; base-uri 'none'; form-action 'self';
   object-src 'none'; require-trusted-types-for 'script'
-Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+Strict-Transport-Security: max-age=63072000; includeSubDomains
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: camera=(self), geolocation=(), microphone=(), payment=()
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Resource-Policy: same-site
 ```
+
+> **`preload` is deliberately absent from `Strict-Transport-Security`**, and
+> `includeSubDomains` is deliberately present (open point **O20**, decided
+> 2026-09-11). The two are often shipped together and do very different things.
+>
+> `includeSubDomains` carries the protection: it stops an attacker downgrading
+> `media.inv.example.org` or a plugin-panel subdomain, both of which this design
+> puts on subdomains of the application host by default. It stays.
+>
+> `preload` carries no protection of its own. It is a **consent flag**: the
+> browser preload list only accepts a domain whose header contains it, and
+> enrolment still requires the operator to submit the domain themselves. So
+> sending it changes nothing until someone acts — but what it consents to is a
+> commitment over the operator's **whole registrable domain**, which for a
+> self-hoster is often their private main domain carrying unrelated services, and
+> removal from the list takes months. That is not a default this project gets to
+> set on someone else's domain. The installation guide describes it as a
+> deliberate step, next to the rest of the header set.
+>
+> The CI comparison of `REQ-SEC-060` therefore expects the header **without**
+> `preload`, the same way it fails if `COEP` appears: a fixed expected string, not
+> a configurable one.
 
 > **`Cross-Origin-Embedder-Policy` is deliberately absent**
 > ([ADR-0040](../adr/0040-no-cross-origin-isolation.md)). `require-corp` exists to

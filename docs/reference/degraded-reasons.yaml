@@ -1,0 +1,161 @@
+# Home Inventory — the `meta.degradedReason` registry
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR THE SET OF DEGRADATION TOKENS.
+#
+# ADR-0039 made degradation a field in the response envelope rather than a
+# `Warning` header, and `REQ-API-012` states the contract:
+#
+#   "`degradedReason` [is] a stable token from a documented set — clients branch
+#    on it the way they branch on `problem.type`, never on prose."
+#   "Every degradation level of 13 §13.6 that a client can observe signals this
+#    way."
+#
+# The documented set did not exist until 2026-09-11: one token appeared in worked
+# examples and the rest of 13 §13.6 had no spellings at all, so "every level a
+# client can observe" was a requirement with nothing to check it against. That is
+# A8 in docs/adr/0000-open-points.md.
+#
+# ---------------------------------------------------------------------------
+# WHAT BELONGS HERE, AND WHAT DOES NOT
+#
+# A degraded response is a **`200` whose content is correct** and only poorer —
+# fewer facets, a different ranking, a thumbnail that is not ready yet
+# (ADR-0039 §3). If the answer would be wrong, or the function cannot be
+# performed at all, it is a `problem.type` in problem-types.yaml and a 4xx/5xx.
+#
+# The clearest pair, both from 13 §13.6:
+#   OpenSearch down  → search still returns correct hits  → DEGRADED, 200
+#   ClamAV down      → the upload cannot happen at all    → PROBLEM, 503
+#
+# `REQ-API-012` also fixes what a new token costs: it "passes `oasdiff` as a
+# minor change", the same as a new `problem.type`. Removing one, or changing what
+# it means, is breaking.
+# ---------------------------------------------------------------------------
+#
+# `meta.degraded` is a boolean that is true whenever `degradedReason` is present,
+# and `false` with `degradedReason: null` otherwise (08 §8.2). Several
+# degradations at once are reported by the most severe token; `meta.degraded`
+# does not become a list, because a client that branches on a list is branching
+# on prose again.
+
+schemaVersion: 1
+updated: 2026-09-11
+
+# ---------------------------------------------------------------------------
+# IN USE — appears verbatim in the corpus.
+# ---------------------------------------------------------------------------
+registered:
+
+  - token: search-fallback
+    affects: ["GET /api/v1/items", "any search or facet query"]
+    since: 1
+    summary: >
+      OpenSearch is unreachable or timing out; the query was served by the
+      PostgreSQL fallback adapter.
+    whatIsWorse: >
+      Facets are restricted and the ranking is poorer. The **hits are correct** —
+      they are re-loaded from PostgreSQL in either path, so a stale index can
+      never show wrong content or cross a tenant boundary (REQ-SRCH-007).
+    sources:
+      - "ADR-0039 §1: 'The first token is `search-fallback`'"
+      - "05 §5.6, 13 §13.6, ADR-0008, REQ-SRCH-006"
+
+# ---------------------------------------------------------------------------
+# ASSIGNED HERE — client-observable levels from 13 §13.6 that `REQ-API-012`
+# requires to signal this way, and that had no spelling. Each names its row.
+# ---------------------------------------------------------------------------
+assigned:
+
+  - token: index-stale
+    affects: ["any list or search response"]
+    since: 1
+    summary: >
+      RabbitMQ is unreachable, so the outbox is backing up and derived stores are
+      not being updated. Search results and facets may lag arbitrarily behind the
+      database.
+    whatIsWorse: >
+      Recently changed items may be missing from or stale in a result set. The
+      detail view is unaffected — it always reads PostgreSQL (ADR-0008).
+    notes: >
+      Distinct from `search-fallback`: there the index is unreachable, here it is
+      reachable and wrong. A client showing "results may be out of date" wants to
+      tell the two apart.
+    sources:
+      - "13 §13.6, RabbitMQ row: 'The outbox backs up, derived data goes stale'"
+      - "13 §13.3: the outbox backlog is 'the most important metric in the system'"
+      - "REQ-API-012"
+
+  - token: media-upload-queued
+    affects: ["POST /api/v1/media/uploads", "any response embedding a media reference"]
+    since: 1
+    summary: >
+      The configured `BlobStore` — a remote object store or Nextcloud, through
+      its plugin — is unreachable. The upload is queued and the item is already
+      usable; already-loaded images come from the cache.
+    whatIsWorse: >
+      A newly uploaded image is not yet retrievable from the store. Nothing is
+      lost: the queue drains when the plugin returns.
+    notes: >
+      **Not** the same as the scan being unavailable, which is a refusal
+      (`scan-unavailable`, `503`). Here the bytes are accepted.
+    sources:
+      - "13 §13.6, `plugin-blobstore-*` / Nextcloud row: 'Uploads are queued, already loaded images come from the cache'"
+      - "11 §11.6, REQ-API-012"
+
+  - token: notifications-unavailable
+    affects: ["any response whose action would normally send a message"]
+    since: 1
+    summary: >
+      No `NotificationChannel` plugin can deliver — `plugin-smtp` is not
+      installed, or the `egress-proxy` is down, so every plugin's outbound call
+      stops at once.
+    whatIsWorse: >
+      The action itself succeeded; the message did not go out. An invitation is
+      created and stays valid, but nobody was mailed.
+    notes: >
+      A `minimal` installation runs without `plugin-smtp` **by design**
+      (ADR-0028), so this is a steady state there, not a fault. The
+      administration UI states it rather than failing silently — REQ-NOTI-004
+      requires exactly that, and this token is how an API client learns the same
+      thing.
+    sources:
+      - "13 §13.6, `plugin-smtp` and `egress-proxy` rows"
+      - "ADR-0028, REQ-NOTI-004, REQ-API-012"
+
+  - token: enrichment-unavailable
+    affects: ["POST /api/v1/enrichment/proposals", "any enrichment-triggering write"]
+    since: 3
+    summary: >
+      No `MetadataResolver` can be reached — the plugin's circuit is open, or the
+      egress proxy refused or is down.
+    whatIsWorse: >
+      No proposals are produced. **Capture still works** — that is the documented
+      behaviour of this failure, and the reason enrichment never writes to an item
+      directly (04 §4.3 `enrichment`).
+    sources:
+      - "02 §2.5, metadata sources row: 'Enrichment drops out, capture still works'"
+      - "13 §13.6, one-plugin row, REQ-API-012"
+
+# ---------------------------------------------------------------------------
+# DELIBERATELY NOT TOKENS — levels from 13 §13.6 that a client cannot observe as
+# a degraded `200`, listed so nobody adds them here later by symmetry.
+# ---------------------------------------------------------------------------
+excluded:
+
+  - level: "ClamAV unreachable"
+    why: >
+      The upload is REJECTED with `503` — the only degradation level that blocks a
+      user function entirely, deliberately, because the scan is fail-closed
+      (ADR-0024). It is `scan-unavailable` in problem-types.yaml.
+
+  - level: "Valkey unreachable"
+    why: >
+      Sessions become invalid and in-flight OIDC logins fail. The client is signed
+      out or the login errors; there is no successful response to carry a token.
+      Idempotency is unaffected — those records live in PostgreSQL (ADR-0009).
+
+  - level: "PostgreSQL unreachable"
+    why: >
+      Total outage. `/readyz` turns false and the instance leaves rotation; there
+      is no response at all. 13 §13.6 calls it 'the only component without a
+      fallback'.

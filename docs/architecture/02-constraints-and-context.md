@@ -194,7 +194,21 @@ constraint that shapes the design:
 
 ## 2.7 Open constraints
 
-See [ADR-0000 Open Points](../adr/0000-open-points.md). **No decision is open.**
-What remains is outstanding *work* — the printable width of the Brother DK rolls
-(A2), verifying that port publishing behaves as assumed on an internal segment
-(A5), and emitting the generated `freshclam.conf` from the service matrix (A6).
+See [ADR-0000 Open Points](../adr/0000-open-points.md). **No decision is open.** The review pass
+of 2026-09-11 raised five (O18–O22) and the `problem.type` registry a sixth
+(O23); all six were decided the same day, each recorded there with its rationale.
+
+What remains is outstanding *work*, stated here in its current form
+rather than in the form it had when it was raised:
+
+- **A2** — the **Dymo** printable areas, from Dymo's SDK documentation. The
+  Brother DK widths are **done**: they came from Brother's raster reference on
+  2026-09-11 and are in [`label-media.yaml`](../reference/label-media.yaml).
+- **A5** — the connectivity suite under **rootless Podman with `pasta` and under
+  `kind`**. Port publishing on an internal segment was *not* merely unverified:
+  it was measured under Docker, found **false**, and the topology was changed
+  ([ADR-0042](../adr/0042-edge-is-not-internal.md)). What is outstanding is
+  confirming the corrected topology on the other two runtimes.
+- **A6** — emitting the generated `freshclam.conf` from the service matrix. The
+  expected output is already fixed as a CI fixture at
+  [`deploy/expected/clamav-freshclam.conf`](../../deploy/expected/clamav-freshclam.conf).

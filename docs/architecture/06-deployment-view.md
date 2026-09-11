@@ -225,11 +225,13 @@ daemon disappears entirely.
 ├── homeinv-internal.network
 ├── homeinv-scanner.network
 ├── homeinv-plugin-<id>.network    (one per installed plugin, ADR-0037)
+├── homeinv-blobdata.volume
 ├── homeinv-pgdata.volume
 ├── homeinv-osdata.volume
 ├── homeinv-mqdata.volume
 ├── homeinv-postgres.container
 ├── homeinv-valkey.container
+├── homeinv-blobstore.container
 ├── homeinv-rabbitmq.container
 ├── homeinv-opensearch.container
 ├── homeinv-clamav.container
@@ -383,6 +385,7 @@ logging:
 | `opensearch` | `opensearchproject/opensearch:3` | 1.5 / 2 GB | volume `osdata` | internal |
 | `rabbitmq` | `rabbitmq:4-management-alpine` | 256 / 512 MB | volume `mqdata` | internal |
 | `valkey` | `valkey/valkey:8-alpine` | 128 / 256 MB | volume (AOF) | internal |
+| `blobstore` | own, minimal | 32 / 128 MB | volume `blobdata` | internal |
 | `clamav` | `clamav/clamav` | 1 / 1.5 GB | volume `cvddata` (signatures) | scanner |
 | `egress-proxy` | own, minimal | 16 / 32 MB | none | **egress**, scanner, and every `plugin-<id>` |
 | `plugin-*` | per plugin | 64 / 256 MB | plugin's own | its own `plugin-<id>` |
@@ -391,9 +394,9 @@ logging:
 
 | | `minimal` | `standard` |
 |---|---|---|
-| Services | web, api, worker, postgres, valkey, clamav, egress-proxy | + opensearch, rabbitmq, first-party plugins |
-| Sum of **reservations** | ≈ **3.4 GB** | ≈ **5.4 GB** |
-| Sum of **limits** | ≈ **6.9 GB** | ≈ **9.4 GB** (+ ~0.25 GB per plugin) |
+| Services | web, api, worker, **blobstore**, postgres, valkey, clamav, egress-proxy | + opensearch, rabbitmq, first-party plugins |
+| Sum of **reservations** | ≈ **3.5 GB** | ≈ **5.2 GB** (+ 64 MB per plugin) |
+| Sum of **limits** | ≈ **7.2 GB** | ≈ **9.7 GB** (+ 256 MB per plugin) |
 | VM | ≥ 8 GB | ≥ 8 GB |
 
 **The reservations are the budget; the limits deliberately over-commit.** That is
@@ -439,7 +442,7 @@ Applies equally to Podman (`netavark`) and Docker:
 |---|---|---|
 | `edge` | **`web` only** — the one container with a published port | **yes, and it has to be.** See the measurement below |
 | `egress` | **`egress-proxy` only** — the route the chokepoint needs | **yes, and it has to be** |
-| `internal` | database, search, broker, cache, `api`, `worker`, `web`, `migrate` — **and the only segment the management listener binds to** ([13 §13.3](13-operations-and-observability.md)) | **no** (`internal: true` resp. `Internal=true`) |
+| `internal` | database, search, broker, cache, **`blobstore`**, `api`, `worker`, `web`, `migrate` — **and the only segment the management listener binds to** ([13 §13.3](13-operations-and-observability.md)) | **no** (`internal: true` resp. `Internal=true`) |
 | `scanner` | `clamav`, `worker`, `egress-proxy` | **only through `egress-proxy`**, and only to the signature mirror ([ADR-0036](../adr/0036-scanner-egress.md)). `api` is deliberately absent: the scan runs in the worker, never in the request path |
 | `plugin-<id>` — **one per installed plugin** | that plugin, `api`, `worker`, `egress-proxy`. Nothing else, and never a second plugin | **only through `egress-proxy`**, and only to the hosts the granting plugin's manifest declared ([ADR-0027](../adr/0027-egress-enforcement.md)). Plugin containers get no gateway of their own |
 
@@ -512,6 +515,43 @@ Six properties, all verified in CI by a connectivity test rather than asserted:
 - **Exactly one host port is published in the whole deployment.** It was two until
   `api` stopped publishing.
 
+### The `web` → `api` hop, and what it must not do
+
+[ADR-0042](../adr/0042-edge-is-not-internal.md) put `web` on the request path of
+**every** API call, not just of the static shell. That is a new hop, and a hop
+that is not specified is one each runtime's generated config will specify
+differently. Five rules, all checkable (`REQ-NFR-078`, `REQ-SEC-103`):
+
+| Rule | Why it is not a detail |
+|---|---|
+| **`web` terminates no TLS.** It speaks HTTP to `api` over `internal`; the operator's reverse proxy terminates TLS in front of it | Consistent with `REQ-NFR-061`. Two TLS terminations in one delivery would mean two certificate lifecycles for one hostname |
+| **`web`'s body limit is not below the API's.** The rejection of an oversized request must come from `api` | `REQ-API-003` puts RFC 9457 on **every** HTTP surface. A limit enforced at `web` returns an nginx HTML error page, and the client that was promised `application/problem+json` gets markup it cannot parse |
+| **`web`'s read timeout exceeds the API's 30 s ceiling** ([08 §8.2](08-api-contract.md)) | Same failure one layer up: `web` would emit its own `504` instead of the API's handled response, and long operations already return `202` plus a job resource rather than holding a connection |
+| **Response buffering is off for the SSE stream** | `REQ-API-011` is live updating. A buffering proxy holds events until the buffer fills, so the feature appears to work in development and silently stops working in the deployment — which is the class of defect this chapter keeps finding |
+| **`web` rewrites and drops no header `api` sets** — `ETag`, `Retry-After`, `RateLimit-*`, `Deprecation`, `Sunset`, `Link`, `Content-Disposition` | Each carries a documented contract. A proxy that drops `RateLimit-*` breaks `REQ-SEC-064`'s acceptance criterion without breaking anything visible |
+
+**The forwarded-header chain is the security-relevant half.** There are now two
+hops in front of `api`, and `REQ-SEC-063` only ever described one:
+
+```
+client → operator's reverse proxy → web → api
+         sets X-Forwarded-For        appends its step
+```
+
+`HOMEINV_TRUSTED_PROXIES` must therefore contain **both** the operator's proxy
+and `web`'s address on `internal`, and `web` must **append** to `X-Forwarded-For`
+rather than overwrite it. Get it wrong in either direction and one of two things
+happens, neither loud:
+
+- **Too narrow** — `web` is not trusted, so every request appears to come from
+  `web`. Per-IP rate limiting (`REQ-SEC-064`) then throttles all tenants as one
+  client, and every audit entry records the same source IP (`REQ-SEC-068`).
+- **Too wide** — a header a client supplied is believed, and per-IP rate limiting
+  and the audit trail become attacker-controlled.
+
+A startup check verifies that `web`'s address is in the list, because a
+deployment where it is not produces no error — only wrong numbers.
+
 ```mermaid
 graph TB
     subgraph Internet
@@ -533,6 +573,7 @@ graph TB
             OS[("opensearch")]
             MQ[["rabbitmq"]]
             KV[("valkey")]
+            BS[("blobstore<br/>volume blobdata")]
         end
         subgraph netScan["Network: scanner"]
             CAV["clamav"]
@@ -553,8 +594,8 @@ graph TB
     BR --> RP
     RP -->|"the ONLY published port"| WEB
     WEB -->|"/api /graphql /c/ SSE<br/>over internal"| APP
-    APP --> PG & KV & OS & MQ
-    WRK --> PG & OS & MQ & CAV
+    APP --> PG & KV & OS & MQ & BS
+    WRK --> PG & OS & MQ & CAV & BS
     APP -.->|mTLS| PH1 & PH2 & PH3
     WRK -.->|mTLS| PH1 & PH2 & PH3
     PH1 & PH2 & PH3 --> EGP
@@ -642,7 +683,7 @@ about 3 GB.
 
 | Profile | `search` | Events | Media | Plugins | RAM (reserved) | Purpose |
 |---|---|---|---|---|---|---|
-| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core) | none — but the `egress-proxy` runs, for the scanner | ~3.4 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
+| `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ~3.4 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
 | `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ~5.4 GB | **The profile of this installation** |
 | `ha` | OpenSearch cluster | RabbitMQ cluster | S3 via plugin | as `standard` | ≥ 16 GB | Kubernetes, multiple instances |
 
@@ -722,7 +763,8 @@ data loss, no migration.
 |---|---|---|---|
 | PostgreSQL | `pg_dump --format=custom` **inside the container** (not over the volume) plus WAL archiving | daily full, WAL continuous | weekly automated restore into a throwaway container, then a consistency check |
 | Volumes generally | Export through the runtime (`podman volume export`, for Docker through a helper container) — **never** by copying directly out of the storage directory, because the files belong to the `subuid` range and ownership is lost on restore | daily | weekly spot check |
-| Blobs (Nextcloud) | Backed up through Nextcloud; plus a manifest reconciliation (every referenced hash exists) | daily | weekly spot check |
+| Blobs (`blobstore`, the default) | Volume `blobdata` exported through the runtime, plus a manifest reconciliation (every referenced hash exists). **This row did not exist until 2026-09-11** — the default media store had no volume and no backup at all ([ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | daily | weekly automated restore, with the reconciliation as the check |
+| Blobs (Nextcloud or S3, where configured) | Backed up through Nextcloud resp. the object store; plus the same manifest reconciliation | daily | weekly spot check |
 | OpenSearch | **no backup** — rebuildable from PostgreSQL | — | rebuild rehearsed quarterly |
 | RabbitMQ | No message backup; the outbox is the truth | — | — |
 | Valkey | No backup (cache and sessions only; loss means re-login) | — | — |

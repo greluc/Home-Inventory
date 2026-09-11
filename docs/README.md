@@ -24,6 +24,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | **quality goals, risks, terms** | [14 Quality, Risks, Glossary](architecture/14-quality-risks-glossary.md) |
 | **implementable requirements** | [Requirements catalogue](requirements/) |
 | the **design system** | [Design system brief](design/design-system-brief.md) |
+| the **error and degradation tokens** clients branch on | [`problem-types.yaml`](reference/problem-types.yaml) · [`degraded-reasons.yaml`](reference/degraded-reasons.yaml) |
 
 ## Layout
 
@@ -33,7 +34,8 @@ docs/
 ├── adr/              architecture decisions, numbered consecutively
 ├── design/           the brief that produced the design system — the system
 │                  itself is at ../design-system/ (it is source, not docs)
-├── reference/        reference data (label geometries)
+├── reference/        reference data: label geometries, the `problem.type`
+│                  registry, the `degradedReason` registry
 └── requirements/     a verifiable requirements catalogue with stable IDs
 ```
 
@@ -99,8 +101,15 @@ Each has its own ADR with rationale and alternatives.
 | 40 | Cross-origin isolation | Not pursued — `COEP` is dropped, `COOP` and `CORP` stay | [0040](adr/0040-no-cross-origin-isolation.md) |
 | 41 | Migration | Its own one-shot service on every runtime; no long-running process holds DDL rights | [0041](adr/0041-migration-as-its-own-service.md) |
 | 42 | Inbound topology | `edge` is not internal; `web` is the ingress and the only publisher | [0042](adr/0042-edge-is-not-internal.md) |
+| 43 | Default media store | The filesystem `BlobStore` gets its own in-deployment service, so `api` and `worker` stay stateless | [0043](adr/0043-blobstore-as-its-own-service.md) |
 
 Open points and outstanding work are collected in
-[ADR-0000](adr/0000-open-points.md). **No decision is currently open**; what
-remains there is outstanding *work*, most notably verifying that port publishing
-behaves as assumed on an internal network under both container runtimes (A5).
+[ADR-0000](adr/0000-open-points.md). **No decision is currently open** — the
+review pass of 2026-09-11 raised five (O18–O22) and writing the `problem.type`
+registry raised a sixth (O23); all six were decided the same day. What remains
+there is outstanding *work* — the Dymo printable areas (A2), running the
+connectivity suite under rootless Podman and `kind` (A5), and emitting the
+generated `freshclam.conf` from the service matrix (A6). A5 is **not** an
+unverified assumption: it was measured under Docker, found false, and the
+topology was corrected ([ADR-0042](adr/0042-edge-is-not-internal.md)); what is
+outstanding is confirming the corrected shape on the other two runtimes.

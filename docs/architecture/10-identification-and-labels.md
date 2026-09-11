@@ -326,8 +326,42 @@ from Brother's *Raster Command Reference QL-800/810W/820NWB* v1.01 §2.3.2 and
 The same pass **downgraded the two Dymo entries to `verified: false`**. Nothing
 about them changed; the rule did. Adding the printable area to the definition of
 "verified" made a field mandatory that they never carried, and leaving them at
-`true` would have meant the flag stopped meaning one thing. Their printable areas
-have to come from Dymo's SDK documentation the way Brother's came from Brother's.
+`true` would have meant the flag stopped meaning one thing.
+
+### Dymo publishes no printable area, and that is the answer
+
+The Dymo figures were then looked for, in Dymo's own *LabelWriter 550 Series
+Technical Reference Manual* — and **they are not there.** Not missing from the
+copy we read: not published in that form at all.
+
+Brother prints one row per die-cut medium. Dymo's 550 series instead carries
+*"Printable area horizontal offset"* and *"Printable area vertical offset"* as
+millimetre fields **in the data the printer reads from the roll**, beside label
+length, label width, liner width, label count and production date. The printable
+area is per-roll runtime data there, not a document constant.
+
+What the reference does fix, and what is now recorded in
+[`label-media.yaml`](../reference/label-media.yaml): **300 dpi**, and a **57 mm
+print head of 672 addressable dots at 84 bytes per line**. The cross-check that
+confirmed the Brother table was read correctly works here too —
+672 × 25.4/300 = 56.9 mm.
+
+Three things follow, and they are design input rather than catalogue trivia:
+
+1. **The two entries stay `verified: false`, and not provisionally.** There is no
+   document to promote them from. That is a *different* state from
+   `brother-dk-11209`, whose row simply was not in the reference we read.
+2. **A `PrintTarget` plugin for a 550-series LabelWriter should ask the printer.**
+   That is better evidence than any catalogue row, because it describes the roll
+   actually loaded. `ListPrinters` already returns printer-reported data
+   ([08 §8.5](08-api-contract.md)).
+3. **For the 450 series and third-party printers the calibration sheet is the
+   only path** — which is exactly what `verified: false` already requires before a
+   bulk print (`REQ-LBL-004`).
+
+So the outstanding point **A2** is closed for Dymo the same way it was closed for
+Brother: by reading the manufacturer's technical reference. The answer happens to
+be that the figure does not exist in the shape the catalogue wanted.
 
 The catalogue stays **deliberately small**. Few verified formats beat many
 half-verified ones — anyone who needs a missing format creates it themselves

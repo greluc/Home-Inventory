@@ -1,0 +1,247 @@
+# Home Inventory — the `problem.type` registry (RFC 9457)
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR THE SET OF PROBLEM TYPES.
+#
+# 08 §8.2 makes `type` the part of an error response clients branch on:
+#   "`type` is a stable, documented URI — clients branch on it, not on the text."
+# `REQ-API-003` requires it on every endpoint. Until 2026-09-11 the set was named
+# nowhere: three tokens appeared in worked examples across three chapters, and a
+# client author had no list to program against. That is the gap this file closes
+# (A8 in docs/adr/0000-open-points.md), under the same principle that put
+# `deploy/expected/clamav-freshclam.conf` in the repository before its generator:
+# "contracts before implementations" (01 §1.5, principle 3).
+#
+# It is generated INTO the OpenAPI document, not derived from it. `oasdiff`
+# guards the result: a removed token or a changed status code is a BREAKING
+# change and needs `/api/v2` (08 §8.3); a NEW token is a minor change, exactly
+# like a new enum value in a response.
+#
+# ---------------------------------------------------------------------------
+# THE NAMESPACE IS FIXED, NOT PER DEPLOYMENT
+#
+# `https://home-inv.example/problems/<token>` — the spelling 08 §8.2 already
+# uses, taken here as the namespace rather than as a stand-in for the
+# deployment's own host.
+#
+# It has to be fixed, or "stable" means nothing: a client that talks to two
+# instances would see two different `type` URIs for the same condition and could
+# not branch on either. The URI is an IDENTIFIER, not a fetch target — RFC 9457
+# permits that explicitly — and `home-inv.example` is a documentation-reserved
+# name (RFC 2606), so it can never collide with a host somebody actually runs.
+#
+# DECIDED 2026-09-11 as open point O23, and decided deliberately rather than
+# inherited: the spelling appeared in ONE worked example, and treating an example
+# as a decision is the drift this file exists to end.
+#
+# The reserved name stays. Three reasons, in order of weight:
+#
+#   1. `.example` is reserved by RFC 2606 and can never be registered by anyone.
+#      A real domain can lapse and be bought by someone else — while it is baked
+#      into every client already shipped. Clients MUST NOT dereference the URI
+#      automatically (RFC 9457), so that would not be an immediate compromise; it
+#      would be somebody else owning an identifier of ours, permanently.
+#   2. No host has to stay alive. A dereferenceable URL would commit the project
+#      to serving those paths for as long as the API version lives — v1 stays
+#      served at least 12 months past deprecation (ADR-0011) — which is an
+#      ongoing obligation taken on by a one-person, part-time project for a
+#      convenience.
+#   3. The human-readable documentation is THIS FILE and the OpenAPI document,
+#      which is where an integrator actually looks. RFC 9457 encourages the URI to
+#      resolve to documentation; it does not require it.
+#
+# Rejected: `https://greluc.github.io/Home-Inventory/problems/<token>`. Besides
+# (2), it would carry the repository's LONG form into an identifier every client
+# bakes in, where the project uses the short form `home-inv` everywhere by rule —
+# the repository name is the single documented long-form exception, and this
+# would have quietly made it a second one. Also rejected: a URN
+# (`urn:home-inv:problem:<token>`), which is clean and host-free but unfamiliar
+# to API consumers and offers no path to a documentation page either.
+# ---------------------------------------------------------------------------
+#
+# `status` is part of the contract. 08 §8.3 lists "changing the status code of an
+# existing case" as breaking, so it is recorded per entry and compared in CI.
+#
+# `since` records the stage the condition first occurs in, so an entry cannot be
+# required by a test before the feature that raises it exists.
+
+schemaVersion: 1
+updated: 2026-09-11
+namespace: "https://home-inv.example/problems/"
+
+# ---------------------------------------------------------------------------
+# IN USE — the token appears verbatim in the corpus, with its status code.
+# ---------------------------------------------------------------------------
+registered:
+
+  - token: validation-failed
+    status: 422
+    since: 0
+    summary: >
+      The request was syntactically valid but violates a domain rule — most often
+      an attribute that does not match its type version's JSON Schema.
+    carries:
+      - "`errors[]`, one entry per failing field, each with `pointer`, `code`,
+         `message` and where applicable `expected` (08 §8.2)"
+    sources:
+      - "08 §8.2, the worked error example: `https://home-inv.example/problems/validation-failed`"
+      - "05 §5.1 error cases: attribute violates the type definition → 422 with a field path"
+      - "11 §11.3: a sync push result of `REJECTED` carries `problem.type` `…/validation-failed`"
+      - "REQ-CORE-005, REQ-API-003"
+
+  - token: quota-exceeded
+    status: 403
+    since: 1
+    summary: >
+      A tenant quota would be exceeded by this operation — item count, stored
+      bytes, plugin count or API calls.
+    carries:
+      - "the current and the permitted amount (05 §5.1, REQ-TEN-009)"
+    sources:
+      - "05 §5.1: `403` with `type: .../quota-exceeded`, current and permitted amount"
+      - "REQ-TEN-009, 04 §4.3 `tenancy` (`QuotaGuard`)"
+
+  - token: cursor-expired
+    status: 410
+    since: 3
+    summary: >
+      The device's sync cursor is older than the tenant's `change_log` retention.
+      The device must perform a full seeding.
+    carries:
+      - "no resumption hint — by design; the client restarts from `/sync/bootstrap`"
+    sources:
+      - "11 §11.3: `410 Gone` with `type: …/cursor-expired` → the device performs a full seeding"
+      - "REQ-SYNC-009, 07 §7.6 (retention 30–365 days, default 90)"
+
+# ---------------------------------------------------------------------------
+# ASSIGNED HERE — the CONDITION and its STATUS CODE are fixed by the corpus; only
+# the spelling was missing. Assigning it is the work A8 describes. Every entry
+# names the place that fixed the condition, so none of this is invention.
+# ---------------------------------------------------------------------------
+assigned:
+
+  - token: malformed-request
+    status: 400
+    since: 0
+    summary: "The request could not be parsed, or an unknown field was present."
+    notes: >
+      `REQ-SEC-029` makes unknown fields a REJECTION rather than something
+      ignored, so this covers more than a JSON syntax error.
+    sources: ["08 §8.2 status list: `400` syntax", "REQ-SEC-029"]
+
+  - token: unauthenticated
+    status: 401
+    since: 0
+    summary: "No valid credential was presented."
+    sources: ["08 §8.2 status list: `401` not authenticated"]
+
+  - token: forbidden
+    status: 403
+    since: 0
+    summary: >
+      The caller is authenticated and the resource is one they may know exists,
+      but the action is not permitted.
+    notes: >
+      **Not** used for a foreign or invisible resource — that is `not-found`
+      below, and the distinction is a security property, not a style choice
+      (`REQ-SEC-025`).
+    sources: ["08 §8.2: `403` authenticated but not permitted", "REQ-SEC-026"]
+
+  - token: not-found
+    status: 404
+    since: 0
+    summary: >
+      The resource does not exist, **or** exists and is not visible to this
+      caller. One token, deliberately, for both.
+    notes: >
+      **This entry is a security control and must not be split.** `REQ-SEC-025`
+      requires foreign or invisible objects to be indistinguishable from absent
+      ones, and `REQ-IDENT-014` requires the same of `/c/{code}`: an unknown code
+      and a missing permission must give the same answer. Two tokens here would
+      turn the error body into the existence oracle the status code was chosen to
+      avoid. A CI test asserts the two cases produce byte-identical responses.
+    sources:
+      - "08 §8.2: `404` not present **or not visible**"
+      - "05 §5.1: location belongs to another tenant → `404`, **not** `403`, so as not to reveal existence"
+      - "REQ-SEC-025, REQ-IDENT-014"
+
+  - token: idempotency-key-conflict
+    status: 409
+    since: 1
+    summary: >
+      The `Idempotency-Key` was already used with a **different** payload. The
+      same key with the same payload returns the original response instead.
+    sources:
+      - "08 §8.2 concurrency table: a repeat with a different payload → `409`"
+      - "05 §5.1 error cases, REQ-API-005"
+
+  - token: precondition-failed
+    status: 412
+    since: 1
+    summary: "The `If-Match` entity tag does not match the resource's current version."
+    sources: ["08 §8.2: a mismatch → `412`", "REQ-API-004"]
+
+  - token: precondition-required
+    status: 428
+    since: 1
+    summary: >
+      A mutating request on a single resource arrived without `If-Match`. There
+      is no blind overwrite.
+    sources: ["08 §8.2: a missing header → `428 Precondition Required`", "REQ-API-004"]
+
+  - token: rate-limited
+    status: 429
+    since: 1
+    summary: "A per-user, per-tenant or per-IP rate limit was reached."
+    carries:
+      - "`Retry-After` and the `RateLimit-*` headers (08 §8.2, REQ-SEC-064)"
+    notes: >
+      Login and code resolution have their own, stricter limits and use this same
+      token — the limit that was hit is an operational detail, not a contract.
+    sources: ["08 §8.2 security table", "REQ-SEC-064"]
+
+  - token: malware-detected
+    status: 422
+    since: 0
+    summary: >
+      The malware scan found something. The blob is discarded, an audit entry is
+      written and the tenant administrator is notified.
+    sources: ["ADR-0024, fail-closed table: a finding → `422`", "REQ-SEC-092"]
+
+  - token: scan-unavailable
+    status: 503
+    since: 0
+    summary: >
+      The malware scanner is unreachable or timed out. The upload is rejected and
+      the blob stays `PENDING_SCAN` and unretrievable until a catch-up run clears
+      it.
+    notes: >
+      This is the one `503` that is not a degradation but a refusal, and that is
+      deliberate: the scan is **fail-closed** (ADR-0024). It is also the only
+      degradation level in 13 §13.6 that blocks a user function entirely, which is
+      why it is a problem type and not a `degradedReason`.
+    sources: ["ADR-0024: scanner unreachable → `503`", "REQ-SEC-092, REQ-MED-013"]
+
+# ---------------------------------------------------------------------------
+# NOT REGISTERED YET — conditions the corpus describes without fixing a status
+# code. They are listed so the gap is visible rather than discovered by the first
+# client author, and NOT given a token, because inventing a status code here
+# would make a contract out of a guess.
+# ---------------------------------------------------------------------------
+pending:
+
+  - condition: "A payload exceeds the JSON or bulk limit"
+    whatIsFixed: "the limits — JSON ≤ 1 MB, bulk ≤ 500 entries (REQ-SEC-065, 08 §8.2)"
+    whatIsMissing: "the status code. 08 §8.2's status list does not include `413`, and nothing else names one"
+
+  - condition: "A plugin the requested function depends on is unavailable (circuit open)"
+    whatIsFixed: >
+      the behaviour — "fail immediately and visibly instead of piling up"
+      (05 §5.8), "only the function depending on it, visibly marked" (13 §13.6)
+    whatIsMissing: >
+      whether this surfaces as a problem type or as a `degradedReason` in a `200`.
+      Both are defensible: a print job that cannot reach its printer is a failure,
+      while an enrichment that cannot reach a resolver is a degradation
+
+  - condition: "A tenant is suspended or pending deletion"
+    whatIsFixed: "the states (04 §4.3 `tenancy`, 05 §5.9: access blocked immediately)"
+    whatIsMissing: "the status code and whether the response distinguishes the two states"
