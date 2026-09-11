@@ -9,6 +9,7 @@ import de.greluc.homeinv.identity.application.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.application.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.application.LocationNotEmptyException;
 import de.greluc.homeinv.locations.domain.TooDeepException;
+import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -169,6 +170,28 @@ public class ApiExceptionHandler {
             request);
     problem.setProperty("maxDepth", exception.getMaxDepth());
     return problem;
+  }
+
+  /**
+   * Answers a cursor that is malformed, forged, or from a different query.
+   *
+   * <p>A {@code 400}, not an empty page. Returning results anyway is the failure this whole
+   * mechanism exists to prevent: a client would page past rows it should have seen and never learn
+   * that it did (REQ-SEC-106, REQ-SRCH-009).
+   *
+   * @param exception the rejection
+   * @param request the request
+   * @return a {@code 400} problem detail
+   */
+  @ExceptionHandler(InvalidCursorException.class)
+  public ProblemDetail handleInvalidCursor(
+      InvalidCursorException exception, HttpServletRequest request) {
+    return problem(
+        HttpStatus.BAD_REQUEST,
+        ProblemTypes.MALFORMED_REQUEST,
+        "Malformed request",
+        "The pagination cursor is not valid for this query. Start from the first page.",
+        request);
   }
 
   /**

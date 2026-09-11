@@ -1,0 +1,45 @@
+/*
+ * SPDX-FileCopyrightText: Lucas Greuloch
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+package de.greluc.homeinv.search.api;
+
+import de.greluc.homeinv.inventory.api.ItemView;
+import java.util.List;
+
+/**
+ * Finding things.
+ *
+ * <p>At stage 0 this is PostgreSQL full text over the two generated vectors on {@code item}
+ * (ADR-0047, REQ-SRCH-001). Stage 1 adds OpenSearch as the primary index and keeps this one as the
+ * fallback, which is why the block publishes a service rather than the query itself: the caller asks
+ * a question and does not learn which engine answered it.
+ */
+public interface SearchService {
+
+  /**
+   * Runs a search.
+   *
+   * @param request what to look for and where to resume
+   * @return the matching items and a cursor for the next page
+   */
+  SearchResult query(SearchRequest request);
+
+  /**
+   * What to search for.
+   *
+   * @param text the query text; blank lists everything
+   * @param language {@code de} or {@code en}, deciding which generated vector is searched
+   * @param cursor an opaque cursor from a previous result, or {@code null} for the first page
+   * @param limit how many rows at most
+   */
+  record SearchRequest(String text, String language, String cursor, int limit) {}
+
+  /**
+   * What was found.
+   *
+   * @param items the matching items
+   * @param nextCursor the cursor for the following page, or {@code null} when this was the last
+   */
+  record SearchResult(List<ItemView> items, String nextCursor) {}
+}
