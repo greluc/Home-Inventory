@@ -68,6 +68,33 @@ without noticing:
   ([REQ-LBL-014](../docs/requirements/01-functional.md)). An inverted code does
   not scan reliably, and the preview is a picture of paper.
 
+## Icons
+
+**Lucide** — self-hosted SVG, no CDN, and never the icon webfont, whose private
+use area glyphs are read out as garbage by screen readers
+([REQ-PRIV-015](../docs/requirements/03-security-and-privacy.md)).
+
+Source is **`lucide-static`** (the raw SVGs and the sprite), not `lucide-react`:
+the same files also have to feed the Compose apps, and a React package cannot.
+One source, one `<Icon>` component of our own.
+
+- **They are strokes, not fills**: a 24 × 24 grid, `fill: none`,
+  `stroke: currentColor`, `stroke-width: 2`, round caps and joins. Colour them
+  with `stroke`, never `fill` — setting `fill` on a Lucide icon paints it into a
+  blob. `stroke-width` is a token per icon size, not the inherited default.
+- **The licence is `ISC AND MIT`**, in one file: ISC for the set, MIT (© Cole
+  Bemis) for about 150 icons inherited from Feather. Ship that file **whole** —
+  the ISC half alone under-attributes the Feather icons — and ship it **with the
+  bundle**, not only in this repository: a minified bundle is a copy, and both
+  licences require the notice in all copies
+  ([REQ-CON-013](../docs/requirements/02-non-functional.md)).
+- **Vendoring the SVGs into this directory changes their licence on paper.**
+  `REUSE.toml` declares `web/**` as AGPL-3.0-or-later by aggregate precedence, so
+  a permissively licensed SVG dropped in here without its own SPDX header gets
+  labelled AGPL. Consume them from the package, or vendor them together with
+  `LICENSES/ISC.txt`, `LICENSES/MIT.txt` and explicit annotations
+  (ADR-0000, A4).
+
 ## Status
 
 Empty. Stage 0 delivers the first screens:

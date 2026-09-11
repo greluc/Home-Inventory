@@ -224,8 +224,35 @@ Most systems treat these as afterthoughts. Here they are daily:
    date picker, tag, chip, badge, table, tree, card, modal, drawer, toast,
    inline message, tooltip, tabs, breadcrumb, pagination, skeleton, avatar,
    progress, empty state, the scan overlay.
-7. **Icons**: a monochrome stroke set, self-hosted, sized to the type scale. Name
-   the set and its licence; do not design 200 icons by hand.
+7. **Icons: Lucide** (<https://github.com/lucide-icons/lucide>, 1600+ icons).
+   The set is **given** — do not choose one, and do not draw icons by hand. It
+   ships self-hosted as SVG; no CDN, and not as an icon webfont, whose private
+   use area glyphs a screen reader either skips or reads out as a stray
+   character.
+
+   Its drawing model is the one to design against: a **24 × 24 grid**,
+   `fill="none"`, `stroke="currentColor"`, `stroke-width="2"`, round caps and
+   joins. Two things follow.
+
+   **`stroke-width` is a real design token here, so decide it rather than
+   inheriting the default.** 2 px on a 24 px grid is tuned for icons rendered
+   around 24 px; at 16 px in a dense table row the same stroke reads heavy, and
+   at 32 px it reads thin. State the stroke width per icon size, and match it to
+   the weight of the text it sits beside — an icon should not look bolder than
+   its label.
+
+   **Check the optical weight in dark mode specifically.** A light stroke on a
+   dark ground blooms and reads heavier than the same stroke dark-on-light. Since
+   dark is our default, that is the case to tune first, not the afterthought.
+
+   Lucide is outline-only — there is no filled twin of each icon. Where a
+   component needs to distinguish selected from unselected or active from
+   inactive, that distinction must come from **colour, background or weight**,
+   not from swapping to a fill variant that does not exist. Say how.
+
+   If an icon this application needs has no counterpart in the set, **name it in
+   a list** rather than substituting something approximate.
+
 8. **The rules in writing.** When does something become a modal versus a drawer.
    Where does the primary action sit on a phone versus a desktop. How is
    destructive confirmation handled. How does focus move. What happens to a long
