@@ -19,7 +19,11 @@ CREATE TABLE media.media_object (
     -- same photo twice costs storage once, and two tenants holding the same file
     -- hold two copies with two reference counts (ADR-0032). Deduplicating across
     -- tenants would make "do you have this file" answerable by timing.
-    sha256          char(64) NOT NULL,
+    -- `text` with a check, not `char(64)`. A char(n) column pads with spaces and
+    -- compares padded, which is a quiet way to make two identical hashes unequal;
+    -- and the check is stricter than the length anyway, because char(64) accepts
+    -- any sixty-four characters while a content address is hex.
+    sha256          text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
 
     -- Detected from magic bytes, never from the extension or the declared type
     -- (REQ-MED-004). Stored so a variant can be served with the right header
@@ -80,7 +84,7 @@ CREATE TABLE media.media_variant (
     -- because re-encoding is what destroys an embedded payload (12 §12, row 5) —
     -- serving the uploaded bytes back would undo that.
     kind            text NOT NULL CHECK (kind IN ('thumb', 'preview', 'full')),
-    sha256          char(64) NOT NULL,
+    sha256          text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
     media_type      text NOT NULL,
     byte_size       bigint NOT NULL CHECK (byte_size > 0),
     width_px        int NOT NULL CHECK (width_px > 0),
