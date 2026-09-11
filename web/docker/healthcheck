@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The health command `deploy/services.yaml` names for `web`.
+#
+# It asks nginx about nginx and nothing else. A check that went through to `api`
+# would report THIS container as unhealthy whenever the upstream is down, and the
+# runtime would then restart the one container that was still working — while the
+# operator reads a health status that points at the wrong service.
+#
+# `wget` and not `curl`: the nginx-unprivileged alpine image has busybox and no
+# curl, and adding one for a health check is a package, a CVE feed and a rebuild.
+set -eu
+
+wget --quiet --spider --tries=1 --timeout=3 "http://127.0.0.1:8080/healthz"

@@ -208,6 +208,79 @@ jobs:
           done
           echo "The policy carries everything it must and nothing it must not."
 
+          # Every copy of the policy has to be the same policy. It is emitted once
+          # per location, because nginx inherits `add_header` only where the
+          # current level defines none - so a server-level block would reach
+          # /api/ and /media/, which send their own headers, and the client would
+          # receive two enforced policies fighting each other.
+          distinct=$(grep -o 'Content-Security-Policy "[^"]*"' nginx/default.conf | sort -u | wc -l)
+          if [ "$distinct" -ne 1 ]; then
+            echo "::error::the locations do not all send the same policy"
+            exit 1
+          fi
+
+      # REQ-NFR-078 and 06 §6.7. Five rules for the hop ADR-0042 created, each
+      # of which is quiet when wrong: the symptom is never an error, it is a
+      # feature that silently stops working or a client that gets markup where
+      # it was promised a problem document.
+      - name: The web to api hop keeps its contract
+        run: |
+          set -euo pipefail
+          conf=nginx/default.conf
+          fail=0
+
+          require() {
+            if ! grep -qE "$2" "$conf"; then
+              echo "::error::$1"
+              fail=1
+            fi
+          }
+          forbid() {
+            if grep -qE "$2" "$conf"; then
+              echo "::error::$1"
+              grep -nE "$2" "$conf" || true
+              fail=1
+            fi
+          }
+
+          # The body limit must be ABOVE the API's, so an oversized upload is
+          # refused by `api` as application/problem+json rather than by nginx as
+          # an HTML error page (REQ-API-003).
+          require "no client_max_body_size: the proxy would reject with markup" \
+                  '^\s*client_max_body_size\s+[0-9]+m;'
+
+          # The read timeout must exceed the API's own 30 s ceiling (08 §8.2), or
+          # `web` emits its own 504 in place of the handled response.
+          require "no proxy_read_timeout above the API ceiling" \
+                  'proxy_read_timeout\s+(3[1-9]|[4-9][0-9]|[0-9]{3,})s;'
+
+          # Off, for the SSE stream of REQ-API-011. A buffering proxy holds
+          # events until the buffer fills: the feature appears to work in
+          # development and silently stops working in the deployment.
+          require "proxy_buffering is not switched off for the API" \
+                  'proxy_buffering\s+off;'
+
+          # APPENDED, never overwritten. Overwriting makes every client appear to
+          # be this container: per-IP rate limiting throttles all tenants as one
+          # and every audit entry records the same source (REQ-SEC-103).
+          require "X-Forwarded-For is not appended" \
+                  'proxy_set_header\s+X-Forwarded-For\s+\$proxy_add_x_forwarded_for;'
+          forbid "X-Forwarded-For is overwritten rather than appended" \
+                 'proxy_set_header\s+X-Forwarded-For\s+\$remote_addr;'
+
+          # Nothing the API sets may be dropped: ETag, Retry-After, RateLimit-*,
+          # Deprecation, Sunset, Link and Content-Disposition each carry a
+          # documented contract, and dropping RateLimit-* breaks REQ-SEC-064's
+          # acceptance criterion without breaking anything visible.
+          forbid "a response header the API sets is hidden" 'proxy_hide_header'
+
+          # `web` terminates no TLS (REQ-NFR-061): two terminations for one
+          # hostname would mean two certificate lifecycles.
+          forbid "web terminates TLS" '^\s*(ssl_certificate|listen[^;]*ssl)'
+
+          [ "$fail" -eq 0 ] && echo "The hop keeps all five rules."
+          exit $fail
+
   documentation:
     name: Documentation rules
     runs-on: ubuntu-latest

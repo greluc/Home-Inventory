@@ -36,17 +36,28 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:alpine
 
+COPY --from=build /src/dist /usr/share/nginx/html
+COPY --from=build /src/nginx/default.conf /etc/nginx/conf.d/default.conf
+
+# The health command the service matrix names for this service.
+COPY web/docker/healthcheck /healthcheck
+COPY web/docker/nginx-check.conf /tmp/nginx-check.conf
+
+# Fails the build rather than the first request if the generated configuration is
+# not valid nginx.
+#
+# The upstream is rewritten to a literal address for the check, and only for the
+# check. `nginx -t` parses the configuration exactly as a start would, upstream
+# name resolution included, and `api` does not resolve inside a build — so
+# without the substitution this would fail on the one thing a build cannot
+# verify. What it does verify is every other line, which is what a build can.
+USER root
+RUN chmod 0555 /healthcheck     && sed 's|server api:8080;|server 127.0.0.1:8080;|' /etc/nginx/conf.d/default.conf          > /tmp/check-site.conf     && nginx -t -c /tmp/nginx-check.conf     && rm /tmp/check-site.conf /tmp/nginx-check.conf
+
 # This base image already runs as an unprivileged user and listens above 1024,
 # which is what the deployment requires (REQ-NFR-061, REQ-SEC-085). The stock
 # nginx image does neither: it starts as root and binds port 80, and making it
 # behave would mean undoing its entrypoint.
 USER 101:101
 
-COPY --from=build /src/dist /usr/share/nginx/html
-COPY --from=build /src/nginx/default.conf /etc/nginx/conf.d/default.conf
-
 EXPOSE 8080
-
-# Fails the build rather than the first request if the generated configuration is
-# not valid nginx.
-RUN nginx -t -c /etc/nginx/nginx.conf

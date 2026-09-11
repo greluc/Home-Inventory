@@ -89,6 +89,19 @@ spring:
     username: ${HOMEINV_MQ_USER:homeinv}
     password: ${homeinv.secret.mq-password:}
 
+  servlet:
+    multipart:
+      # ABOVE the upload pipeline's own 25 MiB ceiling, on purpose. Whichever
+      # limit fires first decides what the client is told, and the pipeline's is
+      # the one that answers with the RFC 9457 document REQ-API-003 promises;
+      # Spring's answers with its own exception. So Spring's is the outer bound
+      # that stops an unbounded read, and the pipeline's is the one users meet.
+      #
+      # `web` is bounded higher again (64 MB), so an oversized body is always
+      # rejected by `api` rather than by the proxy as HTML (06 §6.7).
+      max-file-size: 32MB
+      max-request-size: 34MB
+
   threads:
     virtual:
       enabled: true

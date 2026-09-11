@@ -21,6 +21,11 @@ commit".
 
 ### Added
 
+- **`web` is the ingress.** It proxies the API and the media path to `api` on the
+  two-member frontend segment, appends its own step to `X-Forwarded-For` rather
+  than overwriting it, and leaves every response header the application sets
+  intact. CI checks all five rules of that hop.
+
 - **Thumbnails and previews are generated in the background**, by the `worker`
   role over the broker, so photographing something on a phone does not wait for
   three image encodes. A variant that has not been produced is simply not offered,
