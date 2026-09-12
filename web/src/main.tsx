@@ -5,6 +5,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+// Before the first render: i18next has to be initialised when a component asks
+// for a string, and every component does.
+import "./i18n";
 import "./styles.css";
 
 /**

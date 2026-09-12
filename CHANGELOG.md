@@ -21,6 +21,15 @@ commit".
 
 ### Added
 
+- **The web client speaks German and English**, switchable in the bar, starting
+  in the language on your profile and falling back to English. Nothing a user
+  reads is written into a screen any more.
+
+- **Things can be put somewhere, and photographed.** The client can build the
+  tree of places, create a physical item in one of them, and add photographs to
+  an item — from the camera directly on a phone. Dates are shown in your own time
+  zone.
+
 - **A client can find out where things go.** The locations of a tenant and the
   thirteen kinds of place they can be are now readable through the API, so
   somewhere to put an item can be offered and chosen. Without them a physical

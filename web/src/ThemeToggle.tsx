@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Switches between dark and light.
@@ -19,6 +20,7 @@ import { useState } from "react";
  * while the profile is still in flight.
  */
 export function ThemeToggle(): React.JSX.Element {
+  const { t } = useTranslation();
   const [theme, setTheme] = useState<"dark" | "light">(
     () => (document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"),
   );
@@ -42,7 +44,7 @@ export function ThemeToggle(): React.JSX.Element {
       aria-pressed={theme === "light"}
       onClick={() => switchTo(theme === "light" ? "dark" : "light")}
     >
-      {theme === "light" ? "Dunkel" : "Hell"}
+      {theme === "light" ? t("theme.toDark") : t("theme.toLight")}
     </button>
   );
 }

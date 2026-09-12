@@ -218,6 +218,23 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # REQ-NFR-032 and REQ-NFR-033: the interface is multilingual, the strings
+      # live in resource bundles, and both languages are complete. i18next
+      # answers a missing key with the key itself, so a typo ships as
+      # `item.quntity` on screen and looks like a styling problem; a key missing
+      # from German falls back to English and looks translated to anybody
+      # testing in English.
+      - name: Both languages are complete
+        run: npm run i18n:check
+
+      # The client is hand-written through stage 0 (REQ-API-002 generates it at
+      # stage 1), and a hand-written client drifts silently: a mistyped path is a
+      # 404 at run time on a screen nobody opened during review. `api/openapi.yaml`
+      # is generated from the running application, so this compares against the
+      # implementation.
+      - name: Every path it calls is in the API document
+        run: npm run contract:check
+
       - name: Build
         run: npm run build
 

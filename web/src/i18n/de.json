@@ -1,0 +1,97 @@
+{
+  "app": {
+    "title": "Home Inventory",
+    "inventory": "Inventar"
+  },
+  "language": {
+    "label": "Sprache",
+    "de": "Deutsch",
+    "en": "English"
+  },
+  "theme": {
+    "toDark": "Dunkel",
+    "toLight": "Hell"
+  },
+  "login": {
+    "email": "E-Mail",
+    "password": "Passwort",
+    "submit": "Anmelden",
+    "working": "Anmelden…",
+    "failed": "E-Mail-Adresse oder Passwort stimmen nicht.",
+    "throttled": "Zu viele Versuche. Bitte kurz warten."
+  },
+  "session": {
+    "signOut": "Abmelden"
+  },
+  "search": {
+    "label": "Suchen",
+    "placeholder": "Suchen…"
+  },
+  "item": {
+    "new": "Gegenstand anlegen",
+    "name": "Name",
+    "description": "Beschreibung",
+    "kind": "Art",
+    "quantity": "Menge",
+    "unit": "Einheit",
+    "location": "Ort",
+    "created": "Erfasst",
+    "photos": "Fotos",
+    "none": "Nichts gefunden.",
+    "listCaption": "Gefundene Gegenstände",
+    "actions": "Aktionen",
+    "kinds": {
+      "PHYSICAL": "Physisch",
+      "DIGITAL": "Digital"
+    },
+    "locationRequired": "Ein physischer Gegenstand braucht einen Ort.",
+    "createFailed": "Der Gegenstand konnte nicht angelegt werden.",
+    "deleteFailed": "Der Gegenstand konnte nicht gelöscht werden."
+  },
+  "location": {
+    "heading": "Orte",
+    "new": "Ort anlegen",
+    "name": "Name",
+    "category": "Art des Ortes",
+    "parent": "Befindet sich in",
+    "root": "Nirgends — das ist ein Ort der obersten Ebene",
+    "none": "Noch keine Orte. Legen Sie einen an, um Dinge hineinzulegen.",
+    "createFailed": "Der Ort konnte nicht angelegt werden.",
+    "categories": {
+      "building": "Gebäude",
+      "floor": "Etage",
+      "room": "Raum",
+      "furniture": "Möbelstück",
+      "shelf": "Regal",
+      "compartment": "Fach",
+      "drawer": "Schublade",
+      "box": "Kiste",
+      "moving-box": "Umzugskarton",
+      "vehicle": "Fahrzeug",
+      "warehouse": "Lager",
+      "outdoor-storage": "Außenlager",
+      "locker": "Schließfach"
+    }
+  },
+  "media": {
+    "heading": "Fotos",
+    "add": "Foto hinzufügen",
+    "uploading": "Wird hochgeladen…",
+    "none": "Noch keine Fotos.",
+    "remove": "Entfernen",
+    "primary": "Wird in Listen gezeigt",
+    "pending": "Wird geprüft…",
+    "uploadFailed": "Die Datei konnte nicht hochgeladen werden.",
+    "removeFailed": "Die Datei konnte nicht entfernt werden.",
+    "alt": "Foto von {{name}}"
+  },
+  "action": {
+    "create": "Anlegen",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "error": {
+    "network": "Die Anfrage ist fehlgeschlagen. Besteht eine Verbindung?",
+    "withTrace": "{{detail}} ({{traceId}})"
+  }
+}

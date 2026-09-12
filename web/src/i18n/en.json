@@ -1,0 +1,97 @@
+{
+  "app": {
+    "title": "Home Inventory",
+    "inventory": "Inventory"
+  },
+  "language": {
+    "label": "Language",
+    "de": "Deutsch",
+    "en": "English"
+  },
+  "theme": {
+    "toDark": "Dark",
+    "toLight": "Light"
+  },
+  "login": {
+    "email": "E-mail",
+    "password": "Password",
+    "submit": "Sign in",
+    "working": "Signing in…",
+    "failed": "That e-mail address and password do not match.",
+    "throttled": "Too many attempts. Please wait a moment."
+  },
+  "session": {
+    "signOut": "Sign out"
+  },
+  "search": {
+    "label": "Search",
+    "placeholder": "Search…"
+  },
+  "item": {
+    "new": "Add item",
+    "name": "Name",
+    "description": "Description",
+    "kind": "Kind",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "location": "Location",
+    "created": "Added",
+    "photos": "Photos",
+    "none": "Nothing found.",
+    "listCaption": "Items found",
+    "actions": "Actions",
+    "kinds": {
+      "PHYSICAL": "Physical",
+      "DIGITAL": "Digital"
+    },
+    "locationRequired": "A physical item needs a location.",
+    "createFailed": "The item could not be created.",
+    "deleteFailed": "The item could not be deleted."
+  },
+  "location": {
+    "heading": "Locations",
+    "new": "Add location",
+    "name": "Name",
+    "category": "Kind of place",
+    "parent": "Inside",
+    "root": "Nowhere — this is a top-level place",
+    "none": "No locations yet. Add one to put things in it.",
+    "createFailed": "The location could not be created.",
+    "categories": {
+      "building": "Building",
+      "floor": "Floor",
+      "room": "Room",
+      "furniture": "Furniture",
+      "shelf": "Shelf",
+      "compartment": "Compartment",
+      "drawer": "Drawer",
+      "box": "Box",
+      "moving-box": "Moving box",
+      "vehicle": "Vehicle",
+      "warehouse": "Warehouse",
+      "outdoor-storage": "Outdoor storage",
+      "locker": "Locker"
+    }
+  },
+  "media": {
+    "heading": "Photos",
+    "add": "Add a photo",
+    "uploading": "Uploading…",
+    "none": "No photos yet.",
+    "remove": "Remove",
+    "primary": "Shown in lists",
+    "pending": "Being checked…",
+    "uploadFailed": "The file could not be uploaded.",
+    "removeFailed": "The file could not be removed.",
+    "alt": "Photo of {{name}}"
+  },
+  "action": {
+    "create": "Add",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "error": {
+    "network": "The request failed. Are you connected?",
+    "withTrace": "{{detail}} ({{traceId}})"
+  }
+}

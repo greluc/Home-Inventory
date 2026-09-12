@@ -21,9 +21,36 @@ camera-based scanning and offline storage decided it
 
 ## What is generated, not written
 
-The API client comes from `api/openapi.yaml`. Hand-writing one would mean the
-contract and the client can disagree, which is exactly what the generation
-prevents.
+The API client will come from `api/openapi.yaml` — `REQ-API-002`, stage 1. At
+stage 0 it is hand-written in `src/api.ts`, which is the drift this sentence used
+to say was prevented, so `npm run contract:check` compares every path the client
+calls against the document. The document is itself generated from the running
+application ([ADR-0049](../docs/adr/0049-openapi-generated-from-the-implementation.md)),
+so that comparison is against the implementation. It says the path exists, not
+that the shape matches; the shape is what generation adds.
+
+`nginx/default.conf` is generated from the built bundle by `scripts/csp.mjs`,
+because the CSP names the hash of every inline script.
+
+## Text, and the two languages
+
+Every string a user reads comes from `src/i18n/en.json` or `src/i18n/de.json`.
+Nothing is written into a component (`REQ-NFR-032`), English is the fallback
+(`REQ-NFR-033`), and `npm run i18n:check` fails the build when a key a component
+asks for is missing, when the two bundles disagree, or when a key nothing asks
+for is still being translated.
+
+The language is decided in this order: a choice made with the switch in the bar
+and remembered in this browser, then the `locale` on the signed-in user's
+profile, then the browser's own preference, then English. Changing the profile is
+stage 1; until then the switch is what a user has, which is why it sits in the bar
+and not behind a settings screen.
+
+Category names are a case worth knowing about. The server sends the shipped key —
+`room`, `shelf`, `box` — and never a label, because a label would be interface
+text the server would have to translate into a language it does not know the
+reader wants. The bundle translates the key, and the picker sorts by the result:
+thirteen translated words sort differently in every language.
 
 ## Formatting money and dates
 
@@ -120,8 +147,15 @@ configured to hold it
 
 ## Status
 
-Empty. Stage 0 delivers the first screens:
-[the roadmap](../docs/requirements/04-roadmap-and-stages.md).
+Stage 0's screens are here: sign in, search, create an item and put it somewhere,
+build the tree of places, photograph a thing where it stands. That is the whole
+of "an item can be created, photographed, stored and found again"
+([the roadmap](../docs/requirements/04-roadmap-and-stages.md)) — offline
+operation, labels and scanning are later stages.
+
+There is no router. Two panels behind the login and inline forms; a router would
+be a dependency carrying its own history handling for a navigation that does not
+exist yet.
 
 ## Linting
 
@@ -140,4 +174,4 @@ Two rules are switched off in `.oxlintrc.json`, both with a narrow scope:
 | Rule | Where | Why |
 |---|---|---|
 | `react/react-in-jsx-scope` | everywhere | It is for the legacy JSX transform. React 19 uses the automatic runtime, where `React` is not in scope and does not need to be |
-| `import/no-unassigned-import` | `src/main.tsx` only | `import "./styles.css"` is how Vite gets the stylesheet into the bundle. It has no binding by design |
+| `import/no-unassigned-import` | `src/main.tsx` only | `import "./styles.css"` and `import "./i18n"` are how Vite gets the stylesheet into the bundle and how i18next is initialised before the first component asks for a string. Neither has a binding by design |

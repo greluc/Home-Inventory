@@ -13,6 +13,11 @@
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true,
 
+    // The translation bundles are JSON and are imported as modules. Vite inlines
+    // them into the bundle, so there is nothing to fetch at runtime and no flash
+    // of untranslated keys (REQ-NFR-032).
+    "resolveJsonModule": true,
+
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,

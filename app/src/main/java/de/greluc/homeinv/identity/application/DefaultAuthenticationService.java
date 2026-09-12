@@ -142,7 +142,7 @@ public class DefaultAuthenticationService implements AuthenticationService {
         membership.tenantId(),
         membership.role());
     return new AuthenticatedUser(
-        user.getId(), membership.tenantId(), user.getEmail(), membership.role());
+        user.getId(), membership.tenantId(), user.getEmail(), user.getLocale(), membership.role());
   }
 
   /**

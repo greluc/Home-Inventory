@@ -48,6 +48,8 @@ export interface Session {
   userId: string;
   tenantId: string;
   email: string;
+  /** The language on the user's profile, which the interface starts in (REQ-NFR-033). */
+  locale: string;
 }
 
 /** An item as the API returns it. */
@@ -79,6 +81,50 @@ export interface Location {
   parentId: string | null;
   depth: number;
   ancestors: string[];
+}
+
+/** A page of locations. */
+export interface LocationPage {
+  items: Location[];
+  nextCursor: string | null;
+}
+
+/**
+ * A kind of place a location can be.
+ *
+ * The server sends the shipped key and no label: the names are interface text and
+ * live in the resource bundles, because only this side knows what language the
+ * reader wants them in (REQ-NFR-032).
+ */
+export interface LocationCategory {
+  id: string;
+  key: string;
+  mobile: boolean;
+}
+
+/** A page of location categories. */
+export interface LocationCategoryPage {
+  items: LocationCategory[];
+  nextCursor: string | null;
+}
+
+/** A file attached to an item or a location. */
+export interface Media {
+  id: string;
+  mediaType: string;
+  byteSize: number;
+  widthPx: number | null;
+  heightPx: number | null;
+  scanState: string;
+  primaryImage: boolean;
+  /** Signed, short-lived URLs per variant; empty until the malware scan says clean. */
+  urls: Record<string, string>;
+}
+
+/** A page of attachments. */
+export interface MediaPage {
+  items: Media[];
+  nextCursor: string | null;
 }
 
 /**
@@ -171,10 +217,12 @@ export const api = {
    * Searches items.
    *
    * @param query the text; empty lists everything
+   * @param language which generated vector to search — the interface language, so
+   *   that a German user's search is stemmed with German rules (ADR-0047)
    * @param cursor the opaque cursor from a previous page
    */
-  search: (query: string, cursor?: string): Promise<SearchResult> => {
-    const params = new URLSearchParams({ q: query, language: "de", limit: "50" });
+  search: (query: string, language: string, cursor?: string): Promise<SearchResult> => {
+    const params = new URLSearchParams({ q: query, language, limit: "50" });
     if (cursor) {
       params.set("cursor", cursor);
     }
@@ -214,4 +262,71 @@ export const api = {
 
   /** Reads one location with its readable path. */
   location: (id: string): Promise<Location> => request<Location>(`/api/v1/locations/${id}`),
+
+  /**
+   * The tenant's locations, as a page.
+   *
+   * The whole tree rather than one level: each row carries its parent and its
+   * readable path, which is what the picker assembles a tree from.
+   *
+   * @param cursor the opaque cursor from a previous page
+   */
+  locations: (cursor?: string): Promise<LocationPage> => {
+    const params = new URLSearchParams({ limit: "200" });
+    if (cursor) {
+      params.set("cursor", cursor);
+    }
+    return request<LocationPage>(`/api/v1/locations?${params.toString()}`);
+  },
+
+  /** The kinds of place a location can be. */
+  locationCategories: (): Promise<LocationCategoryPage> =>
+    request<LocationCategoryPage>("/api/v1/locations/categories?limit=200"),
+
+  /**
+   * The files attached to one thing.
+   *
+   * @param targetKind `ITEM` or `LOCATION`
+   * @param targetId what they hang on
+   */
+  media: (targetKind: "ITEM" | "LOCATION", targetId: string): Promise<MediaPage> => {
+    const params = new URLSearchParams({ targetKind, targetId, limit: "200" });
+    return request<MediaPage>(`/api/v1/media?${params.toString()}`);
+  },
+
+  /**
+   * Uploads a file and attaches it.
+   *
+   * Sent as `multipart/form-data`, which is what the endpoint reads — the
+   * `Content-Type` is deliberately not set here, because the browser has to add
+   * the boundary and will not if the header is already there.
+   *
+   * @param file the chosen file
+   * @param targetKind `ITEM` or `LOCATION`
+   * @param targetId what to attach it to
+   */
+  uploadMedia: (file: File, targetKind: "ITEM" | "LOCATION", targetId: string): Promise<Media> => {
+    const body = new FormData();
+    body.append("file", file);
+    const params = new URLSearchParams({ targetKind, targetId });
+    return request<Media>(`/api/v1/media?${params.toString()}`, { method: "POST", body });
+  },
+
+  /**
+   * Detaches a file.
+   *
+   * @param mediaObjectId the file
+   * @param targetKind what it hangs on
+   * @param targetId which one
+   */
+  deleteMedia: (
+    mediaObjectId: string,
+    targetKind: "ITEM" | "LOCATION",
+    targetId: string,
+  ): Promise<void> => {
+    const params = new URLSearchParams({ targetKind, targetId });
+    return request<void>(`/api/v1/media/${mediaObjectId}?${params.toString()}`, {
+      method: "DELETE",
+    });
+  },
 };

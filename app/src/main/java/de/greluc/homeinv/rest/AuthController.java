@@ -93,7 +93,8 @@ public class AuthController {
     SecurityContextHolder.setContext(context);
     securityContextRepository.saveContext(context, httpRequest, httpResponse);
 
-    return new SessionView(user.userId(), user.tenantId(), user.email(), user.role());
+    return new SessionView(
+        user.userId(), user.tenantId(), user.email(), user.locale(), user.role());
   }
 
   /**
@@ -133,7 +134,8 @@ public class AuthController {
               + "has already refused an unauthenticated caller with 401. There is no "
               + "role low enough to be denied knowing who it is.")
   public SessionView me(@AuthenticationPrincipal AuthenticatedUser user) {
-    return new SessionView(user.userId(), user.tenantId(), user.email(), user.role());
+    return new SessionView(
+        user.userId(), user.tenantId(), user.email(), user.locale(), user.role());
   }
 
   /**
@@ -188,5 +190,6 @@ public class AuthController {
    *     decides what is allowed, which happens in the application layer on every request
    *     (REQ-SEC-022). A UI that shows a button nobody may press teaches people to ignore errors.
    */
-  public record SessionView(UUID userId, UUID tenantId, String email, String role) {}
+  public record SessionView(
+      UUID userId, UUID tenantId, String email, String locale, String role) {}
 }

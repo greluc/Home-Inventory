@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, api, type Session } from "./api";
+import { LanguageToggle } from "./LanguageToggle";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -23,6 +25,7 @@ export function LoginForm({
 }: {
   onAuthenticated: (session: Session) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,9 +39,9 @@ export function LoginForm({
       onAuthenticated(await api.login(email, password));
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 429) {
-        setError("Zu viele Versuche. Bitte kurz warten.");
+        setError(t("login.throttled"));
       } else {
-        setError("E-Mail-Adresse oder Passwort stimmen nicht.");
+        setError(t("login.failed"));
       }
     } finally {
       setBusy(false);
@@ -49,13 +52,16 @@ export function LoginForm({
     <main className="login">
       <div className="login-card">
         <div className="login-head">
-          <h1>Home Inventory</h1>
-          <ThemeToggle />
+          <h1>{t("app.title")}</h1>
+          <div className="bar-actions">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
         </div>
 
         <form onSubmit={(event) => void submit(event)}>
           <label>
-            E-Mail
+            {t("login.email")}
             <input
               type="email"
               value={email}
@@ -66,7 +72,7 @@ export function LoginForm({
           </label>
 
           <label>
-            Passwort
+            {t("login.password")}
             <input
               type="password"
               value={password}
@@ -83,7 +89,7 @@ export function LoginForm({
           )}
 
           <button type="submit" disabled={busy}>
-            {busy ? "Anmelden…" : "Anmelden"}
+            {busy ? t("login.working") : t("login.submit")}
           </button>
         </form>
       </div>

@@ -108,6 +108,63 @@ label input, label textarea { display: block; width: 100%; margin-top: .25rem; }
 .login-head h1 { font-size: 1.15rem; margin: 0 0 1rem; }
 .login button[type="submit"] { width: 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
 
+/* A label wrapping a select in the bar: the select carries the control, the
+   label only names it for a screen reader. */
+.language { display: inline-block; margin: 0; }
+.language select {
+  font: inherit; color: inherit; background: var(--surface-raised);
+  border: 1px solid var(--border); border-radius: 3px; padding: .25rem .5rem; min-height: 2.25rem;
+}
+
+label.narrow { flex: 1; }
+
+.row-actions { white-space: nowrap; }
+
+/* The photographs of an expanded row. A strip rather than a grid: an item has a
+   handful of pictures, and a grid of three would leave two empty cells. */
+.expansion > td { background: var(--surface-raised); }
+.photos { padding: .5rem 0; }
+.photo-strip { display: flex; flex-wrap: wrap; gap: .75rem; list-style: none; padding: 0; margin: 0 0 .75rem; }
+.photo-strip li { display: grid; gap: .25rem; justify-items: center; }
+.photo-strip img {
+  width: 6.25rem; height: 6.25rem; object-fit: cover;
+  border: 1px solid var(--border); border-radius: 3px; background: var(--surface);
+}
+/* The one shown in lists, marked rather than implied by position: the list is
+   paged and the primary is not guaranteed to be first on the page. */
+.photo-strip li.primary img { border-color: var(--accent); border-width: 2px; }
+.photo-strip .pending {
+  display: grid; place-items: center; width: 6.25rem; height: 6.25rem;
+  border: 1px dashed var(--border); border-radius: 3px; font-size: .8rem; text-align: center;
+}
+/* The file input itself is off-screen; the label is the control. A styled file
+   input is not possible across browsers, and a label is a real one. */
+.upload input[type="file"] {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%);
+}
+.upload > span {
+  display: inline-block; cursor: pointer;
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: 3px;
+  padding: .5rem .625rem; min-height: 2.75rem; line-height: 1.75rem;
+}
+.upload:focus-within > span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.locations { margin-top: 2rem; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.section-head h2 { font-size: 1rem; margin: 0; }
+.new-location { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 3px; padding: 1rem; margin-top: 1rem; }
+.new-location select, .new-item select {
+  display: block; width: 100%; margin-top: .25rem;
+  font: inherit; color: inherit; background: var(--surface-raised);
+  border: 1px solid var(--border); border-radius: 3px; padding: .5rem .625rem; min-height: 2.75rem;
+}
+.location-tree { list-style: none; padding: 0; margin: 1rem 0 0; }
+.location-tree li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+  padding: .4rem .5rem; border-bottom: 1px solid var(--border);
+}
+
 /* Visible to a screen reader, not on screen. `display: none` would hide it from
    both, which is the usual mistake. */
 .visually-hidden {

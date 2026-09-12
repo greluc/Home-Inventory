@@ -357,6 +357,8 @@ components:
         email:
           description: the address they logged in with
           type: string
+        locale:
+          type: string
         role:
           description: |-
             the membership's role. Returned so the client can decide what to *offer*; it never
