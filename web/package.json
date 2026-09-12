@@ -31,7 +31,7 @@
     "oxlint": "1.82.0",
     "typescript": "7.0.2",
     "vite": "8.3.0",
-    "vitest": "4.0.18"
+    "vitest": "4.1.11"
   },
   "overrides": {
     "react-i18next": {
