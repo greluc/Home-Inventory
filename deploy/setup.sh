@@ -19,7 +19,8 @@
 #      fixes it — because the failure without this check is not a clear error, it
 #      is a container that starts and then behaves strangely (REQ-NFR-060).
 #   2. GENERATES THE SECRETS it does not already find, with the system random
-#      source, into deploy/secrets/ with mode 0600. It never overwrites: a
+#      source, into deploy/secrets/ — a 0700 directory holding 0444 files, for
+#      the reason given at generate_secret(). It never overwrites: a
 #      regenerated key means every session invalid and every signed URL broken,
 #      and a setup script is not where that decision should be made.
 #   3. RENDERS THE TEMPLATES from deploy/generated/ into deploy/secrets/,
@@ -164,7 +165,9 @@ extendedKeyUsage = serverAuth, clientAuth
 EXT
     cat "$key" "$crt" "$CA_CERT" > "$SECRETS/$name"
     rm -f "$csr"
-    chmod 0600 "$SECRETS/$name" "$key" "$crt"
+    # The combined file is a mounted secret and its caller sets its mode; the
+    # two halves it was built from are read by nobody and stay unreadable.
+    chmod 0600 "$key" "$crt"
 }
 
 generate_secret() {
@@ -176,6 +179,9 @@ generate_secret() {
         # every signed URL broken, and a setup script is not where that decision
         # belongs.
         say "  $name — kept (it already exists)"
+        # Re-applied even when kept: a deployment set up before the modes were
+        # corrected holds files its own containers cannot read.
+        chmod 0444 "$target"
         return 0
     fi
     case "$kind" in
@@ -193,7 +199,17 @@ generate_secret() {
         mtls-server) generate_mtls "$name" "$(echo "$name" | sed 's/^mtls-//')" ;;
         *) die "Unknown secret kind '$kind' for $name. services.yaml and this script disagree." ;;
     esac
-    chmod 0600 "$target"
+    # 0444 in a 0700 directory, and the directory is the protection. Compose
+    # mounts a secret by bind-mounting this very file, so the mode here is the
+    # mode the container sees — and under ROOTLESS Docker the host user maps to
+    # uid 0 inside the container while the service runs as 10001, which makes a
+    # 0600 file unreadable. postgres, valkey, clamav, blobstore and the egress
+    # proxy each died on "Permission denied" for a file that was plainly there.
+    # Compose will not fix it per mount either: it answers uid/gid/mode with
+    # "not supported, they will be ignored". Nothing on the host gains access,
+    # because a file inside a 0700 directory cannot be reached to be read.
+    # Podman copies these into its own secret store, which mounts them 0444 too.
+    chmod 0444 "$target"
     say "  $name — generated ($kind)"
 }
 
@@ -309,7 +325,8 @@ render_templates() {
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done
-        chmod 0600 "$target"
+        # 0444 for the same reason as a generated secret; see generate_secret().
+        chmod 0444 "$target"
         say "  $name — rendered"
     done
 }

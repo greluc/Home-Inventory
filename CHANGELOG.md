@@ -41,6 +41,14 @@ commit".
 
 ### Fixed
 
+- **A rootless Docker deployment could not start at all.** PostgreSQL, Valkey,
+  ClamAV, the blob store and the egress proxy each stopped on "Permission
+  denied" for a secret that was plainly there: mounted at mode 0600, a secret
+  belongs to a user id the container does not run as, and Compose ignores the
+  per-mount ownership that would fix it. Secrets are now readable inside the
+  container and unreachable outside it, which is where `deploy/secrets/` being
+  a 0700 directory was always doing the work.
+
 - **No image could be uploaded to a real deployment.** Four separate faults in the
   libvips adapter and the image it runs in, each of which alone turned every photo
   into a `500`: the wrong binary was called, the output path grew a second file
