@@ -41,6 +41,16 @@ commit".
 
 ### Fixed
 
+- **The WAL archive received nothing, on either runtime.** The recovery point
+  this deployment promises rests on continuous archiving into the `pgwal`
+  volume, and every segment since first start had been refused: the directory
+  archiving writes into did not exist in the PostgreSQL image, so both runtimes
+  created it root-owned under a server that does not run as root — and under
+  Podman, systemd additionally read the archive command's `%f` and `%p` as two
+  of its own specifiers. A failing archive command is a log line and nothing
+  else, so both faults were silent. The smoke suite now asks the archiver
+  instead of reading the setting.
+
 - **A rootless Docker deployment could not start at all.** PostgreSQL, Valkey,
   ClamAV, the blob store and the egress proxy each stopped on "Permission
   denied" for a secret that was plainly there: mounted at mode 0600, a secret

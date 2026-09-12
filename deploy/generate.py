@@ -792,6 +792,23 @@ def compose(matrix: dict) -> str:
     return "\n".join(lines)
 
 
+def literal(value: str) -> str:
+    """A value systemd must pass through rather than read specifiers in.
+
+    systemd expands ``%`` specifiers in ``Exec=``, ``Environment=`` and the rest of a
+    unit, and Quadlet hands our values to it unchanged. PostgreSQL's ``archive_command``
+    is written in ``%f`` and ``%p``, which are also two of systemd's: ``homeinv-postgres``
+    started with ``cp homeinv-postgres /var/lib/homeinv/wal-archive//homeinv/postgres``
+    and logged "archive command failed" for every segment — WAL archiving doing nothing at
+    all, which is the failure ADR-0045 exists to prevent, announced only in a log nobody
+    reads. ``%%`` is how systemd is told to keep the one character.
+
+    :param value: the text as the matrix wrote it
+    :return: the text with every ``%`` doubled
+    """
+    return value.replace("%", "%%")
+
+
 def quadlet(matrix: dict) -> dict[str, str]:
     """Renders the Quadlet units.
 
@@ -880,7 +897,7 @@ def quadlet(matrix: dict) -> dict[str, str]:
         for key, value in (service.get("env") or {}).items():
             if PLACEHOLDER.fullmatch(str(value)):
                 continue
-            body.append(f"Environment={key}={resolve_secrets(value)}")
+            body.append(f"Environment={key}={literal(resolve_secrets(value))}")
         for key, value in settings_environment(service).items():
             body.append(f"Environment={key}={value}")
         for key, value in secret_environment(service).items():
@@ -897,7 +914,7 @@ def quadlet(matrix: dict) -> dict[str, str]:
             # some. Quoted, or PostgreSQL starts with an archive command that is
             # the first word of one - and WAL archiving silently does nothing,
             # which is the failure ADR-0045 exists to prevent.
-            body.append("Exec=" + " ".join(shlex.quote(part) for part in command))
+            body.append("Exec=" + " ".join(literal(shlex.quote(part)) for part in command))
         for port in service.get("ports") or []:
             if port.get("host"):
                 body.append(f"PublishPort={port['host']}:{port['container']}")
@@ -907,7 +924,9 @@ def quadlet(matrix: dict) -> dict[str, str]:
             # The JSON array form, for the reason above: Podman hands a plain
             # string to `/bin/sh -c`, and `blobstore` and `egress-proxy` are
             # `scratch` images with no shell to hand it to.
-            body.append("HealthCmd=" + json.dumps(["CMD", *shlex.split(health["command"])]))
+            body.append(
+                "HealthCmd=" + literal(json.dumps(["CMD", *shlex.split(health["command"])]))
+            )
             body.append(f"HealthInterval={health.get('interval', '15s')}")
             body.append(f"HealthStartPeriod={health.get('startPeriod', '30s')}")
             if health.get("notify") == "healthy":

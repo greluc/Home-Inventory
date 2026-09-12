@@ -15,6 +15,7 @@
 #   REQ-SEC-104   every store inside the deployment authenticates its callers
 #   REQ-SEC-105   `web` reaches `api` and nothing else
 #   REQ-PRIV-003  `api` and `worker` have no outbound route out of the deployment
+#   REQ-NFR-014   the WAL archive actually receives segments
 #
 # A segment flag is a claim; a refused connection is evidence. That distinction is
 # ADR-0044's, and it is the reason this file exists rather than another grep over
@@ -175,6 +176,43 @@ if [ "$outside" -eq 2 ]; then
     pass "web and egress-proxy are the two, and they are both running"
 else
     fail "expected web and egress-proxy to be running; found $outside of them"
+fi
+
+section "REQ-NFR-014: the WAL archive receives segments"
+# `pg_stat_archiver`, not the presence of a setting. The `archive_command` was
+# right in every description and archived nothing at all, for two reasons at
+# once: systemd read its %f and %p as its own specifiers, and the volume's mount
+# point did not exist in the image, so both runtimes created it root-owned under
+# a server that runs as uid 70. Neither shows anywhere but a log, which is why
+# the RPO the deployment promises is asked of the archiver here (ADR-0045).
+#
+# A switch rather than a wait: `archive_timeout` is 900 s, and a smoke suite that
+# waited that long for its evidence is one nobody runs. The counters are reset
+# first, so what is measured is this run rather than the history of the volume —
+# a single archive failure at any point in the past would otherwise leave
+# `failed_count` above zero for the life of the cluster.
+if ! "$RUNTIME" exec homeinv-postgres psql -U postgres -d homeinv -At \
+        -c "SELECT pg_stat_reset_shared('archiver');" \
+        -c "SELECT pg_switch_wal();" >/dev/null 2>&1; then
+    fail "could not ask postgres to switch its WAL segment"
+else
+    archived=0
+    failed=0
+    attempt=0
+    while [ "$attempt" -lt 30 ]; do
+        counts=$("$RUNTIME" exec homeinv-postgres psql -U postgres -d homeinv -At \
+            -c "SELECT archived_count, failed_count FROM pg_stat_archiver;" 2>/dev/null)
+        archived=${counts%%|*}
+        failed=${counts##*|}
+        [ "${archived:-0}" -gt 0 ] && break
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    if [ "${archived:-0}" -gt 0 ] && [ "${failed:-0}" -eq 0 ]; then
+        pass "postgres archived $archived segment(s), none refused"
+    else
+        fail "the WAL archive holds $archived segment(s) and refused $failed"
+    fi
 fi
 
 printf '\n'

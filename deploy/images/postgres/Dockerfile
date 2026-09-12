@@ -33,6 +33,24 @@ FROM docker.io/library/postgres@sha256:d3e1620b530c944afa6e887d22eb899824da68e19
 COPY --chmod=0444 deploy/postgres/initdb/00-roles.sql /docker-entrypoint-initdb.d/00-roles.sql
 COPY --chmod=0555 deploy/postgres/initdb/01-role-passwords.sh /docker-entrypoint-initdb.d/01-role-passwords.sh
 
+# The WAL archive's mount point, created here because the account that writes
+# into it has to own it (ADR-0045, REQ-NFR-014).
+#
+# Both runtimes initialise a fresh named volume from whatever the image holds at
+# that path, ownership included — and where the image holds nothing, they create
+# the directory root-owned and 0755 instead. `pg_stat_archiver` on a stack that
+# had been up for four hours read 0 archived and 1185 failed: every segment since
+# first start, refused by a directory the server could not write to. A failing
+# archive command is a log line and nothing else, so the deployment's promise of
+# an RPO under fifteen minutes stayed false for as long as nobody read it.
+# `deploy/smoke/connectivity.sh` now asks the archiver rather than the settings.
+#
+# The path is `deploy/services.yaml`'s `pgwal` volume; the smoke check is what
+# notices if the two ever stop agreeing.
+RUN mkdir -p /var/lib/homeinv/wal-archive \
+    && chown 70:70 /var/lib/homeinv/wal-archive \
+    && chmod 0700 /var/lib/homeinv/wal-archive
+
 # The uid the deployment runs this as, stated here as well as in the matrix.
 #
 # `deploy/services.yaml` has carried `user: "70:70"` from the start — the image's
