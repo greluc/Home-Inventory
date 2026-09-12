@@ -10,6 +10,9 @@ import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.inventory.api.ItemKind;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -19,8 +22,11 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,9 +66,21 @@ public class ItemController {
    * @param user the authenticated caller
    * @return the created or already-present item
    */
-  @PostMapping
+  @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_CREATE)
-  public ResponseEntity<ItemView> create(
+  @CanFail(ProblemType.RESOURCE_EXISTS)
+  // The one endpoint with two success codes, so the second one is written down:
+  // springdoc derives a single response from the return type and cannot see that
+  // this method chooses between them.
+  @ApiResponse(
+      responseCode = "201",
+      description = "This request created the item. `Location` names it.",
+      content = @Content(schema = @Schema(implementation = ItemView.class)))
+  @ApiResponse(
+      responseCode = "200",
+      description = "An identical item already existed under this id; this is that item.",
+      content = @Content(schema = @Schema(implementation = ItemView.class)))
+  public ResponseEntity<ItemView> createItem(
       @Valid @RequestBody CreateItemRequest request, @AuthenticationPrincipal AuthenticatedUser user) {
     ItemService.CreateResult result =
         items.create(
@@ -90,9 +108,10 @@ public class ItemController {
    * @param id the item
    * @return the item
    */
-  @GetMapping("/{id}")
+  @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
-  public ItemView get(@PathVariable UUID id) {
+  @CanFail(ProblemType.NOT_FOUND)
+  public ItemView getItem(@PathVariable UUID id) {
     return items.get(id);
   }
 
@@ -104,9 +123,10 @@ public class ItemController {
    * @param user the authenticated caller
    * @return the changed item
    */
-  @PutMapping("/{id}")
+  @PutMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_UPDATE)
-  public ItemView update(
+  @CanFail(ProblemType.NOT_FOUND)
+  public ItemView updateItem(
       @PathVariable UUID id,
       @Valid @RequestBody UpdateItemRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
@@ -129,14 +149,13 @@ public class ItemController {
    *
    * @param id the item
    * @param user the authenticated caller
-   * @return an empty {@code 204}
    */
   @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.ITEM_DELETE)
-  public ResponseEntity<Void> delete(
-      @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
+  @CanFail(ProblemType.NOT_FOUND)
+  public void deleteItem(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     items.delete(id, user.userId());
-    return ResponseEntity.noContent().build();
   }
 
   /**

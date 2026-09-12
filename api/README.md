@@ -1,13 +1,19 @@
 # api/
 
-The **OpenAPI 3.1 document** — `openapi.yaml`.
+The **OpenAPI 3.1 document** — [`openapi.yaml`](openapi.yaml).
 
 ## It is generated, committed, and checked against the code
 
-`springdoc-openapi` produces the document from the running application;
-`./gradlew openApiCheck` regenerates it and fails on any difference. Editing it by
-hand fails that check, exactly like editing `deploy/compose/compose.yaml` or
-`web/nginx/default.conf`.
+`springdoc-openapi` produces the document from the running application, and
+`OpenApiDocumentIT` compares it with the committed copy on every test run.
+Editing it by hand fails that check, exactly like editing
+`deploy/compose/compose.yaml` or `web/nginx/default.conf`.
+
+**The document endpoint is off in every deployment.** `springdoc.api-docs.enabled`
+is `false` outside the test profile, and Swagger UI is off everywhere: serving
+either would be a second HTTP surface on an internet-facing application,
+describing every endpoint it has, for a document that is already in this
+directory.
 
 This directory used to state the opposite — the document written first, server
 stubs and clients generated from it. That was decided in the design phase and not
@@ -28,20 +34,26 @@ with many, and it is drawn on purpose.
 
 | Check | Tool | Why it still works on a generated document |
 |---|---|---|
-| The document matches the implementation | `./gradlew openApiCheck` | It **is** the implementation, restated |
-| It is valid and lints against a project ruleset | `spectral`, with `spectral.yaml` | With no author enforcing naming and status codes by hand, the ruleset is where those conventions live |
+| The document matches the implementation | `./gradlew :app:test` | It **is** the implementation, restated: `OpenApiDocumentIT` reads it from a running context and compares |
+| It is valid and lints against a project ruleset | `spectral`, with [`spectral.yaml`](spectral.yaml) | With no author enforcing naming and status codes by hand, the ruleset is where those conventions live |
 | No unannounced breaking change | `oasdiff` against the last release | Compares two documents; indifferent to how either was produced |
 | Every `problem.type` a response emits is in the registry | a check against [`docs/reference/problem-types.yaml`](../docs/reference/problem-types.yaml) | `REQ-API-003` |
 | The examples validate against their schemas | schema validation | — |
 
 ## What belongs here
 
-- `openapi.yaml` — the document. **A build output that is committed**, so a contract
-  change is reviewable as a diff next to the code that caused it.
-- `spectral.yaml` — the lint ruleset.
-- `problems/` — one document per RFC 9457 `type` URI, rendered from the registry.
-  Clients branch on those URIs, so they are part of the contract and change like
-  it.
+- [`openapi.yaml`](openapi.yaml) — the document. **A build output that is
+  committed**, so a contract change is reviewable as a diff next to the code that
+  caused it. `./gradlew updateOpenApi` regenerates it; `./gradlew :app:test` fails
+  while it and the code disagree.
+- [`spectral.yaml`](spectral.yaml) — the lint ruleset. It carries more weight
+  here than in a specification-first project: with no author enforcing naming and
+  status codes by hand, this file is where those conventions live.
+- [`problems/`](problems/README.md) — one document per RFC 9457 `type` URI,
+  rendered from [the registry](../docs/reference/problem-types.yaml) by
+  `tools/render_problems.py`. Clients branch on those URIs, so they are part of
+  the contract and change like it — and the URIs are meant to be dereferenceable,
+  which is what these documents are for.
 
 ## What does not
 

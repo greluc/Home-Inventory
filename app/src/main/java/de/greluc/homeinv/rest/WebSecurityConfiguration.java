@@ -4,13 +4,12 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -40,6 +39,7 @@ public class WebSecurityConfiguration {
    * @param tenantContextFilter the filter that publishes the session's tenant to
    *     {@code TenantContext}
    * @param corsConfigurationSource the one named origin cross-origin requests may come from
+   * @param problemEntryPoint what an unauthenticated request is answered with
    * @return the configured chain
    * @throws Exception when the builder rejects the configuration, which fails startup rather than
    *     leaving the application running with a security configuration that did not apply
@@ -48,7 +48,8 @@ public class WebSecurityConfiguration {
   public SecurityFilterChain filterChain(
       HttpSecurity http,
       TenantContextFilter tenantContextFilter,
-      CorsConfigurationSource corsConfigurationSource)
+      CorsConfigurationSource corsConfigurationSource,
+      ProblemEntryPoint problemEntryPoint)
       throws Exception {
     CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
     // The token is read from the header, not from a request parameter. A parameter
@@ -74,12 +75,27 @@ public class WebSecurityConfiguration {
         .authorizeHttpRequests(
             authorize ->
                 authorize
+                    // The container's error dispatch. It is not a request a client
+                    // made — the request it belongs to was already refused, and
+                    // the decision that refused it has already run. Demanding
+                    // authentication here would answer an anonymous 404 with a
+                    // 401 about a path that does not exist.
+                    .dispatcherTypeMatchers(DispatcherType.ERROR)
+                    .permitAll()
                     // The probes. `/livez` and `/readyz` are the additional paths
                     // the health groups carry (13 §13.3); they answer on the
                     // management listener, which is bound to `internal` and is
                     // unreachable from here (REQ-SEC-099).
                     .requestMatchers(
                         "/api/v1/auth/login", "/actuator/health/**", "/livez", "/readyz")
+                    .permitAll()
+                    // The generated OpenAPI document. `springdoc.api-docs.enabled`
+                    // is false in every deployment, so this path answers 404
+                    // there; permitting it grants access to nothing. It is here
+                    // because the build reads the document from a context whose
+                    // filter chain is the real one — a rule that only applied in
+                    // tests would be a rule the tests do not exercise.
+                    .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml")
                     .permitAll()
                     // Authorised by the signature in the URL and by nothing else
                     // (REQ-MED-010). A browser following an <img src> to the
@@ -94,9 +110,12 @@ public class WebSecurityConfiguration {
                     .authenticated())
         .exceptionHandling(
             handling ->
-                // 401 with an empty body, not a redirect to a login page: this is an
-                // API, and a 302 to HTML is what makes a fetch() fail incomprehensibly.
-                handling.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                // A 401 carrying RFC 9457 problem details, not a redirect to a login
+                // page and not an empty body. A 302 to HTML is what makes a fetch()
+                // fail incomprehensibly; an empty body is the one failure in the
+                // surface a client cannot parse the way it parses every other one
+                // (REQ-API-003).
+                handling.authenticationEntryPoint(problemEntryPoint))
         .addFilterAfter(
             tenantContextFilter,
             org.springframework.security.web.context.SecurityContextHolderFilter.class)

@@ -51,6 +51,14 @@ dependencies {
     // left the JDK in 11. Without it the generated sources do not compile.
     compileOnly(libs.javax.annotation.api)
 
+    // Generates the OpenAPI document from the running application (ADR-0049).
+    // `implementation` rather than a test dependency: the document is produced
+    // from the real context, and a version that existed only in tests would be a
+    // document describing a program that is not the one that ships.
+    implementation(libs.springdoc.openapi.webmvc)
+    implementation(libs.therapi.javadoc)
+    annotationProcessor(libs.therapi.javadoc.scribe)
+
     implementation(libs.spring.boot.starter.flyway)
     implementation(libs.flyway.core)
     runtimeOnly(libs.flyway.postgresql)
@@ -164,4 +172,40 @@ tasks.named("spotbugsTest") { enabled = false }
 // say about generated builders. Analysing them would bury every real finding.
 tasks.named<com.github.spotbugs.snom.SpotBugsTask>("spotbugsMain") {
     classes = classes?.filter { !it.path.contains("plugin${File.separator}v1") }
+}
+
+// The OpenAPI document is a build output that is committed (ADR-0049), like the
+// Quadlet units and `web/nginx/default.conf`. `:app:test` fails while it and the
+// code disagree; this task is how an intended change is written down.
+// The check REQ-API-001 names. It is the same test the `test` task already runs —
+// registered under its own name because a requirement that names a command is a
+// requirement somebody will type, and one that does not exist reads as a project
+// that stopped caring.
+tasks.register<Test>("openApiCheck") {
+    description = "Fails while api/openapi.yaml and the implementation disagree."
+    group = "verification"
+
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter { includeTestsMatching("de.greluc.homeinv.OpenApiDocumentIT") }
+
+    systemProperty("spring.profiles.active", "test")
+
+    outputs.upToDateWhen { false }
+}
+
+tasks.register<Test>("updateOpenApi") {
+    description = "Regenerates api/openapi.yaml from the implementation."
+    group = "documentation"
+
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter { includeTestsMatching("de.greluc.homeinv.OpenApiDocumentIT") }
+
+    systemProperty("spring.profiles.active", "test")
+    systemProperty("homeinv.openapi.regenerate", "true")
+
+    // Never up to date: the point of running it is to look at the repository
+    // again, and its inputs are the whole application.
+    outputs.upToDateWhen { false }
 }

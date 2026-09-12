@@ -38,6 +38,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @RequiredArgsConstructor
 public class PermissionInterceptor implements HandlerInterceptor {
 
+  /** Where this application's own endpoints live, and the only place they may. */
+  private static final String ACCESS_LAYER = "de.greluc.homeinv.rest";
+
   private final AccessControl accessControl;
 
   @Override
@@ -47,8 +50,20 @@ public class PermissionInterceptor implements HandlerInterceptor {
       @NonNull Object handler) {
 
     if (!(handler instanceof HandlerMethod method)) {
-      // Static resources, the error dispatcher, the actuator's own handlers.
-      // None of them is a controller of ours, and none is covered by REQ-SEC-023.
+      // Static resources and the error dispatcher. Neither is a controller.
+      return true;
+    }
+
+    if (!method.getBeanType().getPackageName().startsWith(ACCESS_LAYER)) {
+      // A handler the framework contributed: the actuator's endpoints, springdoc's
+      // document resource, the error controller. REQ-SEC-023 is about the
+      // endpoints THIS application defines, and the filter chain is what decides
+      // for the rest — the actuator listens on a port bound to `internal`
+      // (REQ-SEC-099) and the document resource does not exist outside the build.
+      //
+      // The narrowing is safe because of the companion rule: ArchUnit refuses a
+      // `@RestController` anywhere but `de.greluc.homeinv.rest`, so an endpoint of
+      // ours cannot end up on the other side of this check.
       return true;
     }
 

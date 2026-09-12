@@ -68,3 +68,17 @@ homeinv:
   # so and continues, which is what a laptop and a CI runner need and what the
   # class documents.
   ingress-host: "web.invalid"
+
+springdoc:
+  api-docs:
+    # On here and nowhere else. `OpenApiDocumentIT` reads the document from the
+    # running context and compares it with the committed one; in a deployment the
+    # endpoint does not exist.
+    enabled: true
+  cache:
+    # The customiser in `OpenApiConfiguration` runs at the end of a build; a
+    # cached document is re-served through the server-filling step without
+    # passing it again, so the second fetch in a run would carry a `servers`
+    # entry the first one does not. Rebuilding costs a second here and makes the
+    # document a function of the code alone.
+    disabled: true

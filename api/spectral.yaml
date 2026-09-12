@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The lint ruleset for `openapi.yaml`.
+#
+# It carries more weight here than in a specification-first project. The document
+# is GENERATED from the implementation (ADR-0049), so there is no author enforcing
+# naming, status codes and response shapes by hand — this file is where those
+# conventions live, and a rule here fails the build rather than a reviewer
+# noticing.
+#
+# Run: npx @stoplight/spectral-cli lint api/openapi.yaml
+
+extends: ["spectral:oas"]
+
+rules:
+  # --- Rules the base ruleset has that this project does not want ------------
+
+  # Every operation carrying a description would mean a Javadoc sentence
+  # duplicated into an annotation on every method. The Javadoc is mandatory and
+  # is where the sentence belongs; springdoc lifts the summary from it.
+  operation-description: off
+
+  # springdoc derives operationIds from method names, which are unique within a
+  # controller and need no separate convention.
+  operation-operationId: off
+
+  # There are no tags: `OpenApiConfiguration` strips the ones springdoc infers
+  # from controller class names, because publishing `item-controller` would make
+  # renaming a class a contract change. Twelve endpoints across five controllers
+  # do not need a taxonomy, and one invented now would be one nobody maintains.
+  operation-tags: off
+  openapi-tags: off
+  operation-tag-defined: off
+
+  # Replaced by `homeinv-no-server-urls` below, which asserts the opposite. The
+  # base ruleset assumes a document written for one deployment; this one
+  # describes a product that is installed, and the two cannot both hold.
+  oas3-api-servers: off
+
+  # --- Rules this project adds -----------------------------------------------
+
+  homeinv-versioned-paths:
+    description: >
+      Every path is under /api/v1, except the signed media path, which answers on
+      the media hostname and is authorised by its signature rather than by a
+      session (REQ-MED-010). An unversioned path is one that cannot be changed
+      without breaking a client (REQ-API-008).
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^(/api/v1/|/media/)"
+
+  homeinv-problem-details-on-errors:
+    description: >
+      Every 4xx and 5xx response is application/problem+json (RFC 9457,
+      REQ-API-003). A client is promised one error format on every surface, and an
+      endpoint that answers with something else is an endpoint whose failures
+      cannot be handled generically.
+    severity: error
+    given: $.paths[*][*].responses[?(@property.match(/^[45]/))].content
+    then:
+      field: "application/problem+json"
+      function: truthy
+
+  homeinv-no-server-urls:
+    description: >
+      The document names no server. `HOMEINV_PUBLIC_BASE_URL` is per deployment
+      and is printed onto physical labels (CLAUDE.md rule 10); a hostname baked
+      into the contract would be one clients copy from the wrong instance.
+    severity: error
+    given: $
+    then:
+      field: servers
+      function: falsy
+
+  homeinv-documented-success:
+    description: Every operation documents the status it answers with on success.
+    severity: error
+    given: $.paths[*][get,post,put,patch,delete]
+    then:
+      field: responses
+      function: truthy

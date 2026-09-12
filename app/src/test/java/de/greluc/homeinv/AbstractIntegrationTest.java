@@ -136,7 +136,20 @@ public abstract class AbstractIntegrationTest {
     // apply(springSecurity()) is what puts the actual filter chain in the path.
     // Without it the tests would exercise the controllers directly and every
     // authentication and CSRF assertion below would pass vacuously.
-    mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).apply(springSecurity()).build();
+    //
+    // The two filters are added by hand because `webAppContextSetup` registers
+    // none of the application's own: they are servlet filters registered with the
+    // container, not beans the DispatcherServlet consults. Leaving them out cost
+    // nothing visible and hid two properties completely — a request had no
+    // `traceId` (REQ-NFR-042) and a body of any size was accepted (REQ-SEC-065) —
+    // in exactly the tests written to check them.
+    mockMvc =
+        MockMvcBuilders.webAppContextSetup(webApplicationContext)
+            .addFilters(
+                webApplicationContext.getBean(de.greluc.homeinv.rest.TraceIdFilter.class),
+                webApplicationContext.getBean(de.greluc.homeinv.rest.JsonBodyLimitFilter.class))
+            .apply(springSecurity())
+            .build();
   }
 
   /**

@@ -61,6 +61,36 @@ jobs:
           path: app/build/reports/tests/test
           retention-days: 7
 
+  contract:
+    name: API contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26'
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      # The document is generated from the implementation and committed
+      # (ADR-0049). `:app:test` is what proves the two agree — it reads the
+      # document from a running context — so this job lints what that produced
+      # rather than regenerating it a second time.
+      - name: The document lints against the project ruleset
+        run: npx --yes @stoplight/spectral-cli lint api/openapi.yaml --ruleset api/spectral.yaml
+
+      # REQ-API-003. The `type` URIs are the part of an error a client branches
+      # on, and their documents are rendered from the registry rather than
+      # written — so a token added to the registry and not rendered, or rendered
+      # and not registered, fails here.
+      - name: The problem documents match the registry
+        run: |
+          pip install --quiet pyyaml
+          python tools/render_problems.py --check
+
   deployment:
     name: Deployment descriptions
     runs-on: ubuntu-latest

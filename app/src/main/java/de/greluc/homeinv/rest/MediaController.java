@@ -11,6 +11,7 @@ import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.media.api.MediaService;
 import de.greluc.homeinv.media.api.MediaUrlSigner;
 import de.greluc.homeinv.media.api.MediaView;
+import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.validation.constraints.Pattern;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,6 +23,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,9 +65,19 @@ public class MediaController {
    * @return the stored file with its signed URLs
    * @throws IOException when the upload cannot be read or stored
    */
-  @PostMapping("/api/v1/media")
+  @PostMapping(value = "/api/v1/media", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEDIA_CREATE)
-  public ResponseEntity<MediaView> upload(
+  // Redundant at run time — the method sets the same status — and not in the
+  // document, which would otherwise describe the 200 springdoc infers from the
+  // return type for an endpoint that never answers one.
+  @ResponseStatus(HttpStatus.CREATED)
+  @CanFail({
+    ProblemType.PAYLOAD_TOO_LARGE,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.MALWARE_DETECTED,
+    ProblemType.SCAN_UNAVAILABLE
+  })
+  public ResponseEntity<MediaView> uploadMedia(
       @RequestParam("file") MultipartFile file,
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId,
@@ -85,9 +98,9 @@ public class MediaController {
    * @param targetId the target
    * @return the attachments, primary image first
    */
-  @GetMapping("/api/v1/media")
+  @GetMapping(value = "/api/v1/media", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEDIA_READ)
-  public List<MediaView> list(
+  public List<MediaView> listMedia(
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId) {
     return media.attachmentsOf(targetKind, targetId);
@@ -100,17 +113,17 @@ public class MediaController {
    * @param targetKind the target kind
    * @param targetId the target
    * @param user the authenticated caller
-   * @return an empty {@code 204}
    */
   @DeleteMapping("/api/v1/media/{mediaObjectId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.MEDIA_DELETE)
-  public ResponseEntity<Void> detach(
+  @CanFail(ProblemType.NOT_FOUND)
+  public void detachMedia(
       @PathVariable UUID mediaObjectId,
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId,
       @AuthenticationPrincipal AuthenticatedUser user) {
     media.detach(mediaObjectId, targetKind, targetId, user.userId());
-    return ResponseEntity.noContent().build();
   }
 
   /**
@@ -135,6 +148,7 @@ public class MediaController {
    * @throws IOException when the blob cannot be read
    */
   @GetMapping("/media/{tenantId}/{sha256}/{variant}")
+  @CanFail(ProblemType.NOT_FOUND)
   @PublicEndpoint(
       reason =
           "Authorised by the signature in the URL and by nothing else (REQ-MED-010). A "
@@ -142,7 +156,7 @@ public class MediaController {
               + "cookie, and SameSite=Strict withholds it even towards our own. The "
               + "signature is bound to the tenant, the object and an expiry, and an "
               + "invalid one is answered 404.")
-  public ResponseEntity<InputStreamResource> serve(
+  public ResponseEntity<InputStreamResource> serveMedia(
       @PathVariable UUID tenantId,
       @PathVariable @Pattern(regexp = "[0-9a-f]{64}") String sha256,
       @PathVariable @Pattern(regexp = "thumb|preview|full") String variant,
@@ -154,7 +168,11 @@ public class MediaController {
     if (!signer.verify(tenantId, issuedTo, sha256, variant, expires, signature)) {
       // 404 and not 403: a 403 would confirm that this blob exists for this
       // tenant, which is exactly what an unsigned request must not learn.
-      return ResponseEntity.notFound().build();
+      //
+      // Thrown rather than returned as an empty 404, so the answer is the same
+      // RFC 9457 document every other failure in this API is (REQ-API-003). It
+      // says nothing a valid signature would not have revealed.
+      throw new NotFoundException("media", null);
     }
 
     InputStream bytes = media.openVerified(tenantId, sha256);

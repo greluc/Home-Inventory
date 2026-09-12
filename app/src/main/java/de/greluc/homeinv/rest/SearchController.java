@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,8 +42,9 @@ public class SearchController {
    * @param limit how many rows at most
    * @return the matching items and a cursor for the next page, or none when this was the last
    */
-  @GetMapping
+  @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.SEARCH_QUERY)
+  @CanFail(ProblemType.MALFORMED_REQUEST)
   public SearchService.SearchResult search(
       @RequestParam(required = false) @Size(max = 500) String q,
       @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,

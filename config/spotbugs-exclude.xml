@@ -214,4 +214,55 @@
     <Class name="de.greluc.homeinv.platform.MediaHostCheck"/>
   </Match>
 
+  <!--
+    RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT on `AuthController.login`. Both calls
+    are made FOR their effect on the container's session store, and both have one:
+    `changeSessionId()` replaces the id an attacker may have planted, which is the
+    servlet container's own fixation defence, and `getSession(true)` creates the
+    session the security context is about to be written into. The rule reads the
+    `HttpServletRequest` interface, where neither is declared to mutate anything.
+  -->
+  <Match>
+    <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    <Class name="de.greluc.homeinv.rest.AuthController"/>
+    <Method name="login"/>
+  </Match>
+
+  <!--
+    SERVLET_CONTENT_TYPE on `JsonBodyLimitFilter`. The header is untrusted and is
+    treated as such: it is lowercased and compared against one literal prefix to
+    decide whether this request carries an upload, and it reaches nothing else —
+    not a response, not a log line, not a parser. A caller who lies about it gets
+    the stricter limit, which is the safe direction.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_CONTENT_TYPE"/>
+    <Class name="de.greluc.homeinv.rest.JsonBodyLimitFilter"/>
+  </Match>
+
+  <!--
+    SERVLET_HEADER on `TraceIdFilter`. `traceparent` is untrusted, which is why
+    the trace id is matched against `[0-9a-f]{32}` and rejected when it is the
+    all-zero id, before anything is done with it. Unvalidated it would end up in
+    a log line, which is the injection the rule is about; validated it is 32 hex
+    characters. It authorises nothing and nothing is looked up with it.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.TraceIdFilter"/>
+  </Match>
+
+  <!--
+    SPRING_CSRF_UNRESTRICTED_REQUEST_MAPPING on `ProblemErrorController`. The
+    mapping names no method on purpose: the container forwards to `/error` after a
+    request has already been refused, whatever method that request used, and one
+    restricted to GET would answer a failed POST with a second failure. It reads
+    two servlet attributes and writes a problem document; it changes no state, so
+    there is nothing for a forged request to achieve.
+  -->
+  <Match>
+    <Bug pattern="SPRING_CSRF_UNRESTRICTED_REQUEST_MAPPING"/>
+    <Class name="de.greluc.homeinv.rest.ProblemErrorController"/>
+  </Match>
+
 </FindBugsFilter>

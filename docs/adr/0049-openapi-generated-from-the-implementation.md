@@ -80,6 +80,30 @@ intended shows up as a diff nobody expected.
 status codes and response shapes by hand, the ruleset is where those conventions
 now live.
 
+### What "generated" had to be made to include (2026-09-12)
+
+The first generated document described twelve endpoints that only ever succeed. It
+had no failure responses at all, no summaries, and `operationId`s like `create_1`
+assigned by iteration order over a hash map — a value that could change between two
+runs of the same code and break the drift check for no reason.
+
+None of that is a reason to write the document by hand; each is a thing the
+generator has to be told, once:
+
+| What was missing | Where it comes from now |
+|---|---|
+| Prose — summaries, parameter and field descriptions | The Javadoc, through `therapi-runtime-javadoc`. It is mandatory in this project and has to be concrete, so a second copy in an annotation would have been a second thing to keep right. |
+| Failure responses | The annotations already on the handler: `@PublicEndpoint` decides the `401`, `@RequiresPermission` the `403`, a `@RequestBody` the `400/413/415/422`. `@CanFail` carries only what no annotation says — that *this* endpoint can conflict, or runs a malware scan. |
+| Stable operation ids | Controller method names, made unique across the document rather than within a class. |
+| No `servers`, no tags | Stripped in `OpenApiConfiguration`. A base URL belongs to a deployment ([CLAUDE.md rule 10](../../CLAUDE.md)), and springdoc's inferred tags are controller class names, which would have made renaming a class a contract change. |
+
+The `problem.type` registry says of itself that it is "generated INTO the OpenAPI
+document". Until this was done it was not, and the gap was not only documentary:
+three of the fourteen stage-0 conditions were not *emitted* either — an
+unauthenticated request got an empty `401`, an unknown path and an unsupported
+method got Spring Boot's own error JSON. Writing the contract down is what found
+them.
+
 ## Rationale
 
 The promise that was broken here was not *"the document is written by a human"*. It

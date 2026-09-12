@@ -1,0 +1,1579 @@
+# GENERATED FROM THE IMPLEMENTATION — DO NOT EDIT.
+#
+# `./gradlew updateOpenApi` regenerates it; `./gradlew :app:test` fails while this file and
+# the code disagree. Editing it by hand is lost and noticed rather than lost and not
+# (ADR-0049).
+components:
+  schemas:
+    CreateItemRequest:
+      description: |-
+        The body of a creation.
+
+        The constraints are duplicated from the aggregate on purpose. The aggregate's checks are the
+        truth and hold for every caller; these produce a `422` with a field path, which is what
+        lets a form mark the field instead of showing a sentence. A rule that existed only here would
+        be one a non-HTTP caller could walk past.
+      properties:
+        description:
+          description: free text
+          maxLength: 20000
+          minLength: 0
+          type: string
+        id:
+          description: the client's chosen UUIDv7, or `null` to have one assigned
+          format: uuid
+          type: string
+        itemTypeVersionId:
+          description: |-
+            the type version, or omitted — which is what a stage-0 client does,
+            because there is no type system to choose from and the server fills in the built-in type
+          format: uuid
+          type: string
+        kind:
+          description: '`PHYSICAL` or `DIGITAL`'
+          enum:
+          - PHYSICAL
+          - DIGITAL
+          type: string
+        locationId:
+          description: required for a physical item
+          format: uuid
+          type: string
+        name:
+          description: the name
+          maxLength: 500
+          minLength: 0
+          type: string
+        quantity:
+          description: how many; `null` means one
+          minimum: 0
+          type: number
+        quantityUnit:
+          description: the unit
+          maxLength: 30
+          minLength: 0
+          type: string
+      required:
+      - kind
+      - name
+      type: object
+    CreateLocationRequest:
+      description: The body of a creation.
+      properties:
+        categoryId:
+          description: the category
+          format: uuid
+          type: string
+        id:
+          description: the client's chosen id, or omitted
+          format: uuid
+          type: string
+        name:
+          description: the name
+          maxLength: 300
+          minLength: 0
+          type: string
+        parentId:
+          description: the parent, or omitted to create a root
+          format: uuid
+          type: string
+      required:
+      - categoryId
+      - name
+      type: object
+    ItemView:
+      description: |-
+        What other blocks and the REST layer are allowed to see of an item.
+
+        This is the published type of the `inventory` block (REQ-NFR-023). The entity stays
+        inside: handed out, it carries its persistence context with it, so a caller could modify the
+        aggregate without passing the use case that guards its invariants — and would do so by accident,
+        because a getter returning a managed entity looks exactly like one returning data.
+
+        A record, so it is immutable without anyone having to remember to make it so.
+      properties:
+        createdAt:
+          description: when it was created
+          format: date-time
+          type: string
+        description:
+          description: free text, may be `null`
+          type: string
+        id:
+          description: the item's UUIDv7
+          format: uuid
+          type: string
+        kind:
+          description: '`PHYSICAL` or `DIGITAL`, as a string so consumers need no enum of ours'
+          type: string
+        lifecycleState:
+          description: where the item is in its life; stage 0 always `ACTIVE`
+          type: string
+        locationId:
+          description: where it is; `null` for a digital item
+          format: uuid
+          type: string
+        name:
+          description: the name
+          type: string
+        quantity:
+          description: how many
+          type: number
+        quantityUnit:
+          description: the unit, may be `null`
+          type: string
+        updatedAt:
+          description: when it last changed
+          format: date-time
+          type: string
+        version:
+          description: |-
+            the optimistic lock, which a client echoes back on update to detect a concurrent
+            edit rather than overwriting one
+          format: int64
+          type: integer
+      type: object
+    LocationView:
+      description: |-
+        What other blocks and the REST layer see of a location.
+
+        `ancestors` is the readable form of the materialised path: the names from the root down
+        to this location, assembled from the rows the path names. The path itself is made of ids and is
+        deliberately not published - it is an index structure, and publishing it would invite a client to
+        parse it.
+      properties:
+        ancestors:
+          description: the names from the root down to and including this location (REQ-CORE-044)
+          items:
+            type: string
+          type: array
+        categoryId:
+          description: the category
+          format: uuid
+          type: string
+        depth:
+          description: distance from the root
+          format: int32
+          type: integer
+        id:
+          description: the location
+          format: uuid
+          type: string
+        name:
+          description: the name
+          type: string
+        parentId:
+          description: the parent, or `null` for a root
+          format: uuid
+          type: string
+      type: object
+    LoginRequest:
+      description: The login body.
+      properties:
+        email:
+          description: the address
+          maxLength: 320
+          minLength: 0
+          type: string
+        password:
+          description: |-
+            the password. Length-bounded, because Argon2id spends 19 MiB per attempt and an
+            unbounded field is an invitation to spend it on a megabyte of nothing
+          maxLength: 200
+          minLength: 0
+          type: string
+      required:
+      - email
+      - password
+      type: object
+    MediaView:
+      description: |-
+        What a client learns about a stored file.
+
+        Deliberately no bytes and no unsigned path. `urls` carries signed, short-lived links per
+        variant and nothing else (REQ-MED-010); a field with a raw path would be a field that bypasses the
+        signature, the expiry and the dedicated hostname at once.
+
+        When the scan has not finished, `urls` is empty rather than absent. A client showing a
+        placeholder needs to know the upload exists and is not yet retrievable, which is a different state
+        from "no such file" (REQ-MED-013).
+      properties:
+        byteSize:
+          description: the size of the original
+          format: int64
+          type: integer
+        heightPx:
+          description: the height for an image, or `null`
+          format: int32
+          type: integer
+        id:
+          description: the media object
+          format: uuid
+          type: string
+        mediaType:
+          description: the detected type, never the declared one
+          type: string
+        scanState:
+          description: where the scan stands; only `CLEAN` yields URLs
+          type: string
+        urls:
+          additionalProperties:
+            type: string
+          description: variant name to signed URL, empty until the scan says clean
+          type: object
+        widthPx:
+          description: the width for an image, or `null`
+          format: int32
+          type: integer
+      type: object
+    Problem:
+      additionalProperties: true
+      description: 'An error, as RFC 9457 describes one. A client branches on `type` and never on `detail`:
+        the URI is stable and documented under `api/problems/`, the prose is not and is translated (REQ-API-003).'
+      properties:
+        detail:
+          description: What happened this time, in a sentence. Not stable; do not branch on it.
+          type: string
+        instance:
+          description: The path of the request that failed.
+          format: uri
+          type: string
+        status:
+          description: The HTTP status, repeated in the body.
+          format: int32
+        title:
+          description: The condition stable, human-readable name.
+          type: string
+        traceId:
+          description: The identifier of this request in the server log. Quoting it in a report leads
+            straight to the operation (REQ-NFR-042).
+          type: string
+        type:
+          description: What went wrong, as an identifier. One of the tokens in `docs/reference/problem-types.yaml`,
+            under `https://home-inv.example/problems/`. Fixed for the product rather than derived from
+            a deployment hostname, so a client recognises it from every instance.
+          format: uri
+          type: string
+      required:
+      - status
+      - title
+      - type
+    RenameLocationRequest:
+      description: The body of a rename.
+      properties:
+        name:
+          description: the new name
+          maxLength: 300
+          minLength: 0
+          type: string
+      required:
+      - name
+      type: object
+    SearchResult:
+      description: What was found.
+      properties:
+        items:
+          description: the matching items
+          items:
+            $ref: '#/components/schemas/ItemView'
+          type: array
+        nextCursor:
+          description: the cursor for the following page, or `null` when this was the last
+          type: string
+      type: object
+    SessionView:
+      description: Who the caller is.
+      properties:
+        email:
+          description: the address they logged in with
+          type: string
+        role:
+          description: |-
+            the membership's role. Returned so the client can decide what to *offer*; it never
+            decides what is allowed, which happens in the application layer on every request
+            (REQ-SEC-022). A UI that shows a button nobody may press teaches people to ignore errors.
+          type: string
+        tenantId:
+          description: the tenant this session acts for
+          format: uuid
+          type: string
+        userId:
+          description: the person
+          format: uuid
+          type: string
+      type: object
+    UpdateItemRequest:
+      description: 'The body of an update. `kind` is absent: a physical item does not become a digital
+        one.'
+      properties:
+        description:
+          description: the new description
+          maxLength: 20000
+          minLength: 0
+          type: string
+        locationId:
+          description: the new location; required while the item is physical
+          format: uuid
+          type: string
+        name:
+          description: the new name
+          maxLength: 500
+          minLength: 0
+          type: string
+        quantity:
+          description: the new quantity; `null` means one
+          minimum: 0
+          type: number
+        quantityUnit:
+          description: the new unit
+          maxLength: 30
+          minLength: 0
+          type: string
+      required:
+      - name
+      type: object
+info:
+  contact:
+    email: lucas.greuloch@gmail.com
+    name: Lucas Greuloch (greluc)
+    url: https://github.com/greluc/Home-Inventory
+  description: |-
+    The HTTP surface of a self-hosted Home Inventory instance.
+
+    This document is generated from the implementation and committed (ADR-0049); it describes what the code does rather than what it was meant to do. Errors follow RFC 9457 on every endpoint, and a client branches on the `type` URI, which is registered in `docs/reference/problem-types.yaml` and documented under `api/problems/` (REQ-API-003).
+
+    Paths are versioned. Within a major version a field may be added and an optional one may appear, and nothing a client already reads changes meaning (REQ-API-008).
+  license:
+    name: AGPL-3.0-or-later
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+  title: Home Inventory API
+  version: v1
+openapi: 3.1.0
+paths:
+  /api/v1/auth/login:
+    post:
+      description: |-
+        Verifies credentials and establishes a session.
+
+        Any session that existed before the login is invalidated and a new one created. That is what
+        prevents session fixation: an id an attacker planted beforehand is never the id the
+        authenticated session ends up with.
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        description: the credentials
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+          description: who the caller now is
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '429':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Rate limited (`rate-limited`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Verifies credentials and establishes a session
+  /api/v1/auth/logout:
+    post:
+      description: |-
+        Ends the session.
+
+        Always `204`, whether or not there was a session. A client cleaning up after itself
+        should not have to care, and the answer says nothing about whether the caller was logged in.
+      operationId: logout
+      responses:
+        '204':
+          description: No Content
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Ends the session
+  /api/v1/auth/me:
+    get:
+      description: Who the caller is.
+      operationId: me
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+          description: the session view
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Who the caller is.
+  /api/v1/items:
+    post:
+      description: |-
+        Creates an item, or returns the one that is already there.
+
+        `201` when this request created it, `200` when an identical creation had already
+        happened — which is what makes a client's retry safe (REQ-CORE-001). A different item under the
+        same id is a `409`.
+      operationId: createItem
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemRequest'
+        description: the item to create
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: An identical item already existed under this id; this is that item.
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: This request created the item. `Location` names it.
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Resource exists (`resource-exists`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates an item, or returns the one that is already there
+  /api/v1/items/{id}:
+    delete:
+      description: |-
+        Deletes an item, leaving a tombstone.
+
+        `204` whether or not the item was already deleted: a client retrying a request whose
+        answer it never saw must not be told it failed for succeeding twice.
+      operationId: deleteItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Deletes an item, leaving a tombstone
+    get:
+      description: Reads one item.
+      operationId: getItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: the item
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Reads one item.
+    put:
+      description: Replaces the mutable fields of an item.
+      operationId: updateItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItemRequest'
+        description: the new values
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: the changed item
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Replaces the mutable fields of an item.
+  /api/v1/locations:
+    post:
+      description: Creates a location.
+      operationId: createLocation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+        description: what to create
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationView'
+          description: the new location
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a location.
+  /api/v1/locations/{id}:
+    delete:
+      description: Deletes a location, if nothing is inside it.
+      operationId: deleteLocation
+      parameters:
+      - description: the location
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Resource exists (`resource-exists`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Deletes a location, if nothing is inside it.
+    get:
+      description: Reads one location, with the names from the root down to it.
+      operationId: getLocation
+      parameters:
+      - description: the location
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationView'
+          description: the location
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Reads one location, with the names from the root down to it.
+    put:
+      description: Renames a location.
+      operationId: renameLocation
+      parameters:
+      - description: the location
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameLocationRequest'
+        description: the new name
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationView'
+          description: the renamed location
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Renames a location.
+  /api/v1/locations/{id}/items:
+    get:
+      description: |-
+        The items in a location, optionally including everything below it (REQ-CORE-049).
+
+        This replaced a `/subtree` endpoint that returned a bare list of location ids. That
+        shape had two problems and neither was cosmetic: it answered a question nobody asked — the
+        requirement is about *items* — and it returned an unbounded collection, which
+        `REQ-NFR-010` forbids for every endpoint without exception.
+
+        The paging is the same cursor mechanism search uses, deliberately: one implementation, one
+        discipline, and a cursor that is bound to the location filter as well as to the text, so a
+        cursor from one location's page is refused on another's (REQ-SRCH-009).
+      operationId: itemsInLocation
+      parameters:
+      - description: the location
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: whether items in locations below this one count as well
+        in: query
+        name: includeSubtree
+        required: false
+        schema:
+          default: false
+          type: boolean
+      - description: an opaque cursor from a previous page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The items in a location, optionally including everything below it (REQ-CORE-049)
+  /api/v1/media:
+    get:
+      description: The files attached to one thing.
+      operationId: listMedia
+      parameters:
+      - description: '`ITEM` or `LOCATION`'
+        in: query
+        name: targetKind
+        required: true
+        schema:
+          pattern: ITEM|LOCATION
+          type: string
+      - description: the target
+        in: query
+        name: targetId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MediaView'
+                type: array
+          description: the attachments, primary image first
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The files attached to one thing.
+    post:
+      description: Uploads a file and attaches it to an item or a location.
+      operationId: uploadMedia
+      parameters:
+      - description: '`ITEM` or `LOCATION`'
+        in: query
+        name: targetKind
+        required: true
+        schema:
+          pattern: ITEM|LOCATION
+          type: string
+      - description: what to attach it to
+        in: query
+        name: targetId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: whether it becomes the image lists show
+        in: query
+        name: primary
+        required: false
+        schema:
+          default: false
+          type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                file:
+                  description: the upload
+                  format: binary
+                  type: string
+              required:
+              - file
+              type: object
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaView'
+          description: the stored file with its signed URLs
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`), or Malware detected (`malware-detected`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+        '503':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Scan unavailable (`scan-unavailable`)
+      summary: Uploads a file and attaches it to an item or a location.
+  /api/v1/media/{mediaObjectId}:
+    delete:
+      description: Detaches a file, removing the bytes when nothing references them.
+      operationId: detachMedia
+      parameters:
+      - description: the file
+        in: path
+        name: mediaObjectId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the target kind
+        in: query
+        name: targetKind
+        required: true
+        schema:
+          pattern: ITEM|LOCATION
+          type: string
+      - description: the target
+        in: query
+        name: targetId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Detaches a file, removing the bytes when nothing references them.
+  /api/v1/search:
+    get:
+      description: Searches items by name and description.
+      operationId: search
+      parameters:
+      - description: what to look for; omitted lists everything, paged the same way
+        in: query
+        name: q
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: '`de` or `en`, deciding which generated vector is searched'
+        in: query
+        name: language
+        required: false
+        schema:
+          default: de
+          maxLength: 5
+          minLength: 0
+          type: string
+      - description: an opaque cursor from a previous response, or omitted for the first page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many rows at most
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+          description: the matching items and a cursor for the next page, or none when this was the last
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Searches items by name and description.
+  /media/{tenantId}/{sha256}/{variant}:
+    get:
+      description: |-
+        Serves the bytes of one variant, to whoever presents a valid signature.
+
+        No session and no tenant context: the signature carries the authorisation, and the tenant is
+        part of what it covers, so a URL cannot be replayed with a different tenant in the path.
+
+        Every response is `Content-Disposition: attachment` and
+        `X-Content-Type-Options: nosniff`. Even for an image: a file served inline from a hostname
+        runs in that hostname's origin if a browser can be persuaded to treat it as a document, and the
+        dedicated media hostname exists precisely so that the answer to "what if it is" is "nothing of
+        ours".
+      operationId: serveMedia
+      parameters:
+      - description: the tenant, from the path and covered by the signature
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the content address
+        in: path
+        name: sha256
+        required: true
+        schema:
+          pattern: '[0-9a-f]{64}'
+          type: string
+      - description: '`thumb`, `preview` or `full`'
+        in: path
+        name: variant
+        required: true
+        schema:
+          pattern: thumb|preview|full
+          type: string
+      - description: the user the link was signed for, from the query and covered by the signature
+        in: query
+        name: u
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the expiry from the query
+        in: query
+        name: expires
+        required: true
+        schema:
+          format: int64
+          type: integer
+      - description: the signature from the query
+        in: query
+        name: signature
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            '*/*':
+              schema:
+                format: binary
+                type: string
+          description: the bytes, or `404` when the signature does not verify
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Serves the bytes of one variant, to whoever presents a valid signature

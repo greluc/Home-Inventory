@@ -209,13 +209,20 @@ assigned:
 
   - token: rate-limited
     status: 429
-    since: 1
+    since: 0
     summary: "A per-user, per-tenant or per-IP rate limit was reached."
     carries:
       - "`Retry-After` and the `RateLimit-*` headers (08 §8.2, REQ-SEC-064)"
     notes: >
       Login and code resolution have their own, stricter limits and use this same
       token — the limit that was hit is an operational detail, not a contract.
+
+
+      CORRECTED 2026-09-12: this read `since: 1` while `ApiExceptionHandler` has
+      emitted it since stage 0, because REQ-SEC-014's login throttle is a stage-0
+      requirement and answers with it. The general rate limit of REQ-SEC-064 is
+      stage 1; the token is not, and `since` records where the condition first
+      occurs.
     sources: ["08 §8.2 security table", "REQ-SEC-064"]
 
   - token: malware-detected
@@ -258,6 +265,65 @@ assigned:
     sources:
       - "08 §8.2 security table: JSON max. 1 MB, bulk operations max. 500 entries"
       - "REQ-SEC-065, REQ-NFR-078, RFC 9110 §15.5.14"
+
+  - token: method-not-allowed
+    status: 405
+    since: 0
+    summary: "The path exists and does not support this method."
+    notes: >
+      ADDED 2026-09-12, with `not-acceptable` and `unsupported-media-type`. All
+      three are produced by Spring's own request matching before a handler runs,
+      and all three are reachable today: `POST /api/v1/items/{id}` is a 405.
+      Without a token each of them was an error response with a shape of its own,
+      which is precisely what `REQ-API-003` forbids.
+    carries:
+      - "`Allow`, naming the methods the path does support (RFC 9110 §15.5.6)"
+    sources: ["RFC 9110 §15.5.6", "REQ-API-003"]
+
+  - token: not-acceptable
+    status: 406
+    since: 0
+    summary: >
+      The caller's `Accept` header allows no representation this endpoint can
+      produce.
+    notes: >
+      Every endpoint answers `application/json`, and errors `application/problem+json`
+      — which RFC 9457 §3 makes acceptable to a client that asked for JSON, and
+      which is sent regardless, because an error that cannot be represented is
+      still an error the caller has to be told about.
+    sources: ["RFC 9110 §15.5.7", "RFC 9457 §3", "REQ-API-003"]
+
+  - token: unsupported-media-type
+    status: 415
+    since: 0
+    summary: "The request's `Content-Type` is not one this endpoint reads."
+    notes: >
+      About the header, not about the bytes. An upload whose *content* is a type
+      this system does not store is `validation-failed` with a `422`, decided by
+      `MediaTypeDetector` after sniffing — a different condition with a different
+      answer, and deliberately a different token (REQ-MED-004).
+    sources: ["RFC 9110 §15.5.16", "REQ-API-003"]
+
+  - token: internal-error
+    status: 500
+    since: 0
+    summary: >
+      Something failed that the application does not have a specific answer for.
+      The request may be repeatable; nothing about what went wrong is disclosed.
+    carries:
+      - "`traceId`, and nothing else — the operator's log line is the detail"
+    notes: >
+      ADDED 2026-09-12. `REQ-API-003` requires one error format on every endpoint,
+      and until this existed an unexpected exception left through Spring Boot's
+      own `/error` handler as `{"timestamp": ..., "error": ...}` — a second,
+      undocumented shape, on the one path a client is least able to anticipate.
+
+
+      The `detail` is a fixed sentence. An exception message is written for an
+      operator and regularly contains a query, a path or an identifier, and the
+      `traceId` is what connects the caller's report to the line that has all of
+      it (`REQ-NFR-042`).
+    sources: ["08 §8.2: every error is problem+json", "REQ-API-003, REQ-NFR-042"]
 
   - token: plugin-unavailable
     status: 503

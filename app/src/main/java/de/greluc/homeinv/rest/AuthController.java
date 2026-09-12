@@ -16,6 +16,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -24,6 +25,8 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -58,7 +61,8 @@ public class AuthController {
    * @param httpResponse the servlet response, which the security context is written to
    * @return who the caller now is
    */
-  @PostMapping("/login")
+  @PostMapping(value = "/login", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.RATE_LIMITED})
   @PublicEndpoint(
       reason =
           "It establishes the session every other permission is evaluated against. "
@@ -99,21 +103,20 @@ public class AuthController {
    * should not have to care, and the answer says nothing about whether the caller was logged in.
    *
    * @param httpRequest the servlet request
-   * @return an empty {@code 204}
    */
   @PostMapping("/logout")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
   @PublicEndpoint(
       reason =
           "Ending a session needs no permission, and a caller whose session already "
               + "expired must still get a clean answer rather than a 401 they can do "
               + "nothing about.")
-  public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
+  public void logout(HttpServletRequest httpRequest) {
     HttpSession session = httpRequest.getSession(false);
     if (session != null) {
       session.invalidate();
     }
     SecurityContextHolder.clearContext();
-    return ResponseEntity.noContent().build();
   }
 
   /**
@@ -122,7 +125,8 @@ public class AuthController {
    * @param user the authenticated principal
    * @return the session view
    */
-  @GetMapping("/me")
+  @GetMapping(value = "/me", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail(ProblemType.UNAUTHENTICATED)
   @PublicEndpoint(
       reason =
           "It reports on the session rather than on tenant data, and the filter chain "

@@ -193,6 +193,25 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("keep every endpoint of ours in the access layer")
+  void controllersLiveInTheAccessLayer() {
+    // The companion to the rule above, and the reason PermissionInterceptor may
+    // narrow itself to `de.greluc.homeinv.rest`: a controller anywhere else would
+    // be one the interceptor lets through, silently, because it looks like a
+    // handler the framework contributed. Two rules that each cover the other's
+    // gap (REQ-SEC-023).
+    noClasses()
+        .that()
+        .areAnnotatedWith(RestController.class)
+        .should()
+        .resideOutsideOfPackage("de.greluc.homeinv.rest..")
+        .because(
+            "PermissionInterceptor governs handlers in the access layer and lets framework "
+                + "handlers through; a controller outside it would be neither (REQ-SEC-023)")
+        .check(CLASSES);
+  }
+
+  @Test
   @DisplayName("let only the authorization block answer whether somebody may")
   void onlyAuthorizationDecides() {
     // REQ-SEC-022 and ADR-0010: REST, GraphQL and gRPC are adapters that decide

@@ -8,7 +8,7 @@ import de.greluc.homeinv.media.api.BlobStore;
 import de.greluc.homeinv.media.api.ImageProcessor;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.MediaTypeDetector;
-import de.greluc.homeinv.media.api.PayloadTooLargeException;
+import de.greluc.homeinv.platform.PayloadTooLargeException;
 import de.greluc.homeinv.media.api.VirusScanner;
 import java.io.IOException;
 import java.io.InputStream;

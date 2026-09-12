@@ -15,10 +15,10 @@ time*.
 
 | Aspect | Decision |
 |---|---|
-| Format | JSON lines, one event per line, to `stdout` |
+| Format | JSON lines, one event per line, to `stdout`, in **ECS** (`logging.structured.format.console: ecs`) — the schema the log shippers a self-hoster is likely to already run understand, and the one that carries the MDC as top-level fields rather than inside the message. `LogFormatIT` encodes an event and parses the result, which is REQ-NFR-041's "format verified" |
 | Collection | Podman/Quadlet: **journald** (`journalctl --user -u homeinv-api`) · Docker: `json-file` with rotation · Kubernetes: container logs. The operations documentation gives the commands for each way of running it. |
-| Mandatory fields | `timestamp`, `level`, `logger`, `message`, `traceId`, `spanId`, `tenantId`, `actorId`, `requestId` |
-| Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation |
+| Mandatory fields | `timestamp`, `level`, `logger`, `message`, `traceId`, `tenantId`, `actorId`. `spanId` and `requestId` arrive with the tracing agent at stage 1 (REQ-NFR-044): a span id without spans would be a field with nothing in it. *This row listed all seven as if they existed — corrected 2026-09-12.* |
+| Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation. It is a 128-bit W3C trace id, put in the MDC by `TraceIdFilter` and adopted from an incoming `traceparent` when there is one, so the OpenTelemetry agent of stage 1 fills the same field with the same shape and nothing downstream changes |
 | Levels | `ERROR` only when someone must act · `WARN` for degraded operation · `INFO` for state changes · `DEBUG` off, switchable per logger at runtime |
 | Personal data | No passwords, tokens, keys or `sensitive` values. A test with known test values verifies this. IP addresses removed after 7 days. |
 | Tenant separation | `tenantId` on every line, so that analysis can be tenant-scoped |
@@ -64,6 +64,11 @@ Prometheus, Grafana and ready-made dashboards ships with the product.
 | **JVM** | Memory, collector pauses, threads, virtual threads, class loading |
 
 ## 13.4 Distributed tracing
+
+Stage 1. The `traceId` of [13.2](#132-logging) exists from stage 0 without it and
+is its own thing: a per-request identifier, generated in a filter, so that a user
+report and a log line can be connected on a deployment that runs nothing else.
+Spans, and therefore the chains below, need the agent.
 
 OpenTelemetry (Java agent, automatic). A trace spans: HTTP ingress → use case →
 database → outbox → RabbitMQ → worker → plugin call. Exactly the chains you

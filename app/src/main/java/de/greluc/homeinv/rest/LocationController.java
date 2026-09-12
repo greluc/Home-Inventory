@@ -20,8 +20,11 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,9 +51,14 @@ public class LocationController {
    * @param user the authenticated caller
    * @return the new location
    */
-  @PostMapping
+  @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_CREATE)
-  public ResponseEntity<LocationView> create(
+  @CanFail(ProblemType.NOT_FOUND)
+  // Redundant at run time — `ResponseEntity.created` sets the same status — and
+  // not in the document, which would otherwise describe the 200 springdoc infers
+  // from the return type for an endpoint that never answers one.
+  @ResponseStatus(HttpStatus.CREATED)
+  public ResponseEntity<LocationView> createLocation(
       @Valid @RequestBody CreateLocationRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
     LocationView view =
@@ -67,9 +75,10 @@ public class LocationController {
    * @param id the location
    * @return the location
    */
-  @GetMapping("/{id}")
+  @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_READ)
-  public LocationView get(@PathVariable UUID id) {
+  @CanFail(ProblemType.NOT_FOUND)
+  public LocationView getLocation(@PathVariable UUID id) {
     return locations.get(id);
   }
 
@@ -81,9 +90,10 @@ public class LocationController {
    * @param user the authenticated caller
    * @return the renamed location
    */
-  @PutMapping("/{id}")
+  @PutMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_UPDATE)
-  public LocationView rename(
+  @CanFail(ProblemType.NOT_FOUND)
+  public LocationView renameLocation(
       @PathVariable UUID id,
       @Valid @RequestBody RenameLocationRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
@@ -108,9 +118,10 @@ public class LocationController {
    * @param limit how many at most; capped at 200 by the service
    * @return the page and a cursor for the next one
    */
-  @GetMapping("/{id}/items")
+  @GetMapping(value = "/{id}/items", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
-  public SearchService.SearchResult items(
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public SearchService.SearchResult itemsInLocation(
       @PathVariable UUID id,
       @RequestParam(required = false, defaultValue = "false") boolean includeSubtree,
       @RequestParam(required = false) @Size(max = 500) String cursor,
@@ -131,14 +142,13 @@ public class LocationController {
    *
    * @param id the location
    * @param user the authenticated caller
-   * @return an empty 204
    */
   @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.LOCATION_DELETE)
-  public ResponseEntity<Void> delete(
-      @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.RESOURCE_EXISTS})
+  public void deleteLocation(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     locations.delete(id, user.userId());
-    return ResponseEntity.noContent().build();
   }
 
   /**

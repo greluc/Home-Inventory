@@ -4,34 +4,34 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
-import de.greluc.homeinv.media.api.PayloadTooLargeException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
-import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.platform.InvalidCursorException;
-import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.platform.NotFoundException;
+import de.greluc.homeinv.platform.PayloadTooLargeException;
 import jakarta.servlet.http.HttpServletRequest;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * Turns every exception that escapes a controller into RFC 9457 {@code application/problem+json}.
@@ -63,11 +63,7 @@ public class ApiExceptionHandler {
     // Not logged above DEBUG: a 404 is an ordinary answer, and logging it at WARN
     // lets anyone fill the log by requesting random ids.
     log.debug("Not found: {}", exception.getMessage());
-    return problem(
-        HttpStatus.NOT_FOUND,
-        ProblemTypes.NOT_FOUND,
-        "Not found",
-        "No such " + exception.getResource() + " is visible to you.",
+    return problem(ProblemType.NOT_FOUND, "No such " + exception.getResource() + " is visible to you.",
         request);
   }
 
@@ -88,11 +84,7 @@ public class ApiExceptionHandler {
     // At WARN: a denial is either an attack or a misconfigured role, and both are
     // worth seeing. The caller is already in the MDC of every line (REQ-NFR-041).
     log.warn("Forbidden: {}", exception.getMessage());
-    return problem(
-        HttpStatus.FORBIDDEN,
-        ProblemTypes.FORBIDDEN,
-        "Forbidden",
-        "Your role does not permit this operation.",
+    return problem(ProblemType.FORBIDDEN, "Your role does not permit this operation.",
         request);
   }
 
@@ -110,11 +102,7 @@ public class ApiExceptionHandler {
   public ProblemDetail handleAlreadyExists(
       ItemAlreadyExistsException exception, HttpServletRequest request) {
     ProblemDetail problem =
-        problem(
-            HttpStatus.CONFLICT,
-            ProblemTypes.RESOURCE_EXISTS,
-            "Resource exists",
-            "An item with this id already exists in this tenant with different content.",
+        problem(ProblemType.RESOURCE_EXISTS, "An item with this id already exists in this tenant with different content.",
             request);
     problem.setProperty("id", exception.getId().toString());
     return problem;
@@ -134,11 +122,7 @@ public class ApiExceptionHandler {
   @ExceptionHandler(InvalidCredentialsException.class)
   public ProblemDetail handleInvalidCredentials(
       InvalidCredentialsException exception, HttpServletRequest request) {
-    return problem(
-        HttpStatus.UNAUTHORIZED,
-        ProblemTypes.UNAUTHENTICATED,
-        "Unauthenticated",
-        "The e-mail address or password is not correct.",
+    return problem(ProblemType.UNAUTHENTICATED, "The e-mail address or password is not correct.",
         request);
   }
 
@@ -157,11 +141,7 @@ public class ApiExceptionHandler {
   public ProblemDetail handleTooManyAttempts(
       TooManyAttemptsException exception, HttpServletRequest request) {
     ProblemDetail problem =
-        problem(
-            HttpStatus.TOO_MANY_REQUESTS,
-            ProblemTypes.RATE_LIMITED,
-            "Too many attempts",
-            "Too many failed login attempts. Try again shortly.",
+        problem(ProblemType.RATE_LIMITED, "Too many failed login attempts. Try again shortly.",
             request);
     problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
     return problem;
@@ -178,11 +158,7 @@ public class ApiExceptionHandler {
   public ProblemDetail handleLocationNotEmpty(
       LocationNotEmptyException exception, HttpServletRequest request) {
     ProblemDetail problem =
-        problem(
-            HttpStatus.CONFLICT,
-            ProblemTypes.RESOURCE_EXISTS,
-            "Location not empty",
-            exception.getMessage(),
+        problem(ProblemType.RESOURCE_EXISTS, exception.getMessage(),
             request);
     problem.setProperty("locationId", exception.getLocationId().toString());
     return problem;
@@ -198,11 +174,7 @@ public class ApiExceptionHandler {
   @ExceptionHandler(TooDeepException.class)
   public ProblemDetail handleTooDeep(TooDeepException exception, HttpServletRequest request) {
     ProblemDetail problem =
-        problem(
-            HttpStatus.UNPROCESSABLE_ENTITY,
-            ProblemTypes.VALIDATION_FAILED,
-            "Validation failed",
-            exception.getMessage(),
+        problem(ProblemType.VALIDATION_FAILED, exception.getMessage(),
             request);
     problem.setProperty("maxDepth", exception.getMaxDepth());
     return problem;
@@ -222,11 +194,7 @@ public class ApiExceptionHandler {
   @ExceptionHandler(InvalidCursorException.class)
   public ProblemDetail handleInvalidCursor(
       InvalidCursorException exception, HttpServletRequest request) {
-    return problem(
-        HttpStatus.BAD_REQUEST,
-        ProblemTypes.MALFORMED_REQUEST,
-        "Malformed request",
-        "The pagination cursor is not valid for this query. Start from the first page.",
+    return problem(ProblemType.MALFORMED_REQUEST, "The pagination cursor is not valid for this query. Start from the first page.",
         request);
   }
 
@@ -243,11 +211,7 @@ public class ApiExceptionHandler {
   @ExceptionHandler(MalwareDetectedException.class)
   public ProblemDetail handleMalware(MalwareDetectedException exception, HttpServletRequest request) {
     log.warn("Upload rejected by the malware scanner: {}", exception.getSignature());
-    return problem(
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        URI.create("https://home-inv.example/problems/malware-detected"),
-        "Malware detected",
-        "The malware scan rejected this upload.",
+    return problem(ProblemType.MALWARE_DETECTED, "The malware scan rejected this upload.",
         request);
   }
 
@@ -265,11 +229,7 @@ public class ApiExceptionHandler {
   public ProblemDetail handleScannerDown(
       ScannerUnavailableException exception, HttpServletRequest request) {
     log.error("The malware scanner is unavailable; uploads are refused", exception);
-    return problem(
-        HttpStatus.SERVICE_UNAVAILABLE,
-        URI.create("https://home-inv.example/problems/scan-unavailable"),
-        "Scan unavailable",
-        "Uploads are refused while the malware scanner cannot be reached. Try again shortly.",
+    return problem(ProblemType.SCAN_UNAVAILABLE, "Uploads are refused while the malware scanner cannot be reached. Try again shortly.",
         request);
   }
 
@@ -283,11 +243,7 @@ public class ApiExceptionHandler {
   @ExceptionHandler(PayloadTooLargeException.class)
   public ProblemDetail handleTooLarge(
       PayloadTooLargeException exception, HttpServletRequest request) {
-    return problem(
-        HttpStatus.PAYLOAD_TOO_LARGE,
-        ProblemTypes.PAYLOAD_TOO_LARGE,
-        "Payload too large",
-        exception.getMessage(),
+    return problem(ProblemType.PAYLOAD_TOO_LARGE, exception.getMessage(),
         request);
   }
 
@@ -302,11 +258,7 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnsupportedType(
       UnsupportedMediaTypeException exception, HttpServletRequest request) {
     ProblemDetail problem =
-        problem(
-            HttpStatus.UNPROCESSABLE_ENTITY,
-            ProblemTypes.VALIDATION_FAILED,
-            "Validation failed",
-            exception.getMessage(),
+        problem(ProblemType.VALIDATION_FAILED, exception.getMessage(),
             request);
     problem.setProperty("detectedType", exception.getDetectedType());
     return problem;
@@ -337,11 +289,7 @@ public class ApiExceptionHandler {
                         "message", error.getDefaultMessage() == null ? "invalid" : error.getDefaultMessage())));
 
     ProblemDetail problem =
-        problem(
-            HttpStatus.UNPROCESSABLE_ENTITY,
-            ProblemTypes.VALIDATION_FAILED,
-            "Validation failed",
-            "The request is well formed but violates a rule.",
+        problem(ProblemType.VALIDATION_FAILED, "The request is well formed but violates a rule.",
             request);
     problem.setProperty("errors", errors);
     return problem;
@@ -388,11 +336,7 @@ public class ApiExceptionHandler {
                                         : error.getDefaultMessage()))));
 
     ProblemDetail problem =
-        problem(
-            HttpStatus.UNPROCESSABLE_ENTITY,
-            ProblemTypes.VALIDATION_FAILED,
-            "Validation failed",
-            "A request parameter is well formed but outside its permitted range.",
+        problem(ProblemType.VALIDATION_FAILED, "A request parameter is well formed but outside its permitted range.",
             request);
     problem.setProperty("errors", errors);
     return problem;
@@ -416,11 +360,7 @@ public class ApiExceptionHandler {
     log.warn(
         "A domain invariant was reached without a matching validation constraint: {}",
         exception.getMessage());
-    return problem(
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        ProblemTypes.VALIDATION_FAILED,
-        "Validation failed",
-        exception.getMessage(),
+    return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(),
         request);
   }
 
@@ -435,6 +375,16 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnreadable(
       HttpMessageNotReadableException exception, HttpServletRequest request) {
 
+    // A body that stopped because it hit the limit is not a parse failure either.
+    // `JsonBodyLimitFilter` refuses a declared Content-Length before anything is
+    // read; a chunked body is only known to be oversized while Jackson is reading
+    // it, and what reaches here is the limit's exception wrapped in a parse one.
+    for (Throwable cause = exception.getCause(); cause != null; cause = cause.getCause()) {
+      if (cause instanceof PayloadTooLargeException) {
+        return handleTooLarge((PayloadTooLargeException) cause, request);
+      }
+    }
+
     // An unknown field is not a parse failure and must not be answered as one.
     // The body was well-formed; it named something this endpoint does not accept,
     // and REQ-SEC-029 makes that a rejection rather than something to ignore. A
@@ -444,11 +394,7 @@ public class ApiExceptionHandler {
     if (unknown != null) {
       log.debug("Unknown field in request body: {}", unknown);
       ProblemDetail problem =
-          problem(
-              HttpStatus.UNPROCESSABLE_ENTITY,
-              ProblemTypes.VALIDATION_FAILED,
-              "Validation failed",
-              "The request contains a field this endpoint does not accept.",
+          problem(ProblemType.VALIDATION_FAILED, "The request contains a field this endpoint does not accept.",
               request);
       problem.setProperty("errors", List.of(Map.of("field", unknown, "message", "unknown field")));
       return problem;
@@ -457,12 +403,74 @@ public class ApiExceptionHandler {
     // The parser's own message can quote the payload. It is not echoed, because a
     // malformed body may contain whatever the sender put in it.
     log.debug("Unreadable request body", exception);
-    return problem(
-        HttpStatus.BAD_REQUEST,
-        ProblemTypes.MALFORMED_REQUEST,
-        "Malformed request",
-        "The request body could not be parsed.",
+    return problem(ProblemType.MALFORMED_REQUEST, "The request body could not be parsed.",
         request);
+  }
+
+  /**
+   * Answers an upload the servlet container refused before the pipeline saw it.
+   *
+   * <p>{@code spring.servlet.multipart.max-file-size} is the outer bound that stops an unbounded
+   * read; the upload pipeline's own, lower ceiling is the one users meet. Whichever fires, the
+   * answer is the same document — which is what {@code REQ-NFR-078} asks for in so many words: an
+   * oversized body is rejected by {@code api} as {@code application/problem+json} and not by
+   * {@code web} as markup.
+   *
+   * @param exception the container's refusal
+   * @param request the request
+   * @return a {@code 413} problem detail
+   */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  public ProblemDetail handleUploadTooLarge(
+      MaxUploadSizeExceededException exception, HttpServletRequest request) {
+    log.debug("Upload refused by the container limit", exception);
+    return problem(ProblemType.PAYLOAD_TOO_LARGE, "The upload exceeds the size this server accepts.",
+        request);
+  }
+
+  /**
+   * Answers everything else at all — the framework's own refusals, and the unanticipated.
+   *
+   * <p>Two cases in one handler, because {@code @ExceptionHandler} matches on a class and the
+   * framework's refusals do not share one. An unknown path, a method a path does not support, a
+   * {@code Content-Type} nothing reads, a query parameter that is not a UUID: Spring reports each as
+   * an {@link ErrorResponse}, but {@code HttpMediaTypeNotSupportedException} arrives through {@code
+   * ServletException} and {@code ErrorResponseException} through {@code NestedRuntimeException}.
+   * Registering the interface is not possible; testing for it here is, and it is total.
+   *
+   * <p>Anything that is <em>not</em> an {@code ErrorResponse} is a {@code 500}: a bug in a handler,
+   * a datastore that went away mid-request, a library throwing something nobody anticipated. The
+   * class Javadoc says every exception that escapes a controller becomes RFC 9457, and before this
+   * handler existed that sentence was true only of the ones somebody had thought of.
+   *
+   * <p>Nothing about the failure reaches the caller — not the class, not the message, and not the
+   * framework's own {@code detail}, which quotes the request ("Invalid UUID string: …"). All of it
+   * is written for an operator; the {@code traceId} in the response is the entire mechanism by which
+   * "it said something went wrong" becomes a specific line in the log ({@code REQ-NFR-042}).
+   *
+   * @param exception the failure
+   * @param request the request
+   * @return the problem detail for the status the framework chose, or a {@code 500} that discloses
+   *     nothing
+   */
+  @ExceptionHandler(Exception.class)
+  public ResponseEntity<ProblemDetail> handleUnexpected(
+      Exception exception, HttpServletRequest request) {
+
+    if (exception instanceof ErrorResponse refusal) {
+      int status = refusal.getStatusCode().value();
+      log.debug("Refused by the framework with {}: {}", status, exception.getMessage());
+      ProblemDetail refused =
+          Problems.forStatus(
+              status, "The request was refused before it reached a handler.", request);
+      return ResponseEntity.status(refused.getStatus()).body(refused);
+    }
+
+    // ERROR, with the stack trace: this is the branch that means the application
+    // met something it has no answer for, and every occurrence is worth a look.
+    log.error("Unhandled exception while serving {}", request.getRequestURI(), exception);
+    ProblemDetail unexpected = problem(ProblemType.INTERNAL_ERROR, Problems.INTERNAL_DETAIL, request);
+    return ResponseEntity.status(unexpected.getStatus()).body(unexpected);
   }
 
   /**
@@ -487,24 +495,22 @@ public class ApiExceptionHandler {
   /**
    * Builds a problem detail with the members every response in this application carries.
    *
-   * @param status the HTTP status
-   * @param type the registered type URI
-   * @param title a short, stable, human-readable summary
+   * <p>Delegates, because {@link ProblemEntryPoint} and {@link ProblemErrorController} answer the
+   * requests that never reach a controller and have to produce the identical shape.
+   *
+   * <p>The status and the title come from the type rather than from the call site. They used to be
+   * arguments, and two call sites had drifted: a {@code 429} titled "Too many attempts" and a
+   * {@code 409} titled "Location not empty", both of which RFC 9457 §3.1.4 says should be the same
+   * for every occurrence of a type — the varying part is {@code detail}, which both of them also
+   * carry.
+   *
+   * @param type the condition, which decides the status and the title
    * @param detail what happened, in a sentence a user could read
    * @param request the request, for the {@code instance} member
    * @return the problem detail, ready to return
    */
   private static ProblemDetail problem(
-      HttpStatus status, URI type, String title, String detail, HttpServletRequest request) {
-    ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
-    problem.setType(type);
-    problem.setTitle(title);
-    problem.setInstance(URI.create(request.getRequestURI()));
-
-    String traceId = MDC.get("traceId");
-    if (traceId != null) {
-      problem.setProperty("traceId", traceId);
-    }
-    return problem;
+      ProblemType type, String detail, HttpServletRequest request) {
+    return Problems.of(type, detail, request);
   }
 }

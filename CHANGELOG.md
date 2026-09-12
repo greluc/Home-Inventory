@@ -21,6 +21,21 @@ commit".
 
 ### Added
 
+- **The API describes itself.** `api/openapi.yaml` is generated from the running
+  application and committed, so a client has a contract to build against — every
+  endpoint, every field, and every way each one can fail. The build fails while
+  the document and the code disagree (**REST API**).
+
+- **Errors say what went wrong, everywhere.** Every failure now answers with an
+  RFC 9457 document carrying a stable `type` a client can branch on — including
+  the ones that never reach the application: an expired session, an unknown path,
+  a method a path does not support. Each response carries a `traceId` that appears
+  in the server log for the same request, so a report of "it said something went
+  wrong" leads to the operation (**REST API**).
+
+- **The log is JSON.** One event per line in ECS, with `traceId`, `tenantId` and
+  `actorId` as fields, so a log shipper can query them instead of matching text.
+
 - **The gates that read the repository rather than run it.** Secret scanning in
   CI and as a pre-commit hook, daily vulnerability scans of the dependencies and
   of all three images, CodeQL for Java and TypeScript, SpotBugs with

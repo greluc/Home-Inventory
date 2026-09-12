@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.greluc.homeinv.media.api.BlobStore;
 import de.greluc.homeinv.media.api.ImageProcessor;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
-import de.greluc.homeinv.media.api.PayloadTooLargeException;
+import de.greluc.homeinv.platform.PayloadTooLargeException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
 import de.greluc.homeinv.media.api.VirusScanner;
