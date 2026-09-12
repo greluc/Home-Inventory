@@ -1,0 +1,75 @@
+# egress-proxy/
+
+The one route out of a deployment.
+
+`api` and `worker` have **no** route out at all — that is topology, not
+configuration ([ADR-0026](../docs/adr/0026-core-outbound-via-plugins.md),
+[ADR-0027](../docs/adr/0027-egress-enforcement.md)). The containers that do need
+one reach it through here, and here refuses everything that is not on an
+allowlist generated from [`deploy/services.yaml`](../deploy/services.yaml).
+
+## What it is for at stage 0
+
+One caller and one host: ClamAV fetching its signatures from
+`database.clamav.net`. Without it a mandatory, fail-closed scanner would scan
+against whatever was in the image on the day it was built
+([ADR-0036](../docs/adr/0036-scanner-egress.md)) — which is why this container
+runs in **every** profile, `minimal` included, although `minimal` has no plugins
+at all.
+
+## Two checks, and both have to pass
+
+| Check | Why one alone is not enough |
+|---|---|
+| The **name** is on the allowlist | An address check alone would let any host on the internet through |
+| Every **address** it resolves to is outside the private, link-local, carrier-grade-NAT and loopback ranges | A name check alone is defeated by a DNS record that answers `169.254.169.254` — the cloud metadata endpoint, which is link-local on every provider |
+
+Names are resolved **here**, never trusted from the caller, and the match is
+exact: ADR-0027 allows a host, not a domain. There is no wildcard, so
+`evil.database.clamav.net` is a different host that nobody declared.
+
+## What it never does
+
+**Terminate TLS.** With `CONNECT` it sees a host and a port and copies bytes; the
+certificate the caller verifies is the real target's. A TLS-intercepting proxy
+would put every plugin's credentials within reach of this one container, which is
+the opposite of what it exists for.
+
+A redirect to an undeclared host fails because following it needs a new
+`CONNECT` the allowlist rejects — **not** because the proxy inspects the
+redirect, which under `CONNECT` it cannot see.
+
+## What is not here yet
+
+The per-plugin half, which is stage 1 with the plugin runtime
+([ADR-0028](../docs/adr/0028-plugin-runtime-stage-1.md),
+[ADR-0037](../docs/adr/0037-per-plugin-network-segments.md)): one listener per
+plugin segment, the caller identified by the interface a connection arrived on,
+the allowlist merged from granted manifests, and the plain-TCP forwarding mode
+for targets that are not HTTP. The log lines already carry a caller for that
+reason.
+
+## Running it
+
+```sh
+cargo test                       # the parser and the ranges
+cargo clippy -- -D warnings      # what CI runs
+cargo build --release
+HOMEINV_EGRESS_ALLOWLIST=./allowlist.conf ./target/release/homeinv-egress-proxy
+```
+
+It refuses to start without an allowlist, and refuses to start with an empty one.
+A missing file and an empty one look identical from the outside — every fetch
+refused — and the difference is a deployment mistake somebody has to be told
+about, which is the same reasoning `REQ-NFR-046` applies to secrets.
+
+## The image
+
+`scratch`, like [`blobstore/`](../blobstore/README.md) and for the same reason:
+this is the container with a route out, so there is nothing in it for anybody who
+reaches the process to run. DNS still works — the binary is statically linked
+against musl, whose resolver reads `/etc/resolv.conf` directly rather than
+through NSS plugins, and every runtime mounts that file in.
+
+The health check is the binary with `--health` rather than a script, because
+there is no shell to run one.

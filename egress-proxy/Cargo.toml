@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-egress-proxy"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "The one route out of a Home Inventory deployment"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+# Everything this needs is a socket, a copy loop and a clock. No HTTP library:
+# the two shapes it handles are a CONNECT line and an absolute-form request line,
+# and a parser for those is forty lines — against a dependency tree that would be
+# the largest thing in a container limited to 32 MiB.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "signal", "fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[profile.release]
+# The same budget as the blob store, for the same reason (ADR-0050): the matrix
+# gives this container 32 MiB and every byte of the image is also attack surface.
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
