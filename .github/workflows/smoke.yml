@@ -147,18 +147,17 @@ jobs:
             # restriction off host-wide would also turn it off for everything the
             # deployment then starts, and this job exists to prove rootless works
             # rather than that it works with a protection removed.
-            if [ -d /etc/apparmor.d ]; then
-              sudo tee /etc/apparmor.d/home.runner.bin.rootlesskit >/dev/null <<'PROFILE'
-            abi <abi/4.0>,
-            include <tunables/global>
-
-            /home/runner/bin/rootlesskit flags=(unconfined) {
-              userns,
-              include if exists <local/home.runner.bin.rootlesskit>
-            }
-            PROFILE
-              sudo systemctl restart apparmor.service || true
-            fi
+            profile=/etc/apparmor.d/home.runner.bin.rootlesskit
+            printf '%s\n' \
+              'abi <abi/4.0>,' \
+              'include <tunables/global>' \
+              '' \
+              '/home/runner/bin/rootlesskit flags=(unconfined) {' \
+              '  userns,' \
+              '  include if exists <local/home.runner.bin.rootlesskit>' \
+              '}' \
+              | sudo tee "$profile" >/dev/null
+            sudo systemctl restart apparmor.service || true
 
             # The rootful daemon goes first. FORCE_ROOTLESS_INSTALL alone gets the
             # installer past its own refusal and then its `systemctl --user start

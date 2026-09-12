@@ -13,6 +13,7 @@ runs before pushing.
 | [`adr_links.py`](adr_links.py) | An amendment recorded in one direction only: ADR-A says it amends ADR-B and ADR-B does not say so, an amendment aimed at a requirement or chapter that does not exist, or an index row that omits one | A4b in [ADR-0000](../docs/adr/0000-open-points.md) |
 | [`unbacked_claims.py`](unbacked_claims.py) | A **new** passage promising a property — *enforced*, *cannot*, *is refused*, *guaranteed* — without naming a requirement, ADR, test or check in the same paragraph | A7 in [ADR-0000](../docs/adr/0000-open-points.md), risk **R16** |
 | [`dead_links.py`](dead_links.py) | A relative link that resolves to nothing — resolved against what git tracks, so a wrong-case link fails here and not only on the Linux runner | Replaced a shell step on 2026-09-12 that had never passed |
+| [`workflow_shell.py`](workflow_shell.py) | A `run:` block that is not valid shell — a heredoc terminator that YAML indentation moved off column zero, most often | Two of those shipped on 2026-09-12 |
 | [`render_problems.py`](render_problems.py) | A `problem.type` document that has drifted from [`problem-types.yaml`](../docs/reference/problem-types.yaml), which is the registry | A8 in [ADR-0000](../docs/adr/0000-open-points.md) |
 
 ## The one with a baseline

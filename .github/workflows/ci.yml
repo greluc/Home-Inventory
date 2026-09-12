@@ -715,3 +715,12 @@ jobs:
       # the runner.
       - name: No dead relative link
         run: python tools/dead_links.py
+
+      # A workflow step is a shell script nothing parses until a runner reaches
+      # it, which makes a syntax error the most expensive typo here: a push, a
+      # queue and several minutes, reported as whatever step was running. Two
+      # went out on 2026-09-12, both a quoted heredoc inside an indented block —
+      # YAML strips the base indentation and the terminator arrives indented.
+      # `bash -n` sees that in a millisecond.
+      - name: Every workflow step is valid shell
+        run: python tools/workflow_shell.py
