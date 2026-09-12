@@ -32,3 +32,15 @@ FROM docker.io/library/postgres@sha256:d3e1620b530c944afa6e887d22eb899824da68e19
 # the mounted secrets. They run in name order, once, at first initialisation.
 COPY --chmod=0444 deploy/postgres/initdb/00-roles.sql /docker-entrypoint-initdb.d/00-roles.sql
 COPY --chmod=0555 deploy/postgres/initdb/01-role-passwords.sh /docker-entrypoint-initdb.d/01-role-passwords.sh
+
+# The uid the deployment runs this as, stated here as well as in the matrix.
+#
+# `deploy/services.yaml` has carried `user: "70:70"` from the start — the image's
+# own postgres account, and not 10001, because initdb refuses to run as a uid it
+# does not own the data directory as. Saying it only there left the image itself
+# defaulting to root, which is REQ-SEC-084's concern and which trivy reports as
+# DS-0002: an image is a thing somebody can run without our compose file.
+#
+# 70:70 and not the name: a rootless runtime maps the id through subuid, and the
+# mapping is by number (ADR-0022).
+USER 70:70

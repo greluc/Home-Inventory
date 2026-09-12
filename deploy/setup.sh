@@ -249,7 +249,7 @@ HOMEINV_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint
 
-# The first owner. The one-shot `bootstrap` service creates this account and the
+# The first owner. The one-shot bootstrap service creates this account and the
 # tenant it owns, once, and does nothing on every run after that (ADR-0053). Its
 # password is a file like every other secret: deploy/secrets/bootstrap-password,
 # generated on the first run and never overwritten — write your own there before

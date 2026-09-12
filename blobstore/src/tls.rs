@@ -15,6 +15,8 @@
 
 use std::path::Path;
 
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tonic::transport::ServerTlsConfig;
 use tonic::transport::{Certificate, Identity};
 
@@ -45,25 +47,39 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
     // to parse private key" — says nothing about which of the three encodings was
     // expected. `openssl genpkey` writes PKCS#8 and BouncyCastle writes PKCS#1
     // for the same RSA key, so both spellings reach this code in practice.
-    let mut keys: Vec<(&'static str, Vec<u8>)> = Vec::new();
-    let mut certificates = Vec::new();
-    for item in rustls_pemfile::read_all(&mut bundle.as_slice()) {
-        match item? {
-            rustls_pemfile::Item::Pkcs8Key(key) => {
-                keys.push(("PRIVATE KEY", key.secret_pkcs8_der().to_vec()))
-            }
-            rustls_pemfile::Item::Pkcs1Key(key) => {
-                keys.push(("RSA PRIVATE KEY", key.secret_pkcs1_der().to_vec()))
-            }
-            rustls_pemfile::Item::Sec1Key(key) => {
-                keys.push(("EC PRIVATE KEY", key.secret_sec1_der().to_vec()))
-            }
-            rustls_pemfile::Item::X509Certificate(certificate) => {
-                certificates.push(certificate.to_vec())
-            }
-            _ => {}
-        }
-    }
+    let certificates: Vec<Vec<u8>> = CertificateDer::pem_slice_iter(&bundle)
+        .map(|entry| entry.map(|certificate| certificate.to_vec()))
+        .collect::<Result<_, _>>()
+        .map_err(|failure| {
+            format!(
+                "the certificates in the mTLS identity at {} could not be parsed: {failure}",
+                identity_path.display()
+            )
+        })?;
+
+    // The variant is what carries the label: the same RSA key is PKCS#1 from
+    // BouncyCastle and PKCS#8 from `openssl genpkey`, and re-emitting one under
+    // the other's header produces a file every parser rejects.
+    let keys: Vec<(&'static str, Vec<u8>)> = PrivateKeyDer::pem_slice_iter(&bundle)
+        .map(|entry| {
+            entry.map(|key| match key {
+                PrivateKeyDer::Pkcs8(der) => ("PRIVATE KEY", der.secret_pkcs8_der().to_vec()),
+                PrivateKeyDer::Pkcs1(der) => ("RSA PRIVATE KEY", der.secret_pkcs1_der().to_vec()),
+                PrivateKeyDer::Sec1(der) => ("EC PRIVATE KEY", der.secret_sec1_der().to_vec()),
+                // `PrivateKeyDer` is non-exhaustive. A variant added upstream is
+                // a key encoding this code has never emitted a label for, and
+                // guessing one would produce exactly the unparseable file the
+                // labels above exist to prevent.
+                other => ("PRIVATE KEY", other.secret_der().to_vec()),
+            })
+        })
+        .collect::<Result<_, _>>()
+        .map_err(|failure| {
+            format!(
+                "the private key in the mTLS identity at {} could not be parsed: {failure}",
+                identity_path.display()
+            )
+        })?;
 
     if keys.len() != 1 {
         return Err(format!(
@@ -99,8 +115,8 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
         .client_ca_root(Certificate::from_pem(pem_block("CERTIFICATE", &authority))))
 }
 
-/// Re-encodes a DER block as PEM, because `tonic` takes PEM and `rustls_pemfile`
-/// hands back DER.
+/// Re-encodes a DER block as PEM, because `tonic` takes PEM and the parser hands
+/// back DER.
 fn pem_block(label: &str, der: &[u8]) -> String {
     let encoded = base64_encode(der);
     let mut out = format!("-----BEGIN {label}-----\n");

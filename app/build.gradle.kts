@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.id
+import java.util.Base64
 
 // The Spring Boot application. One Gradle project, eighteen building blocks as
 // packages — the boundary is enforced by Spring Modulith and ArchUnit, not by
@@ -84,7 +85,38 @@ dependencies {
 // that NOBYPASSRLS is the property under test rather than an assumption. Copying
 // it in at build time keeps the test independent of the working directory and
 // makes a drifted copy impossible - there is only one file.
+// The URL signing key the tests sign media URLs and pagination cursors with
+// (REQ-SEC-106). GENERATED rather than committed, and that is the whole point:
+// `.gitignore` refuses `*.key`, so the file every container-based test needs has
+// never been in the repository and CI has never had it — every one of those tests
+// failed there while passing on the machine that had written the file once, by
+// hand, months earlier.
+//
+// The value is a fixed, obviously-fake literal. It must be: `CLAUDE.md` says never
+// use real credentials in tests, and a key that is regenerated at random would
+// make a signature from one run unverifiable in the next, which is a flaky test
+// nobody would enjoy diagnosing.
+val generateTestUrlSigningKey by tasks.registering {
+    val target = layout.buildDirectory.file("generated/test-secrets/test-url-signing.key")
+    outputs.file(target)
+    doLast {
+        val file = target.get().asFile
+        file.parentFile.mkdirs()
+        // 48 bytes, comfortably over UrlSigningKey's 32-byte floor, written as the
+        // base64 line a secret manager would hand over — which is the shape the
+        // production path reads, so the tests exercise the same branch.
+        val material = "home-inv test url signing key - not a secret - REQ-SEC-106"
+            .toByteArray(Charsets.UTF_8)
+            .copyOf(48)
+        file.writeText(Base64.getEncoder().encodeToString(material) + "\n")
+    }
+}
+
 tasks.named<ProcessResources>("processTestResources") {
+    dependsOn(generateTestUrlSigningKey)
+    from(generateTestUrlSigningKey.map { it.outputs.files.singleFile }) {
+        into("db")
+    }
     from(rootProject.file("deploy/postgres/initdb/00-roles.sql")) {
         into("db")
     }

@@ -22,6 +22,11 @@ version = 2
 # combined into it. GPL-2.0-only is deliberately absent: it is the one common
 # copyleft licence AGPL-3.0 cannot absorb.
 allow = [
+# The crate's OWN licence, and the reason this list failed on its first real run:
+# every dependency was allowed and the thing being built was not. `cargo deny`
+# checks the whole graph including the root, so a project that is AGPL-3.0-or-later
+# has to say so here. ADR-0018 makes the core AGPL and this service is core.
+    "AGPL-3.0-or-later",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "MIT",

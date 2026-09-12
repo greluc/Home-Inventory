@@ -107,6 +107,15 @@ jobs:
             # `rootless` out of the daemon's own security options — so a silent
             # fallback to the rootful socket fails the job instead of passing it.
             sudo apt-get install -y uidmap dbus-user-session
+            # The rootful daemon goes first. FORCE_ROOTLESS_INSTALL alone gets the
+            # installer past its own refusal and then its `systemctl --user start
+            # docker.service` fails anyway, because the two daemons contend for
+            # the same iptables chains and the same default bridge. Stopping the
+            # system one is also the honest thing for a job whose whole subject is
+            # that rootless is the only supported path (REQ-NFR-059).
+            sudo systemctl disable --now docker.service docker.socket || true
+            sudo rm -f /var/run/docker.sock
+            export XDG_RUNTIME_DIR="/run/user/$(id -u)"
             curl -fsSL https://get.docker.com/rootless | FORCE_ROOTLESS_INSTALL=1 sh
             echo "$HOME/bin" >> "$GITHUB_PATH"
             echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
@@ -116,8 +125,16 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.runtime }}" = "docker" ]; then
+            export XDG_RUNTIME_DIR="/run/user/$(id -u)"
             systemctl --user start docker || true
             for _ in $(seq 1 30); do docker info > /dev/null 2>&1 && break; sleep 1; done
+            if ! docker info > /dev/null 2>&1; then
+              # The installer's own advice, taken here so a failure arrives with
+              # its reason attached rather than as "the daemon did not start".
+              echo "::error::the rootless daemon did not come up"
+              journalctl --user -n 40 --no-pager -u docker.service || true
+              exit 1
+            fi
             # Docker reports rootless as a security option. Without this check a
             # fallback to the rootful daemon would go unnoticed, and the job would
             # claim to prove something it had not.
@@ -179,7 +196,26 @@ jobs:
           set -euo pipefail
           # setup.sh installs the Quadlet units and says how to start them; on
           # Compose it starts the stack itself.
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           systemctl --user daemon-reload
+
+          # Quadlet turns the .container files into services through a systemd
+          # GENERATOR, and a generator that does not run leaves `systemctl start`
+          # saying only "Unit homeinv-api.service not found" — which is what this
+          # job reported, with the units sitting installed and correct one
+          # directory away. So the generator is checked before the unit is, and
+          # what it did is printed rather than guessed at.
+          if ! systemctl --user list-unit-files 'homeinv-*' | grep -q 'homeinv-api'; then
+            echo "::error::the Quadlet generator produced no units from the installed files"
+            echo "--- installed files ---"
+            ls -la "${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd/" || true
+            echo "--- generators present ---"
+            ls -la /usr/lib/systemd/user-generators/ /usr/libexec/podman/ 2>/dev/null || true
+            echo "--- what the generator makes of them ---"
+            /usr/libexec/podman/quadlet -dryrun -user 2>&1 | head -40 || true
+            exit 1
+          fi
+
           systemctl --user start homeinv-api.service
 
       - name: The API becomes ready
