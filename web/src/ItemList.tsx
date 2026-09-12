@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, api, type Item, type Location } from "./api";
+import { formatTimestamp } from "./format";
 import { ItemPhotos } from "./ItemPhotos";
 
 /**
@@ -51,11 +52,6 @@ export function ItemList({
     }
   }
 
-  const when = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-
   return (
     <table className="items">
       <caption className="visually-hidden">{t("item.listCaption")}</caption>
@@ -80,7 +76,7 @@ export function ItemList({
             item={item}
             locations={locations}
             expanded={expanded === item.id}
-            when={when}
+            language={i18n.resolvedLanguage ?? "en"}
             onToggle={() => setExpanded(expanded === item.id ? null : item.id)}
             onRemove={() => void remove(item)}
             onError={onError}
@@ -101,7 +97,7 @@ function Row({
   item,
   locations,
   expanded,
-  when,
+  language,
   onToggle,
   onRemove,
   onError,
@@ -109,7 +105,7 @@ function Row({
   item: Item;
   locations: Location[];
   expanded: boolean;
-  when: Intl.DateTimeFormat;
+  language: string;
   onToggle: () => void;
   onRemove: () => void;
   onError: (message: string) => void;
@@ -133,7 +129,7 @@ function Row({
           {item.quantityUnit !== null ? ` ${item.quantityUnit}` : ""}
         </td>
         <td className="muted">
-          <time dateTime={item.createdAt}>{when.format(new Date(item.createdAt))}</time>
+          <time dateTime={item.createdAt}>{formatTimestamp(item.createdAt, language)}</time>
         </td>
         <td className="row-actions">
           <button type="button" className="ghost" aria-expanded={expanded} onClick={onToggle}>

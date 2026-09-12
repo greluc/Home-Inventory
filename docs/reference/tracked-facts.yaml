@@ -103,6 +103,22 @@ computed:
       O1–O26 and the outstanding work. Counting it out would make the number disagree
       with the index in docs/adr/README.md, which lists it.
 
+  - id: platformTypes
+    compute: "count of app/src/main/java/de/greluc/homeinv/platform/*.java"
+    value: 21
+    pattern: '(?:(\d+)|twenty-one)\s+types?\s+in\s+(?:the\s+)?(?:shared\s+kernel|`?platform`?)'
+    notes: >
+      REQ-NFR-024 asks for the shared kernel's size to be monitored, with a figure per
+      release in the changelog. This is that figure, and tracking it is what keeps the
+      restatement from quietly falling behind the directory. Counted as types and not as
+      lines: a line count moves when a comment is rewritten, and the question is how much
+      has accumulated in there.
+
+
+      What keeps it SMALL is the ArchUnit rule beside it — `platform` may depend on no
+      block, so it cannot hold one's domain — and this number is the thing that makes
+      creeping growth visible when the rule alone would not.
+
   - id: requirementTotal
     compute: "count of lines matching ^| REQ-<AREA>-<nnn> across docs/requirements/0[123]-*.md"
     value: 423

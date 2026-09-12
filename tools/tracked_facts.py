@@ -115,8 +115,16 @@ def compute(registry: dict) -> dict[str, object]:
     health_states = yaml.safe_load(
         (REPOSITORY / "docs" / "reference" / "plugin-health-states.yaml").read_text(encoding="utf-8"))
 
+    # REQ-NFR-024: the shared kernel's size is monitored. Counted as types rather
+    # than as lines, because a line count moves with a rewritten comment and the
+    # question being asked is "how much has accumulated in here", which is a
+    # question about things.
+    platform_types = sorted((REPOSITORY / "app" / "src" / "main" / "java" / "de" / "greluc"
+                             / "homeinv" / "platform").glob("*.java"))
+
     return {
         "adrCount": len(adr_files),
+        "platformTypes": len(platform_types),
         "requirementTotal": len(requirement_rows),
         "requirementsPerArea": per_area,
         "architectureChapters": len(sorted((REPOSITORY / "docs" / "architecture").glob("*.md"))),

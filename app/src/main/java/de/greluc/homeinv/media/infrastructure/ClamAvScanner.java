@@ -13,6 +13,13 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,6 +55,9 @@ public class ClamAvScanner implements VirusScanner {
    * and large enough that a multi-megabyte photo is a handful of writes rather than thousands.
    */
   private static final int CHUNK_BYTES = 32 * 1024;
+
+  /** {@code "Thu "} — the three-letter weekday clamd prints, and the space after it. */
+  private static final int FIRST_SPACE_AFTER_WEEKDAY = 3;
 
   private final String host;
   private final int port;
@@ -109,6 +119,85 @@ public class ClamAvScanner implements VirusScanner {
     } catch (IOException unreachable) {
       throw new ScannerUnavailableException(
           "The malware scanner at " + host + ":" + port + " could not be reached", unreachable);
+    }
+  }
+
+  /**
+   * When the scanner's signature database was built (REQ-SEC-093).
+   *
+   * <p>clamd's {@code VERSION} answers with three fields separated by slashes — the engine version,
+   * the database version and the date the database was built:
+   *
+   * <pre>ClamAV 1.4.3/27512/Thu Sep 11 09:23:41 2026</pre>
+   *
+   * <p>The date is the one that matters. The database <em>number</em> rises with every update and
+   * says nothing on its own: an operator cannot tell 27512 from 27100 without knowing what today's
+   * is, which is the question being asked.
+   *
+   * <p>Empty rather than an exception when the scanner cannot be reached or answers something else.
+   * The caller is a metric, and a metric that throws takes an actuator endpoint down with it; the
+   * condition "the scanner is unreachable" has its own, louder answer during an upload.
+   *
+   * @return the date the signatures were built, or empty
+   */
+  public Optional<Instant> signatureDate() {
+    try (Socket socket = new Socket()) {
+      socket.connect(new InetSocketAddress(host, port), timeoutMillis);
+      socket.setSoTimeout(timeoutMillis);
+
+      try (OutputStream out = socket.getOutputStream();
+          InputStream in = socket.getInputStream()) {
+        out.write("zVERSION\0".getBytes(StandardCharsets.US_ASCII));
+        out.flush();
+        return parseSignatureDate(
+            new String(in.readAllBytes(), StandardCharsets.US_ASCII).trim());
+      }
+    } catch (IOException unreachable) {
+      log.debug("Could not read the scanner's version", unreachable);
+      return Optional.empty();
+    }
+  }
+
+  /**
+   * Reads the build date out of a {@code VERSION} reply.
+   *
+   * <p>Visible so that a test can exercise the parsing without a scanner — which is the half that
+   * can go wrong, and can go wrong silently. The class is infrastructure and is published to nobody:
+   * {@code media.api} is the block's surface, and ArchUnit refuses an import of this package from
+   * another block whatever the modifier says.
+   *
+   * @param reply what clamd said, trimmed
+   * @return the date, or empty when the reply does not carry one
+   */
+  public static Optional<Instant> parseSignatureDate(String reply) {
+    String[] fields = reply.split("/");
+    if (fields.length < 3 || fields[2].trim().length() <= FIRST_SPACE_AFTER_WEEKDAY) {
+      return Optional.empty();
+    }
+    try {
+      // Three things about this pattern, each of which fails silently without it:
+      //
+      //   * the locale is pinned to ROOT, because clamd prints the weekday and
+      //     the month in the C locale whatever the host's is, and a German
+      //     default would refuse "Thu";
+      //   * `ppd` accepts the space-padded day clamd prints before the tenth,
+      //     which neither `d` nor `dd` does;
+      //   * the reply carries no zone, so it is read as UTC. The container runs
+      //     UTC, and being an hour or two out cannot change the answer to
+      //     "older than 48 hours".
+      //   * the weekday is dropped rather than parsed. It is redundant — the date
+      //     is complete without it — and parsing it makes the formatter compare
+      //     the two and refuse a correct date whose weekday is wrong, which is a
+      //     way to fail for no benefit.
+      String withoutWeekday = fields[2].trim().substring(FIRST_SPACE_AFTER_WEEKDAY).trim();
+      return Optional.of(
+          LocalDateTime.parse(
+                  withoutWeekday,
+                  DateTimeFormatter.ofPattern("MMM ppd HH:mm:ss yyyy", Locale.ROOT))
+              .toInstant(ZoneOffset.UTC));
+    } catch (DateTimeParseException | IndexOutOfBoundsException unparseable) {
+      log.debug("The scanner's version reply carried no readable date: {}", reply);
+      return Optional.empty();
     }
   }
 

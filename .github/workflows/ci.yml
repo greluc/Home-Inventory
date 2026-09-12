@@ -227,6 +227,13 @@ jobs:
       - name: Both languages are complete
         run: npm run i18n:check
 
+      # REQ-NFR-035: times are stored in UTC and displayed in the user's zone.
+      # The gate that requirement names is "a test across several time zones",
+      # and it earns the plural — a formatter that ignored the zone would pass a
+      # test run in one.
+      - name: Unit tests
+        run: npm test
+
       # The client is hand-written through stage 0 (REQ-API-002 generates it at
       # stage 1), and a hand-written client drifts silently: a mistyped path is a
       # 404 at run time on a screen nobody opened during review. `api/openapi.yaml`

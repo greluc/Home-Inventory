@@ -21,6 +21,11 @@ commit".
 
 ### Added
 
+- **The shared kernel is measured.** `platform` holds 21 types in the shared
+  kernel, and an architecture rule keeps it that way: it may depend on no
+  building block, so it cannot come to hold one's domain. The figure moves with
+  every release and a check compares it with the directory (REQ-NFR-024).
+
 - **The deployment is checked by being run, not only by being read.** CI now
   brings the whole stack up on both container runtimes with the one setup
   command, proves that each segment refuses what it is meant to refuse, and walks

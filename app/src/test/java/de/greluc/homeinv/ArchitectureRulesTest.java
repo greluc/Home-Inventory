@@ -202,6 +202,39 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("keep the shared kernel free of every block's domain")
+  void theSharedKernelDependsOnNoBlock() {
+    // REQ-NFR-024, mechanically. "Contains no domain logic" is not checkable as
+    // written — a machine cannot tell a domain rule from a utility — but the
+    // property that makes it true is: a shared kernel that depends on no block
+    // cannot contain one's domain, because it cannot name any of its types.
+    //
+    // The direction is the whole point. Every block depends on `platform`; the
+    // moment `platform` depends back, the two are one module with a package
+    // boundary drawn through it, and every later extraction has to unpick it.
+    noClasses()
+        .that()
+        .resideInAPackage("de.greluc.homeinv.platform..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage(
+            "de.greluc.homeinv.authorization..",
+            "de.greluc.homeinv.bootstrap..",
+            "de.greluc.homeinv.catalog..",
+            "de.greluc.homeinv.identity..",
+            "de.greluc.homeinv.inventory..",
+            "de.greluc.homeinv.locations..",
+            "de.greluc.homeinv.media..",
+            "de.greluc.homeinv.rest..",
+            "de.greluc.homeinv.search..",
+            "de.greluc.homeinv.tenancy..")
+        .because(
+            "the shared kernel is shared by every block and owns none of their domains "
+                + "(REQ-NFR-024)")
+        .check(CLASSES);
+  }
+
+  @Test
   @DisplayName("never let a record holding a secret print it")
   void secretsAreNotPrintable() {
     // Spring MVC logs the deserialised request body at DEBUG, through the type's
