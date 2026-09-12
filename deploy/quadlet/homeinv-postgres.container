@@ -16,17 +16,17 @@ ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network
-Volume=homeinv-pgdata.volume:/var/lib/postgresql/data
+Volume=homeinv-pgdata.volume:/var/lib/postgresql
 Volume=homeinv-pgwal.volume:/var/lib/homeinv/wal-archive
-Tmpfs=/tmp
-Tmpfs=/var/run/postgresql
+Tmpfs=/tmp:mode=1777
+Tmpfs=/var/run/postgresql:mode=1777
 Environment=POSTGRES_DB=homeinv
 Environment=POSTGRES_PASSWORD_FILE=/run/secrets/postgres-superuser-password
 Secret=postgres-superuser-password,type=mount
 Secret=db-password,type=mount
 Secret=db-migration-password,type=mount
 Exec=postgres -c wal_level=replica -c archive_mode=on -c 'archive_command=test ! -f /var/lib/homeinv/wal-archive/%f && cp %p /var/lib/homeinv/wal-archive/%f' -c archive_timeout=900
-HealthCmd=pg_isready
+HealthCmd=["CMD", "pg_isready"]
 HealthInterval=10s
 HealthStartPeriod=30s
 

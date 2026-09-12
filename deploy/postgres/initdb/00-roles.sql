@@ -69,6 +69,23 @@ ALTER ROLE homeinv_housekeeping SET statement_timeout = '30s';
 ALTER ROLE homeinv_housekeeping SET lock_timeout = '15s';
 ALTER ROLE homeinv_housekeeping SET idle_in_transaction_session_timeout = '60s';
 
+-- The migrator owns the schema, so it has to be able to create one — including
+-- `flyway`, which is where the migration history lives. `NOCREATEDB` is about
+-- creating DATABASES and says nothing about schemas inside one, and a role with
+-- neither ends up where this deployment ended up on its first real start:
+-- "permission denied for database homeinv", from Flyway, before the first
+-- migration ran.
+--
+-- The grant existed in the TEST role script and only there, under a comment
+-- saying the migrator must be able to create a schema — so every test passed
+-- against a permission production did not give. `current_database()` rather than
+-- a literal: the entrypoint runs this against whatever POSTGRES_DB names.
+DO $$
+BEGIN
+    EXECUTE format('GRANT CREATE ON DATABASE %I TO homeinv_migrator', current_database());
+END
+$$;
+
 -- Nobody may CREATE in the public schema: a table created there by accident
 -- would carry no policy at all. USAGE stays, and must - the `ltree` extension
 -- lives there, and a role that cannot see the schema cannot use the type its

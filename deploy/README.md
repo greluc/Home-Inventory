@@ -1,5 +1,9 @@
 # deploy/
 
+<!-- REQ-NFR-065: the Quadlet units, `compose.yaml` and the Helm chart are versioned in the
+     repository rather than living only on a host — which is what makes the drift check
+     possible at all, and what lets a deployment be reviewed in a pull request. -->
+
 Everything needed to run Home Inventory.
 
 | Path | What it is |
@@ -65,6 +69,9 @@ runtimes:
 ## Status
 
 `generate.py` renders 30 files from the matrix and CI compares every one of them.
-Image digests still read `TODO` on purpose — a tag in their place would quietly
+Third-party images carry their manifest digest and that is what is pulled; the tag
+beside one is for a reader. The images built from this repository carry no digest
+at all, because nothing has been published yet — pinning and signing them is
+`REQ-SEC-077`, stage 1. A tag in a digest's place would quietly
 defeat the digest-pinning rule, and they are filled in when the first images are
 published.

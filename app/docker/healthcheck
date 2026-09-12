@@ -18,7 +18,14 @@ set -eu
 
 PORT="${MANAGEMENT_SERVER_PORT:-8090}"
 
+# The address the server was told to bind to, not loopback. The management
+# listener binds to one segment — `api-internal`, which resolves to this
+# container's address on `internal` and to nothing else (REQ-SEC-099) — so a
+# check that asks 127.0.0.1 asks an address nothing is listening on, and the
+# container never reports healthy. Found by running the stack.
+HOST="${MANAGEMENT_SERVER_ADDRESS:-127.0.0.1}"
+
 # --fail turns a 503 into a non-zero exit; without it curl reports success for
 # having successfully received a failure.
 exec curl --fail --silent --show-error --max-time 3 \
-    "http://127.0.0.1:${PORT}/actuator/health/readiness"
+    "http://${HOST}:${PORT}/actuator/health/readiness"

@@ -10,20 +10,18 @@ Description=Home Inventory rabbitmq
 
 [Container]
 ContainerName=homeinv-rabbitmq
-Image=docker.io/library/rabbitmq:4-management-alpine
+Image=docker.io/library/rabbitmq@sha256:b3b8b7f95f5382a19f9ea33540e604f30aad081d37ad9aba72255135765373a1
 User=999:999
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network
 Volume=homeinv-mqdata.volume:/var/lib/rabbitmq
-Tmpfs=/tmp
-Tmpfs=/var/log/rabbitmq
-Tmpfs=/etc/rabbitmq
-Environment=RABBITMQ_DEFAULT_USER=homeinv
-Environment=RABBITMQ_DEFAULT_PASS_FILE=/run/secrets/mq-password
+Tmpfs=/tmp:mode=1777
+Tmpfs=/var/log/rabbitmq:mode=1777
 Secret=mq-password,type=mount
-HealthCmd=rabbitmq-diagnostics -q ping
+Secret=rabbitmq-rabbitmq.conf,type=mount,target=/etc/rabbitmq/rabbitmq.conf
+HealthCmd=["CMD", "rabbitmq-diagnostics", "-q", "ping"]
 HealthInterval=20s
 HealthStartPeriod=60s
 

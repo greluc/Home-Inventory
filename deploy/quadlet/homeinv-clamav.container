@@ -10,18 +10,19 @@ Description=Home Inventory clamav
 
 [Container]
 ContainerName=homeinv-clamav
-Image=docker.io/clamav/clamav:stable
+Image=docker.io/clamav/clamav@sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422
 User=100:101
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-scanner.network
 Volume=homeinv-cvddata.volume:/var/lib/clamav
-Tmpfs=/tmp
-Tmpfs=/run/clamav
-Tmpfs=/var/log/clamav
+Tmpfs=/tmp:mode=1777
+Tmpfs=/run/clamav:mode=1777
+Tmpfs=/var/lock:mode=1777
+Tmpfs=/var/log/clamav:mode=1777
 Secret=clamav-freshclam.conf,type=mount,target=/etc/clamav/freshclam.conf
-HealthCmd=clamdcheck.sh
+HealthCmd=["CMD", "clamdcheck.sh"]
 HealthInterval=60s
 HealthStartPeriod=300s
 

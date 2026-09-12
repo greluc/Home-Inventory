@@ -20,6 +20,7 @@ Run it as ``python deploy/generate.py`` (writes) or with ``--check`` (compares).
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
 import re
 import shlex
@@ -113,23 +114,28 @@ ConnectTimeout 30
 ReceiveTimeout 60
 """
 
-VALKEY_ACL_TEMPLATE = """# GENERATED FROM ../services.yaml — DO NOT EDIT.
+# NO COMMENTS AND NO BLANK LINES. Valkey parses an ACL file strictly: every line
+# must begin with the `user` keyword, and anything else aborts start-up with
+# "should start with user keyword followed by the username" — for every line. The
+# first version of this template carried the usual explanation in the file and the
+# server refused to start, which the connectivity suite found as "valkey answered
+# an unauthenticated PING": the server was running from an earlier start, without
+# the ACL.
 #
-# A TEMPLATE. `deploy/setup.sh` replaces the placeholder below with the content
-# of the `valkey-password` secret and writes the result into deploy/secrets/,
-# which is git-ignored. The password is not in this repository and must not be.
+# So the reasoning lives here instead:
 #
-# Valkey held no credential at all until ADR-0044, which meant every session and
-# every rate-limit counter was readable by anything that could open port 6379 on
-# `internal` — `web` included, at the time.
-
-# The built-in account is off. Leaving it on with `nopass` is the default, and
-# it is how an authenticated Valkey ends up accepting anonymous commands anyway.
-user default off
-
-# One user, allowed exactly what sessions, the login throttle and the short-lived
-# OIDC state need. After ADR-0044 the only members of `internal` that can reach
-# the port are `api` and `worker`.
+#   * `default off` — leaving the built-in account on with `nopass` is the
+#     default, and it is how an authenticated Valkey ends up accepting anonymous
+#     commands anyway.
+#   * one user, allowed exactly what sessions, the login throttle and the
+#     short-lived OIDC state need. After ADR-0044 the only members of `internal`
+#     that can reach the port are `api` and `worker`.
+#   * the password is a `@SECRET:` placeholder; `deploy/setup.sh` substitutes the
+#     operator's secret into a copy under deploy/secrets/, which is git-ignored.
+#     Valkey held no credential at all until ADR-0044, which meant every session
+#     and every rate-limit counter was readable by anything that could open port
+#     6379 on `internal` — `web` included, at the time.
+VALKEY_ACL_TEMPLATE = """user default off
 user {user} on >{password} ~* +@all
 """
 
@@ -306,6 +312,83 @@ def opensearch_internal_users(matrix: dict) -> str:
         client=SECRET_PLACEHOLDER.format(name="search-password"))
 
 
+def egress_allowlist(matrix: dict) -> str:
+    """The hosts the egress proxy may reach, one per line.
+
+    Every value comes from the matrix: the deployment allowlist of `ADR-0036`,
+    which today holds one entry — the ClamAV signature mirror. The plugin half of
+    the list is merged in at run time from granted manifests and is stage 1
+    (`ADR-0028`); this is the closed half, consented to by nobody and changed only
+    by a change to this repository.
+
+    A flat list rather than YAML or JSON: the proxy reads it once at start-up, and
+    a parser there would be a dependency and a class of failure a container with
+    32 MiB and a route out of the deployment does not need.
+
+    :param matrix: the parsed matrix
+    :return: the rendered allowlist
+    """
+    allowlist = matrix["services"]["egress-proxy"]["allowlist"]
+    lines = [
+        "# GENERATED — do not edit. Source: deploy/services.yaml, "
+        "services.egress-proxy.allowlist.deployment",
+        "#",
+        "# The CLOSED deployment allowlist (ADR-0036, REQ-SEC-097): one entry per",
+        "# in-deployment service that needs a named external target and has no",
+        "# manifest. Adding one requires a row in services.yaml with a sentence",
+        "# saying why that service cannot be a plugin — deliberately more friction",
+        "# than adding a manifest host, because this is the one list no tenant ever",
+        "# consents to.",
+        "#",
+        "# The per-plugin half is merged in at run time from granted manifests and",
+        "# arrives with the plugin runtime in stage 1.",
+        "",
+    ]
+    for entry in allowlist.get("deployment") or []:
+        lines.append(f"# {entry['id']} — for {entry['caller']}")
+        for host in entry["hosts"]:
+            lines.append(host)
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def rabbitmq_conf(matrix: dict) -> str:
+    """Renders the broker's configuration from the matrix.
+
+    RabbitMQ 4 refuses to start when it finds `RABBITMQ_DEFAULT_USER` or
+    `RABBITMQ_DEFAULT_PASS_FILE` in its environment — they are deprecated, and
+    the entrypoint treats finding them as an error rather than a warning. The
+    supported way to give a fresh broker its first user is this file.
+
+    The password is left as a `@SECRET:` placeholder for `setup.sh` to
+    substitute, the same way the Valkey ACL is: the repository holds the shape
+    and never the value.
+
+    :param matrix: the parsed matrix
+    :return: the rendered configuration
+    """
+    user = matrix["services"]["api"]["env"]["HOMEINV_MQ_USER"]
+    return (
+        "# GENERATED - do not edit. Source: deploy/services.yaml, services.rabbitmq\n"
+        "#\n"
+        "# The broker's first user. RabbitMQ 4 refuses to start when it finds the\n"
+        "# deprecated RABBITMQ_DEFAULT_* variables, so the credential travels as a\n"
+        "# configuration file - rendered by deploy/setup.sh, which substitutes the\n"
+        "# value from deploy/secrets/mq-password and never commits it.\n"
+        "#\n"
+        "# `guest` is loopback-only by design and is left alone: api and worker\n"
+        "# connect over the network and could never have used it (ADR-0044).\n"
+        "\n"
+        f"default_user = {user}\n"
+        "default_pass = @SECRET:mq-password@\n"
+        "\n"
+        "# The management plugin listens on 15672 and is not published anywhere.\n"
+        "# It stays on because the image is the `-management` tag and removing it\n"
+        "# would mean a different image, not a smaller one.\n"
+        "loopback_users.guest = true\n"
+    )
+
+
 def generated_files(matrix: dict) -> dict[pathlib.Path, str]:
     """Every file a service needs delivered into it, rendered.
 
@@ -314,7 +397,9 @@ def generated_files(matrix: dict) -> dict[pathlib.Path, str]:
     """
     renderers = {
         ("clamav", "egress"): freshclam_conf,
+        ("egress-proxy", "allowlist"): egress_allowlist,
         ("valkey", "secrets"): valkey_acl,
+        ("rabbitmq", "secrets"): rabbitmq_conf,
         ("opensearch", "secrets"): opensearch_internal_users,
     }
     outputs: dict[pathlib.Path, str] = {}
@@ -498,7 +583,7 @@ def compose(matrix: dict) -> str:
         image = service["image"]
         # The digest, not the tag. "The same image digests as production" is what
         # makes an integration test mean anything (CLAUDE.md, Build).
-        reference = f"{image['name']}@{image['digest']}" if image.get("digest") and image["digest"] != "TODO" \
+        reference = f"{image['name']}@{image['digest']}" if image.get("digest") \
             else f"{image['name']}:{image.get('tag', 'latest')}"
 
         lines.append(f"  {name}:")
@@ -537,10 +622,24 @@ def compose(matrix: dict) -> str:
 
         if service.get("networks"):
             lines.append("    networks:")
+            aliases = service.get("networkAliases") or {}
             for network in service["networks"]:
-                lines.append(f"      - {network}")
+                alias = aliases.get(network)
+                if alias:
+                    # The long form, for the alias. It is what makes
+                    # `management.server.address` bindable to ONE segment: a name
+                    # declared on a network resolves to the container's address on
+                    # THAT network, and a listener bound to it is unreachable from
+                    # every other (REQ-SEC-099).
+                    lines.append(f"      {network}:")
+                    lines.append("        aliases:")
+                    lines.append(f"          - {alias}")
+                else:
+                    lines.append(f"      {network}: {{}}")
 
-        command = settings_arguments(service)
+        # A service's own `command:` wins; `settings_arguments` is the
+        # postgres-shaped path that builds one from the `settings` block.
+        command = service.get("command") or settings_arguments(service)
         if command:
             lines.append("    command: [" + ", ".join(f"\"{part}\"" for part in command) + "]")
 
@@ -566,19 +665,31 @@ def compose(matrix: dict) -> str:
             for secret in service.get("secrets", []):
                 lines.append(f"      - {secret}")
 
-        if service.get("volumes"):
+        if service.get("volumes") or service.get("tmpfs"):
             lines.append("    volumes:")
-            for volume in service["volumes"]:
+            for volume in service.get("volumes") or []:
                 # Named volumes only. A bind mount into a host directory is on the
                 # forbidden list, because with rootless user namespaces the file
                 # ownership on the host is not the ownership in the container.
                 lines.append(f"      - {volume['name']}:{volume['path']}")
-
-        if service.get("tmpfs"):
-            lines.append("    tmpfs:")
-            for path in service["tmpfs"]:
-                # A read-only root filesystem still needs somewhere to write.
-                lines.append(f"      - {path}")
+            for path in service.get("tmpfs") or []:
+                # A read-only root filesystem still needs somewhere to write — and
+                # the mode is the part that makes it true. A tmpfs mounted without
+                # one arrives root-owned and 0755, so the non-root user every
+                # container runs as cannot write to the directory that was mounted
+                # for it. `0o1777` is what /tmp is on any host.
+                #
+                # Found by starting the stack: clamav could not create its lock
+                # file and never became healthy, so nothing that waits for it
+                # started — and `api` would have failed its first upload, because
+                # the pipeline spools to /tmp.
+                #
+                # The long form rather than the `tmpfs:` short one, which takes a
+                # path and no options. Compose accepts both forms in one list.
+                lines.append("      - type: tmpfs")
+                lines.append(f"        target: {path}")
+                lines.append("        tmpfs:")
+                lines.append("          mode: 0o1777")
 
         ports = service.get("ports") or []
         published = [p for p in ports if p.get("host")]
@@ -603,7 +714,14 @@ def compose(matrix: dict) -> str:
         health = service.get("health")
         if health and health.get("command"):
             lines.append("    healthcheck:")
-            lines.append(f"      test: [\"CMD\", \"{health['command']}\"]")
+            # Split into argv rather than passed as one string. Compose runs a
+            # single-element CMD as one executable name, so `valkey-cli ping`
+            # became a search for a binary called "valkey-cli ping" and the
+            # container was never healthy — and a dependant gated on
+            # `service_healthy` therefore never started. CMD-SHELL is not the
+            # answer either: two of these images are `scratch` and have no shell.
+            argv = ", ".join(f'"{part}"' for part in shlex.split(health["command"]))
+            lines.append(f"      test: [\"CMD\", {argv}]")
             lines.append(f"      interval: {health.get('interval', '15s')}")
             lines.append(f"      start_period: {health.get('startPeriod', '30s')}")
 
@@ -681,7 +799,7 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
     for name, service in matrix["services"].items():
         image = service["image"]
-        reference = f"{image['name']}@{image['digest']}" if image.get("digest") and image["digest"] != "TODO" \
+        reference = f"{image['name']}@{image['digest']}" if image.get("digest") \
             else f"{image['name']}:{image.get('tag', 'latest')}"
 
         body = [BANNER.replace("#", ";"), "", "[Unit]", f"Description=Home Inventory {name}"]
@@ -700,11 +818,18 @@ def quadlet(matrix: dict) -> dict[str, str]:
         # volumes correctly, which it does on its own.
 
         for network in service.get("networks", []):
-            body.append(f"Network=homeinv-{network}.network")
+            alias = (service.get("networkAliases") or {}).get(network)
+            if alias:
+                body.append(f"Network=homeinv-{network}.network:alias={alias}")
+            else:
+                body.append(f"Network=homeinv-{network}.network")
         for volume in service.get("volumes", []):
             body.append(f"Volume=homeinv-{volume['name']}.volume:{volume['path']}")
         for path in service.get("tmpfs", []):
-            body.append(f"Tmpfs={path}")
+            # `mode=1777` for the reason the Compose side gives: without it the
+            # mount is root-owned and 0755, and the container's own user cannot
+            # write to it.
+            body.append(f"Tmpfs={path}:mode=1777")
         for key, value in (service.get("env") or {}).items():
             body.append(f"Environment={key}={resolve_secrets(value)}")
         for key, value in settings_environment(service).items():
@@ -715,7 +840,9 @@ def quadlet(matrix: dict) -> dict[str, str]:
             body.append(f"Secret={secret},type=mount")
         for secret, target in delivered_files(service, name):
             body.append(f"Secret={secret},type=mount,target={target}")
-        command = settings_arguments(service)
+        # A service's own `command:` wins; `settings_arguments` is the
+        # postgres-shaped path that builds one from the `settings` block.
+        command = service.get("command") or settings_arguments(service)
         if command:
             # systemd splits Exec= on whitespace, and `archive_command` contains
             # some. Quoted, or PostgreSQL starts with an archive command that is
@@ -728,7 +855,10 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
         health = service.get("health")
         if health and health.get("command"):
-            body.append(f"HealthCmd={health['command']}")
+            # The JSON array form, for the reason above: Podman hands a plain
+            # string to `/bin/sh -c`, and `blobstore` and `egress-proxy` are
+            # `scratch` images with no shell to hand it to.
+            body.append("HealthCmd=" + json.dumps(["CMD", *shlex.split(health["command"])]))
             body.append(f"HealthInterval={health.get('interval', '15s')}")
             body.append(f"HealthStartPeriod={health.get('startPeriod', '30s')}")
             if health.get("notify") == "healthy":

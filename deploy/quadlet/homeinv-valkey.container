@@ -10,17 +10,18 @@ Description=Home Inventory valkey
 
 [Container]
 ContainerName=homeinv-valkey
-Image=docker.io/valkey/valkey:8-alpine
+Image=docker.io/valkey/valkey@sha256:d2e18f3410b6f616de1417f570fa55261af2898b9c5b2cfb6781ce2373ea43d1
 User=999:1000
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network
 Volume=homeinv-kvdata.volume:/data
-Tmpfs=/tmp
+Tmpfs=/tmp:mode=1777
 Secret=valkey-password,type=mount
 Secret=valkey-users.acl,type=mount,target=/etc/valkey/users.acl
-HealthCmd=valkey-cli ping
+Exec=valkey-server --aclfile /etc/valkey/users.acl --appendonly yes
+HealthCmd=["CMD", "valkey-cli", "ping"]
 HealthInterval=10s
 HealthStartPeriod=30s
 

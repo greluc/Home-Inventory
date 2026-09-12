@@ -17,9 +17,10 @@ DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-scanner.network
 Network=homeinv-egress.network
-Tmpfs=/tmp
-Tmpfs=/var/run
-HealthCmd=/healthcheck
+Tmpfs=/tmp:mode=1777
+Tmpfs=/var/run:mode=1777
+Secret=egress-proxy-egress-allowlist.conf,type=mount,target=/etc/homeinv/egress-allowlist.conf
+HealthCmd=["CMD", "/homeinv-egress-proxy", "--health"]
 HealthInterval=30s
 HealthStartPeriod=30s
 

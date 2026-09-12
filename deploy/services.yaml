@@ -11,9 +11,24 @@
 # not if, but when. And the failure shows up at an operator's site, on the
 # runtime we did not test, which is the worst place to find it (risk R13).
 #
-# Status: seed. The values below follow the architecture but nothing generates
-# from them yet, because there is no code to deploy. Image digests are marked
-# TODO deliberately — a tag here would defeat the digest-pinning rule.
+# Status: live. The Quadlet units, `compose.yaml` and the Helm values under
+# deploy/ are generated from this file and checked against it on every run.
+#
+# IMAGES. Every third-party image carries its manifest `digest`, and that is what
+# is pulled — the `tag` beside it is for a reader. The integration tests take
+# their coordinates from this file too (`ProductionImages`), which is what makes
+# `REQ-NFR-027`'s "the same image digests as production" true rather than hoped.
+#
+# The images built FROM THIS REPOSITORY carry no `digest` key at all, because a
+# digest names bytes in a registry and none has been published. That absence is
+# the fact, not a task: `REQ-SEC-077` — distroless base, referenced by digest,
+# trivy-scanned, cosign-signed — is **stage 1**, and it is where their pinning
+# and signing belong. Until then the generator falls back to the tag, which for
+# these is `latest`. No integration test starts one of them.
+#
+# The key was spelled `digest: "TODO"` until 2026-09-12. It read as unfinished
+# stage-0 work, which it never was, and it made a sentinel that three separate
+# files had to know about.
 
 version: 1
 
@@ -169,7 +184,7 @@ services:
 
   web:
     role: static
-    image: { name: ghcr.io/greluc/home-inv-web, digest: "TODO" }
+    image: { name: ghcr.io/greluc/home-inv-web }
     networks: [edge, frontend]
     # THE INGRESS (ADR-0042). It is the only container with a published port, and
     # it proxies /api, /graphql, /c/, /.well-known and the SSE stream to `api`
@@ -208,7 +223,14 @@ services:
 
   api:
     role: api
-    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }
+    image: { name: ghcr.io/greluc/home-inv }
+    networkAliases:
+      # The name `management.server.address` binds to. A network alias resolves to
+      # the container's address on THAT network, so the management listener is
+      # reachable from `internal` and from nowhere else — which is what
+      # REQ-SEC-099 asks for and what `0.0.0.0` did not give: the connectivity
+      # suite reached :8090 from `web` over `frontend`.
+      internal: api-internal
     networks: [internal, frontend]               # NOT edge: api publishes nothing and
                                                  # is reached through web over the
                                                  # two-member `frontend` segment
@@ -236,7 +258,9 @@ services:
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
       MANAGEMENT_SERVER_PORT: "8090"
-      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"           # bindTo, resolved by the generator
+      MANAGEMENT_SERVER_ADDRESS: "api-internal"               # the alias below, which resolves to
+                                                              # this container's address on
+                                                              # `internal` and to nothing else
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
       # The other two REQUIRED non-secret variables of 06 §6.11. They were listed
       # as required there and declared nowhere here, so the generated units would
@@ -254,7 +278,15 @@ services:
                                                              # pinned, exactly like a plugin's
                                                              # (REQ-SEC-056). `internal` is not a
                                                              # trust boundary — ADR-0044
+      # The other two stores' coordinates, for the same reason HOMEINV_DB_URL is
+      # here. They were NOT declared until 2026-09-12, and the application's
+      # fallback for both is `localhost` — so `api` resolved Valkey to its own
+      # loopback, every session write raised RedisConnectionFailureException, and
+      # POST /api/v1/auth/login answered 500. Found by running the journey suite
+      # against the stack (REQ-SEC-030, REQ-MED-005).
+      HOMEINV_VALKEY_HOST: "valkey"
       HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
     # NO db-migration-password. It is mounted into the one-shot `migrate` service
@@ -279,7 +311,8 @@ services:
       - search-password
       - mtls-core                # client identity towards blobstore and the plugins
     tmpfs: ["/tmp"]
-    dependsOn: [postgres, valkey, migrate, bootstrap, blobstore]   # both one-shots
+    dependsOn: [postgres, valkey, rabbitmq, migrate, bootstrap, blobstore]
+                                                       # both one-shots
                                                        # must have exited 0
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
@@ -287,7 +320,9 @@ services:
 
   worker:
     role: worker
-    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image as api
+    image: { name: ghcr.io/greluc/home-inv }   # the SAME image as api
+    networkAliases:
+      internal: worker-internal                  # as api, for the same reason
     networks: [internal, scanner]
     networksByPlugin: all                        # plus one membership per installed
                                                  # plugin segment, generated (ADR-0037)
@@ -298,7 +333,14 @@ services:
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"
-      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
+      MANAGEMENT_SERVER_ADDRESS: "worker-internal"            # as api, one segment only
+      HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
+                                                 # The worker serves no REST surface and keeps the
+                                                 # web context anyway, because the management
+                                                 # listener is a child of it — so the same beans are
+                                                 # created, and one of them refuses to exist without
+                                                 # this. Without it the worker never started at all;
+                                                 # found by starting the stack (REQ-SEC-063).
       HOMEINV_DB_MIGRATE_ON_START: "false"       # validates the schema, never changes it
       HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"   # the worker RENDERS the labels
                                                              # (05 §5.4), so it needs the base
@@ -306,7 +348,9 @@ services:
       HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
       HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # ADR-0043
       HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
-      HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_VALKEY_HOST: "valkey"              # as api: undeclared, these fall back to
+      HOMEINV_VALKEY_USER: "homeinv"             # localhost inside the container
+      HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
     secrets:
@@ -318,13 +362,11 @@ services:
       - search-password
       - mtls-core
     tmpfs: ["/tmp"]
-    # rabbitmq exists only in standard and ha (see its own `profiles`). A flat
-    # dependsOn would generate Requires=homeinv-rabbitmq.service into the minimal
-    # profile, where that unit does not exist — the stack would not start.
-    dependsOn: [postgres, clamav, blobstore]
-    dependsOnByProfile:
-      standard: [rabbitmq]
-      ha:       [rabbitmq]
+    # rabbitmq is in every profile since ADR-0051, so it is a flat dependency like
+    # the rest. It used to sit behind a `dependsOnByProfile` key that the generator
+    # never read — the broker was in `standard` and up at the time, and the split
+    # outlived the reason for it.
+    dependsOn: [postgres, valkey, rabbitmq, clamav, blobstore]
     resources: { memoryReservation: 512Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
@@ -336,7 +378,7 @@ services:
                                   #            with condition: service_completed_successfully
                                   # → Helm:    the pre-upgrade Job that already existed
                                   # Success is exit 0. api and worker do not start otherwise.
-    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image again
+    image: { name: ghcr.io/greluc/home-inv }   # the SAME image again
     networks: [internal]          # it talks to PostgreSQL and to nothing else
     env:
       SPRING_PROFILES_ACTIVE: "migrate"
@@ -367,7 +409,7 @@ services:
                                   #            with condition: service_completed_successfully
                                   # Success is exit 0, and exit 0 is also what it returns when
                                   # the owner already exists — a redeploy must not fail.
-    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image again
+    image: { name: ghcr.io/greluc/home-inv }   # the SAME image again
     networks: [internal]          # it talks to PostgreSQL and to nothing else
     env:
       SPRING_PROFILES_ACTIVE: "bootstrap"
@@ -404,11 +446,17 @@ services:
     # roles the isolation design rests on, they have to be inside the container
     # before its first start, and the only two ways in are a bind mount — which
     # ADR-0022 forbids — or a layer. See deploy/images/postgres/Dockerfile.
-    image: { name: ghcr.io/greluc/home-inv-postgres, digest: "TODO" }
+    image: { name: ghcr.io/greluc/home-inv-postgres }
     user: "70:70"                 # the image's own postgres user; 10001 breaks initdb
     networks: [internal]
     volumes:
-      - { name: pgdata, path: /var/lib/postgresql/data }
+      # `/var/lib/postgresql`, NOT `/var/lib/postgresql/data`. The 18 image places
+        # the cluster in a major-version subdirectory of this path so that
+        # `pg_upgrade --link` does not cross a mount boundary, and it refuses to
+        # start when it finds a volume at the old location — "there appears to be
+        # PostgreSQL data in /var/lib/postgresql/data (unused mount/volume)".
+        # Found by starting it (docker-library/postgres#1259).
+      - { name: pgdata, path: /var/lib/postgresql }
       - { name: pgwal,  path: /var/lib/homeinv/wal-archive }   # ADR-0045
     tmpfs: ["/tmp", "/var/run/postgresql"]          # the unix socket lives here
     env:
@@ -452,11 +500,21 @@ services:
       that nothing delivers.
 
   valkey:
-    image: { name: docker.io/valkey/valkey, tag: "8-alpine", digest: "TODO" }
+    image: { name: docker.io/valkey/valkey, tag: "8-alpine", digest: "sha256:d2e18f3410b6f616de1417f570fa55261af2898b9c5b2cfb6781ce2373ea43d1" }
     user: "999:1000"              # the image's own valkey user
     networks: [internal]
     volumes: [{ name: kvdata, path: /data }]
     tmpfs: ["/tmp"]
+    # Mounting the ACL is not using it. The image starts `valkey-server` with no
+    # configuration file, so without this the file sat at /etc/valkey/users.acl
+    # and the server ran with `default` enabled and no password — which is the
+    # state ADR-0044 says it fixed. Found by running the connectivity suite
+    # against the stack: an unauthenticated PING was answered (REQ-SEC-104).
+    #
+    # `--appendonly yes` belongs here too: the volume is declared for the AOF,
+    # and without the flag the server keeps an RDB snapshot instead and the
+    # sessions a restart is supposed to preserve are the ones that are lost.
+    command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl", "--appendonly", "yes"]
     secrets: [valkey-password]
     files:
       - target: /etc/valkey/users.acl
@@ -477,7 +535,7 @@ services:
       a Valkey outage cannot produce a duplicate.
 
   blobstore:
-    image: { name: ghcr.io/greluc/home-inv-blobstore, digest: "TODO" }
+    image: { name: ghcr.io/greluc/home-inv-blobstore }
     networks: [internal]          # NOT a plugin segment and NOT egress-capable. It is
                                   # in-deployment infrastructure behind a port, exactly
                                   # like clamd behind `VirusScanner` — the core's
@@ -524,14 +582,19 @@ services:
       can express.
 
   clamav:
-    image: { name: docker.io/clamav/clamav, tag: "stable", digest: "TODO" }
+    image: { name: docker.io/clamav/clamav, tag: "stable", digest: "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422" }
     user: "100:101"               # the image's own clamav user
     networks: [scanner]           # NOT a plugin segment: on the old shared one, a
                                   # plugin could reach clamd and stop it, and with a
                                   # fail-closed scan that blocks every upload in the
                                   # instance (ADR-0037, REQ-SEC-098).
     volumes: [{ name: cvddata, path: /var/lib/clamav }]
-    tmpfs: ["/tmp", "/run/clamav", "/var/log/clamav"]
+    tmpfs: ["/tmp", "/run/clamav", "/var/lock", "/var/log/clamav"]
+                                  # `/var/lock` because the image links its lock file
+                                  # there and the root filesystem is read-only: without it
+                                  # clamd never starts, the health check never passes, and
+                                  # every service gated on it waits for ever. Found by
+                                  # starting the stack.
     resources: { memoryReservation: 1Gi, memoryLimit: 1536Mi }
     health: { command: "clamdcheck.sh", interval: 60s, startPeriod: 300s }
     profiles: [minimal, standard, ha]
@@ -567,7 +630,7 @@ services:
       scanner whose signatures freeze at the image build date.
 
   egress-proxy:
-    image: { name: ghcr.io/greluc/home-inv-egress-proxy, digest: "TODO" }
+    image: { name: ghcr.io/greluc/home-inv-egress-proxy }
     networks: [scanner, egress]   # `egress` is non-internal and is its route out.
                                   # Without it this container sat only on internal
                                   # segments and could not make the very call it
@@ -578,7 +641,10 @@ services:
                                           # interface. Never published to the host.
     tmpfs: ["/tmp", "/var/run"]
     resources: { memoryReservation: 16Mi, memoryLimit: 32Mi }
-    health: { command: "/healthcheck", interval: 30s }
+    health: { command: "/homeinv-egress-proxy --health", interval: 30s }
+                                  # The binary with a flag, not a script: the image is
+                                  # `scratch` and has no shell to run one (ADR-0054),
+                                  # exactly like blobstore.
     profiles: [minimal, standard, ha]
                                   # EVERY profile since ADR-0036. `minimal` runs no
                                   # plugin, but it does run the mandatory scanner,
@@ -608,6 +674,19 @@ services:
             grant and no per-tenant consent, so it cannot use source 1. The mirror
             sits behind a CDN with rotating addresses, which is precisely why
             ADR-0027 chose hostname allowlisting over CIDR.
+    files:
+      # The allowlist the proxy reads, generated from the block above. REQ-SEC-097
+      # says "the list is in deploy/services.yaml and the proxy reads it from
+      # there"; generating it is what makes that true rather than aspirational.
+      # Delivered through the same file-mount mechanism as freshclam.conf, for the
+      # same reason: a read-only root filesystem and no bind mounts (ADR-0022)
+      # leave no other way in. It is not a secret and is not treated as one.
+      - target: /etc/homeinv/egress-allowlist.conf
+        generatedFrom: allowlist
+        deliveredBy:
+          podman: "secret type=mount"
+          docker: "secret"
+          kubernetes: "ConfigMap"
     notes: >
       The single route out of the deployment (ADR-0027). Plugin containers get no
       gateway of their own and reach it via HTTPS_PROXY; clamav reaches it via
@@ -631,7 +710,7 @@ services:
       to that plugin's interface alone, and both modes write the same access log.
 
   opensearch:
-    image: { name: docker.io/opensearchproject/opensearch, tag: "3", digest: "TODO" }
+    image: { name: docker.io/opensearchproject/opensearch, tag: "3", digest: "sha256:bcc1797519726ceb6d651d4a3e60b7c30da91793914a8dfe75fd441d4f641509" }
     user: "1000:1000"             # the image's own opensearch user
     networks: [internal]
     volumes: [{ name: osdata, path: /usr/share/opensearch/data }]
@@ -683,15 +762,32 @@ services:
     notes: "Not backed up — rebuildable from PostgreSQL (ADR-0008)."
 
   rabbitmq:
-    image: { name: docker.io/library/rabbitmq, tag: "4-management-alpine", digest: "TODO" }
+    image: { name: docker.io/library/rabbitmq, tag: "4-management-alpine", digest: "sha256:b3b8b7f95f5382a19f9ea33540e604f30aad081d37ad9aba72255135765373a1" }
     user: "999:999"               # the image's own rabbitmq user
     networks: [internal]
     volumes: [{ name: mqdata, path: /var/lib/rabbitmq }]
-    tmpfs: ["/tmp", "/var/log/rabbitmq", "/etc/rabbitmq"]
+    tmpfs: ["/tmp", "/var/log/rabbitmq"]
+                                  # NOT /etc/rabbitmq any more: the generated
+                                  # rabbitmq.conf is mounted into it, and a tmpfs over
+                                  # the directory would hide the file.
     secrets: [mq-password]
-    env:
-      RABBITMQ_DEFAULT_USER: "homeinv"
-      RABBITMQ_DEFAULT_PASS_FILE: /run/secrets/mq-password   # the image reads _FILE here
+    files:
+      # RabbitMQ 4 REFUSES to start when it finds `RABBITMQ_DEFAULT_USER` or
+      # `RABBITMQ_DEFAULT_PASS_FILE` — "deprecated environment variables detected",
+      # and the container exits. That is what this declared until 2026-09-12, so
+      # the broker never started and nothing that waits for it did either. The
+      # supported way is a configuration file, which is also the way the Valkey
+      # ACL and the OpenSearch users already travel.
+      - target: /etc/rabbitmq/rabbitmq.conf
+        generatedFrom: secrets
+        deliveredBy:
+          podman: "secret type=mount"
+          docker: "secret"
+          kubernetes: "Secret"
+        notes: >
+          It carries the password, so it is rendered into deploy/secrets/ and
+          delivered as a secret rather than as a ConfigMap — exactly like
+          valkey-users.acl.
     resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
     health: { command: "rabbitmq-diagnostics -q ping", interval: 20s, startPeriod: 60s }
     # In `minimal` since ADR-0051. REQ-MED-005 generates media derivatives

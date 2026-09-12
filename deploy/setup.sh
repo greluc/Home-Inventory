@@ -130,7 +130,12 @@ CA_CERT="$SECRETS/deployment-ca.crt"
 ensure_ca() {
     [ -f "$CA_CERT" ] && return 0
     command -v openssl >/dev/null 2>&1 || die "openssl is needed to create the deployment CA."
-    openssl req -x509 -newkey ed25519 -nodes -days 3650 \
+    # P-256 and not Ed25519. The mTLS material has to be readable by everything
+    # that presents or verifies it, and grpc-java's key manager parses RSA, DSA
+    # and EC only — an Ed25519 key reaches it as "Neither RSA, DSA nor EC worked"
+    # and `api` refuses to start. Found by starting the stack; the JWT signing key
+    # stays Ed25519, because that one is read by our own code.
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 3650 \
         -keyout "$CA_KEY" -out "$CA_CERT" \
         -subj "/CN=Home Inventory deployment CA" >/dev/null 2>&1
     chmod 0600 "$CA_KEY" "$CA_CERT"
@@ -148,7 +153,8 @@ generate_mtls() {
     key="$SECRETS/$name.key"
     csr="$SECRETS/$name.csr"
     crt="$SECRETS/$name.crt"
-    openssl req -newkey ed25519 -nodes -keyout "$key" -out "$csr" \
+    # P-256, for the reason `ensure_ca` gives.
+    openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$key" -out "$csr" \
         -subj "/CN=$service" >/dev/null 2>&1
     openssl x509 -req -in "$csr" -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
         -days 825 -out "$crt" \
@@ -208,8 +214,16 @@ write_environment() {
     # and a clear message saying so — which is better than an account at an address
     # nobody reads.
     bootstrap_email="${HOMEINV_BOOTSTRAP_EMAIL:-owner@example.invalid}"
+    # The certificate has to exist by now — it is generated a step earlier. If
+    # it does not, the fingerprint below is empty, Compose interpolates an empty
+    # string, and `api` fails to start much later with a message about a pin
+    # rather than about a missing file. `compose/.env` is never overwritten, so a
+    # wrong value written here is a wrong value for ever.
+    [ -f "$SECRETS/mtls-blobstore.crt" ] \
+        || die "$SECRETS/mtls-blobstore.crt is missing; the secrets step did not finish."
     fingerprint=$(openssl x509 -in "$SECRETS/mtls-blobstore.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
+    [ -n "$fingerprint" ] || die "the blob store certificate produced no fingerprint."
     cat > "$env_file" <<ENV
 # Written by deploy/setup.sh on first run. Edit freely; it is never overwritten.
 #
@@ -231,10 +245,6 @@ HOMEINV_MEDIA_BASE_URL=http://media.localhost:8080
 # the frontend segment (REQ-SEC-103). The default covers a local container
 # network; a real deployment narrows it.
 HOMEINV_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-# The address the management listener binds to. It must be the container's
-# address on the internal segment and nothing wider (REQ-SEC-099).
-INTERNAL_ADDR=0.0.0.0
 
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint

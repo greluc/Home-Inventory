@@ -25,7 +25,13 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 
 COPY web/ ./
-COPY design-system/ /design-system/
+
+# No `COPY design-system/`: nothing in this build reads it. It was copied to
+# `/design-system` for the fonts and icons the client will bundle from there
+# rather than from a CDN — and until something imports them it was a directory
+# the root `.dockerignore` excludes, so the build failed on a path it did not
+# need. It comes back with the code that reads it, and with the `.dockerignore`
+# entry in the same commit.
 
 # The build also regenerates nginx/default.conf from the bundle it just produced,
 # so the policy and the hashes it names cannot disagree.

@@ -24,6 +24,12 @@ COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY app/build.gradle.kts ./app/
 RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /dev/null 2>&1 || true
 
+# The BlobStore contract. `app/build.gradle.kts` points the protobuf plugin at
+# `<root>/proto`, so without this the generator finds no sources, reports
+# NO-SOURCE, and the compile fails on a package that was never generated — which
+# is what this image did from the day the gRPC client was added until the first
+# time anybody built it.
+COPY proto/ ./proto/
 COPY app/src ./app/src
 RUN ./gradlew --no-daemon :app:bootJar -x test
 
@@ -35,7 +41,17 @@ RUN java -Djarmode=tools -jar app/build/libs/app-*.jar extract --layers --launch
 # ---------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:25-jre
+# PINNED to noble (Ubuntu 24.04 LTS), and not out of caution about newness.
+# `eclipse-temurin:25-jre` currently resolves to Ubuntu 26.04, whose archive
+# carries libheif's AVIF *decoder* plugin and none of its encoders — no
+# `libheif-plugin-aomenc`, `-rav1e` or `-svtenc` at all. ADR-0052 makes AVIF the
+# one stored image format, so on that base every image upload failed with
+# `heifsave: Unsupported compression` and answered 500. Found by running
+# deploy/smoke/journey.sh against the stack.
+#
+# Revisit when the encoder plugins reappear in a later Ubuntu, or when Temurin
+# publishes a Debian-based tag: Debian packages them.
+FROM eclipse-temurin:25-jre-noble
 
 # libvips is the ImageProcessor (O29, ADR-0007). Installed here rather than
 # bound into the JVM, so a crash while decoding a stranger's upload kills a child
@@ -43,8 +59,24 @@ FROM eclipse-temurin:25-jre
 #
 # --no-install-recommends: Debian's recommends pull in a large graphics stack
 # this application never uses, and every megabyte is also attack surface.
+#
+# libheif-plugin-aomenc is what lets libvips WRITE AVIF. libvips links libheif,
+# and libheif loads its codecs as plugins — without this one `heifsave` exists,
+# accepts the request and fails at the last step, which is the worst shape a
+# missing dependency can take (ADR-0052, REQ-MED-003, REQ-SEC-041). aomenc rather
+# than rav1e or svtenc because it is the reference AV1 encoder and the one the
+# quality setting in `VipsImageProcessor` was chosen against.
+#
+# curl is the health check (app/docker/healthcheck). It asks the management port
+# every fifteen seconds, and without it the container can never report healthy —
+# so nothing that waits for `api` ever starts. The script said "curl rather than
+# a JVM" from the day it was written and nothing installed it; found by starting
+# the stack.
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y libvips-tools \
+    && apt-get install --no-install-recommends -y \
+        libvips-tools \
+        libheif-plugin-aomenc \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # The uid the service matrix names. A fixed numeric uid rather than a name:

@@ -11,6 +11,8 @@ Requires=homeinv-postgres.service
 After=homeinv-postgres.service
 Requires=homeinv-valkey.service
 After=homeinv-valkey.service
+Requires=homeinv-rabbitmq.service
+After=homeinv-rabbitmq.service
 Requires=homeinv-migrate.service
 After=homeinv-migrate.service
 Requires=homeinv-bootstrap.service
@@ -25,20 +27,22 @@ User=10001:10001
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-internal.network
+Network=homeinv-internal.network:alias=api-internal
 Network=homeinv-frontend.network
-Tmpfs=/tmp
+Tmpfs=/tmp:mode=1777
 Environment=SPRING_PROFILES_ACTIVE=api,${HOMEINV_PROFILE}
 Environment=HOMEINV_DB_URL=jdbc:postgresql://postgres:5432/homeinv
 Environment=HOMEINV_DB_USER=homeinv_app
 Environment=MANAGEMENT_SERVER_PORT=8090
-Environment=MANAGEMENT_SERVER_ADDRESS=${INTERNAL_ADDR}
+Environment=MANAGEMENT_SERVER_ADDRESS=api-internal
 Environment=HOMEINV_TRUSTED_PROXIES=${HOMEINV_TRUSTED_PROXIES}
 Environment=HOMEINV_PUBLIC_BASE_URL=${HOMEINV_PUBLIC_BASE_URL}
 Environment=HOMEINV_MEDIA_BASE_URL=${HOMEINV_MEDIA_BASE_URL}
 Environment=HOMEINV_BLOBSTORE_ENDPOINT=blobstore:8100
 Environment=HOMEINV_BLOBSTORE_FINGERPRINT=${HOMEINV_BLOBSTORE_FINGERPRINT}
+Environment=HOMEINV_VALKEY_HOST=valkey
 Environment=HOMEINV_VALKEY_USER=homeinv
+Environment=HOMEINV_MQ_HOST=rabbitmq
 Environment=HOMEINV_MQ_USER=homeinv
 Environment=HOMEINV_SEARCH_USER=homeinv
 Environment=HOMEINV_DB_PASSWORD_FILE=/run/secrets/db-password
@@ -57,7 +61,7 @@ Secret=valkey-password,type=mount
 Secret=mq-password,type=mount
 Secret=search-password,type=mount
 Secret=mtls-core,type=mount
-HealthCmd=/usr/bin/healthcheck
+HealthCmd=["CMD", "/usr/bin/healthcheck"]
 HealthInterval=15s
 HealthStartPeriod=90s
 Notify=healthy

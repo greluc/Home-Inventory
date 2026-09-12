@@ -1,18 +1,2 @@
-# GENERATED FROM ../services.yaml — DO NOT EDIT.
-#
-# A TEMPLATE. `deploy/setup.sh` replaces the placeholder below with the content
-# of the `valkey-password` secret and writes the result into deploy/secrets/,
-# which is git-ignored. The password is not in this repository and must not be.
-#
-# Valkey held no credential at all until ADR-0044, which meant every session and
-# every rate-limit counter was readable by anything that could open port 6379 on
-# `internal` — `web` included, at the time.
-
-# The built-in account is off. Leaving it on with `nopass` is the default, and
-# it is how an authenticated Valkey ends up accepting anonymous commands anyway.
 user default off
-
-# One user, allowed exactly what sessions, the login throttle and the short-lived
-# OIDC state need. After ADR-0044 the only members of `internal` that can reach
-# the port are `api` and `worker`.
 user homeinv on >@SECRET:valkey-password@ ~* +@all

@@ -19,7 +19,14 @@
 # matrix carries are passed as `-c` arguments, so they stay visible in the
 # generated descriptions rather than hiding in a layer.
 
-FROM docker.io/library/postgres:18-alpine
+# Pinned to the digest, not the tag. This image IS the deployment's PostgreSQL,
+# and the integration tests run this same base — `ProductionImages` reads the
+# `FROM` below — so an unpinned tag here would mean the tests and the deployment
+# both float, which is what REQ-NFR-027 forbids. The tag is kept in the comment
+# because a bare digest tells a reader nothing:
+#
+#     docker.io/library/postgres:18-alpine, resolved 2026-09-12
+FROM docker.io/library/postgres@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
 
 # 00 creates the roles; 01 gives the two that log in their passwords, read from
 # the mounted secrets. They run in name order, once, at first initialisation.

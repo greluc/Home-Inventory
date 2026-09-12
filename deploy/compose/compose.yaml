@@ -23,12 +23,21 @@ services:
       - standard
       - ha
     networks:
-      - edge
-      - frontend
-    tmpfs:
-      - /tmp
-      - /var/cache/nginx
-      - /var/run
+      edge: {}
+      frontend: {}
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/cache/nginx
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/run
+        tmpfs:
+          mode: 0o1777
     ports:
       - "8080:8080"
     depends_on:
@@ -60,20 +69,24 @@ services:
       - standard
       - ha
     networks:
-      - internal
-      - frontend
+      internal:
+        aliases:
+          - api-internal
+      frontend: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"
-      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
+      MANAGEMENT_SERVER_ADDRESS: "api-internal"
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
       HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
       HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
       HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"
       HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
+      HOMEINV_VALKEY_HOST: "valkey"
       HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
       HOMEINV_DB_PASSWORD_FILE: "/run/secrets/db-password"
@@ -93,12 +106,17 @@ services:
       - mq-password
       - search-password
       - mtls-core
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -132,20 +150,25 @@ services:
       - standard
       - ha
     networks:
-      - internal
-      - scanner
+      internal:
+        aliases:
+          - worker-internal
+      scanner: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"
-      MANAGEMENT_SERVER_ADDRESS: "${INTERNAL_ADDR}"
+      MANAGEMENT_SERVER_ADDRESS: "worker-internal"
+      HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
       HOMEINV_DB_MIGRATE_ON_START: "false"
       HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
       HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
       HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"
       HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
+      HOMEINV_VALKEY_HOST: "valkey"
       HOMEINV_VALKEY_USER: "homeinv"
+      HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
       HOMEINV_DB_PASSWORD_FILE: "/run/secrets/db-password"
@@ -163,10 +186,17 @@ services:
       - mq-password
       - search-password
       - mtls-core
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
     depends_on:
       postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       clamav:
         condition: service_healthy
@@ -198,7 +228,7 @@ services:
       - standard
       - ha
     networks:
-      - internal
+      internal: {}
     environment:
       SPRING_PROFILES_ACTIVE: "migrate"
       HOMEINV_DB_MIGRATE_ON_START: "true"
@@ -207,8 +237,11 @@ services:
       HOMEINV_DB_MIGRATION_PASSWORD_FILE: "/run/secrets/db-migration-password"
     secrets:
       - db-migration-password
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
     depends_on:
       postgres:
         condition: service_healthy
@@ -234,7 +267,7 @@ services:
       - standard
       - ha
     networks:
-      - internal
+      internal: {}
     environment:
       SPRING_PROFILES_ACTIVE: "bootstrap"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
@@ -248,8 +281,11 @@ services:
     secrets:
       - db-password
       - bootstrap-password
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
     depends_on:
       postgres:
         condition: service_healthy
@@ -277,7 +313,7 @@ services:
       - standard
       - ha
     networks:
-      - internal
+      internal: {}
     command: ["postgres", "-c", "wal_level=replica", "-c", "archive_mode=on", "-c", "archive_command=test ! -f /var/lib/homeinv/wal-archive/%f && cp %p /var/lib/homeinv/wal-archive/%f", "-c", "archive_timeout=900"]
     environment:
       POSTGRES_DB: "homeinv"
@@ -287,11 +323,16 @@ services:
       - db-password
       - db-migration-password
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - pgwal:/var/lib/homeinv/wal-archive
-    tmpfs:
-      - /tmp
-      - /var/run/postgresql
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/run/postgresql
+        tmpfs:
+          mode: 0o1777
     healthcheck:
       test: ["CMD", "pg_isready"]
       interval: 10s
@@ -304,7 +345,7 @@ services:
           memory: 1g
 
   valkey:
-    image: docker.io/valkey/valkey:8-alpine
+    image: docker.io/valkey/valkey@sha256:d2e18f3410b6f616de1417f570fa55261af2898b9c5b2cfb6781ce2373ea43d1
     container_name: homeinv-valkey
     user: "999:1000"
     read_only: true
@@ -318,17 +359,20 @@ services:
       - standard
       - ha
     networks:
-      - internal
+      internal: {}
+    command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl", "--appendonly", "yes"]
     secrets:
       - source: valkey-users.acl
         target: /etc/valkey/users.acl
       - valkey-password
     volumes:
       - kvdata:/data
-    tmpfs:
-      - /tmp
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
     healthcheck:
-      test: ["CMD", "valkey-cli ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       start_period: 30s
     deploy:
@@ -353,15 +397,17 @@ services:
       - standard
       - ha
     networks:
-      - internal
+      internal: {}
     secrets:
       - mtls-blobstore
     volumes:
       - blobdata:/var/lib/homeinv/blobs
-    tmpfs:
-      - /tmp
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
     healthcheck:
-      test: ["CMD", "/homeinv-blobstore --health"]
+      test: ["CMD", "/homeinv-blobstore", "--health"]
       interval: 30s
       start_period: 30s
     deploy:
@@ -372,7 +418,7 @@ services:
           memory: 32m
 
   clamav:
-    image: docker.io/clamav/clamav:stable
+    image: docker.io/clamav/clamav@sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422
     container_name: homeinv-clamav
     user: "100:101"
     read_only: true
@@ -386,16 +432,28 @@ services:
       - standard
       - ha
     networks:
-      - scanner
+      scanner: {}
     secrets:
       - source: clamav-freshclam.conf
         target: /etc/clamav/freshclam.conf
     volumes:
       - cvddata:/var/lib/clamav
-    tmpfs:
-      - /tmp
-      - /run/clamav
-      - /var/log/clamav
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /run/clamav
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/lock
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/log/clamav
+        tmpfs:
+          mode: 0o1777
     healthcheck:
       test: ["CMD", "clamdcheck.sh"]
       interval: 60s
@@ -422,13 +480,22 @@ services:
       - standard
       - ha
     networks:
-      - scanner
-      - egress
-    tmpfs:
-      - /tmp
-      - /var/run
+      scanner: {}
+      egress: {}
+    secrets:
+      - source: egress-proxy-egress-allowlist.conf
+        target: /etc/homeinv/egress-allowlist.conf
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/run
+        tmpfs:
+          mode: 0o1777
     healthcheck:
-      test: ["CMD", "/healthcheck"]
+      test: ["CMD", "/homeinv-egress-proxy", "--health"]
       interval: 30s
       start_period: 30s
     deploy:
@@ -439,7 +506,7 @@ services:
           memory: 16m
 
   opensearch:
-    image: docker.io/opensearchproject/opensearch:3
+    image: docker.io/opensearchproject/opensearch@sha256:bcc1797519726ceb6d651d4a3e60b7c30da91793914a8dfe75fd441d4f641509
     container_name: homeinv-opensearch
     user: "1000:1000"
     read_only: true
@@ -452,7 +519,7 @@ services:
       - standard
       - ha
     networks:
-      - internal
+      internal: {}
     environment:
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: "/run/secrets/opensearch-admin-password"
       DISABLE_INSTALL_DEMO_CONFIG: "true"
@@ -467,12 +534,20 @@ services:
       - mtls-search
     volumes:
       - osdata:/usr/share/opensearch/data
-    tmpfs:
-      - /tmp
-      - /usr/share/opensearch/logs
-      - /usr/share/opensearch/config
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /usr/share/opensearch/logs
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /usr/share/opensearch/config
+        tmpfs:
+          mode: 0o1777
     healthcheck:
-      test: ["CMD", "curl -fsS -k https://localhost:9200/_cluster/health"]
+      test: ["CMD", "curl", "-fsS", "-k", "https://localhost:9200/_cluster/health"]
       interval: 20s
       start_period: 120s
     deploy:
@@ -483,7 +558,7 @@ services:
           memory: 1536m
 
   rabbitmq:
-    image: docker.io/library/rabbitmq:4-management-alpine
+    image: docker.io/library/rabbitmq@sha256:b3b8b7f95f5382a19f9ea33540e604f30aad081d37ad9aba72255135765373a1
     container_name: homeinv-rabbitmq
     user: "999:999"
     read_only: true
@@ -497,20 +572,23 @@ services:
       - standard
       - ha
     networks:
-      - internal
-    environment:
-      RABBITMQ_DEFAULT_USER: "homeinv"
-      RABBITMQ_DEFAULT_PASS_FILE: "/run/secrets/mq-password"
+      internal: {}
     secrets:
+      - source: rabbitmq-rabbitmq.conf
+        target: /etc/rabbitmq/rabbitmq.conf
       - mq-password
     volumes:
       - mqdata:/var/lib/rabbitmq
-    tmpfs:
-      - /tmp
-      - /var/log/rabbitmq
-      - /etc/rabbitmq
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 0o1777
+      - type: tmpfs
+        target: /var/log/rabbitmq
+        tmpfs:
+          mode: 0o1777
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics -q ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 20s
       start_period: 60s
     deploy:
@@ -544,8 +622,12 @@ secrets:
     file: ../secrets/valkey-users.acl
   clamav-freshclam.conf:
     file: ../secrets/clamav-freshclam.conf
+  egress-proxy-egress-allowlist.conf:
+    file: ../secrets/egress-proxy-egress-allowlist.conf
   opensearch-internal_users.yml:
     file: ../secrets/opensearch-internal_users.yml
+  rabbitmq-rabbitmq.conf:
+    file: ../secrets/rabbitmq-rabbitmq.conf
   postgres-superuser-password:
     file: ../secrets/postgres-superuser-password
   db-password:

@@ -20,7 +20,7 @@ ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network
-Tmpfs=/tmp
+Tmpfs=/tmp:mode=1777
 Environment=SPRING_PROFILES_ACTIVE=bootstrap
 Environment=HOMEINV_DB_URL=jdbc:postgresql://postgres:5432/homeinv
 Environment=HOMEINV_DB_USER=homeinv_app

@@ -19,11 +19,11 @@ DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-edge.network
 Network=homeinv-frontend.network
-Tmpfs=/tmp
-Tmpfs=/var/cache/nginx
-Tmpfs=/var/run
+Tmpfs=/tmp:mode=1777
+Tmpfs=/var/cache/nginx:mode=1777
+Tmpfs=/var/run:mode=1777
 PublishPort=8080:8080
-HealthCmd=/healthcheck
+HealthCmd=["CMD", "/healthcheck"]
 HealthInterval=15s
 HealthStartPeriod=30s
 

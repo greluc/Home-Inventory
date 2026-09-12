@@ -10,16 +10,16 @@ Description=Home Inventory opensearch
 
 [Container]
 ContainerName=homeinv-opensearch
-Image=docker.io/opensearchproject/opensearch:3
+Image=docker.io/opensearchproject/opensearch@sha256:bcc1797519726ceb6d651d4a3e60b7c30da91793914a8dfe75fd441d4f641509
 User=1000:1000
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network
 Volume=homeinv-osdata.volume:/usr/share/opensearch/data
-Tmpfs=/tmp
-Tmpfs=/usr/share/opensearch/logs
-Tmpfs=/usr/share/opensearch/config
+Tmpfs=/tmp:mode=1777
+Tmpfs=/usr/share/opensearch/logs:mode=1777
+Tmpfs=/usr/share/opensearch/config:mode=1777
 Environment=OPENSEARCH_INITIAL_ADMIN_PASSWORD=/run/secrets/opensearch-admin-password
 Environment=DISABLE_INSTALL_DEMO_CONFIG=true
 Environment=bootstrap.memory_lock=false
@@ -28,7 +28,7 @@ Secret=search-password,type=mount
 Secret=mtls-search,type=mount
 Secret=opensearch-internal_users.yml,type=mount,target=/usr/share/opensearch/config/opensearch-security/internal_users.yml
 Secret=mtls-search,type=mount,target=/usr/share/opensearch/config/certificates
-HealthCmd=curl -fsS -k https://localhost:9200/_cluster/health
+HealthCmd=["CMD", "curl", "-fsS", "-k", "https://localhost:9200/_cluster/health"]
 HealthInterval=20s
 HealthStartPeriod=120s
 

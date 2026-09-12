@@ -15,5 +15,8 @@ ALTER ROLE homeinv_migrator     WITH PASSWORD 'test-migrator';
 ALTER ROLE homeinv_readonly     WITH PASSWORD 'test-readonly';
 ALTER ROLE homeinv_housekeeping WITH PASSWORD 'test-housekeeping';
 
--- The migrator owns the schema, so it must be able to create one.
-GRANT CREATE ON DATABASE homeinv TO homeinv_migrator;
+-- Nothing else. The CREATE grant the migrator needs used to be here and only
+-- here, which meant the tests passed against a permission the production script
+-- never gave — the deployment failed on its first real start with "permission
+-- denied for database homeinv". It lives in 00-roles.sql now, where the header
+-- above already claimed the real roles came from.

@@ -55,6 +55,18 @@ spring:
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
 
 management:
+  endpoint:
+    health:
+      group:
+        readyz:
+          # Without `schemaVersionCheck`, which is `@Profile("!migrate")` and does
+          # not exist in a one-shot — and Spring Boot validates group membership at
+          # startup, so naming a contributor that is not there is a refusal to
+          # start rather than a warning. The shared application.yaml names it
+          # because `api` and `worker` need it; this role has no management server
+          # at all.
+          include: readinessState,db
+
   # No management listener either. A one-shot that exposes a port would keep the
   # port open for as long as it runs, which is seconds, and would need an address
   # to bind on a segment it is not meant to serve on.
