@@ -58,7 +58,7 @@ Secret=valkey-password,type=mount
 Secret=mq-password,type=mount
 Secret=search-password,type=mount
 Secret=mtls-core,type=mount
-HealthCmd=["CMD", "/usr/bin/healthcheck"]
+HealthCmd=["/usr/bin/healthcheck"]
 HealthInterval=15s
 HealthStartPeriod=90s
 Notify=healthy

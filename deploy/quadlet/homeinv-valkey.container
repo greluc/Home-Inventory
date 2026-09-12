@@ -21,7 +21,7 @@ Tmpfs=/tmp:mode=1777
 Secret=valkey-password,type=mount
 Secret=valkey-users.acl,type=mount,target=/etc/valkey/users.acl
 Exec=valkey-server --aclfile /etc/valkey/users.acl --appendonly yes
-HealthCmd=["CMD", "valkey-cli", "ping"]
+HealthCmd=["valkey-cli", "ping"]
 HealthInterval=10s
 HealthStartPeriod=30s
 

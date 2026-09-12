@@ -23,7 +23,7 @@ Tmpfs=/tmp:mode=1777
 Tmpfs=/var/cache/nginx:mode=1777
 Tmpfs=/var/run:mode=1777
 PublishPort=8080:8080
-HealthCmd=["CMD", "/healthcheck"]
+HealthCmd=["/healthcheck"]
 HealthInterval=15s
 HealthStartPeriod=30s
 

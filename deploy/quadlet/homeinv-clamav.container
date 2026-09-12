@@ -22,7 +22,7 @@ Tmpfs=/run/clamav:mode=1777
 Tmpfs=/var/lock:mode=1777
 Tmpfs=/var/log/clamav:mode=1777
 Secret=clamav-freshclam.conf,type=mount,target=/etc/clamav/freshclam.conf
-HealthCmd=["CMD", "clamdcheck.sh"]
+HealthCmd=["clamdcheck.sh"]
 HealthInterval=60s
 HealthStartPeriod=300s
 

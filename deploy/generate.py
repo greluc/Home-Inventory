@@ -921,11 +921,29 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
         health = service.get("health")
         if health and health.get("command"):
-            # The JSON array form, for the reason above: Podman hands a plain
-            # string to `/bin/sh -c`, and `blobstore` and `egress-proxy` are
-            # `scratch` images with no shell to hand it to.
+            # The array WITHOUT Compose's `CMD` prefix, which is the one form
+            # Podman reads as a command.
+            #
+            # Given `["CMD", ...]` Podman sees the keyword, decides the value is
+            # Docker's string form after all, and re-splits the RAW TEXT on
+            # whitespace — so the check it stored for `api` was the four words
+            # `["CMD",` and `"/usr/bin/healthcheck"]`, brackets and quotes and
+            # all. It could never pass. `api` started in fourteen seconds, ran
+            # perfectly, and was killed at 210 s for never reporting healthy,
+            # because `Notify=healthy` waits for a check that cannot run.
+            #
+            # Without the prefix, Podman takes an array of TWO OR MORE words as
+            # the command to execute, and a single word as something to hand to
+            # `/bin/sh -c`. That is why the two `scratch` images — `blobstore`
+            # and `egress-proxy`, which have no shell — declare their check with
+            # an argument: `/homeinv-blobstore --health` is executed, and a bare
+            # `/homeinv-blobstore` would have been handed to a shell that is not
+            # in the image. `deploy/smoke/connectivity.sh` asserts that every
+            # container the stack starts actually reports healthy, on both
+            # runtimes, which is what makes that a caught mistake rather than a
+            # silent one.
             body.append(
-                "HealthCmd=" + literal(json.dumps(["CMD", *shlex.split(health["command"])]))
+                "HealthCmd=" + literal(json.dumps(shlex.split(health["command"])))
             )
             body.append(f"HealthInterval={health.get('interval', '15s')}")
             body.append(f"HealthStartPeriod={health.get('startPeriod', '30s')}")

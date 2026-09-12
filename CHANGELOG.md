@@ -41,6 +41,14 @@ commit".
 
 ### Fixed
 
+- **Under Podman, not one health check could run.** `HealthCmd` was written in
+  Compose's `["CMD", ...]` shape, which Podman answers by re-splitting the raw
+  text of the array on spaces — so every container carried a check made of
+  brackets and quotes, and `api` and `worker`, the two whose units wait for one,
+  started perfectly and were killed three and a half minutes later for never
+  reporting healthy. The smoke suite now requires every running container to
+  report healthy on both runtimes.
+
 - **The WAL archive received nothing, on either runtime.** The recovery point
   this deployment promises rests on continuous archiving into the `pgwal`
   volume, and every segment since first start had been refused: the directory

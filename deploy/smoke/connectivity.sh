@@ -16,6 +16,7 @@
 #   REQ-SEC-105   `web` reaches `api` and nothing else
 #   REQ-PRIV-003  `api` and `worker` have no outbound route out of the deployment
 #   REQ-NFR-014   the WAL archive actually receives segments
+#   REQ-NFR-067   every container that declares a health check reports healthy
 #
 # A segment flag is a claim; a refused connection is evidence. That distinction is
 # ADR-0044's, and it is the reason this file exists rather than another grep over
@@ -178,6 +179,53 @@ else
     fail "expected web and egress-proxy to be running; found $outside of them"
 fi
 
+section "REQ-NFR-067: every health check the matrix declares actually passes"
+# A check that cannot run looks exactly like one that has not run yet, and under
+# Podman not one of them could: `HealthCmd` was written in Compose's
+# `["CMD", ...]` shape, and Podman answers that by re-splitting the raw text of
+# the array on spaces — so `api` was checked by running the four words `["CMD",`
+# and `"/usr/bin/healthcheck"]`. Ten containers carried a check that could never
+# pass, and the only two that said so were the two whose units wait for one:
+# `api` and `worker` timed out after starting perfectly.
+#
+# `starting` is neither pass nor fail, so a container inside its start period is
+# waited for rather than judged.
+health_of() {
+    "$RUNTIME" inspect --format '{{.State.Health.Status}}' "$1" 2>/dev/null | tr -d "\r"
+}
+
+containers=$("$RUNTIME" ps --format '{{.Names}}' | grep '^homeinv-' || true)
+
+attempt=0
+while [ "$attempt" -lt 90 ]; do
+    settling=0
+    for container in $containers; do
+        [ "$(health_of "$container")" = "starting" ] && settling=$((settling + 1))
+    done
+    [ "$settling" -eq 0 ] && break
+    attempt=$((attempt + 1))
+    sleep 1
+done
+
+checked=0
+for container in $containers; do
+    status=$(health_of "$container")
+    case "$status" in
+        healthy)
+            checked=$((checked + 1))
+            pass "$container reports healthy"
+            ;;
+        "" | "<no value>")
+            # No health check declared for this one; the matrix is the authority
+            # on which services have one, and it is checked elsewhere.
+            ;;
+        *) fail "$container reports '$status'" ;;
+    esac
+done
+if [ "$checked" -eq 0 ]; then
+    fail "not one running container reported a health status"
+fi
+
 section "REQ-NFR-014: the WAL archive receives segments"
 # `pg_stat_archiver`, not the presence of a setting. The `archive_command` was
 # right in every description and archived nothing at all, for two reasons at
@@ -191,8 +239,15 @@ section "REQ-NFR-014: the WAL archive receives segments"
 # first, so what is measured is this run rather than the history of the volume —
 # a single archive failure at any point in the past would otherwise leave
 # `failed_count` above zero for the life of the cluster.
+#
+# The message before the switch is what makes the switch happen at all:
+# PostgreSQL skips it when the current segment holds nothing new, so on a quiet
+# cluster the check would reset the counters, switch nothing, and then report
+# that nothing was archived. `pg_logical_emit_message` writes a WAL record and
+# touches no table, which is what this needs and all of it.
 if ! "$RUNTIME" exec homeinv-postgres psql -U postgres -d homeinv -At \
         -c "SELECT pg_stat_reset_shared('archiver');" \
+        -c "SELECT pg_logical_emit_message(true, 'homeinv-smoke', 'wal archive check');" \
         -c "SELECT pg_switch_wal();" >/dev/null 2>&1; then
     fail "could not ask postgres to switch its WAL segment"
 else

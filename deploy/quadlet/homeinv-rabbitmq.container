@@ -21,7 +21,7 @@ Tmpfs=/tmp:mode=1777
 Tmpfs=/var/log/rabbitmq:mode=1777
 Secret=mq-password,type=mount
 Secret=rabbitmq-rabbitmq.conf,type=mount,target=/etc/rabbitmq/rabbitmq.conf
-HealthCmd=["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+HealthCmd=["rabbitmq-diagnostics", "-q", "ping"]
 HealthInterval=20s
 HealthStartPeriod=60s
 
