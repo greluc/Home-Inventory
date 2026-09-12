@@ -44,11 +44,25 @@ const nginxConf = join(root, "nginx", "default.conf");
  * bootstrap changes the hash, which is the coupling this whole mechanism relies
  * on.
  *
+ * **Newlines are normalised first, because the browser's are.** An HTML parser
+ * turns every CRLF and CR into a single LF before the script element has any text
+ * content, and the hash the browser checks is taken from that text — not from the
+ * bytes on the wire. Hashing the file as it lies on disk therefore produces a
+ * policy that rejects its own bundle on any checkout where the file has CRLF,
+ * with `--check` passing all the while because both halves read the same bytes.
+ *
+ * `.gitattributes` asks for LF everywhere, which is why nothing had seen this;
+ * a worktree that predates that line still holds CRLF, and there the application
+ * served a blank page — the theme bootstrap is the one inline script, and
+ * `html[data-theme-pending] body` stays hidden until it has run. A build should
+ * not depend on a checkout's line endings to produce a working page.
+ *
  * @param {string} content the element's text content
  * @returns {string} the `sha256-…` source expression
  */
 function hashOf(content) {
-  return `'sha256-${createHash("sha256").update(content, "utf8").digest("base64")}'`;
+  const parsed = content.replace(/\r\n?/g, "\n");
+  return `'sha256-${createHash("sha256").update(parsed, "utf8").digest("base64")}'`;
 }
 
 /**

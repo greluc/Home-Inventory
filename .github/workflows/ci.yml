@@ -342,6 +342,15 @@ jobs:
       - name: The served CSP matches the built bundle
         run: npm run csp:check
 
+      # `npm run build` REWRITES nginx/default.conf, so the check above compares
+      # the build with itself and cannot fail. What it cannot see is the copy in
+      # the repository going stale — and it had, by the hash of the theme
+      # bootstrap, because that hash was generated on a checkout whose line
+      # endings differed. This is the same gate `deploy/generate.py --check` is:
+      # the generated file in the tree must be the one the generator produces.
+      - name: The committed policy is the generated one
+        run: git diff --exit-code -- nginx/default.conf
+
       - name: The CSP has not been weakened
         run: |
           set -euo pipefail

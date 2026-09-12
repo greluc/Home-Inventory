@@ -41,6 +41,16 @@ commit".
 
 ### Fixed
 
+- **The application could serve a blank page, with only a console message to
+  say why.** Its Content-Security-Policy names the hash of the one inline script
+  — the theme bootstrap that unhides the page — and that hash was taken from the
+  file's bytes, while a browser takes it from the parsed text, in which every
+  line ending has become a single newline. Built from a checkout with Windows
+  line endings, the policy therefore blocked the bundle's own script and the
+  interface stayed invisible. The hash is now computed the way the browser
+  computes it, and CI checks the committed policy against the generated one
+  rather than against itself.
+
 - **The worker could start before the database had been migrated.** It is the
   same application as `api` under a different profile and validates the schema
   as it starts, but it did not wait for the migration the way `api` does — so it
