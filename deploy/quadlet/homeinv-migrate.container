@@ -29,7 +29,9 @@ Secret=db-migration-password,type=mount
 [Service]
 MemoryMax=512M
 MemoryLow=256M
-Restart=on-failure
+Type=oneshot
+RemainAfterExit=yes
+Restart=no
 
 [Install]
 WantedBy=default.target

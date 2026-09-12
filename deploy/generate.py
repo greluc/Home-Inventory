@@ -203,7 +203,7 @@ def secret_environment(service: dict) -> dict[str, str]:
     # db-password too, but it is told where by POSTGRES_PASSWORD_FILE and its own
     # init script; handing it HOMEINV_* variables would be noise that reads like
     # configuration.
-    if service.get("role") not in {"api", "worker", "migrate"}:
+    if service.get("role") not in {"api", "worker", "migrate", "bootstrap"}:
         return {}
     return {
         "HOMEINV_" + name.upper().replace("-", "_") + "_FILE": f"/run/secrets/{name}"
@@ -510,7 +510,17 @@ def compose(matrix: dict) -> str:
             lines.append(f"      - {capability}")
         lines.append("    security_opt:")
         lines.append("      - no-new-privileges:true")
-        lines.append(f"    restart: {service.get('restart', d['restart'])}")
+        # A one-shot has finished when it exits, and `on-failure` would restart a
+        # deterministic failure — a missing HOMEINV_BOOTSTRAP_EMAIL, a migration
+        # that cannot apply — until somebody noticed. Dependants wait on
+        # `service_completed_successfully`, which a restarting container never
+        # reaches. services.yaml said this was generated; it was not.
+        restart = service.get("restart", d["restart"])
+        if service.get("lifecycle") == "oneShot":
+            # Quoted: YAML 1.1 reads a bare `no` as false, and a Compose file
+            # is parsed by more than one implementation.
+            restart = '"no"'
+        lines.append(f"    restart: {restart}")
 
         if service.get("profiles"):
             lines.append("    profiles:")
@@ -719,14 +729,25 @@ def quadlet(matrix: dict) -> dict[str, str]:
                 # mean "ready" rather than "process exists" (REQ-NFR-067).
                 body.append("Notify=healthy")
 
+        one_shot = service.get("lifecycle") == "oneShot"
+
         resources = service.get("resources")
+        body += ["", "[Service]"]
         if resources:
-            body += ["", "[Service]"]
             body.append(f"MemoryMax={memory(resources.get('memoryLimit', '512Mi'), 'systemd')}")
             body.append(f"MemoryLow={memory(resources.get('memoryReservation', '128Mi'), 'systemd')}")
-            body.append(f"Restart={service.get('restart', d['restart'])}")
+        if one_shot:
+            # Without these the unit is "started" the moment the container is
+            # launched, so a `Requires=`/`After=` dependant starts alongside the
+            # migration rather than after it — which is the ordering REQ-NFR-067
+            # asks for and the generator did not produce. `RemainAfterExit` keeps
+            # the unit active once it has exited 0, so the dependency holds for the
+            # rest of the boot instead of going away with the process.
+            body.append("Type=oneshot")
+            body.append("RemainAfterExit=yes")
+            body.append("Restart=no")
         else:
-            body += ["", "[Service]", f"Restart={service.get('restart', d['restart'])}"]
+            body.append(f"Restart={service.get('restart', d['restart'])}")
 
         body += ["", "[Install]", "WantedBy=default.target", ""]
         files[f"homeinv-{name}.container"] = "\n".join(body)
@@ -759,6 +780,32 @@ def check_expected_fixtures(matrix: dict) -> None:
                     f"services.yaml names as its expected output.")
 
 
+def check_setup_writes_every_variable(rendered: str) -> None:
+    """Every variable ``compose.yaml`` interpolates is written by ``setup.sh``.
+
+    Compose substitutes an unset variable with an empty string and says nothing,
+    so a service reached by a variable nobody wrote starts misconfigured rather
+    than failing — which is the failure mode `06 §6.11` exists to prevent. The
+    matrix generates ``compose.yaml``; ``compose/.env`` is written by hand in
+    ``setup.sh``, and the two have no other connection.
+
+    :param rendered: the generated compose file
+    :raises SystemExit: when a variable is interpolated and never written
+    """
+    interpolated = set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)\}", rendered))
+    setup = (HERE / "setup.sh").read_text(encoding="utf-8")
+    written = set(re.findall(r"^([A-Z_][A-Z0-9_]*)=", setup, flags=re.MULTILINE))
+
+    missing = sorted(interpolated - written)
+    if missing:
+        raise SystemExit(
+            "compose.yaml interpolates variables that deploy/setup.sh never writes into\n"
+            "compose/.env, so Compose would substitute an empty string and the stack would\n"
+            "start misconfigured rather than fail:\n  "
+            + "\n  ".join(missing)
+        )
+
+
 def main() -> int:
     """Writes or checks the generated files.
 
@@ -772,7 +819,9 @@ def main() -> int:
     matrix = load()
     check_settings_delivery(matrix)
     check_expected_fixtures(matrix)
-    outputs = {COMPOSE_OUT: compose(matrix)}
+    rendered_compose = compose(matrix)
+    check_setup_writes_every_variable(rendered_compose)
+    outputs = {COMPOSE_OUT: rendered_compose}
     for filename, content in quadlet(matrix).items():
         outputs[QUADLET_DIR / filename] = content
     outputs.update(generated_files(matrix))

@@ -13,6 +13,8 @@ Requires=homeinv-valkey.service
 After=homeinv-valkey.service
 Requires=homeinv-migrate.service
 After=homeinv-migrate.service
+Requires=homeinv-bootstrap.service
+After=homeinv-bootstrap.service
 Requires=homeinv-blobstore.service
 After=homeinv-blobstore.service
 

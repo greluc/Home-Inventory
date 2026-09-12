@@ -1,0 +1,44 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory bootstrap
+Requires=homeinv-postgres.service
+After=homeinv-postgres.service
+Requires=homeinv-migrate.service
+After=homeinv-migrate.service
+
+[Container]
+ContainerName=homeinv-bootstrap
+Image=ghcr.io/greluc/home-inv:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-internal.network
+Tmpfs=/tmp
+Environment=SPRING_PROFILES_ACTIVE=bootstrap
+Environment=HOMEINV_DB_URL=jdbc:postgresql://postgres:5432/homeinv
+Environment=HOMEINV_DB_USER=homeinv_app
+Environment=HOMEINV_BOOTSTRAP_EMAIL=${HOMEINV_BOOTSTRAP_EMAIL}
+Environment=HOMEINV_BOOTSTRAP_DISPLAY_NAME=${HOMEINV_BOOTSTRAP_DISPLAY_NAME}
+Environment=HOMEINV_BOOTSTRAP_LOCALE=${HOMEINV_BOOTSTRAP_LOCALE}
+Environment=HOMEINV_BOOTSTRAP_TENANT_NAME=${HOMEINV_BOOTSTRAP_TENANT_NAME}
+Environment=HOMEINV_DB_PASSWORD_FILE=/run/secrets/db-password
+Environment=HOMEINV_BOOTSTRAP_PASSWORD_FILE=/run/secrets/bootstrap-password
+Secret=db-password,type=mount
+Secret=bootstrap-password,type=mount
+
+[Service]
+MemoryMax=512M
+MemoryLow=256M
+Type=oneshot
+RemainAfterExit=yes
+Restart=no
+
+[Install]
+WantedBy=default.target

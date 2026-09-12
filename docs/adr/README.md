@@ -74,3 +74,4 @@ Date: YYYY-MM-DD
 | [0050](0050-blobstore-service-in-rust.md) | The `blobstore` service is written in Rust | Accepted |
 | [0051](0051-broker-in-stage-0.md) | RabbitMQ moves to stage 0, because a stage-0 requirement needs the worker | Accepted |
 | [0052](0052-one-stored-image-format.md) | Every stored image is AVIF, and the bytes that arrived are never stored | Accepted |
+| [0053](0053-first-owner-as-a-one-shot.md) | The first owner is created by a one-shot service, not by an endpoint | Accepted |

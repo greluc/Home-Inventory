@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The `bootstrap` role (ADR-0053): the same image, creating the first owner and
+# the tenant it owns, then exiting.
+#
+# It is the same jar for the reason `migrate` is — an account created by a
+# different build is an account created against different validation — and a
+# different process because creating an owner is the most privileged action this
+# system performs, and it has no business living in the one that serves the
+# internet.
+
+spring:
+  main:
+    # No HTTP listener: this role serves nothing and must not open a port.
+    web-application-type: none
+    # Beans are created only when something needs them. The runner needs the two
+    # provisioning ports and the data source; the REST layer, the media pipeline
+    # and the URL signing key are never constructed, so their secrets - which
+    # this role deliberately does not hold - are never required.
+    lazy-initialization: true
+
+  jpa:
+    hibernate:
+      # The schema belongs to `migrate`, which has already run: Compose gates this
+      # service on it and Quadlet orders it after it.
+      ddl-auto: none
+
+  autoconfigure:
+    exclude:
+      # Sessions and the login throttle live in Valkey. This role establishes no
+      # session and has no reason to reach it.
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+management:
+  # No management listener. A one-shot that exposes a port would keep it open for
+  # as long as it runs, which is a second, and would need an address to bind on a
+  # segment it is not meant to serve on.
+  server:
+    port: -1

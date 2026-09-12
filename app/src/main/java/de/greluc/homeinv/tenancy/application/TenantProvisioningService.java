@@ -5,6 +5,7 @@
 package de.greluc.homeinv.tenancy.application;
 
 import de.greluc.homeinv.platform.TenantContext;
+import de.greluc.homeinv.tenancy.api.TenantProvisioning;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,7 @@ import org.springframework.stereotype.Service;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class TenantProvisioningService {
+public class TenantProvisioningService implements TenantProvisioning {
 
   private final TenantBootstrap bootstrap;
 
@@ -47,6 +48,7 @@ public class TenantProvisioningService {
    * @param ownerUserId the user who becomes {@code OWNER}
    * @return the new tenant's id
    */
+  @Override
   public UUID provision(String name, UUID ownerUserId) {
     UUID tenantId = UUID.randomUUID();
     // Established before the transaction opens: the transaction manager publishes

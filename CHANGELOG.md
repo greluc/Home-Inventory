@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **A deployed instance can be signed in to.** `deploy/setup.sh` now also creates
+  the first owner and the tenant it owns, with a password generated into
+  `deploy/secrets/bootstrap-password` and an address you set in `compose/.env`.
+  Before this there was no way to create either, so a freshly deployed instance
+  had nobody who could sign in.
+
 - **The web client speaks German and English**, switchable in the bar, starting
   in the language on your profile and falling back to English. Nothing a user
   reads is written into a screen any more.
@@ -116,10 +122,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 422 numbered, testable requirements across
+- A requirements catalogue with 423 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 53 architecture decision records, each with its alternatives and consequences —
+- 54 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -242,6 +242,7 @@ daemon disappears entirely.
 ├── homeinv-clamav.container
 ├── homeinv-egress-proxy.container  (every profile, ADR-0036)
 ├── homeinv-migrate.container       (Type=oneshot; api and worker Require= it)
+├── homeinv-bootstrap.container     (Type=oneshot; the first owner, ADR-0053)
 ├── homeinv-api.container
 ├── homeinv-worker.container
 ├── homeinv-web.container
@@ -396,6 +397,7 @@ logging:
 | `api` | own, distroless JRE 25 | 768 MB / 1.5 GB | none | internal, frontend, every `plugin-<id>` |
 | `worker` | **the same image** | 512 MB / 1.5 GB | none | internal, scanner, every `plugin-<id>` |
 | `migrate` | **the same image**, one-shot | 256 / 512 MB *while running* | none | internal |
+| `bootstrap` | **the same image**, one-shot | 256 / 512 MB *while running* | none | internal |
 | `postgres` | `postgres:18-alpine` | 1 / 2 GB | volumes `pgdata`, **`pgwal`** ([ADR-0045](../adr/0045-wal-archive-volume.md)) | internal |
 | `opensearch` | `opensearchproject/opensearch:3` | 1.5 / 2 GB | volume `osdata` | internal |
 | `rabbitmq` | `rabbitmq:4-management-alpine` | 256 / 512 MB | volume `mqdata` | internal |

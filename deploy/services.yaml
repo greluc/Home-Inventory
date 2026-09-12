@@ -279,7 +279,8 @@ services:
       - search-password
       - mtls-core                # client identity towards blobstore and the plugins
     tmpfs: ["/tmp"]
-    dependsOn: [postgres, valkey, migrate, blobstore]   # migrate must have exited 0
+    dependsOn: [postgres, valkey, migrate, bootstrap, blobstore]   # both one-shots
+                                                       # must have exited 0
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
@@ -358,6 +359,45 @@ services:
       every long-running process. It has no health check because it is not expected
       to stay alive; the generator omits the key for lifecycle: oneShot rather than
       failing the "every service declares a health check" rule.
+
+  bootstrap:
+    role: bootstrap
+    lifecycle: oneShot            # → Quadlet: [Service] Type=oneshot, RemainAfterExit=yes
+                                  # → Compose: restart: "no", and api depends on it
+                                  #            with condition: service_completed_successfully
+                                  # Success is exit 0, and exit 0 is also what it returns when
+                                  # the owner already exists — a redeploy must not fail.
+    image: { name: ghcr.io/greluc/home-inv, digest: "TODO" }   # the SAME image again
+    networks: [internal]          # it talks to PostgreSQL and to nothing else
+    env:
+      SPRING_PROFILES_ACTIVE: "bootstrap"
+      HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
+      HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
+      # Deployment configuration, interpolated from compose/.env exactly like the
+      # base URLs above. The address is the one the first owner signs in with; the
+      # other three have defaults the application supplies, and are named here so
+      # that an operator changing them edits one file.
+      HOMEINV_BOOTSTRAP_EMAIL: "${HOMEINV_BOOTSTRAP_EMAIL}"   # required, no default
+      HOMEINV_BOOTSTRAP_DISPLAY_NAME: "${HOMEINV_BOOTSTRAP_DISPLAY_NAME}"
+      HOMEINV_BOOTSTRAP_LOCALE: "${HOMEINV_BOOTSTRAP_LOCALE}"
+      HOMEINV_BOOTSTRAP_TENANT_NAME: "${HOMEINV_BOOTSTRAP_TENANT_NAME}"
+    # The application role, not the migrator: this creates rows, it does not
+    # change the schema (REQ-SEC-101). The password is a file like every other
+    # secret — never an environment value holding the value itself (REQ-NFR-054).
+    secrets: [db-password, bootstrap-password]
+    tmpfs: ["/tmp"]
+    dependsOn: [postgres, migrate]        # the schema has to exist first
+    resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
+    profiles: [minimal, standard, ha]
+    notes: >
+      Added 2026-09-12 (ADR-0053). A fresh instance had no account and no tenant
+      and nothing could create either, so nobody could sign in — stage 0's "an item
+      can be created, photographed, stored and found again" was unreachable through
+      the product. ADR-0028 already said the registration path is "the operator
+      creating the first account directly" and never said how. Shaped like `migrate`
+      for `migrate`'s reasons: the same image, a different process, and the most
+      privileged action in the system kept out of the one that serves the internet.
+      No health check, because it is not expected to stay alive.
 
   postgres:
     # Our own image, and only because of the init scripts. They create the five
@@ -697,6 +737,17 @@ secrets:
       process away from the one role that can rewrite an RLS policy.
   data-encryption-master-key:                  { required: true, kind: random, notes: "Envelope encryption master key (ADR-0019). Backed up separately from the data." }
   jwt-signing-key:                   { required: true, kind: ed25519, notes: "Ed25519 pair; two active versions during rotation." }
+  bootstrap-password:
+    required: true
+    kind: random
+    notes: >
+      The first owner's password, read once by the `bootstrap` one-shot. It is a
+      password a person types, so an operator who wants to choose it writes the file
+      before the first run; setup.sh generates one only when the file is absent and
+      never overwrites it (REQ-NFR-046 — there is no generated default that keeps a
+      deployment running, and this is not one: without it the one-shot fails and api
+      does not start).
+
   url-signing-key:
     required: true
     kind: random

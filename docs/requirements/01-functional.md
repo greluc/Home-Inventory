@@ -229,6 +229,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-TEN-009 | Quotas per tenant: item count, bytes of storage, plugin count, API calls. | M | 1 | Exceeding one returns `403` with the current and permitted amount |
 | REQ-TEN-010 | Nobody can grant permissions they do not hold themselves. | M | 1 | The attempt is rejected and logged |
 | REQ-TEN-011 | Tenant deletion with a 30-day grace period, revocation, and **a completion report per building block**. | M | 1 | An erasure certificate is produced |
+| REQ-TEN-012 | **A fresh instance gets its first owner and tenant from a one-shot service**, not from a registration endpoint and not from SQL: the operator sets `HOMEINV_BOOTSTRAP_EMAIL` and mounts `HOMEINV_BOOTSTRAP_PASSWORD_FILE`, and the `bootstrap` role creates the account, the tenant and its catalogue and exits ([ADR-0053](../adr/0053-first-owner-as-a-one-shot.md)). It is idempotent: a second run finds the address taken, changes nothing and exits 0, so a redeploy neither creates a second owner nor resets a password the operator has changed. Without it nothing could create either — `TenantProvisioningService` was reachable only from tests — so nobody could sign in to a deployed instance and stage 0's own definition of done was unreachable through the product. | M | 0 | A stack brought up by `deploy/setup.sh` can be signed in to; running the service a second time creates nothing and exits 0; with neither variable set it exits non-zero and `api` does not start |
 
 ---
 

@@ -100,6 +100,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
       blobstore:
         condition: service_healthy
     healthcheck:
@@ -186,7 +188,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    restart: on-failure
+    restart: "no"
     profiles:
       - minimal
       - standard
@@ -206,6 +208,48 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
+  bootstrap:
+    image: ghcr.io/greluc/home-inv:latest
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    profiles:
+      - minimal
+      - standard
+      - ha
+    networks:
+      - internal
+    environment:
+      SPRING_PROFILES_ACTIVE: "bootstrap"
+      HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
+      HOMEINV_DB_USER: "homeinv_app"
+      HOMEINV_BOOTSTRAP_EMAIL: "${HOMEINV_BOOTSTRAP_EMAIL}"
+      HOMEINV_BOOTSTRAP_DISPLAY_NAME: "${HOMEINV_BOOTSTRAP_DISPLAY_NAME}"
+      HOMEINV_BOOTSTRAP_LOCALE: "${HOMEINV_BOOTSTRAP_LOCALE}"
+      HOMEINV_BOOTSTRAP_TENANT_NAME: "${HOMEINV_BOOTSTRAP_TENANT_NAME}"
+      HOMEINV_DB_PASSWORD_FILE: "/run/secrets/db-password"
+      HOMEINV_BOOTSTRAP_PASSWORD_FILE: "/run/secrets/bootstrap-password"
+    secrets:
+      - db-password
+      - bootstrap-password
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     deploy:
       resources:
         limits:
@@ -500,6 +544,8 @@ secrets:
     file: ../secrets/data-encryption-master-key
   jwt-signing-key:
     file: ../secrets/jwt-signing-key
+  bootstrap-password:
+    file: ../secrets/bootstrap-password
   url-signing-key:
     file: ../secrets/url-signing-key
   valkey-password:

@@ -203,6 +203,11 @@ write_environment() {
         say "  compose/.env — kept (it already exists)"
         return 0
     fi
+    # A placeholder rather than a guess. The bootstrap service refuses to invent an
+    # account, so an address that is not this one's is a deployment with no owner
+    # and a clear message saying so — which is better than an account at an address
+    # nobody reads.
+    bootstrap_email="${HOMEINV_BOOTSTRAP_EMAIL:-owner@example.invalid}"
     fingerprint=$(openssl x509 -in "$SECRETS/mtls-blobstore.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
     cat > "$env_file" <<ENV
@@ -233,6 +238,16 @@ INTERNAL_ADDR=0.0.0.0
 
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint
+
+# The first owner. The one-shot `bootstrap` service creates this account and the
+# tenant it owns, once, and does nothing on every run after that (ADR-0053). Its
+# password is a file like every other secret: deploy/secrets/bootstrap-password,
+# generated on the first run and never overwritten — write your own there before
+# the first start if you would rather choose it.
+HOMEINV_BOOTSTRAP_EMAIL=$bootstrap_email
+HOMEINV_BOOTSTRAP_DISPLAY_NAME=Owner
+HOMEINV_BOOTSTRAP_LOCALE=en
+HOMEINV_BOOTSTRAP_TENANT_NAME=Home
 ENV
     chmod 0600 "$env_file"
     say "  compose/.env — written"
@@ -356,5 +371,11 @@ case "$mode" in
         die "Unknown mode '$mode'. Use: check | docker | podman"
         ;;
 esac
+
+say ""
+say "The first owner is ${bootstrap_email:-the address in compose/.env}."
+say "Its password is in deploy/secrets/bootstrap-password — read it once and store it."
+say "Change the address in compose/.env BEFORE the first start; afterwards the"
+say "account exists and this script will not touch it again."
 
 step "Done"
