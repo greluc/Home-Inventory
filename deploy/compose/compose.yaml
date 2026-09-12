@@ -10,6 +10,7 @@ name: home-inv
 services:
   web:
     image: ghcr.io/greluc/home-inv-web:latest
+    container_name: homeinv-web
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -46,6 +47,7 @@ services:
 
   api:
     image: ghcr.io/greluc/home-inv:latest
+    container_name: homeinv-api
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -117,6 +119,7 @@ services:
 
   worker:
     image: ghcr.io/greluc/home-inv:latest
+    container_name: homeinv-worker
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -182,6 +185,7 @@ services:
 
   migrate:
     image: ghcr.io/greluc/home-inv:latest
+    container_name: homeinv-migrate
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -217,6 +221,7 @@ services:
 
   bootstrap:
     image: ghcr.io/greluc/home-inv:latest
+    container_name: homeinv-bootstrap
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -259,6 +264,7 @@ services:
 
   postgres:
     image: ghcr.io/greluc/home-inv-postgres:latest
+    container_name: homeinv-postgres
     user: "70:70"
     read_only: true
     cap_drop:
@@ -299,6 +305,7 @@ services:
 
   valkey:
     image: docker.io/valkey/valkey:8-alpine
+    container_name: homeinv-valkey
     user: "999:1000"
     read_only: true
     cap_drop:
@@ -333,6 +340,7 @@ services:
 
   blobstore:
     image: ghcr.io/greluc/home-inv-blobstore:latest
+    container_name: homeinv-blobstore
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -365,6 +373,7 @@ services:
 
   clamav:
     image: docker.io/clamav/clamav:stable
+    container_name: homeinv-clamav
     user: "100:101"
     read_only: true
     cap_drop:
@@ -400,6 +409,7 @@ services:
 
   egress-proxy:
     image: ghcr.io/greluc/home-inv-egress-proxy:latest
+    container_name: homeinv-egress-proxy
     user: "10001:10001"
     read_only: true
     cap_drop:
@@ -430,6 +440,7 @@ services:
 
   opensearch:
     image: docker.io/opensearchproject/opensearch:3
+    container_name: homeinv-opensearch
     user: "1000:1000"
     read_only: true
     cap_drop:
@@ -473,6 +484,7 @@ services:
 
   rabbitmq:
     image: docker.io/library/rabbitmq:4-management-alpine
+    container_name: homeinv-rabbitmq
     user: "999:999"
     read_only: true
     cap_drop:

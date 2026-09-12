@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **The deployment is checked by being run, not only by being read.** CI now
+  brings the whole stack up on both container runtimes with the one setup
+  command, proves that each segment refuses what it is meant to refuse, and walks
+  the whole of "create an item, photograph it, store it, find it again" through
+  the published port with a real malware scanner.
+
 - **A deployed instance can be signed in to.** `deploy/setup.sh` now also creates
   the first owner and the tenant it owns, with a password generated into
   `deploy/secrets/bootstrap-password` and an address you set in `compose/.env`.

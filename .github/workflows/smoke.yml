@@ -3,15 +3,32 @@
 #
 # The gate that cannot run anywhere else.
 #
-# REQ-NFR-064: the same smoke suite runs **rootless** under Podman, **rootless**
-# under Docker, and against `kind` — and a change that works under only one
-# runtime breaks the build. This is the one requirement no developer workstation
-# can demonstrate: rootless is a Linux concept, and a Windows or macOS runtime
-# runs in a virtual machine where "rootless" says nothing about the host.
+# Stage 0 asks for two container runtimes as equals (REQ-NFR-051, REQ-NFR-059),
+# both rootless. This is the one requirement no developer workstation can
+# demonstrate: rootless is a Linux concept, and a Windows or macOS runtime runs in
+# a virtual machine where "rootless" says nothing about the host.
 #
-# It is therefore a separate workflow rather than a job in CI: it is slower, it
-# needs its own setup per runtime, and when it fails the answer is usually about
-# the deployment rather than about the code.
+# `kind`, SELinux `enforcing` and a RHEL-family distribution are REQ-NFR-064,
+# which is stage 1 — this file covers the two runtimes and says so rather than
+# claiming the third.
+#
+# It is a separate workflow rather than a job in CI: it is slower, it needs its
+# own setup per runtime, and when it fails the answer is usually about the
+# deployment rather than about the code.
+#
+# What it proves, in order:
+#
+#   1. the host prerequisites are what `setup.sh` says they are (REQ-NFR-060)
+#   2. ONE command takes a fresh checkout to a running stack (REQ-NFR-028/051)
+#   3. the segments refuse what the matrix says they refuse — a flag in a file is
+#      a claim and a refused connection is evidence (REQ-SEC-099/102/104/105,
+#      REQ-PRIV-003)
+#   4. an item can be created, photographed, stored and found again, through the
+#      published port, with a real malware scanner (stage 0's definition of done,
+#      REQ-SEC-092)
+#   5. it comes back up against its own volumes (REQ-NFR-062), the bootstrap
+#      one-shot creates nothing on a second run (REQ-TEN-012), and nothing inside
+#      runs as root (REQ-SEC-083)
 
 name: Rootless smoke
 
@@ -23,7 +40,12 @@ on:
       - 'deploy/**'
       - 'app/Dockerfile'
       - 'app/docker/**'
+      - 'web/Dockerfile'
       - '.github/workflows/smoke.yml'
+      # The journey below signs in and uploads; a change to either is a change to
+      # what this workflow is checking.
+      - 'app/src/main/**'
+      - 'web/src/**'
   # Runtimes and base images change underneath us; a weekly run finds that
   # before a release does.
   schedule:
@@ -97,46 +119,59 @@ jobs:
       - name: The descriptions still match the matrix
         run: python deploy/generate.py --check
 
-      - name: Generate the secrets this profile needs
+      # REQ-NFR-060: the host prerequisites a rootless stack needs and no
+      # container can give itself. `setup.sh check` refuses without them, which is
+      # the behaviour under test — so the runner is brought up to them first,
+      # with the commands that script prints.
+      - name: Bring the host up to the prerequisites
         run: |
           set -euo pipefail
-          mkdir -p deploy/secrets
-          # Test-only material, in a runner that is destroyed with the job. Real
-          # deployments mount these from a secret store; the point of generating
-          # them here is that a missing secret must abort startup, and the smoke
-          # test needs to get past that deliberately rather than by accident.
-          for name in db-password db-migration-password data-key jwt-key \
-                      url-signing-key valkey-password; do
-            head -c 48 /dev/urandom | base64 -w0 > "deploy/secrets/$name"
-          done
+          sudo loginctl enable-linger "$USER"
+          sudo mkdir -p /etc/systemd/system/user@.service.d
+          sudo tee /etc/systemd/system/user@.service.d/delegate.conf >/dev/null <<'CONF'
+          [Service]
+          Delegate=cpu cpuset io memory pids
+          CONF
+          sudo systemctl daemon-reload
+          # subuid/subgid for the runner's user: Debian's adduser writes them for
+          # interactive accounts and the runner's is not one.
+          grep -q "^$USER:" /etc/subuid || echo "$USER:100000:65536" | sudo tee -a /etc/subuid
+          grep -q "^$USER:" /etc/subgid || echo "$USER:100000:65536" | sudo tee -a /etc/subgid
 
-      - name: Build the application image
+      - name: Build the application and web images
         run: |
-          ${{ matrix.runtime }} build -f app/Dockerfile -t home-inv:smoke .
+          set -euo pipefail
+          ${{ matrix.runtime }} build -f app/Dockerfile -t ghcr.io/greluc/home-inv:latest .
+          ${{ matrix.runtime }} build -f web/Dockerfile -t ghcr.io/greluc/home-inv-web:latest web
+          ${{ matrix.runtime }} build -f deploy/images/postgres/Dockerfile \
+            -t ghcr.io/greluc/home-inv-postgres:latest deploy/images/postgres
+          ${{ matrix.runtime }} build -f blobstore/Dockerfile \
+            -t ghcr.io/greluc/home-inv-blobstore:latest blobstore
 
-      # The smoke test proper: bring the minimal profile up, wait for the API to
-      # report ready, and take it down. What it proves is narrow and worth
-      # proving — that the generated description describes something that starts.
-      - name: Bring up the minimal profile
-        working-directory: deploy/compose
+      # REQ-NFR-028 and REQ-NFR-051: one command, from a fresh checkout to a
+      # running stack, on both runtimes. Running the real script rather than a
+      # transcription of it is the point — the secrets it generates, the
+      # templates it renders and the `.env` it writes are all things a
+      # hand-written step in this file would drift from.
+      - name: The one command (deploy/setup.sh)
+        timeout-minutes: 10
         env:
-          HOMEINV_PROFILE: minimal
-          HOMEINV_PUBLIC_BASE_URL: http://localhost:8080
-          HOMEINV_MEDIA_BASE_URL: http://localhost:8081
-          INTERNAL_ADDR: 0.0.0.0
-          HOMEINV_TRUSTED_PROXIES: 127.0.0.1/32
+          HOMEINV_BOOTSTRAP_EMAIL: owner@example.org
+        run: ./deploy/setup.sh ${{ matrix.runtime }}
+
+      - name: Start the units (podman)
+        if: matrix.runtime == 'podman'
         run: |
           set -euo pipefail
-          if [ "${{ matrix.runtime }}" = "podman" ]; then
-            podman compose --profile minimal up -d
-          else
-            docker compose --profile minimal up -d
-          fi
+          # setup.sh installs the Quadlet units and says how to start them; on
+          # Compose it starts the stack itself.
+          systemctl --user daemon-reload
+          systemctl --user start homeinv-api.service
 
       - name: The API becomes ready
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 180); do
             if ${{ matrix.runtime }} exec homeinv-api /usr/bin/healthcheck > /dev/null 2>&1; then
               echo "ready after ${attempt}s"
               exit 0
@@ -144,8 +179,71 @@ jobs:
             sleep 1
           done
           echo "::error::the API never became ready"
-          ${{ matrix.runtime }} compose --profile minimal logs --tail 100 || true
+          ${{ matrix.runtime }} ps -a || true
           exit 1
+
+      # The scanner downloads its signatures through the egress proxy on first
+      # start (ADR-0036) and uploads are refused until it can answer — fail-closed,
+      # which is the design working (REQ-SEC-092). The journey below uploads, so it
+      # waits here rather than failing there with a 503 that would read like a bug.
+      - name: The scanner has its signatures
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 1200); do
+            if ${{ matrix.runtime }} exec homeinv-clamav clamdcheck.sh > /dev/null 2>&1; then
+              echo "the scanner answered after ${attempt}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the scanner never became ready; uploads would be refused 503"
+          ${{ matrix.runtime }} logs homeinv-clamav --tail 50 || true
+          exit 1
+
+      # REQ-SEC-099, 102, 104, 105 and REQ-PRIV-003. Every one of them says its
+      # gate is a refused connection; until this step existed, CI read the
+      # descriptions and never opened a socket.
+      - name: The segments are what the matrix claims
+        run: sh deploy/smoke/connectivity.sh ${{ matrix.runtime }}
+
+      # Stage 0's definition of done, end to end through the published port:
+      # sign in as the owner the bootstrap one-shot created, put something
+      # somewhere, photograph it, and find it again. Carries REQ-SEC-092's EICAR
+      # case, which needs a real scanner with real signatures.
+      - name: An item can be created, photographed, stored and found again
+        run: sh deploy/smoke/journey.sh http://localhost:8080
+
+      # REQ-NFR-062: the volumes are runtime-managed and survive a restart with
+      # their ownership intact. A stack that only ever starts once never finds out.
+      - name: It comes back up against its own volumes
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.runtime }}" = "podman" ]; then
+            systemctl --user restart homeinv-api.service
+          else
+            (cd deploy/compose && docker compose --profile minimal restart)
+          fi
+          for attempt in $(seq 1 120); do
+            if ${{ matrix.runtime }} exec homeinv-api /usr/bin/healthcheck > /dev/null 2>&1; then
+              echo "ready again after ${attempt}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the stack did not come back up against its existing volumes"
+          exit 1
+
+      # REQ-TEN-012: the bootstrap one-shot runs on every deployment and must
+      # create nothing the second time.
+      - name: A second bootstrap changes nothing
+        if: matrix.runtime == 'docker'
+        working-directory: deploy/compose
+        run: |
+          set -euo pipefail
+          docker compose --profile minimal up bootstrap --exit-code-from bootstrap
+          docker compose --profile minimal logs bootstrap | grep -q "already has its owner" \
+            || { echo "::error::the second run did not recognise the existing owner"; exit 1; }
 
       # The check that makes the rest of this job mean something: the containers
       # are running as a mapped, unprivileged user. A stack that starts as root

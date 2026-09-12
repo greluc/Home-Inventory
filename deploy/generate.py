@@ -503,6 +503,14 @@ def compose(matrix: dict) -> str:
 
         lines.append(f"  {name}:")
         lines.append(f"    image: {reference}")
+        # The same name both runtimes use. Quadlet sets `ContainerName=` already,
+        # and without this Compose would call it `home-inv-api-1` — so every
+        # command an operator is given (`docker logs homeinv-api`,
+        # `journalctl --user -u homeinv-api`) would be right on one runtime and
+        # wrong on the other, and so would every check in the smoke suite.
+        # Nothing in this matrix scales, which is the one thing `container_name`
+        # would prevent.
+        lines.append(f"    container_name: homeinv-{name}")
         lines.append(f"    user: \"{service.get('user', d['user'])}\"")
         lines.append("    read_only: true" if service.get("readOnlyRootFilesystem", d["readOnlyRootFilesystem"]) else "    read_only: false")
         lines.append("    cap_drop:")
