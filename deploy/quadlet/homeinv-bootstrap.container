@@ -21,13 +21,10 @@ DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network:alias=bootstrap
 Tmpfs=/tmp:mode=1777
+EnvironmentFile=%h/.config/homeinv/homeinv.env
 Environment=SPRING_PROFILES_ACTIVE=bootstrap
 Environment=HOMEINV_DB_URL=jdbc:postgresql://postgres:5432/homeinv
 Environment=HOMEINV_DB_USER=homeinv_app
-Environment=HOMEINV_BOOTSTRAP_EMAIL=${HOMEINV_BOOTSTRAP_EMAIL}
-Environment=HOMEINV_BOOTSTRAP_DISPLAY_NAME=${HOMEINV_BOOTSTRAP_DISPLAY_NAME}
-Environment=HOMEINV_BOOTSTRAP_LOCALE=${HOMEINV_BOOTSTRAP_LOCALE}
-Environment=HOMEINV_BOOTSTRAP_TENANT_NAME=${HOMEINV_BOOTSTRAP_TENANT_NAME}
 Environment=HOMEINV_DB_PASSWORD_FILE=/run/secrets/db-password
 Environment=HOMEINV_BOOTSTRAP_PASSWORD_FILE=/run/secrets/bootstrap-password
 Secret=db-password,type=mount

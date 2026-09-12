@@ -74,7 +74,8 @@ services:
           - api-internal
       frontend: {}
     environment:
-      SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
+      SPRING_PROFILES_ACTIVE: "api"
+      SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"
@@ -155,7 +156,8 @@ services:
           - worker-internal
       scanner: {}
     environment:
-      SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
+      SPRING_PROFILES_ACTIVE: "worker"
+      SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"

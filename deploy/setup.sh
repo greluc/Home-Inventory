@@ -373,8 +373,18 @@ case "$mode" in
             podman secret exists "$secret_name" 2>/dev/null \
                 || podman secret create "$secret_name" "$rendered" >/dev/null
         done
+        # The same variables Compose reads from compose/.env, in the place the
+        # units name. systemd does not interpolate `${VAR}` in `Environment=`, so
+        # the units carry `EnvironmentFile=` and this is that file: one place to
+        # edit after installation, exactly as on the Compose side.
+        env_dir="${XDG_CONFIG_HOME:-$HOME/.config}/homeinv"
+        mkdir -p "$env_dir"
+        cp "$HERE/compose/.env" "$env_dir/homeinv.env"
+        chmod 0600 "$env_dir/homeinv.env"
+
         systemctl --user daemon-reload
         say "  units installed into $units"
+        say "  variables installed into $env_dir/homeinv.env"
         say "  start with: systemctl --user start homeinv-api"
         ;;
     *)

@@ -49,6 +49,10 @@ GENERATED_DIR = HERE / "generated"
 # delivery path is shared with one.
 SECRET_PLACEHOLDER = "@SECRET:{name}@"
 
+# `${HOMEINV_PUBLIC_BASE_URL}` and its kind: a value the operator supplies,
+# which Compose interpolates from compose/.env and systemd does not.
+PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+
 BANNER = (
     "# GENERATED FROM ../services.yaml — DO NOT EDIT.\n"
     "#\n"
@@ -842,7 +846,23 @@ def quadlet(matrix: dict) -> dict[str, str]:
             # mount is root-owned and 0755, and the container's own user cannot
             # write to it.
             body.append(f"Tmpfs={path}:mode=1777")
+        # The operator's own variables come from a file, exactly as they do on the
+        # Compose side. systemd does NOT interpolate `${VAR}` in `Environment=` —
+        # it passes the eight characters — so a unit written that way handed the
+        # container the literal text, and `bootstrap` reported "set
+        # HOMEINV_BOOTSTRAP_EMAIL and run this service again" on a deployment
+        # where the operator had set it. `EnvironmentFile=` is read first and a
+        # later `Environment=` overrides it, so a placeholder must not be written
+        # twice; the loop below skips them.
+        if any(
+            PLACEHOLDER.fullmatch(str(value))
+            for value in (service.get("env") or {}).values()
+        ):
+            body.append("EnvironmentFile=%h/.config/homeinv/homeinv.env")
+
         for key, value in (service.get("env") or {}).items():
+            if PLACEHOLDER.fullmatch(str(value)):
+                continue
             body.append(f"Environment={key}={resolve_secrets(value)}")
         for key, value in settings_environment(service).items():
             body.append(f"Environment={key}={value}")

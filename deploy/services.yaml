@@ -251,7 +251,19 @@ services:
                                                  # holding a single capability
                                                  # (ADR-0037, REQ-SEC-099).
     env:
-      SPRING_PROFILES_ACTIVE: "api,${HOMEINV_PROFILE}"
+      SPRING_PROFILES_ACTIVE: "api"             # the ROLE, which is fixed by which
+                                                 # service this is
+      SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
+                                                 # the DEPLOYMENT profile, which the
+                                                 # operator chooses. Split from the role
+                                                 # on 2026-09-12: as one value it read
+                                                 # `api,${HOMEINV_PROFILE}`, and while
+                                                 # Compose interpolates that, systemd does
+                                                 # not — a Quadlet unit passed the eight
+                                                 # characters through as a profile name.
+                                                 # Whole-value placeholders come from the
+                                                 # env file on both runtimes; embedded ones
+                                                 # cannot.
       # The database coordinates. Declared here and nowhere else: the application
       # has no default for them, which is what makes a missing one abort startup
       # instead of silently reaching for localhost (REQ-NFR-046).
@@ -329,7 +341,19 @@ services:
     ports:
       - { container: 8090, host: null, bindTo: internal }      # same reasoning as api
     env:
-      SPRING_PROFILES_ACTIVE: "worker,${HOMEINV_PROFILE}"
+      SPRING_PROFILES_ACTIVE: "worker"             # the ROLE, which is fixed by which
+                                                 # service this is
+      SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
+                                                 # the DEPLOYMENT profile, which the
+                                                 # operator chooses. Split from the role
+                                                 # on 2026-09-12: as one value it read
+                                                 # `worker,${HOMEINV_PROFILE}`, and while
+                                                 # Compose interpolates that, systemd does
+                                                 # not — a Quadlet unit passed the eight
+                                                 # characters through as a profile name.
+                                                 # Whole-value placeholders come from the
+                                                 # env file on both runtimes; embedded ones
+                                                 # cannot.
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
       MANAGEMENT_SERVER_PORT: "8090"
