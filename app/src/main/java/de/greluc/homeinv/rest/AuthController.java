@@ -160,7 +160,23 @@ public class AuthController {
    *     unbounded field is an invitation to spend it on a megabyte of nothing
    */
   public record LoginRequest(
-      @NotBlank @Size(max = 320) String email, @NotBlank @Size(max = 200) String password) {}
+      @NotBlank @Size(max = 320) String email, @NotBlank @Size(max = 200) String password) {
+
+    /**
+     * The address, and the fact that there was a password.
+     *
+     * <p>Not decoration. Spring MVC logs the deserialised body at {@code DEBUG} — "Read
+     * application/json to [...]" — through the record's generated {@code toString}, so with debug
+     * logging on, every password anybody signed in with was written to the log in clear
+     * (REQ-SEC-050). {@code LogHygieneIT} found it and now keeps it found.
+     *
+     * @return the record with the password masked
+     */
+    @Override
+    public String toString() {
+      return "LoginRequest[email=" + email + ", password=***]";
+    }
+  }
 
   /**
    * Who the caller is.

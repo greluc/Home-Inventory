@@ -15,14 +15,19 @@ import de.greluc.homeinv.media.domain.ScanState;
 import de.greluc.homeinv.media.infrastructure.AttachmentRepository;
 import de.greluc.homeinv.media.infrastructure.MediaObjectRepository;
 import de.greluc.homeinv.platform.CallerContext;
+import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.MediaHostCheck;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +35,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,20 +44,27 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h2>Why the scan is synchronous at stage 0</h2>
  *
- * <p>{@code REQ-MED-013} allows a blob to sit in {@code PENDING_SCAN} until a verdict arrives, and
- * the architecture generates derivatives in a worker. Stage 0 has no worker and no message broker —
- * RabbitMQ is stage 1 — so the scan happens in the request and the upload either succeeds having
- * been judged clean, or fails.
+ * <p>{@code REQ-MED-013} allows a blob to sit in {@code PENDING_SCAN} until a verdict arrives. The
+ * scan happens in the request anyway: the caller is waiting for an answer they can act on, and
+ * "uploaded, come back later to find out whether it was rejected" is a worse experience than a
+ * slower upload.
  *
  * <p>That is a smaller behaviour than the requirement permits, not a larger one: nothing becomes
- * retrievable without a verdict either way. The {@code PENDING_SCAN} state and its index exist from
- * the start because stage 1 moves the scan into the worker, and a state added later would be a state
- * that did not exist for everything uploaded before it.
+ * retrievable without a verdict either way. The {@code PENDING_SCAN} state and its index exist
+ * because a later stage may move the scan out of the request, and a state added then would be a
+ * state that did not exist for everything uploaded before it.
+ *
+ * <p>The <em>derivatives</em> are already asynchronous, in {@code worker}, over the broker
+ * ADR-0051 moved to stage 0 for exactly that (REQ-MED-005). This paragraph said RabbitMQ was stage 1
+ * until 2026-09-12, which had stopped being true.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DefaultMediaService implements MediaService {
+
+  /** The cap REQ-NFR-010 puts on every page of every collection. */
+  private static final int MAX_PAGE = 200;
 
   private final UploadPipeline pipeline;
   private final MediaObjectRepository objects;
@@ -59,6 +72,7 @@ public class DefaultMediaService implements MediaService {
   private final BlobStore blobs;
   private final MediaUrlSigner signer;
   private final MediaHostCheck mediaHost;
+  private final CursorCodec cursors;
   private final ApplicationEventPublisher events;
   private final Clock clock;
 
@@ -99,6 +113,12 @@ public class DefaultMediaService implements MediaService {
                   return objects.save(fresh);
                 });
 
+    // The first image of a thing is its primary one unless the caller says
+    // otherwise: REQ-MED-002 wants the primary selectable AND defaulted, and a
+    // client that uploads one photograph should not have to send a second
+    // request to make it the one lists show.
+    boolean primary = primaryImage || !attachments.hasPrimary(tenantId, targetKind, targetId);
+
     attachments
         .findLive(tenantId, object.getId(), targetKind, targetId)
         .orElseGet(
@@ -111,7 +131,7 @@ public class DefaultMediaService implements MediaService {
                       object.getId(),
                       targetKind,
                       targetId,
-                      primaryImage,
+                      primary,
                       actor,
                       now));
             });
@@ -131,30 +151,82 @@ public class DefaultMediaService implements MediaService {
     }
 
     log.debug("Stored media {} for {} {}", object.getId(), targetKind, targetId);
-    return toView(object);
+    return toView(object, primary);
   }
 
   @Override
   @Transactional(readOnly = true)
-  public List<MediaView> attachmentsOf(String targetKind, UUID targetId) {
+  public MediaPage attachmentsOf(String targetKind, UUID targetId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
-    return attachments.findLiveFor(tenantId, targetKind, targetId).stream()
-        .map(
-            attachment ->
-                objects
-                    .findLive(tenantId, attachment.getMediaObjectId())
-                    .orElseThrow(
-                        () ->
-                            // An attachment pointing at a missing blob is a broken
-                            // invariant, not a 404 for the caller: the foreign key
-                            // makes it impossible, so reaching here means the row
-                            // was written around it.
-                            new IllegalStateException(
-                                "Attachment "
-                                    + attachment.getId()
-                                    + " references a media object that is not there")))
-        .map(this::toView)
-        .toList();
+    int size = Math.clamp(limit, 1, MAX_PAGE);
+
+    // The cursor belongs to one target. Without the fingerprint a cursor from an
+    // item's photographs would resume a location's at the same row, which is a
+    // wrong answer rather than an error (REQ-SRCH-009, REQ-SEC-106).
+    String fingerprint = fingerprintOf(targetKind, targetId);
+
+    List<Attachment> rows;
+    if (cursor == null || cursor.isBlank()) {
+      rows = attachments.findLiveFor(tenantId, targetKind, targetId, PageRequest.of(0, size));
+    } else {
+      // Throws when the cursor was tampered with or belongs to another target.
+      CursorCodec.Position after = cursors.decode(cursor, fingerprint);
+      rows =
+          attachments.findLiveForAfter(
+              tenantId, targetKind, targetId, after.createdAt(), after.id(),
+              PageRequest.of(0, size));
+    }
+
+    List<MediaView> views =
+        rows.stream()
+            .map(
+                attachment ->
+                    toView(
+                        objects
+                            .findLive(tenantId, attachment.getMediaObjectId())
+                            .orElseThrow(
+                                () ->
+                                    // An attachment pointing at a missing blob is a
+                                    // broken invariant, not a 404 for the caller: the
+                                    // foreign key makes it impossible, so reaching
+                                    // here means the row was written around it.
+                                    new IllegalStateException(
+                                        "Attachment "
+                                            + attachment.getId()
+                                            + " references a media object that is not there")),
+                        attachment.isPrimaryImage()))
+            .toList();
+
+    // A cursor only when the page was full. A short page is the last one, and
+    // handing out a cursor for it would make a client fetch an empty page to
+    // find that out.
+    String nextCursor = null;
+    if (rows.size() == size) {
+      Attachment last = rows.get(rows.size() - 1);
+      nextCursor =
+          cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), fingerprint);
+    }
+    return new MediaPage(views, nextCursor);
+  }
+
+  /**
+   * A stable fingerprint of the listing a cursor belongs to.
+   *
+   * @param targetKind {@code ITEM} or {@code LOCATION}
+   * @param targetId the target
+   * @return a hex digest identifying this listing
+   */
+  private static String fingerprintOf(String targetKind, UUID targetId) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      // The separator matters here for the same reason it does in search:
+      // without it two different pairs could hash alike.
+      byte[] hash =
+          digest.digest(("media " + targetKind + " " + targetId).getBytes(StandardCharsets.UTF_8));
+      return HexFormat.of().formatHex(hash, 0, 16);
+    } catch (NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException("SHA-256 is unavailable", impossible);
+    }
   }
 
   @Override
@@ -229,7 +301,7 @@ public class DefaultMediaService implements MediaService {
    * @param object the stored file
    * @return the view
    */
-  private MediaView toView(MediaObject object) {
+  private MediaView toView(MediaObject object, boolean primaryImage) {
     Map<String, String> urls = new LinkedHashMap<>();
     if (object.isRetrievable()) {
       // A URL is offered only for a variant that EXISTS. `full` is produced
@@ -254,6 +326,7 @@ public class DefaultMediaService implements MediaService {
         object.getWidthPx(),
         object.getHeightPx(),
         object.getScanState().name(),
+        primaryImage,
         Map.copyOf(urls));
   }
 }

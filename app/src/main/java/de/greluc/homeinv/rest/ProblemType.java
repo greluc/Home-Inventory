@@ -66,7 +66,7 @@ public enum ProblemType {
   RESOURCE_EXISTS("resource-exists", HttpStatus.CONFLICT, "Resource exists"),
 
   /** The body exceeds the JSON limit, or an upload exceeds its size or pixel limit. */
-  PAYLOAD_TOO_LARGE("payload-too-large", HttpStatus.PAYLOAD_TOO_LARGE, "Payload too large"),
+  PAYLOAD_TOO_LARGE("payload-too-large", HttpStatus.CONTENT_TOO_LARGE, "Payload too large"),
 
   /**
    * The request's {@code Content-Type} is not one this endpoint reads.
@@ -82,10 +82,10 @@ public enum ProblemType {
    *
    * <p>Carries the field paths, so a form can mark the fields rather than showing a sentence.
    */
-  VALIDATION_FAILED("validation-failed", HttpStatus.UNPROCESSABLE_ENTITY, "Validation failed"),
+  VALIDATION_FAILED("validation-failed", HttpStatus.UNPROCESSABLE_CONTENT, "Validation failed"),
 
   /** The malware scan found something; the blob is discarded. */
-  MALWARE_DETECTED("malware-detected", HttpStatus.UNPROCESSABLE_ENTITY, "Malware detected"),
+  MALWARE_DETECTED("malware-detected", HttpStatus.UNPROCESSABLE_CONTENT, "Malware detected"),
 
   /** A per-user, per-tenant or per-IP rate limit was reached. */
   RATE_LIMITED("rate-limited", HttpStatus.TOO_MANY_REQUESTS, "Rate limited"),

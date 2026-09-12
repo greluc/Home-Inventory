@@ -42,6 +42,33 @@ CREATE ROLE homeinv_bootstrap WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE N
 -- The migrator has to be able to hand ownership of that function over.
 GRANT homeinv_bootstrap TO homeinv_migrator;
 
+-- The 30-second ceiling of `REQ-SEC-065`, set on the roles rather than in the
+-- application's configuration, so that it holds for every connection including
+-- the ones a psql session opens. A client can raise its own `statement_timeout`
+-- within a session, which is why `homeinv_app` gets the lowest values and the
+-- migrator gets none: a migration that rewrites a large table legitimately takes
+-- longer than any request may.
+--
+-- `statement_timeout` bounds the query, which is what actually blocks a request
+-- here. `lock_timeout` is lower on purpose — waiting for a lock is waiting for
+-- another transaction, and thirty seconds of that turns one slow write into a
+-- queue of them. `idle_in_transaction_session_timeout` is the one that protects
+-- the database rather than the request: a transaction abandoned mid-flight holds
+-- its locks and its snapshot until something closes it.
+ALTER ROLE homeinv_app          SET statement_timeout = '30s';
+ALTER ROLE homeinv_app          SET lock_timeout = '5s';
+ALTER ROLE homeinv_app          SET idle_in_transaction_session_timeout = '60s';
+
+ALTER ROLE homeinv_readonly     SET statement_timeout = '30s';
+ALTER ROLE homeinv_readonly     SET lock_timeout = '5s';
+ALTER ROLE homeinv_readonly     SET idle_in_transaction_session_timeout = '60s';
+
+-- Housekeeping deletes in batches and may wait a little longer for a lock; it
+-- still may not run a single statement for longer than a request may.
+ALTER ROLE homeinv_housekeeping SET statement_timeout = '30s';
+ALTER ROLE homeinv_housekeeping SET lock_timeout = '15s';
+ALTER ROLE homeinv_housekeeping SET idle_in_transaction_session_timeout = '60s';
+
 -- Nobody may CREATE in the public schema: a table created there by accident
 -- would carry no policy at all. USAGE stays, and must - the `ltree` extension
 -- lives there, and a role that cannot see the schema cannot use the type its

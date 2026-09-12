@@ -21,6 +21,15 @@ commit".
 
 ### Added
 
+- **A photo you upload is the one lists show.** The first image attached to an
+  item or a location becomes its primary image without being asked; it stays
+  selectable (**REST API**).
+
+- **Nothing answers with an unbounded list.** The attachments of a thing are
+  paged by cursor like search results are, at most 200 to a page, and a JSON
+  request body over one megabyte is refused before it is read. Requests, queries
+  and locks all have a thirty-second ceiling (**REST API**).
+
 - **The API describes itself.** `api/openapi.yaml` is generated from the running
   application and committed, so a client has a contract to build against — every
   endpoint, every field, and every way each one can fail. The build fails while

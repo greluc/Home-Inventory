@@ -4,6 +4,11 @@
  */
 package de.greluc.homeinv;
 
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.base.DescribedPredicate;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -62,6 +67,10 @@ class ArchitectureRulesTest {
       new ClassFileImporter()
           .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
           .importPackages("de.greluc.homeinv");
+
+  /** Field names whose value must never be printed by an inherited {@code toString}. */
+  private static final Pattern SECRET_FIELD =
+      Pattern.compile("(?i)(password|secret|credential|token|apikey|privatekey)");
 
   @Test
   @DisplayName("keep the domain free of the framework")
@@ -190,6 +199,57 @@ class ArchitectureRulesTest {
             "every handler carries @RequiresPermission or an explicit @PublicEndpoint with a "
                 + "written reason; the default is deny (REQ-SEC-023)")
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("never let a record holding a secret print it")
+  void secretsAreNotPrintable() {
+    // Spring MVC logs the deserialised request body at DEBUG, through the type's
+    // `toString`. A record gets one generated that prints every component, so
+    // `LoginRequest` wrote passwords into the log for anybody who turned debug
+    // logging on — which is what an operator does when something is wrong
+    // (REQ-SEC-050).
+    //
+    // Records only, and that is the whole point rather than a convenience: an
+    // ordinary class inherits `Object.toString`, which prints a hash code. A
+    // record is the one shape that prints its contents unless somebody says
+    // otherwise.
+    ArchRuleDefinition.classes()
+        .that(
+            new DescribedPredicate<JavaClass>("are records holding a field named like a secret") {
+              @Override
+              public boolean test(JavaClass type) {
+                boolean record =
+                    type.getRawSuperclass()
+                        .map(parent -> "java.lang.Record".equals(parent.getName()))
+                        .orElse(false);
+                return record
+                    && type.getAllFields().stream()
+                        .anyMatch(field -> SECRET_FIELD.matcher(field.getName()).find());
+              }
+            })
+        .should(
+            new ArchCondition<JavaClass>("declare a toString that does not print it") {
+              @Override
+              public void check(JavaClass type, ConditionEvents events) {
+                boolean declared =
+                    type.getMethods().stream()
+                        .anyMatch(
+                            method ->
+                                "toString".equals(method.getName())
+                                    && method.getRawParameterTypes().isEmpty());
+                if (!declared) {
+                  events.add(
+                      SimpleConditionEvent.violated(
+                          type,
+                          type.getName()
+                              + " is a record holding a secret-shaped component and inherits the"
+                              + " generated toString, which prints every one of them. Spring logs"
+                              + " request bodies through it (REQ-SEC-050)."));
+                }
+              }
+            })
+        .check(CLASSES);
   }
 
   @Test

@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -139,6 +140,140 @@ class OpenApiDocumentIT extends AbstractIntegrationTest {
     assertThat(used)
         .as("every problem type the document names is in docs/reference/problem-types.yaml")
         .isSubsetOf(registered);
+  }
+
+  @Test
+  @DisplayName("bounds every collection it returns, at 200 a page (REQ-NFR-010)")
+  @SuppressWarnings("unchecked")
+  void everyCollectionIsBounded() throws Exception {
+    // "Verified across all endpoints" is the requirement's own gate, and the
+    // document is where every endpoint is visible at once. An endpoint that grows
+    // a collection response later fails here rather than in production, which is
+    // what an unbounded query does: nothing, until the row count changes.
+    Map<String, Object> document = parse(fetch());
+    Map<String, Object> paths = (Map<String, Object>) document.get("paths");
+    Map<String, Object> schemas =
+        (Map<String, Object>)
+            ((Map<String, Object>) document.get("components")).get("schemas");
+
+    Set<String> unbounded = new TreeSet<>();
+    for (Map.Entry<String, Object> path : paths.entrySet()) {
+      Map<String, Object> operations = (Map<String, Object>) path.getValue();
+      for (Map.Entry<String, Object> operation : operations.entrySet()) {
+        Map<String, Object> details = (Map<String, Object>) operation.getValue();
+        if (!returnsACollection(details, schemas) || hasABoundedLimit(details)) {
+          continue;
+        }
+        unbounded.add(operation.getKey().toUpperCase(Locale.ROOT) + " " + path.getKey());
+      }
+    }
+
+    assertThat(unbounded)
+        .as(
+            "every endpoint returning a collection takes a `limit` capped at 200. Add the "
+                + "parameter with @Positive @Max(200) and page the query (REQ-NFR-010).")
+        .isEmpty();
+  }
+
+  /**
+   * Whether an operation answers with a collection.
+   *
+   * @param operation the operation
+   * @param schemas the document's component schemas, for resolving a {@code $ref}
+   * @return {@code true} when a success response is an array, or an object carrying one
+   */
+  @SuppressWarnings("unchecked")
+  private static boolean returnsACollection(
+      Map<String, Object> operation, Map<String, Object> schemas) {
+
+    Map<String, Object> responses = (Map<String, Object>) operation.get("responses");
+    if (responses == null) {
+      return false;
+    }
+    for (Map.Entry<String, Object> response : responses.entrySet()) {
+      if (!response.getKey().startsWith("2")) {
+        continue;
+      }
+      Map<String, Object> content = (Map<String, Object>) ((Map<String, Object>) response.getValue()).get("content");
+      if (content == null) {
+        continue;
+      }
+      for (Object body : content.values()) {
+        Map<String, Object> schema = (Map<String, Object>) ((Map<String, Object>) body).get("schema");
+        if (isACollection(resolve(schema, schemas), schemas)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Resolves one level of {@code $ref} into the component schemas.
+   *
+   * @param schema the schema, possibly a reference
+   * @param schemas the component schemas
+   * @return the schema itself, or the one it points at
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> resolve(
+      Map<String, Object> schema, Map<String, Object> schemas) {
+    if (schema == null) {
+      return Map.of();
+    }
+    Object reference = schema.get("$ref");
+    if (reference == null) {
+      return schema;
+    }
+    String name = String.valueOf(reference).substring("#/components/schemas/".length());
+    return (Map<String, Object>) schemas.getOrDefault(name, Map.of());
+  }
+
+  /**
+   * Whether a resolved schema is a collection, or a page wrapping one.
+   *
+   * <p>An array <em>inside</em> an object does not count unless it is the object's {@code items}:
+   * {@code LocationView.ancestors} is a path from the root, bounded by the tree's depth ceiling, and
+   * demanding a page cursor for it would be nonsense.
+   *
+   * @param schema the resolved schema
+   * @param schemas the component schemas
+   * @return {@code true} when the response is a collection
+   */
+  @SuppressWarnings("unchecked")
+  private static boolean isACollection(Map<String, Object> schema, Map<String, Object> schemas) {
+    if ("array".equals(schema.get("type"))) {
+      return true;
+    }
+    Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+    if (properties == null) {
+      return false;
+    }
+    Map<String, Object> items = (Map<String, Object>) properties.get("items");
+    return items != null && "array".equals(resolve(items, schemas).get("type"));
+  }
+
+  /**
+   * Whether an operation takes a {@code limit} that cannot exceed 200.
+   *
+   * @param operation the operation
+   * @return {@code true} when the parameter is there and capped
+   */
+  @SuppressWarnings("unchecked")
+  private static boolean hasABoundedLimit(Map<String, Object> operation) {
+    List<Map<String, Object>> parameters = (List<Map<String, Object>>) operation.get("parameters");
+    if (parameters == null) {
+      return false;
+    }
+    for (Map<String, Object> parameter : parameters) {
+      if (!"limit".equals(parameter.get("name"))) {
+        continue;
+      }
+      Map<String, Object> schema = (Map<String, Object>) parameter.get("schema");
+      Object maximum = schema == null ? null : schema.get("maximum");
+      return maximum instanceof Number cap && cap.intValue() <= 200;
+    }
+    return false;
   }
 
   // -------------------------------------------------------------------------

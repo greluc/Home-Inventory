@@ -12,6 +12,9 @@ import de.greluc.homeinv.media.api.MediaService;
 import de.greluc.homeinv.media.api.MediaUrlSigner;
 import de.greluc.homeinv.media.api.MediaView;
 import de.greluc.homeinv.platform.NotFoundException;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Pattern;
 import java.io.IOException;
 import java.io.InputStream;
@@ -92,18 +95,23 @@ public class MediaController {
   }
 
   /**
-   * The files attached to one thing.
+   * One page of the files attached to one thing, oldest first.
    *
    * @param targetKind {@code ITEM} or {@code LOCATION}
    * @param targetId the target
-   * @return the attachments, primary image first
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
    */
   @GetMapping(value = "/api/v1/media", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEDIA_READ)
-  public List<MediaView> listMedia(
+  @CanFail(ProblemType.MALFORMED_REQUEST)
+  public MediaService.MediaPage listMedia(
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
-      @RequestParam UUID targetId) {
-    return media.attachmentsOf(targetKind, targetId);
+      @RequestParam UUID targetId,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return media.attachmentsOf(targetKind, targetId, cursor, limit);
   }
 
   /**

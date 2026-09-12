@@ -36,13 +36,25 @@ public interface MediaService {
       throws IOException;
 
   /**
-   * The files attached to one thing, in display order.
+   * One page of the files attached to one thing, oldest first.
+   *
+   * <p>Paged, and not because anybody expects two hundred photographs of one box: {@code
+   * REQ-NFR-010} admits no endpoint that loads a collection without a bound, and "this one is
+   * usually small" is the reasoning behind every unbounded query that ever took a server down. The
+   * cursor is the same signed, query-bound one search uses (REQ-SRCH-009).
+   *
+   * <p>Ordered by upload time rather than "primary first". A keyset cursor needs a total order that
+   * does not change under the client's feet, and marking a different attachment primary would
+   * reorder a list somebody is halfway through. The primary is a flag on each row instead
+   * (REQ-MED-002).
    *
    * @param targetKind {@code ITEM} or {@code LOCATION}
    * @param targetId what they hang on
-   * @return the attachments, primary image first
+   * @param cursor an opaque cursor from a previous page, or {@code null} for the first
+   * @param limit how many at most; capped at 200
+   * @return the page and a cursor for the next one, or none when this was the last
    */
-  List<MediaView> attachmentsOf(String targetKind, UUID targetId);
+  MediaPage attachmentsOf(String targetKind, UUID targetId, String cursor, int limit);
 
   /**
    * Detaches a file and removes the bytes when nothing references them any more.
@@ -63,4 +75,12 @@ public interface MediaService {
    * @throws IOException when the blob is missing
    */
   InputStream openVerified(UUID tenantId, String sha256) throws IOException;
+
+  /**
+   * One page of attachments.
+   *
+   * @param items the attachments on this page
+   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
+   */
+  record MediaPage(List<MediaView> items, String nextCursor) {}
 }

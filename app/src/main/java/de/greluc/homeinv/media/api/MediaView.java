@@ -24,6 +24,9 @@ import java.util.UUID;
  * @param widthPx the width for an image, or {@code null}
  * @param heightPx the height for an image, or {@code null}
  * @param scanState where the scan stands; only {@code CLEAN} yields URLs
+ * @param primaryImage whether this is the image lists show for the thing it hangs on
+ *     (REQ-MED-002). Carried per attachment rather than implied by position, because the list is
+ *     paged and the primary is not guaranteed to be on the page a client is looking at
  * @param urls variant name to signed URL, empty until the scan says clean
  */
 public record MediaView(
@@ -33,4 +36,5 @@ public record MediaView(
     Integer widthPx,
     Integer heightPx,
     String scanState,
+    boolean primaryImage,
     Map<String, String> urls) {}

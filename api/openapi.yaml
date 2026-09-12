@@ -186,6 +186,18 @@ components:
       - email
       - password
       type: object
+    MediaPage:
+      description: One page of attachments.
+      properties:
+        items:
+          description: the attachments on this page
+          items:
+            $ref: '#/components/schemas/MediaView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
     MediaView:
       description: |-
         What a client learns about a stored file.
@@ -213,6 +225,12 @@ components:
         mediaType:
           description: the detected type, never the declared one
           type: string
+        primaryImage:
+          description: |-
+            whether this is the image lists show for the thing it hangs on
+            (REQ-MED-002). Carried per attachment rather than implied by position, because the list is
+            paged and the primary is not guaranteed to be on the page a client is looking at
+          type: boolean
         scanState:
           description: where the scan stands; only `CLEAN` yields URLs
           type: string
@@ -1164,7 +1182,7 @@ paths:
       summary: The items in a location, optionally including everything below it (REQ-CORE-049)
   /api/v1/media:
     get:
-      description: The files attached to one thing.
+      description: One page of the files attached to one thing, oldest first.
       operationId: listMedia
       parameters:
       - description: '`ITEM` or `LOCATION`'
@@ -1181,15 +1199,37 @@ paths:
         schema:
           format: uuid
           type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
       responses:
         '200':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/MediaView'
-                type: array
-          description: the attachments, primary image first
+                $ref: '#/components/schemas/MediaPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
         '401':
           content:
             application/problem+json:
@@ -1226,7 +1266,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: The files attached to one thing.
+      summary: One page of the files attached to one thing, oldest first.
     post:
       description: Uploads a file and attaches it to an item or a location.
       operationId: uploadMedia

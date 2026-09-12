@@ -123,6 +123,19 @@ springdoc:
 
 server:
   port: 8080
+  tomcat:
+    # The other half of `REQ-SEC-065`'s ceiling, and the half that is about the
+    # client rather than the work: a request whose headers or body arrive slowly
+    # holds a thread while it does. `connection-timeout` bounds the wait for the
+    # request to arrive, `keep-alive-timeout` the wait for the next one on an
+    # idle connection.
+    #
+    # The query ceiling is not here. It is on the database roles
+    # (`deploy/postgres/initdb/00-roles.sql`), where a client cannot forget to
+    # configure it and where it also applies to a psql session.
+    connection-timeout: 30s
+    keep-alive-timeout: 30s
+    max-keep-alive-requests: 100
   # No server-side error page: every error leaves through the RFC 9457 handler,
   # and a whitelabel page would be a second, undocumented error format.
   error:
@@ -170,6 +183,24 @@ management:
           additional-path: "management:/readyz"
 
 logging:
+  level:
+    # Two framework loggers print credential material at DEBUG, and an operator
+    # turning debugging on to investigate something is exactly when that would
+    # happen (REQ-SEC-050). Pinned above it rather than trusted:
+    #
+    #   - `orm.core` lists every flushed entity with every property, which for
+    #     `AppUser` includes `passwordHash` — an offline cracking target, not a
+    #     password, and not a thing to write into a log file either. It is a broad
+    #     category and pinning it costs the session and flush messages; the parts
+    #     an operator actually debugs with are elsewhere (`org.hibernate.SQL`,
+    #     `orm.connections`, `orm.jdbc`) and are untouched.
+    #   - `orm.jdbc.bind` prints bound statement parameters, which is the same
+    #     hash again on its way to the database.
+    #
+    # `LogHygieneIT` looks for the values rather than for these logger names, so
+    # a third one that starts printing them fails the build.
+    org.hibernate.orm.core: info
+    org.hibernate.orm.jdbc.bind: info
   structured:
     format:
       # JSON lines (REQ-NFR-041). ECS rather than Logstash or GELF: it is the
