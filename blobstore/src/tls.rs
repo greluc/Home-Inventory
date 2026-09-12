@@ -87,10 +87,7 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
     // verified against, and it is deliberately the same CA that signed this
     // service — one deployment, one authority, created by `deploy/setup.sh` and
     // never leaving the host.
-    let authority = certificates
-        .last()
-        .expect("checked above")
-        .clone();
+    let authority = certificates.last().expect("checked above").clone();
     let chain = pem_block("CERTIFICATE", &certificates[0]);
     let (key_label, key_der) = &keys[0];
     let key = pem_block(key_label, key_der);
@@ -117,8 +114,7 @@ fn pem_block(label: &str, der: &[u8]) -> String {
 
 /// Standard base64, without a dependency for sixty lines of table lookup.
 fn base64_encode(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let b = [

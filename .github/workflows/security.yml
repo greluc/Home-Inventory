@@ -45,6 +45,14 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Named rather than relied on. gitleaks finds a `.gitleaks.toml` in the
+          # source root on its own, and "on its own" is how a config silently
+          # stops being read. It allows exactly three things, each with its
+          # reason written out, and each narrowed to the paths it belongs to:
+          # the xkcd passphrase the integration tests share, the role passwords
+          # the test container is given because production reads its own from
+          # mounted secrets, and the illustrative value in a design-system prompt.
+          GITLEAKS_CONFIG: .gitleaks.toml
 
   # -------------------------------------------------------------------------
   # REQ-SEC-076 — CodeQL. It is the only one of the SAST tools here that follows
@@ -104,7 +112,7 @@ jobs:
       # The dependency manifests: Gradle, npm and Cargo, in one pass over the
       # working tree.
       - name: Dependencies
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig
@@ -132,8 +140,11 @@ jobs:
       - name: Build the blob store image
         run: docker build -f blobstore/Dockerfile -t home-inv-blobstore:scan .
 
+      - name: Build the egress proxy image
+        run: docker build -f egress-proxy/Dockerfile -t home-inv-egress-proxy:scan .
+
       - name: Scan the images
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: home-inv:scan
@@ -141,7 +152,7 @@ jobs:
           exit-code: '1'
 
       - name: Scan the web image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: home-inv-web:scan
@@ -149,9 +160,19 @@ jobs:
           exit-code: '1'
 
       - name: Scan the blob store image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: home-inv-blobstore:scan
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      # It runs on a non-internal segment by design (ADR-0042), which makes it one
+      # of exactly two containers an attacker outside the deployment can reach.
+      - name: Scan the egress proxy image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: home-inv-egress-proxy:scan
           severity: HIGH,CRITICAL
           exit-code: '1'

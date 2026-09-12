@@ -96,9 +96,18 @@ jobs:
             podman info --format '{{.Host.Security.Rootless}}' | grep -qx true
           else
             # Docker's rootless mode is a separate installation from the daemon
-            # the runner already has.
+            # the runner already has — and that daemon is why the installer
+            # refuses: "Aborting because rootful Docker is running and
+            # accessible." On a GitHub-hosted runner it always is, so the install
+            # never ran and this job has never reached a container.
+            #
+            # FORCE_ROOTLESS_INSTALL only gets the rootless daemon installed
+            # alongside it. What makes the rest of this job mean anything is
+            # DOCKER_HOST below plus the check in the next step, which reads
+            # `rootless` out of the daemon's own security options — so a silent
+            # fallback to the rootful socket fails the job instead of passing it.
             sudo apt-get install -y uidmap dbus-user-session
-            curl -fsSL https://get.docker.com/rootless | sh
+            curl -fsSL https://get.docker.com/rootless | FORCE_ROOTLESS_INSTALL=1 sh
             echo "$HOME/bin" >> "$GITHUB_PATH"
             echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
           fi

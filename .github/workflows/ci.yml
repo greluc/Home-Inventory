@@ -213,6 +213,69 @@ jobs:
             test "$(vipsheader -f width /tmp/out.avif 2>/dev/null)" = "32"
           '
 
+  egress-proxy:
+    name: Egress proxy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: egress-proxy
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: egress-proxy
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --release --locked
+
+      # The same `-D warnings` the blob store gets, and for a sharper reason:
+      # this process parses bytes an unauthenticated caller chose, on the one
+      # path that decides whether a connection leaves the deployment at all.
+      - name: Clippy
+        run: cargo clippy --release --all-targets --locked -- -D warnings
+
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Advisories and licences
+        run: cargo deny check
+
+      - name: Image
+        run: docker build -f egress-proxy/Dockerfile -t home-inv-egress-proxy:ci ..
+        working-directory: egress-proxy
+
+      # `scratch` plus one static binary. An allowlist enforcer with a shell in
+      # the image is an allowlist enforcer with a way around itself.
+      - name: The image contains the binary and nothing else
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint /bin/sh home-inv-egress-proxy:ci -c 'echo reachable'              2>/dev/null; then
+            echo "::error::the runtime image contains a shell"
+            exit 1
+          fi
+          echo "No shell in the runtime image."
+
+      - name: The image does not run as root
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect home-inv-egress-proxy:ci --format '{{.Config.User}}')
+          if [ "$user" != "10001:10001" ]; then
+            echo "::error::egress-proxy runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
+            exit 1
+          fi
+          echo "Runs as 10001:10001."
+
   web:
     name: Web client
     runs-on: ubuntu-latest
@@ -635,21 +698,14 @@ jobs:
 
       # Every relative link in the corpus resolves. A dead link in a document
       # that calls itself the single source of truth is worse than no document.
+      #
+      # This was four lines of shell until 2026-09-12 and had never passed: under
+      # `pipefail`, a Markdown file with no relative links made `grep` exit 1 and
+      # took the gate with it — which is most of api/problems/ and
+      # CODE_OF_CONDUCT.md — and it reported the dead link from inside a subshell
+      # whose failure could not escape, so the job failed without saying what was
+      # wrong. The script also resolves against what git tracks rather than
+      # against the filesystem, so a wrong-case link fails here and not only on
+      # the runner.
       - name: No dead relative link
-        run: |
-          set -uo pipefail
-          fail=0
-          for f in $(git ls-files '*.md' | grep -v '^design-system/' | grep -v '^website/'); do
-            d=$(dirname "$f")
-            grep -oE '\]\([^)]+\)' "$f" | tr -d '])' | sed 's|^(||' \
-              | grep -vE '^https?:|^#|^mailto:' | sed 's/#.*//' \
-              | while read -r link; do
-                  [ -z "$link" ] && continue
-                  if [ ! -e "$d/$link" ]; then
-                    echo "::error file=$f::dead link: $link"
-                    exit 1
-                  fi
-                done || fail=1
-          done
-          [ "$fail" -eq 0 ] && echo "Every relative link resolves."
-          exit $fail
+        run: python tools/dead_links.py

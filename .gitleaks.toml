@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# gitleaks runs in CI (.github/workflows/security.yml) and as a pre-commit hook.
+# Nothing secret ever lands in this repository — it is public, and every file in
+# it is world-readable from the moment it is pushed.
+#
+# This file does one thing: it stops the scanner reporting the deliberately fake
+# password the integration tests share. It does NOT relax the rules anywhere a
+# real credential could appear.
+
+[extend]
+# Every default rule stays on. This file adds an allowlist; it replaces nothing.
+useDefault = true
+
+[[rules]]
+# A rule of our own, so the allowlist below has something to hang on that is not
+# one of the defaults. It never matches: the default `generic-api-key` rule is
+# what fires on the test password, and `[[allowlists]]` below applies globally.
+id = "homeinv-placeholder"
+description = "Unused; present so this file is a valid rule set rather than only an allowlist."
+regex = '''homeinv-this-pattern-matches-nothing-[0-9a-f]{64}'''
+
+[[allowlists]]
+description = """
+The xkcd passphrase the integration tests sign in with.
+
+It is a literal in seven test classes and it is not a credential: `CLAUDE.md`
+says never use real credentials in tests or local stacks, and this is what
+following that rule looks like from a scanner's side. The account it belongs to
+exists for the length of one Testcontainers run, in a database that is destroyed
+with it.
+
+Scoped to test sources on purpose. The same string in `app/src/main` would be a
+finding, and should be.
+"""
+condition = "AND"
+paths = ['''app/src/test/.*\.java$''']
+regexes = ['''correct-horse-battery-staple-42''']
+
+[[allowlists]]
+description = """
+The role passwords in the test database's init script.
+
+`app/src/test/resources/db/test-roles.sql` sets `test-app`, `test-migrator`,
+`test-readonly` and `test-housekeeping` on the four roles, because production
+reads them from mounted secrets and a test container has nowhere to read them
+from. The file says so in its own header. They exist only inside a container
+that is thrown away when the test class ends.
+"""
+paths = ['''app/src/test/resources/db/test-roles\.sql$''']
+
+[[allowlists]]
+description = """
+Container-local passwords in the test harness and the example environment.
+
+`AbstractIntegrationTest` gives the PostgreSQL container a superuser password so
+that the isolation proof can seed rows as a superuser; `deploy/.env.example`
+carries shapes and placeholders rather than values, which is what makes it
+committable at all. Neither reaches a registry, a host or a log.
+"""
+condition = "AND"
+paths = [
+  '''app/src/test/java/de/greluc/homeinv/AbstractIntegrationTest\.java$''',
+  '''deploy/\.env\.example$''',
+]
+regexes = ['''test-superuser''']
+
+[[allowlists]]
+description = """
+Illustrative values in the design system's component prompts.
+
+`SecretInput.prompt.md` shows what the `secret` field renders when revealed, and
+the string in it is a made-up licence key of the shape a user would see. These
+files are specifications of appearance; every value in them is chosen to look
+like the thing it illustrates, which is exactly what an entropy check rewards.
+
+CI only scans the commits a push carries, so this one did not fire on 2026-09-12
+— it fires the day somebody edits the file. Better allowed with a reason now than
+diagnosed under time pressure later.
+"""
+paths = ['''design-system/.*\.prompt\.md$''']

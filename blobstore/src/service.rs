@@ -102,7 +102,12 @@ impl BlobStore for FilesystemBlobStore {
                 written += first.chunk.len() as u64;
                 file.write_all(&first.chunk).await?;
             }
-            while let Some(frame) = frames.next().await.transpose().map_err(std::io::Error::other)? {
+            while let Some(frame) = frames
+                .next()
+                .await
+                .transpose()
+                .map_err(std::io::Error::other)?
+            {
                 if frame.blob.is_some() {
                     return Err(std::io::Error::other("only the first frame may carry blob"));
                 }

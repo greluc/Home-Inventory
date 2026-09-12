@@ -28,12 +28,8 @@ impl RefError {
     /// message that carries whatever the peer put in it into our logs.
     pub fn message(&self) -> &'static str {
         match self {
-            RefError::TenantNotAUuid => {
-                "tenant_id must be a UUID in canonical hyphenated form"
-            }
-            RefError::DigestNotSha256 => {
-                "sha256 must be 64 lowercase hexadecimal characters"
-            }
+            RefError::TenantNotAUuid => "tenant_id must be a UUID in canonical hyphenated form",
+            RefError::DigestNotSha256 => "sha256 must be 64 lowercase hexadecimal characters",
         }
     }
 }
