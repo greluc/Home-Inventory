@@ -61,7 +61,14 @@ permissions:
 jobs:
   rootless:
     name: ${{ matrix.runtime }} (rootless)
-    runs-on: ubuntu-latest
+    # ubuntu-26.04 and not ubuntu-latest, which is still 24.04 and ships podman
+    # 4.9.3. `REQ-NFR-051` asks for **Podman >= 5.0 with Quadlet**, and 4.9's
+    # quadlet does not understand `Network=<unit>:alias=<name>` — the syntax the
+    # generator emits so that the management listener binds to one segment
+    # (REQ-SEC-099). It rejected every unit file and reported "No files parsed",
+    # which reads as a missing unit rather than as a version that is too old.
+    # 26.04 carries podman 5.7.
+    runs-on: ubuntu-26.04
     strategy:
       # Both are run to completion. Cancelling the second on the first failure
       # would hide exactly the case this matrix exists to find: a change that
@@ -73,9 +80,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
       - run: pip install pyyaml
 
       # The host prerequisites for rootless operation. Debian's podman only
@@ -90,6 +97,17 @@ jobs:
           if [ "${{ matrix.runtime }}" = "podman" ]; then
             sudo apt-get install -y podman uidmap passt dbus-user-session aardvark-dns
             podman --version
+
+            # REQ-NFR-051 names a minimum, so it is enforced here rather than
+            # assumed. A runner whose distribution moves backwards would
+            # otherwise fail later, inside quadlet, with a message about units.
+            version=$(podman --version | awk '{print $3}')
+            major=${version%%.*}
+            if [ "$major" -lt 5 ]; then
+              echo "::error::podman $version is below the 5.0 REQ-NFR-051 requires;"\
+                   "quadlet cannot parse the units this deployment generates"
+              exit 1
+            fi
             # Proof, not assumption: a rootful podman would pass every test below
             # and mean nothing.
             test "$(id -u)" -ne 0

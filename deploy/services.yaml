@@ -500,7 +500,7 @@ services:
       that nothing delivers.
 
   valkey:
-    image: { name: docker.io/valkey/valkey, tag: "8-alpine", digest: "sha256:d2e18f3410b6f616de1417f570fa55261af2898b9c5b2cfb6781ce2373ea43d1" }
+    image: { name: docker.io/valkey/valkey, tag: "9-alpine", digest: "sha256:a0dbf4c1d5708782907c10e2c72deff317518518b5288a58416981d9db95d30b" }
     user: "999:1000"              # the image's own valkey user
     networks: [internal]
     volumes: [{ name: kvdata, path: /data }]

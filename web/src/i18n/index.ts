@@ -116,9 +116,11 @@ void init({
     // `&#39;` on screen.
     escapeValue: false,
   },
-  // The bundles ship with the application; there is nothing to fetch and nothing
-  // to wait for, which is what keeps the first paint free of a flash of keys.
-  initImmediate: false,
+  // No `initImmediate: false` any more. It made init synchronous when there was
+  // nothing to fetch, and i18next 26 removed it because that is now the default
+  // for a bundled resource set — there is no backend here, so `t()` answers on
+  // the line after this one. `init.test.ts` holds that, because it is the
+  // difference between a first paint with words and one with keys.
 });
 
 document.documentElement.setAttribute("lang", i18next.language);

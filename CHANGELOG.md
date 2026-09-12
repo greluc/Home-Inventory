@@ -21,6 +21,12 @@ commit".
 
 ### Changed
 
+- **Every dependency is on its current stable release.** Valkey moves to 9,
+  i18next to 26, react-i18next to 17, vitest to 5, gRPC to 1.84, protobuf to
+  4.36, sha2 to 0.11, and seven GitHub Actions to their new majors. The smoke
+  suite moves to Ubuntu 26.04, because that is the first runner image carrying
+  the Podman 5 this deployment has required since it was first described.
+
 - **An upload is answered before it has been scanned.** `POST /api/v1/media` now
   returns `202` with a `Location`, and the file is not retrievable until the scan
   has cleared it — poll `GET /api/v1/media/{id}`, which answers `200` with the
