@@ -390,7 +390,15 @@ services:
     # the rest. It used to sit behind a `dependsOnByProfile` key that the generator
     # never read — the broker was in `standard` and up at the time, and the split
     # outlived the reason for it.
-    dependsOn: [postgres, valkey, rabbitmq, clamav, blobstore]
+    #
+    # `migrate` belongs in that list for the same reason it does in `api`'s: the
+    # worker is the same application under a different profile, and it validates
+    # the JPA schema as it starts. Without the dependency it is a race, and on
+    # 2026-09-12 it lost one — "Schema validation: missing table
+    # [identity.app_user]", with the migration still running in the next unit
+    # along. Nothing had noticed, because until that day the smoke job started
+    # `api` alone and `api` did list it.
+    dependsOn: [postgres, valkey, rabbitmq, migrate, clamav, blobstore]
     resources: { memoryReservation: 512Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]

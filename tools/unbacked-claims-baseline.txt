@@ -63,14 +63,14 @@ docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot
 docs/architecture/06-deployment-view.md:173:cannot
-docs/architecture/06-deployment-view.md:372:cannot
-docs/architecture/06-deployment-view.md:450:cannot
-docs/architecture/06-deployment-view.md:503:cannot
-docs/architecture/06-deployment-view.md:529:cannot
-docs/architecture/06-deployment-view.md:715:cannot
-docs/architecture/06-deployment-view.md:786:cannot
+docs/architecture/06-deployment-view.md:379:cannot
+docs/architecture/06-deployment-view.md:457:cannot
+docs/architecture/06-deployment-view.md:510:cannot
+docs/architecture/06-deployment-view.md:536:cannot
+docs/architecture/06-deployment-view.md:722:cannot
+docs/architecture/06-deployment-view.md:793:cannot
 docs/architecture/06-deployment-view.md:83:cannot
-docs/architecture/06-deployment-view.md:863:fails the build
+docs/architecture/06-deployment-view.md:870:fails the build
 docs/architecture/07-data-model.md:298:cannot
 docs/architecture/07-data-model.md:414:enforces
 docs/architecture/07-data-model.md:441:cannot

@@ -249,6 +249,13 @@ daemon disappears entirely.
 └── plugins/…                     (one .container file per plugin)
 ```
 
+```
+~/.config/systemd/user/           (ordinary systemd units, not Quadlet's)
+├── homeinv-minimal.target        (Requires= every service of the profile)
+├── homeinv-standard.target
+└── homeinv-ha.target
+```
+
 > **This listing was incomplete until 2026-09-11**, and incompletely in a way that
 > mattered: it omitted `homeinv-egress.network`, `homeinv-egress-proxy.container` — the
 > container [ADR-0036](../adr/0036-scanner-egress.md) runs in *every* profile — and the

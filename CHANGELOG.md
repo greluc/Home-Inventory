@@ -41,6 +41,12 @@ commit".
 
 ### Fixed
 
+- **The worker could start before the database had been migrated.** It is the
+  same application as `api` under a different profile and validates the schema
+  as it starts, but it did not wait for the migration the way `api` does — so it
+  was a race, and it lost one: "missing table [identity.app_user]", with the
+  migration still running alongside it.
+
 - **A Podman deployment started `api` and left the user interface down.** The
   documented command was `systemctl --user start homeinv-api`, which starts
   `api` and the six units it requires — not `web`, which holds the only
