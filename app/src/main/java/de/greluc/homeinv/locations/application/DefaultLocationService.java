@@ -7,6 +7,7 @@ package de.greluc.homeinv.locations.application;
 import de.greluc.homeinv.inventory.api.ItemLocationUsage;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.locations.api.LocationService;
+import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.domain.Location;
 import de.greluc.homeinv.locations.infrastructure.LocationRepository;
@@ -70,6 +71,7 @@ public class DefaultLocationService implements LocationService {
    * @throws NotFoundException when a named parent is not visible to this tenant
    * @throws de.greluc.homeinv.locations.api.TooDeepException when the tree would exceed its
    *     depth limit
+   * @throws NameTakenException when a live sibling already carries this name
    */
   @Transactional
   @Override
@@ -77,6 +79,12 @@ public class DefaultLocationService implements LocationService {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
     Instant now = Instant.now(clock);
+
+    // Asked before the insert, so the caller gets a `409` naming the name rather
+    // than the `500` a constraint violation surfaced as until 2026-09-12. The
+    // index stays the truth — this is a race away from being wrong, and losing
+    // that race still leaves the database refusing the row.
+    requireNameFree(tenantId, command.parentId(), command.name(), null);
 
     Location created;
     if (command.parentId() == null) {
@@ -120,6 +128,7 @@ public class DefaultLocationService implements LocationService {
    * @param actor the authenticated user
    * @return the renamed location
    * @throws NotFoundException when the tenant has no such live location
+   * @throws NameTakenException when a live sibling already carries the new name
    */
   @Transactional
   @Override
@@ -127,8 +136,26 @@ public class DefaultLocationService implements LocationService {
     UUID tenantId = TenantContext.require();
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
+    // Excluding itself, so renaming "Cellar" to "cellar" is a rename and not a
+    // conflict with the row being renamed.
+    requireNameFree(tenantId, location.getParentId(), name, id);
     location.rename(name, actor, Instant.now(clock));
     return toView(location);
+  }
+
+  /**
+   * Refuses a name a live sibling already has.
+   *
+   * @param tenantId the tenant
+   * @param parentId the parent the siblings hang under, or {@code null} among the roots
+   * @param name the proposed name
+   * @param exclude the location being renamed, so it does not conflict with itself
+   * @throws NameTakenException when the name is taken
+   */
+  private void requireNameFree(UUID tenantId, UUID parentId, String name, UUID exclude) {
+    if (name != null && locations.siblingNameTaken(tenantId, parentId, name, exclude)) {
+      throw new NameTakenException(name, parentId);
+    }
   }
 
   /**

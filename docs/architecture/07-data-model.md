@@ -411,6 +411,26 @@ of RLS here is to hold **when the application layer is wrong**.
 ALTER TABLE locations.location
     ADD CONSTRAINT location_tenant_key UNIQUE (tenant_id, id);
 
+Siblings additionally carry **distinct names**, case-insensitively, and the index
+that enforces it is **partial**:
+
+```sql
+CREATE UNIQUE INDEX location_sibling_name ON locations.location (
+    tenant_id,
+    coalesce(parent_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    lower(name)
+) WHERE deleted_at IS NULL;
+```
+
+The `coalesce` is what makes the rule apply to the roots as well: `NULL` is not
+equal to `NULL`, so without it every root would be unique by virtue of having no
+parent. `WHERE deleted_at IS NULL` is rule 5 of §7.1 — a deleted location leaves a
+tombstone, and a tombstone must not hold a name hostage.
+
+A violation is `409` with `type: …/name-taken` (`REQ-CORE-064`). *This index existed
+from the first migration and was described in no chapter until 2026-09-12, which is
+why the API answered `500` for the one case it was built to refuse.*
+
 -- Referencing side: the tenant travels with the reference.
 ALTER TABLE inventory.item
     ADD CONSTRAINT item_location_same_tenant

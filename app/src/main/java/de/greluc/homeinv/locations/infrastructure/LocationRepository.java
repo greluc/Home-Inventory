@@ -34,6 +34,31 @@ public interface LocationRepository extends JpaRepository<Location, UUID> {
   Optional<Location> findLive(@Param("tenantId") UUID tenantId, @Param("id") UUID id);
 
   /**
+   * Whether a live sibling already carries this name.
+   *
+   * <p>The application-side half of the partial unique index {@code location_sibling_name}. The
+   * index is the truth and this is what turns its violation into an answer rather than a
+   * {@code 500}: lower-cased both sides, matching the index's {@code lower(name)}, and scoped to
+   * live rows, matching its {@code WHERE deleted_at IS NULL}. A tombstone must not block re-using
+   * the name (07 §7.1, rule 5).
+   *
+   * <p>{@code parentId} is null for the roots, and the comparison is written so that null matches
+   * null — {@code = null} would match nothing and every root would look free.
+   *
+   * @param tenantId the tenant
+   * @param parentId the parent, or {@code null} among the roots
+   * @param name the proposed name
+   * @param exclude a location to ignore, for a rename that keeps its own name; may be {@code null}
+   * @return whether a different live sibling already has that name
+   */
+  @Query("select count(l) > 0 from Location l where l.tenantId = :tenantId "
+      + "and (:parentId is null and l.parentId is null or l.parentId = :parentId) "
+      + "and lower(l.name) = lower(:name) and l.deletedAt is null "
+      + "and (:exclude is null or l.id <> :exclude)")
+  boolean siblingNameTaken(@Param("tenantId") UUID tenantId, @Param("parentId") UUID parentId,
+      @Param("name") String name, @Param("exclude") UUID exclude);
+
+  /**
    * The first page of the tenant's live locations, oldest first.
    *
    * @param tenantId the tenant

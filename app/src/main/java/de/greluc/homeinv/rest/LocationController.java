@@ -55,7 +55,7 @@ public class LocationController {
    */
   @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_CREATE)
-  @CanFail(ProblemType.NOT_FOUND)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.NAME_TAKEN})
   // Redundant at run time — `ResponseEntity.created` sets the same status — and
   // not in the document, which would otherwise describe the 200 springdoc infers
   // from the return type for an endpoint that never answers one.
@@ -137,7 +137,7 @@ public class LocationController {
    */
   @PutMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_UPDATE)
-  @CanFail(ProblemType.NOT_FOUND)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.NAME_TAKEN})
   public LocationView renameLocation(
       @PathVariable UUID id,
       @Valid @RequestBody RenameLocationRequest request,

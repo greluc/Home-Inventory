@@ -13,6 +13,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.locations.domain.Location;
 import de.greluc.homeinv.locations.api.TooDeepException;
@@ -115,6 +116,54 @@ class LocationTreeIT extends AbstractIntegrationTest {
                 inOwnTransaction(
                     tenant.tenantId(), () -> create(category, deepest, "zu tief", tenant.userId())))
         .isInstanceOf(TooDeepException.class);
+  }
+
+  @Test
+  @DisplayName("refuses a name a live sibling already has, and lets a tombstone's name be re-used")
+  void siblingNamesAreUnique() {
+    Tenant tenant = newTenant("siblings@example.org");
+    UUID category = inOwnTransaction(tenant.tenantId(), () -> anyCategory(tenant.tenantId()));
+
+    UUID cellar =
+        inOwnTransaction(
+            tenant.tenantId(), () -> create(category, null, "Cellar", tenant.userId()).id());
+
+    // REQ-CORE-064. The partial unique index enforced this from the first
+    // migration and nothing answered for it, so this case was a 500 until
+    // 2026-09-12 — found by running the smoke journey twice.
+    assertThatThrownBy(
+            () ->
+                inOwnTransaction(
+                    tenant.tenantId(), () -> create(category, null, "Cellar", tenant.userId())))
+        .isInstanceOf(NameTakenException.class);
+
+    // Case-insensitively, because the index compares `lower(name)` and because a
+    // tree with "Cellar" and "cellar" side by side is one nobody can navigate.
+    assertThatThrownBy(
+            () ->
+                inOwnTransaction(
+                    tenant.tenantId(), () -> create(category, null, "CELLAR", tenant.userId())))
+        .isInstanceOf(NameTakenException.class);
+
+    // A different parent is a different set of siblings.
+    UUID house =
+        inOwnTransaction(
+            tenant.tenantId(), () -> create(category, null, "House", tenant.userId()).id());
+    inOwnTransaction(
+        tenant.tenantId(), () -> create(category, house, "Cellar", tenant.userId()));
+
+    // Renaming a location to its own name in a different case is a rename, not a
+    // conflict with the row being renamed.
+    inTenantTransaction(
+        tenant.tenantId(), () -> locationService.rename(cellar, "cellar", tenant.userId()));
+
+    // And a tombstone does not hold the name: the index is partial for exactly
+    // this (07 §7.1, rule 5).
+    inTenantTransaction(tenant.tenantId(), () -> locationService.delete(cellar, tenant.userId()));
+    LocationView reborn =
+        inOwnTransaction(
+            tenant.tenantId(), () -> create(category, null, "Cellar", tenant.userId()));
+    assertThat(reborn.id()).isNotEqualTo(cellar);
   }
 
   @Test
