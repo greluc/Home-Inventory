@@ -130,6 +130,36 @@ jobs:
             # rounds reporting "Failed to start docker.service" and nothing else.
             sudo apt-get install -y uidmap dbus-user-session slirp4netns fuse-overlayfs
 
+            # Ubuntu 23.10 and later refuse an unprivileged user namespace unless
+            # the binary asking for one has an AppArmor profile permitting it, so
+            # rootlesskit dies with "fork/exec /proc/self/exe: permission denied"
+            # and the daemon never starts. The profile is the one rootlesskit
+            # itself prints in that error.
+            #
+            # It has to be in place BEFORE the installer runs, because the
+            # installer ends by starting the daemon. It was written in a later
+            # step for one round, which is why this failed again with the fix
+            # already in the workflow. The path does not exist yet and that is
+            # fine: AppArmor applies the profile when the binary appears.
+            #
+            # A profile per binary rather than
+            # `sysctl kernel.apparmor_restrict_unprivileged_userns=0`: turning the
+            # restriction off host-wide would also turn it off for everything the
+            # deployment then starts, and this job exists to prove rootless works
+            # rather than that it works with a protection removed.
+            if [ -d /etc/apparmor.d ]; then
+              sudo tee /etc/apparmor.d/home.runner.bin.rootlesskit >/dev/null <<'PROFILE'
+            abi <abi/4.0>,
+            include <tunables/global>
+
+            /home/runner/bin/rootlesskit flags=(unconfined) {
+              userns,
+              include if exists <local/home.runner.bin.rootlesskit>
+            }
+            PROFILE
+              sudo systemctl restart apparmor.service || true
+            fi
+
             # The rootful daemon goes first. FORCE_ROOTLESS_INSTALL alone gets the
             # installer past its own refusal and then its `systemctl --user start
             # docker.service` fails anyway, because the two daemons contend for
@@ -188,30 +218,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Ubuntu 23.10 and later refuse an unprivileged user namespace unless
-          # the binary asking for one has an AppArmor profile that permits it.
-          # Without this, rootlesskit dies with "fork/exec /proc/self/exe:
-          # permission denied" and the daemon never starts — which is what this
-          # job reported as "Failed to start docker.service" for two rounds. The
-          # profile below is the one rootlesskit itself prints in that error.
-          #
-          # A profile per binary rather than
-          # `sysctl kernel.apparmor_restrict_unprivileged_userns=0`: turning the
-          # restriction off host-wide would also turn it off for everything the
-          # deployment then starts, and this job exists to prove rootless works
-          # rather than to prove it works with a protection removed.
-          if [ -d /etc/apparmor.d ]; then
-            sudo tee /etc/apparmor.d/home.runner.bin.rootlesskit >/dev/null <<'PROFILE'
-          abi <abi/4.0>,
-          include <tunables/global>
-
-          /home/runner/bin/rootlesskit flags=(unconfined) {
-            userns,
-            include if exists <local/home.runner.bin.rootlesskit>
-          }
-          PROFILE
-            sudo systemctl restart apparmor.service || true
-          fi
 
           sudo loginctl enable-linger "$USER"
           sudo mkdir -p /etc/systemd/system/user@.service.d
@@ -393,12 +399,38 @@ jobs:
           done
           exit $fail
 
+      # Two runtimes, two ways of holding the containers — and until 2026-09-12
+      # this step assumed one. Under Podman the stack is systemd units, not a
+      # compose project, so `podman compose logs` answered "failed to connect to
+      # the docker API" and every podman failure arrived with no container log
+      # at all. Which is precisely when one is wanted.
       - name: Logs on failure
         if: failure()
-        working-directory: deploy/compose
-        run: ${{ matrix.runtime }} compose --profile minimal logs --tail 200 || true
+        run: |
+          set +e
+          if [ "${{ matrix.runtime }}" = "podman" ]; then
+            for container in $(podman ps --all --format '{{.Names}}' | grep '^homeinv-'); do
+              echo "::group::$container"
+              podman logs --tail 200 "$container"
+              echo "::endgroup::"
+            done
+            echo "::group::unit states"
+            systemctl --user list-units 'homeinv-*' --all --no-pager
+            echo "::endgroup::"
+          else
+            (cd deploy/compose && docker compose --profile minimal logs --tail 200)
+          fi
+          true
 
       - name: Tear down
         if: always()
-        working-directory: deploy/compose
-        run: ${{ matrix.runtime }} compose --profile minimal down -v || true
+        run: |
+          set +e
+          if [ "${{ matrix.runtime }}" = "podman" ]; then
+            systemctl --user stop 'homeinv-*' 2>/dev/null
+            podman rm --force --all 2>/dev/null
+            podman volume prune --force 2>/dev/null
+          else
+            (cd deploy/compose && docker compose --profile minimal down -v)
+          fi
+          true
