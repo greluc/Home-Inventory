@@ -408,14 +408,22 @@ jobs:
         run: |
           set +e
           if [ "${{ matrix.runtime }}" = "podman" ]; then
-            for container in $(podman ps --all --format '{{.Names}}' | grep '^homeinv-'); do
-              echo "::group::$container"
-              podman logs --tail 200 "$container"
-              echo "::endgroup::"
-            done
             echo "::group::unit states"
             systemctl --user list-units 'homeinv-*' --all --no-pager
             echo "::endgroup::"
+            # The journal rather than `podman logs`: systemd tears a timed-out unit
+            # down together with its container, so the one log worth reading is
+            # already gone by the time this step runs. That is what happened to
+            # homeinv-api on 2026-09-12 — 210 s of "activating", then a failure
+            # report that named no container, because `podman ps --all` no longer
+            # listed one. Quadlet sends container output to the unit's journal,
+            # which outlives it.
+            for unit in $(systemctl --user list-units 'homeinv-*' --all --no-legend                           --plain | awk '{print $1}'); do
+              echo "::group::$unit"
+              systemctl --user status "$unit" --no-pager --lines 0
+              journalctl --user -u "$unit" -n 200 --no-pager
+              echo "::endgroup::"
+            done
           else
             (cd deploy/compose && docker compose --profile minimal logs --tail 200)
           fi
