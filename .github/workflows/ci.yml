@@ -281,6 +281,76 @@ jobs:
           [ "$fail" -eq 0 ] && echo "The hop keeps all five rules."
           exit $fail
 
+  blobstore:
+    name: Blob store
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: blobstore
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: blobstore
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --release --locked
+
+      # `-D warnings` and not a report. A lint that does not fail is a lint that
+      # accumulates, and this is the one process in the deployment that touches
+      # every byte of every tenant's media.
+      - name: Clippy
+        run: cargo clippy --release --all-targets --locked -- -D warnings
+
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      # REQ-SEC-075 for this dependency tree, and the check that keeps the
+      # binary's AGPL-3.0-or-later statement true: a crate under a licence that
+      # cannot be combined with it fails, and so does one nobody has considered.
+      - name: Advisories and licences
+        run: cargo deny check
+
+      - name: Image
+        run: docker build -f blobstore/Dockerfile -t home-inv-blobstore:ci ..
+        working-directory: blobstore
+
+      # `scratch` plus one binary. Anything else in there is something an
+      # attacker who reaches this process could run, and something to patch on a
+      # CVE announcement for a package this service never used (ADR-0050).
+      - name: The image contains the binary and nothing else
+        run: |
+          set -euo pipefail
+          layers=$(docker run --rm --entrypoint /homeinv-blobstore home-inv-blobstore:ci --health \
+                   2>&1 || true)
+          if docker run --rm --entrypoint /bin/sh home-inv-blobstore:ci -c 'echo reachable' \
+             2>/dev/null; then
+            echo "::error::the runtime image contains a shell"
+            exit 1
+          fi
+          echo "No shell in the runtime image."
+
+      - name: The image does not run as root
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect home-inv-blobstore:ci --format '{{.Config.User}}')
+          if [ "$user" != "10001:10001" ]; then
+            echo "::error::blobstore runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
+            exit 1
+          fi
+          echo "Runs as $user."
+
   documentation:
     name: Documentation rules
     runs-on: ubuntu-latest

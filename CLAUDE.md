@@ -26,8 +26,8 @@ container image explicitly in CI, because derived from the repository it would
 read `home-inventory`.
 
 > **Status: stage 0 is being implemented.** `app/`, `web/`, `blobstore/`, `deploy/` and
-> `api/` hold real code and real generated artefacts; `cla/`, `plugin-api/`, `plugin-sdk/`
-> and `proto/` are still empty and belong to later stages. Do not invent build commands,
+> `api/`, `blobstore/` and `proto/` hold real code and real generated artefacts; `cla/`,
+> `plugin-api/` and `plugin-sdk/` are still empty and belong to later stages. Do not invent build commands,
 > file paths or class names that do not exist — if something is neither in `docs/` nor in
 > the tree, it has not been decided.
 
@@ -200,16 +200,23 @@ Each of these is a decision with an ADR behind it. They look like details and ar
 ## Where things go
 
 ```
-api/ app/ cla/ deploy/ design-system/ docs/ plugin-api/ plugin-sdk/ proto/ web/
+api/ app/ blobstore/ cla/ deploy/ design-system/ docs/ plugin-api/ plugin-sdk/ proto/ web/
 ```
 
 Every directory has a `README.md` stating what belongs there and which stage
-fills it — read it before putting a file somewhere. Two boundaries are not
+fills it — read it before putting a file somewhere. Some boundaries are not
 negotiable:
 
 - **`plugin-api/`, `plugin-sdk/` and `proto/` are Apache-2.0** and must never
   depend on a core module. A file that lands there by accident makes the promise
   in ADR-0018 false.
+- **`blobstore/` is the only Rust in the repository**, and it is **core, therefore
+  AGPL-3.0-or-later**. It is a service and not a plugin: it opens nothing outside
+  the deployment, holds no manifest and needs no capability grant
+  ([ADR-0043](docs/adr/0043-blobstore-as-its-own-service.md),
+  [ADR-0050](docs/adr/0050-blobstore-service-in-rust.md)). `cargo deny` gates its
+  dependencies' licences, because a crate under an incompatible one would make
+  that statement false.
 - **`deploy/services.yaml` is the source of truth** for the deployment topology.
   The Quadlet units and `compose.yaml` are generated from it; editing them by
   hand fails the drift check.

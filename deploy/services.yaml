@@ -459,7 +459,11 @@ services:
     volumes: [{ name: blobdata, path: /var/lib/homeinv/blobs }]
     tmpfs: ["/tmp"]
     resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
-    health: { command: "/healthcheck", interval: 30s }
+    # The binary answers about itself: the image is `scratch`, so there is no
+    # shell to run a script and no curl to call, and adding either would mean
+    # adding a shell to the container that holds every tenant's media
+    # (ADR-0050).
+    health: { command: "/homeinv-blobstore --health", interval: 30s }
     profiles: [minimal, standard, ha]
     notes: >
       THE DEFAULT MEDIA STORE, and until 2026-09-11 it existed in no topology at

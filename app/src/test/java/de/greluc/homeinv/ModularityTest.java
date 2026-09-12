@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.modulith.core.ApplicationModules;
@@ -31,7 +33,24 @@ import org.springframework.modulith.docs.Documenter;
 @DisplayName("The building blocks")
 class ModularityTest {
 
-  private final ApplicationModules modules = ApplicationModules.of(HomeInvApplication.class);
+  /**
+   * The generated protobuf contract, which is not a building block.
+   *
+   * <p>{@code proto/home_inv/plugin/v1/blob_store.proto} declares
+   * {@code java_package = de.greluc.homeinv.plugin.v1}, and Modulith treats every direct
+   * sub-package of the application's as a module — so the generated classes would become a block
+   * called {@code plugin}, with no {@code api} package and therefore nothing anybody may use.
+   *
+   * <p>Excluding it is the right answer rather than a workaround: it is a wire contract shared with
+   * the Rust service and, from stage 3, with third-party plugin authors. It has no internals to
+   * protect and no dependencies to police — every one of its classes is public by definition,
+   * because that is what a generated contract is.
+   */
+  private static final DescribedPredicate<JavaClass> GENERATED_CONTRACT =
+      JavaClass.Predicates.resideInAPackage("de.greluc.homeinv.plugin.v1..");
+
+  private final ApplicationModules modules =
+      ApplicationModules.of(HomeInvApplication.class, GENERATED_CONTRACT);
 
   @Test
   @DisplayName("respect their published boundaries and contain no cycle")

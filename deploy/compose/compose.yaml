@@ -309,7 +309,7 @@ services:
     tmpfs:
       - /tmp
     healthcheck:
-      test: ["CMD", "/healthcheck"]
+      test: ["CMD", "/homeinv-blobstore --health"]
       interval: 30s
       start_period: 30s
     deploy:

@@ -1,0 +1,122 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! The in-deployment `BlobStore` (ADR-0043, ADR-0050).
+//!
+//! It exists so that `api` and `worker` stay stateless: the default media store
+//! is a directory, a directory has to live somewhere, and mounting it into the
+//! application layer would have cost `REQ-NFR-008` — two `api` instances cannot
+//! share a local filesystem, and the failure appears as *media that exist on one
+//! instance and 404 on the other*, which is the hardest class of bug to
+//! attribute.
+//!
+//! It is written in Rust because ADR-0043 budgeted it at 32 MB reserved and
+//! 128 MB limit, and that sizing is what justified adding a container at all. A
+//! JVM does not run in 128 MB. Between the languages that do, this one is chosen
+//! because this process touches every byte of every tenant's media and has no
+//! other job: no domain logic, no database, nothing but memory handling on
+//! input somebody else supplied (ADR-0050).
+
+mod service;
+mod store;
+mod tls;
+
+/// The generated contract from `proto/home_inv/plugin/v1/blob_store.proto`.
+mod proto {
+    tonic::include_proto!("home_inv.plugin.v1");
+}
+
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
+use tonic::transport::Server;
+use tracing::info;
+
+use crate::proto::blob_store_server::BlobStoreServer;
+use crate::service::FilesystemBlobStore;
+
+/// Where the `blobdata` volume is mounted (06 §6.7).
+const DEFAULT_ROOT: &str = "/var/lib/homeinv/blobs";
+
+/// The port the service matrix names. Never published to the host.
+const DEFAULT_PORT: u16 = 8100;
+
+/// Where the runtime mounts this service's own identity.
+const DEFAULT_IDENTITY: &str = "/run/secrets/mtls-blobstore";
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // JSON lines, like every other service in the deployment (REQ-NFR-041). An
+    // operator reading one log format is an operator who can grep across
+    // services.
+    tracing_subscriber::fmt()
+        .json()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+
+    let root = PathBuf::from(env_or(DEFAULT_ROOT, "HOMEINV_BLOB_ROOT"));
+    let identity_path = PathBuf::from(env_or(DEFAULT_IDENTITY, "HOMEINV_MTLS_BLOBSTORE_FILE"));
+
+    if std::env::args().any(|argument| argument == "--health") {
+        // The health command the service matrix names. The image is `scratch`:
+        // there is no shell to run a script and no curl to call, so the binary
+        // answers the question about itself.
+        //
+        // It asks whether the volume is writable, which is the failure this
+        // service actually has: a read-only mount, a full disk, or a UID mapping
+        // that changed under it. "The process is running" is not worth reporting
+        // — the runtime already knows that.
+        return match health(&root).await {
+            Ok(()) => Ok(()),
+            Err(failure) => {
+                eprintln!("unhealthy: {failure}");
+                std::process::exit(1);
+            }
+        };
+    }
+
+    tokio::fs::create_dir_all(&root).await?;
+
+    let address: SocketAddr = format!("0.0.0.0:{}", env_port()).parse()?;
+    let identity = tls::server_config(&identity_path)?;
+
+    info!(
+        root = %root.display(),
+        address = %address,
+        "the blob store is listening, mTLS required"
+    );
+
+    Server::builder()
+        .tls_config(identity)?
+        .add_service(BlobStoreServer::new(FilesystemBlobStore::new(root)))
+        // The runtime stops a container with SIGTERM. Without this the process
+        // is killed after the grace period instead of finishing the transfer it
+        // is in the middle of.
+        .serve_with_shutdown(address, async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await?;
+
+    Ok(())
+}
+
+/// Writes and removes a probe file, to establish that the volume is usable.
+async fn health(root: &std::path::Path) -> Result<(), std::io::Error> {
+    let probe = root.join(".health");
+    tokio::fs::write(&probe, b"ok").await?;
+    tokio::fs::remove_file(&probe).await
+}
+
+fn env_or(default: &str, variable: &str) -> String {
+    std::env::var(variable).unwrap_or_else(|_| default.to_owned())
+}
+
+fn env_port() -> u16 {
+    std::env::var("HOMEINV_BLOBSTORE_PORT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT_PORT)
+}

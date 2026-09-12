@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **Media has somewhere to live.** `blobstore/` is a small service that owns the
+  data volume, so `api` and `worker` hold no state and can be run more than once.
+  It speaks gRPC over mutual TLS with a pinned certificate, verifies every blob
+  against the address it was given, and ships as a binary in an image with no
+  shell in it.
+
 - **`web` is the ingress.** It proxies the API and the media path to `api` on the
   two-member frontend segment, appends its own step to `X-Forwarded-For` rather
   than overwriting it, and leaves every response header the application sets

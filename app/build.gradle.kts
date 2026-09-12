@@ -1,3 +1,5 @@
+import com.google.protobuf.gradle.id
+
 // The Spring Boot application. One Gradle project, eighteen building blocks as
 // packages — the boundary is enforced by Spring Modulith and ArchUnit, not by
 // the build (ADR-0002, app/README.md).
@@ -5,6 +7,7 @@
 plugins {
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
+    alias(libs.plugins.protobuf)
 }
 
 dependencies {
@@ -35,6 +38,18 @@ dependencies {
     runtimeOnly(libs.spring.modulith.actuator)
     runtimeOnly(libs.spring.modulith.observability)
 
+    // The BlobStore contract lives in `proto/` and is Apache-2.0 (ADR-0018). The
+    // in-core `filesystem` adapter is a CLIENT of the in-deployment `blobstore`
+    // service, which speaks it (ADR-0043) - so the core generates a client here
+    // and depends on nothing in that directory beyond the generated code.
+    implementation(libs.grpc.netty.shaded)
+    implementation(libs.grpc.protobuf)
+    implementation(libs.grpc.stub)
+    implementation(libs.protobuf.java)
+    // grpc-java's generated stubs reference javax.annotation.Generated, which
+    // left the JDK in 11. Without it the generated sources do not compile.
+    compileOnly(libs.javax.annotation.api)
+
     implementation(libs.spring.boot.starter.flyway)
     implementation(libs.flyway.core)
     runtimeOnly(libs.flyway.postgresql)
@@ -53,6 +68,7 @@ dependencies {
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.rabbitmq)
     testImplementation(libs.archunit.junit5)
+    testImplementation(libs.bouncycastle.pkix)
 }
 
 // The integration tests start PostgreSQL with the *production* role script, so
@@ -72,3 +88,38 @@ tasks.withType<Test>().configureEach {
     systemProperty("spring.profiles.active", "test")
 }
 
+
+// The BlobStore contract is generated from `proto/`, which is shared with the
+// plugin SDKs and with the Rust service in `blobstore/`. One definition, three
+// implementations, and none of them may drift from it (ADR-0043).
+sourceSets {
+    named("main") {
+        proto { srcDir(rootProject.file("proto")) }
+    }
+}
+
+protobuf {
+    protoc { artifact = libs.protobuf.protoc.get().toString() }
+    plugins {
+        id("grpc") { artifact = libs.grpc.protoc.gen.java.get().toString() }
+    }
+    generateProtoTasks {
+        // Only the main source set: the contract is generated once, and asking
+        // for it in `test` as well would produce a second copy of every class on
+        // the test classpath.
+        //
+        // The service stubs, not only the messages. Without the `grpc` plugin the
+        // build produces the request and response types and no client at all,
+        // which compiles and does nothing.
+        ofSourceSet("main").forEach { task ->
+            task.plugins {
+                // Guarded, because the protobuf plugin evaluates this block more
+                // than once during configuration and registering the same name
+                // twice is an error rather than a no-op.
+                if (findByName("grpc") == null) {
+                    create("grpc")
+                }
+            }
+        }
+    }
+}

@@ -6,24 +6,34 @@
     ":dependencyDashboard"
   ],
   "commitMessagePrefix": "build(deps):",
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "timezone": "Europe/Berlin",
-  "schedule": ["before 6am on monday"],
+  "schedule": [
+    "before 6am on monday"
+  ],
   "prConcurrentLimit": 5,
   "rebaseWhen": "behind-base-branch",
-
   "_comment_automerge": "Patch versions merge themselves on a green build; anything larger is read by a human. Rationale in docs/architecture/12-security.md §12.10.",
   "packageRules": [
     {
       "description": "Patch updates merge automatically once CI is green.",
-      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "matchUpdateTypes": [
+        "patch",
+        "pin",
+        "digest"
+      ],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
       "description": "Minor and major updates are always reviewed by a person.",
-      "matchUpdateTypes": ["minor", "major"],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
       "automerge": false
     },
     {
@@ -35,48 +45,82 @@
         "valkey/valkey",
         "clamav/clamav"
       ],
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false,
-      "prBodyNotes": ["A major update of this service is a migration with its own runbook — open it deliberately, not through Renovate."]
+      "prBodyNotes": [
+        "A major update of this service is a migration with its own runbook — open it deliberately, not through Renovate."
+      ]
     },
     {
       "description": "Container images are referenced by digest, so digest updates are the real update path.",
-      "matchDatasources": ["docker"],
+      "matchDatasources": [
+        "docker"
+      ],
       "pinDigests": true
     },
     {
       "description": "Java is on an LTS line; moving off it is a decision with an ADR.",
-      "matchPackageNames": ["eclipse-temurin", "openjdk", "java"],
-      "matchUpdateTypes": ["major"],
+      "matchPackageNames": [
+        "eclipse-temurin",
+        "openjdk",
+        "java"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     },
     {
       "description": "Node is on an LTS line for the same reason Java is. The action that installs it may bump freely; the runtime itself may not.",
-      "matchDatasources": ["node-version", "docker"],
-      "matchPackageNames": ["node"],
-      "matchUpdateTypes": ["major"],
+      "matchDatasources": [
+        "node-version",
+        "docker"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     },
     {
       "description": "GitHub Actions stay on their newest major. An action left behind eventually runs on a deprecated Node runtime, which is how a workflow starts failing without anyone changing it.",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["major"],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false,
       "prPriority": 5
+    },
+    {
+      "description": "The blobstore crate's dependencies. `cargo deny` gates their licences and advisories in CI, so a bump that brings an incompatible licence fails there rather than being merged and discovered later (ADR-0050).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "rangeStrategy": "bump"
     }
   ],
-
   "vulnerabilityAlerts": {
-    "labels": ["security", "dependencies"],
-    "schedule": ["at any time"],
+    "labels": [
+      "security",
+      "dependencies"
+    ],
+    "schedule": [
+      "at any time"
+    ],
     "automerge": false,
     "prPriority": 10
   },
-
   "osvVulnerabilityAlerts": true,
-
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 6am on the first day of the month"]
+    "schedule": [
+      "before 6am on the first day of the month"
+    ]
   }
 }

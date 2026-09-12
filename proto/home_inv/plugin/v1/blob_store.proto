@@ -1,0 +1,142 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// THE BLOB STORE CONTRACT.
+//
+// Four implementations speak it (ADR-0007, ADR-0043):
+//
+//   * `blobstore`, the in-deployment service that holds the `blobdata` volume —
+//     the reference implementation, and the one the others are compared to;
+//   * `plugin-blobstore-s3` and `plugin-blobstore-nextcloud`, stage 1, which are
+//     plugins precisely because they open a connection OUTSIDE the deployment
+//     (ADR-0026);
+//   * and whatever a third party writes against the published SDK in stage 3.
+//
+// Apache-2.0 like everything in `proto/`: a plugin author compiles against this
+// and must stay free to license their own work as they wish (ADR-0018).
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "BlobStoreProto";
+
+// Stores and returns opaque byte sequences, addressed by content.
+//
+// WHAT THIS SERVICE DELIBERATELY DOES NOT DO
+//
+// It does not authorise. The tenant is a path segment the caller supplies, and
+// the caller is authenticated by its client certificate and by nothing else
+// (ADR-0044: `internal` is not a trust boundary, so reachability is not
+// authorisation). Deciding whether a person may read a blob happens in the
+// application layer, where ADR-0010 puts every such decision — a store that
+// decided too would be a second set of rules to keep right, and the second one
+// is always the one that is wrong.
+//
+// It does not know what a blob IS. No media type, no dimensions, no scan
+// verdict: those belong to `media_object` in PostgreSQL, and a store that held
+// them would be a second source for facts a transaction already protects.
+service BlobStore {
+  // Writes a blob, or confirms that the identical blob is already there.
+  //
+  // Streamed, because a 25 MB upload in one message would mean both sides
+  // holding it entirely in memory, and gRPC's default message limit is 4 MB.
+  rpc Put(stream PutRequest) returns (PutResponse);
+
+  // Reads a blob.
+  rpc Get(GetRequest) returns (stream GetResponse);
+
+  // Whether a blob is present, and how large it is, without transferring it.
+  rpc Head(HeadRequest) returns (HeadResponse);
+
+  // Removes a blob.
+  //
+  // Reference counting is the CALLER's: `media_object.ref_count` decides when
+  // nothing points at a blob any more, and only then is this called. A store
+  // that counted references would need to know what a reference is.
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+}
+
+// Where a blob lives.
+//
+// Content-addressed WITHIN a tenant and never across (ADR-0032). Two tenants
+// holding the same bytes hold two objects: a global namespace would have been an
+// existence oracle across the tenant boundary, and would have let the second
+// tenant inherit the first one's malware verdict.
+message BlobRef {
+  // The owning tenant, as a UUID in its canonical hyphenated text form.
+  string tenant_id = 1;
+
+  // The SHA-256 of the content, lowercase hex, exactly 64 characters.
+  //
+  // The server verifies it on write and refuses a mismatch. A store that
+  // believed the caller's hash would be content-addressed in name only, and the
+  // first corrupted transfer would be indistinguishable from a different file.
+  string sha256 = 2;
+}
+
+// One frame of a write.
+//
+// The first message on the stream carries `ref` and no `chunk`; every later one
+// carries `chunk` and no `ref`. Splitting them into two fields of one message
+// rather than using a `oneof` keeps the wire format obvious at the cost of a
+// rule the server enforces.
+message PutRequest {
+  // Present on the first message only.
+  //
+  // Named `blob` and not `ref`, which would be the obvious word: `ref` is a
+  // keyword in Rust and a reserved word in several other targets, and a field
+  // name that forces every generated client to escape it is a field name that
+  // will be escaped inconsistently.
+  BlobRef blob = 1;
+
+  // Present on every message after the first.
+  bytes chunk = 2;
+}
+
+// The result of a write.
+message PutResponse {
+  // False when the blob was already present with identical content, which is the
+  // common case: the same photograph uploaded twice by one tenant costs no
+  // second copy.
+  bool created = 1;
+
+  // The number of bytes the blob occupies.
+  uint64 byte_size = 2;
+}
+
+// Which blob to read.
+message GetRequest {
+  BlobRef blob = 1;
+}
+
+// One frame of a read.
+message GetResponse {
+  bytes chunk = 1;
+}
+
+// Which blob to ask about.
+message HeadRequest {
+  BlobRef blob = 1;
+}
+
+// What is known about a blob without reading it.
+message HeadResponse {
+  bool exists = 1;
+  uint64 byte_size = 2;
+}
+
+// Which blob to remove.
+message DeleteRequest {
+  BlobRef blob = 1;
+}
+
+// The result of a removal.
+message DeleteResponse {
+  // False when there was nothing to remove. Not an error: deletion is retried
+  // after a partial failure, and a retry that failed because the work was
+  // already done would be a retry nobody could make succeed.
+  bool removed = 1;
+}

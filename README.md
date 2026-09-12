@@ -69,6 +69,7 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 ├── plugin-api/    the ports a plugin implements — Apache-2.0, not AGPL
 ├── plugin-sdk/    Java and Python SDKs, and the contract test suite
 ├── proto/         home_inv.plugin.v1 — the plugin contract
+├── blobstore/     the in-deployment BlobStore, in Rust
 ├── web/           the React PWA
 └── website/       the project website, published to GitHub Pages
 ```

@@ -4,7 +4,9 @@
  */
 package de.greluc.homeinv;
 
+import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -42,6 +44,11 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @ActiveProfiles("test")
+// On the base class, so every integration test gets it without repeating the
+// import. A nested @TestConfiguration would not do: Spring Boot discovers those
+// on the test class itself, not on its superclass, which is a difference that
+// shows up only in the one test that actually stores a blob.
+@Import(TestBlobStore.class)
 public abstract class AbstractIntegrationTest {
 
   /**
@@ -83,7 +90,29 @@ public abstract class AbstractIntegrationTest {
   protected static final GenericContainer<?> RABBITMQ =
       new GenericContainer<>(DockerImageName.parse("rabbitmq:4-alpine")).withExposedPorts(5672);
 
+  /**
+   * A throwaway certificate authority, and the two identities the mTLS hop needs.
+   *
+   * <p>Generated per run rather than checked in: a private key in the repository is a private key
+   * in every clone of it, and `gitleaks` would be right to fail the build over one.
+   */
+  protected static final TestPki PKI;
+
+  /** The core's client identity, which `api` and `worker` present to the blob store. */
+  protected static final TestPki.Identity CORE_IDENTITY;
+
+  /** The blob store's own identity, and the fingerprint the client pins. */
+  protected static final TestPki.Identity BLOBSTORE_IDENTITY;
+
   static {
+    try {
+      PKI = TestPki.create();
+      CORE_IDENTITY = PKI.issue("api");
+      BLOBSTORE_IDENTITY = PKI.issue("blobstore");
+    } catch (Exception impossible) {
+      throw new IllegalStateException("The test PKI could not be created", impossible);
+    }
+
     POSTGRES.start();
     VALKEY.start();
     RABBITMQ.start();
@@ -123,5 +152,12 @@ public abstract class AbstractIntegrationTest {
     registry.add("spring.data.redis.port", () -> VALKEY.getMappedPort(6379));
     registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
     registry.add("spring.rabbitmq.port", () -> RABBITMQ.getMappedPort(5672));
+    // The gRPC client is still CONSTRUCTED — the pin and the identity have no
+    // default and its constructor refuses without them, which is the behaviour
+    // under test elsewhere. It never connects: a gRPC channel is lazy, and the
+    // in-memory store above is what actually gets injected.
+    registry.add("HOMEINV_BLOBSTORE_ENDPOINT", () -> "blobstore.invalid:8100");
+    registry.add("HOMEINV_BLOBSTORE_FINGERPRINT", BLOBSTORE_IDENTITY::fingerprint);
+    registry.add("HOMEINV_MTLS_CORE_FILE", () -> CORE_IDENTITY.bundle().toString());
   }
 }

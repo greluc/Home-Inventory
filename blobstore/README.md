@@ -1,0 +1,78 @@
+# blobstore/
+
+The **in-deployment `BlobStore`** — the default media store, and the only place
+in this deployment where a tenant's bytes come to rest.
+
+It is a small gRPC service over a directory: `Put`, `Get`, `Head`, `Delete`, on
+the layout `sha256/<tenantId>/<hash>` ([ADR-0032](../docs/adr/0032-per-tenant-blob-addressing.md)).
+
+## Why it is a service at all
+
+Because `api` and `worker` have to stay **stateless**. Mounting the media
+directory into them would have been the smaller change and would have cost
+`REQ-NFR-008`: two `api` instances cannot share a local filesystem, and the
+failure shows up as *media that exist on one instance and 404 on the other* —
+the hardest class of bug to attribute
+([ADR-0043](../docs/adr/0043-blobstore-as-its-own-service.md)).
+
+## Why it is Rust
+
+ADR-0043 budgeted it at **32 MB reserved, 128 MB limit**, and that sizing is what
+justified adding a container at all — its own honest counterweight was that in
+`minimal` the service buys nothing a mount would not have. A JVM does not run in
+128 MB.
+
+Between the languages that do fit, the tie is broken by what this process is:
+the one thing in the deployment that touches every byte of every tenant's media
+and has no other job — no domain logic, no database, nothing but memory handling
+on input somebody else supplied. That is the class of defect a language can
+remove rather than test for
+([ADR-0050](../docs/adr/0050-blobstore-service-in-rust.md)).
+
+It is the only Rust in the repository, and it is bounded on purpose: a few
+hundred lines implementing a contract defined elsewhere.
+
+## What it deliberately does not do
+
+| | |
+|---|---|
+| **Authorise** | The tenant is a path segment the caller supplies, and the caller is authenticated by its client certificate and by nothing else. Deciding whether a *person* may read a blob happens in the application layer, where [ADR-0010](../docs/adr/0010-api-surfaces.md) puts every such decision |
+| **Know what a blob is** | No media type, no dimensions, no scan verdict. Those belong to `media_object` in PostgreSQL, and a store that held them would be a second source for facts a transaction already protects |
+| **Count references** | `media_object.ref_count` decides when nothing points at a blob any more. A store that counted would need to know what a reference is |
+| **Run without mTLS** | There is no unauthenticated mode and no flag to enable one. A mode that exists is a mode somebody runs, and `internal` is not a trust boundary ([ADR-0044](../docs/adr/0044-internal-is-not-a-trust-boundary.md)) |
+
+## The two rules that are not conveniences
+
+**Every path component is validated before it becomes a path.** A canonical UUID
+and 64 lowercase hex characters contain no separator, no `.` and no `..`, so a
+reference that passes can only name a file inside the root. Rejecting on shape
+rather than sanitising is deliberate: a sanitiser turns a hostile path into a
+valid one and stores the file somewhere nobody meant.
+
+**Content is verified against its address on write.** A store that believed the
+caller's hash would be content-addressed in name only, and the first corrupted
+transfer would be indistinguishable from a different file.
+
+## Building and checking
+
+```
+cargo build --release
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo deny check
+```
+
+`cargo deny` is not a formality. The licence allowlist is what keeps this
+binary's AGPL-3.0-or-later statement true, and a crate under a licence nobody has
+considered fails rather than passing quietly.
+
+## The image
+
+`scratch` plus a statically linked binary. No shell, no package manager, no libc
+— so there is nothing in the image for an attacker who reaches this process to
+run, and nothing to patch when a CVE lands on a package this service never used.
+
+That is also why `--health` is a flag on the binary rather than a script: there
+is no `sh` to run one. It writes and removes a probe file, because a read-only
+mount, a full disk or a changed UID mapping is the failure this service actually
+has — "the process is running" is something the runtime already knows.

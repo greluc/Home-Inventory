@@ -1,0 +1,16 @@
+# Everything a build context does not need. Without this the context for the
+# `blobstore` image alone is roughly a gigabyte — `blobstore/target` is 800 MB of
+# incremental Rust artefacts on its own — and every `docker build` pays for it.
+
+.git/
+.gradle/
+build/
+*/build/
+**/target/
+**/node_modules/
+web/dist/
+deploy/secrets/
+docs/
+website/
+design-system/
+*.md
