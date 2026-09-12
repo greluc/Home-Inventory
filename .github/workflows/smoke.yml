@@ -355,8 +355,16 @@ jobs:
         working-directory: deploy/compose
         run: |
           set -euo pipefail
-          docker compose --profile minimal up bootstrap --exit-code-from bootstrap
-          docker compose --profile minimal logs bootstrap | grep -q "already has its owner" \
+          # The output of THIS run, not `compose logs` afterwards. `logs` shows
+          # whatever container currently carries the service name, and on
+          # 2026-09-12 it came back without the line the run had just printed, in
+          # a step that had passed twenty minutes earlier on the same code. What
+          # the second run said is the evidence this step is about, so it is read
+          # where it is produced rather than asked for again.
+          said=$(docker compose --profile minimal up bootstrap \
+                   --exit-code-from bootstrap 2>&1) || { echo "$said"; exit 1; }
+          echo "$said"
+          echo "$said" | grep -q "already has its owner" \
             || { echo "::error::the second run did not recognise the existing owner"; exit 1; }
 
       # The check that makes the rest of this job mean something: the containers
