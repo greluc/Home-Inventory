@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Findings this project has looked at and decided against acting on. Each needs a
+# reason; "noisy" is not one. Nothing here suppresses a vulnerability — only
+# misconfiguration rules whose advice contradicts a decision already recorded.
+
+# DS-0026 — "Add HEALTHCHECK instruction in your Dockerfile".
+#
+# Every service in this deployment HAS a health check, and it is declared in
+# `deploy/services.yaml` beside its interval, its start period and the group that
+# waits on it. That file is the single source of truth for the topology
+# (CLAUDE.md, "Where things go"), and the Quadlet units and compose.yaml are
+# generated from it — so a HEALTHCHECK baked into a Dockerfile would be the same
+# fact stated twice, in a place the generator does not read and the drift check
+# cannot compare. `REQ-CON-015` is the rule against exactly that.
+#
+# The trade is real and is accepted: an image run outside this deployment has no
+# health check of its own. It also has no network, no secrets and no database, so
+# it is not a configuration anybody runs.
+DS-0026

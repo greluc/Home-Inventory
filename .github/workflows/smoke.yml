@@ -124,7 +124,12 @@ jobs:
             # DOCKER_HOST below plus the check in the next step, which reads
             # `rootless` out of the daemon's own security options — so a silent
             # fallback to the rootful socket fails the job instead of passing it.
-            sudo apt-get install -y uidmap dbus-user-session
+            # Everything rootlesskit needs, not only the two packages the
+            # installer names: without slirp4netns or fuse-overlayfs the daemon
+            # installs and then fails to start, which is how this job spent two
+            # rounds reporting "Failed to start docker.service" and nothing else.
+            sudo apt-get install -y uidmap dbus-user-session slirp4netns fuse-overlayfs
+
             # The rootful daemon goes first. FORCE_ROOTLESS_INSTALL alone gets the
             # installer past its own refusal and then its `systemctl --user start
             # docker.service` fails anyway, because the two daemons contend for
@@ -133,8 +138,20 @@ jobs:
             # that rootless is the only supported path (REQ-NFR-059).
             sudo systemctl disable --now docker.service docker.socket || true
             sudo rm -f /var/run/docker.sock
+
             export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-            curl -fsSL https://get.docker.com/rootless | FORCE_ROOTLESS_INSTALL=1 sh
+
+            # The installer ends by starting the service and exits non-zero when
+            # that fails — taking the step down before anything can say why. The
+            # start is retried in the next step, so a failure HERE is allowed
+            # through and the journal is printed instead of a sentence naming no
+            # cause. If the daemon really is unusable, the next step fails and
+            # this output is what explains it.
+            if ! curl -fsSL https://get.docker.com/rootless | FORCE_ROOTLESS_INSTALL=1 sh; then
+              echo "::warning::the rootless installer reported a failure; its journal follows"
+              journalctl --user -n 60 --no-pager -u docker.service || true
+              systemctl --user status docker.service --no-pager || true
+            fi
             echo "$HOME/bin" >> "$GITHUB_PATH"
             echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
           fi

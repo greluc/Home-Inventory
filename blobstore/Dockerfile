@@ -28,19 +28,22 @@ WORKDIR /src
 # fetched and built the dependency graph. `cargo` needs a source file to exist
 # for the crate to resolve at all, hence the stub.
 COPY blobstore/Cargo.toml blobstore/Cargo.lock ./blobstore/
-RUN mkdir -p blobstore/src \
-    && echo 'fn main() {}' > blobstore/src/main.rs \
-    && cd blobstore \
-    && cargo fetch --locked
+RUN mkdir -p blobstore/src && echo 'fn main() {}' > blobstore/src/main.rs
+WORKDIR /src/blobstore
+RUN cargo fetch --locked
+WORKDIR /src
 
 COPY proto/ ./proto/
 COPY blobstore/ ./blobstore/
 
 # Statically linked, so the runtime stage needs no libc at all.
-RUN cd blobstore \
-    && RUSTFLAGS='-C target-feature=+crt-static' \
+# `WORKDIR`, not `RUN cd`: the directory is part of the image's state and
+# belongs in an instruction that records it (trivy DS-0013).
+WORKDIR /src/blobstore
+RUN RUSTFLAGS='-C target-feature=+crt-static' \
        cargo build --release --locked --target x86_64-unknown-linux-musl \
     && cp target/x86_64-unknown-linux-musl/release/homeinv-blobstore /homeinv-blobstore
+WORKDIR /src
 
 # The data directory, created here because `scratch` has no shell to create it
 # and the process runs as uid 10001, which cannot write to a root-owned `/`.

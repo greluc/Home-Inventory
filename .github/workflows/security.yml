@@ -111,7 +111,25 @@ jobs:
 
       # The dependency manifests: Gradle, npm and Cargo, in one pass over the
       # working tree.
-      - name: Dependencies
+      # TWO passes, and the reason is a trap this job sat in: with
+      # `format: sarif` trivy writes EVERY severity into the report and the exit
+      # code is then decided by that unfiltered set, not by `severity:`. So a job
+      # asking to fail on HIGH and CRITICAL failed on a LOW "no HEALTHCHECK"
+      # instead, with nothing in its log to say so — the findings were in the
+      # SARIF, which goes to code scanning rather than to the console.
+      #
+      # The report therefore carries everything, and the gate is a second pass
+      # that prints what it refuses.
+      - name: Dependencies (report)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          ignore-unfixed: false
+          format: sarif
+          output: trivy-filesystem.sarif
+
+      - name: Dependencies (gate)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -119,8 +137,7 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: false
-          format: sarif
-          output: trivy-filesystem.sarif
+          format: table
 
       - name: Publish the findings
         if: always()

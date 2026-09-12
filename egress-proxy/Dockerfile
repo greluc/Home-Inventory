@@ -24,17 +24,20 @@ WORKDIR /src
 # fetched the dependency graph. Cargo needs a source file for the crate to
 # resolve at all, hence the stub.
 COPY egress-proxy/Cargo.toml egress-proxy/Cargo.lock ./egress-proxy/
-RUN mkdir -p egress-proxy/src \
-    && echo 'fn main() {}' > egress-proxy/src/main.rs \
-    && cd egress-proxy \
-    && cargo fetch --locked
+RUN mkdir -p egress-proxy/src && echo 'fn main() {}' > egress-proxy/src/main.rs
+WORKDIR /src/egress-proxy
+RUN cargo fetch --locked
+WORKDIR /src
 
 COPY egress-proxy/ ./egress-proxy/
 
-RUN cd egress-proxy \
-    && RUSTFLAGS='-C target-feature=+crt-static' \
+# `WORKDIR`, not `RUN cd`: the directory is part of the image's state and
+# belongs in an instruction that records it (trivy DS-0013).
+WORKDIR /src/egress-proxy
+RUN RUSTFLAGS='-C target-feature=+crt-static' \
        cargo build --release --locked --target x86_64-unknown-linux-musl \
     && cp target/x86_64-unknown-linux-musl/release/homeinv-egress-proxy /homeinv-egress-proxy
+WORKDIR /src
 
 # The mount point for the generated allowlist, created here because `scratch` has
 # no shell to create it and the process runs as uid 10001, which cannot write to
