@@ -12,6 +12,25 @@ plugins {
     alias(libs.plugins.spotbugs)
 }
 
+// Two transitive versions Spring Boot's BOM pins, raised past the ones trivy
+// refuses. Both are SERVED to the internet by this application, which is why
+// they are overridden here rather than waited out until the next Boot release:
+//
+//   * tomcat-embed-core 11.0.24 carries three CRITICAL advisories — a security
+//     constraint bypass and two authentication bypasses (CVE-2026-65182,
+//     CVE-2026-65905, CVE-2026-68525). It is the servlet container every request
+//     arrives through.
+//   * amqp-client 5.30.0 carries three HIGH ones (CVE-2026-63337, CVE-2026-69219,
+//     CVE-2026-69220). Boot pins it BELOW what its own starter asks for — the
+//     dependency graph reads `5.31.0 -> 5.30.0`.
+//
+// These properties are the BOM's own, so raising them moves every module that
+// resolves through it rather than one edge of the graph. Remove an entry once
+// Boot's managed version passes it; `./gradlew :app:dependencies` and the image
+// scan both say when that is.
+extra["tomcat.version"] = "11.0.25"
+extra["rabbit-amqp-client.version"] = "5.35.0"
+
 dependencies {
     implementation(platform(libs.spring.modulith.bom))
 

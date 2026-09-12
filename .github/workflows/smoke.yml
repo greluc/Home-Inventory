@@ -187,6 +187,32 @@ jobs:
       - name: Bring the host up to the prerequisites
         run: |
           set -euo pipefail
+
+          # Ubuntu 23.10 and later refuse an unprivileged user namespace unless
+          # the binary asking for one has an AppArmor profile that permits it.
+          # Without this, rootlesskit dies with "fork/exec /proc/self/exe:
+          # permission denied" and the daemon never starts — which is what this
+          # job reported as "Failed to start docker.service" for two rounds. The
+          # profile below is the one rootlesskit itself prints in that error.
+          #
+          # A profile per binary rather than
+          # `sysctl kernel.apparmor_restrict_unprivileged_userns=0`: turning the
+          # restriction off host-wide would also turn it off for everything the
+          # deployment then starts, and this job exists to prove rootless works
+          # rather than to prove it works with a protection removed.
+          if [ -d /etc/apparmor.d ]; then
+            sudo tee /etc/apparmor.d/home.runner.bin.rootlesskit >/dev/null <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          /home/runner/bin/rootlesskit flags=(unconfined) {
+            userns,
+            include if exists <local/home.runner.bin.rootlesskit>
+          }
+          PROFILE
+            sudo systemctl restart apparmor.service || true
+          fi
+
           sudo loginctl enable-linger "$USER"
           sudo mkdir -p /etc/systemd/system/user@.service.d
           sudo tee /etc/systemd/system/user@.service.d/delegate.conf >/dev/null <<'CONF'
@@ -251,7 +277,23 @@ jobs:
             exit 1
           fi
 
-          systemctl --user start homeinv-api.service
+          # `systemctl start` reports only "A dependency job for
+          # homeinv-api.service failed" — the unit that actually failed, and why,
+          # are in the journal. Both are printed here, because a smoke job whose
+          # failure names no service is a smoke job somebody re-runs rather than
+          # reads.
+          if ! systemctl --user start homeinv-api.service; then
+            echo "::error::homeinv-api did not start"
+            echo "--- failed units ---"
+            systemctl --user list-units 'homeinv-*' --failed --no-pager || true
+            echo "--- what each failed unit logged ---"
+            for unit in $(systemctl --user list-units 'homeinv-*' --failed --no-legend --plain \
+                          | awk '{print $1}'); do
+              echo "===== $unit"
+              journalctl --user -n 40 --no-pager -u "$unit" || true
+            done
+            exit 1
+          fi
 
       - name: The API becomes ready
         run: |
