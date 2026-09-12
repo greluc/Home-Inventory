@@ -12,9 +12,11 @@
 # port, the session cookie, the CSRF token and the malware scanner, which is where
 # a deployment fails while every test passes.
 #
-# It also carries the one gate no unit test can: `REQ-SEC-092` is fail-closed
+# It also carries the two gates no unit test can. `REQ-SEC-092` is fail-closed
 # scanning "verified with an EICAR test file", and EICAR needs a real ClamAV with
-# real signatures.
+# real signatures. `REQ-SEC-042` is "a test with a reference image": the stripping
+# is libvips doing it, and every test in the JVM suite replaces libvips with a stub
+# that writes a fixed string.
 set -eu
 
 BASE="${1:-http://localhost:8080}"
@@ -121,6 +123,40 @@ status=$(api GET "/api/v1/media?targetKind=ITEM&targetId=$ITEM")
 grep -q '"primaryImage":true' "$OUT" \
     || die "the first photograph is not the primary one (REQ-MED-002)"
 say "the first photograph is the one lists show"
+
+printf '\nREQ-SEC-042: the photograph keeps no EXIF, and no GPS\n'
+# A JPEG carrying an EXIF block with a GPS position and a marker string in
+# ImageDescription. The marker is what makes the assertion precise: if it comes
+# back, the metadata came back with it, and "no GPS" would be a claim rather than
+# a result. Built once and inlined, because a repository holding a real
+# photograph with real coordinates has a privacy problem of its own.
+exif=$(mktemp)
+printf '%s' '/9j/4QB4RXhpZgAASUkqAAgAAAACAA4BAgAUAAAARAAAACWIBAABAAAAJgAAAAAAAAACAAEAAgACAAAA
+TgAAAAIABQADAAAAWAAAAAAAAABIT01FSU5WLUVYSUYtTUFSS0VSADAAAAABAAAACAAAAAEAAADS
+BAAAZAAAAP/gABBKRklGAAEBAQBgAGAAAP/bAEMACAYGBwYFCAcHBwkJCAoMFA0MCwsMGRITDxQd
+Gh8eHRocHCAkLicgIiwjHBwoNyksMDE0NDQfJzk9ODI8LjM0Mv/AAAsIAAEAAQEBEQD/xAAUAAEA
+AAAAAAAAAAAAAAAAAAAJ/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAAPwAqn//Z' \
+    | tr -d '\n' | base64 -d > "$exif"
+grep -q 'HOMEINV-EXIF-MARKER' "$exif" || die "the reference image carries no EXIF marker to look for"
+
+status=$(api POST "/api/v1/media?targetKind=ITEM&targetId=$ITEM" --form "file=@$exif")
+rm -f "$exif"
+[ "$status" = "201" ] || die "the reference upload answered $status"
+
+# Fetched through the media hostname, which is where every stored byte is served
+# from (REQ-MED-010). `--resolve` because `media.localhost` is a name the runner
+# does not resolve and the deployment does not need it to.
+url=$(sed -n 's/.*"full"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$OUT" | head -n 1)
+[ -n "$url" ] || die "the stored image came back with no signed URL"
+stored=$(mktemp)
+curl --silent --show-error --output "$stored" \
+    --resolve "media.localhost:8080:127.0.0.1" "$url" || die "the signed URL could not be fetched"
+if grep -q 'HOMEINV-EXIF-MARKER' "$stored"; then
+    rm -f "$stored"
+    die "the stored image still carries its EXIF block, GPS position included"
+fi
+rm -f "$stored"
+say "stored without its metadata"
 
 printf '\nFinding it again\n'
 status=$(api GET "/api/v1/search?q=drill&language=en&limit=10")
