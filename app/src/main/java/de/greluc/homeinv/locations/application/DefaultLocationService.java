@@ -11,6 +11,7 @@ import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.domain.Location;
 import de.greluc.homeinv.locations.infrastructure.LocationRepository;
 import de.greluc.homeinv.locations.infrastructure.LocationTreeQueries;
+import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import java.time.Clock;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +46,20 @@ public class DefaultLocationService implements LocationService {
   private final LocationRepository locations;
   private final LocationTreeQueries tree;
   private final ItemLocationUsage itemUsage;
+  private final CursorCodec cursors;
   private final Clock clock;
+
+  /** The cap REQ-NFR-010 puts on every page of every collection. */
+  private static final int MAX_PAGE = 200;
+
+  /**
+   * What a location cursor is bound to.
+   *
+   * <p>A constant, because this listing takes no filter: there is one listing per tenant, and the
+   * tenant is not part of the fingerprint because a cursor is worthless in another tenant's session
+   * — the query it resumes is re-authorised and row-level security answers it.
+   */
+  private static final String CURSOR_FINGERPRINT = "locations";
 
   /**
    * Creates a location, as a root or below an existing one.
@@ -162,6 +177,37 @@ public class DefaultLocationService implements LocationService {
     UUID tenantId = TenantContext.require();
     locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
     return tree.subtreeIds(tenantId, id);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public LocationPage list(String cursor, int limit) {
+    UUID tenantId = TenantContext.require();
+    int size = Math.clamp(limit, 1, MAX_PAGE);
+
+    List<Location> rows;
+    if (cursor == null || cursor.isBlank()) {
+      rows = locations.findLive(tenantId, PageRequest.of(0, size));
+    } else {
+      // Throws when the cursor was tampered with or belongs to another listing.
+      CursorCodec.Position after = cursors.decode(cursor, CURSOR_FINGERPRINT);
+      rows =
+          locations.findLiveAfter(
+              tenantId, after.createdAt(), after.id(), PageRequest.of(0, size));
+    }
+
+    List<LocationView> views = rows.stream().map(this::toView).toList();
+
+    // A cursor only when the page was full: a short page is the last one, and a
+    // cursor for it would cost a client a request to discover that.
+    String nextCursor = null;
+    if (rows.size() == size) {
+      Location last = rows.get(rows.size() - 1);
+      nextCursor =
+          cursors.encode(
+              new CursorCodec.Position(last.getCreatedAt(), last.getId()), CURSOR_FINGERPRINT);
+    }
+    return new LocationPage(views, nextCursor);
   }
 
   /**

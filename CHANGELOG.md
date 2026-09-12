@@ -21,6 +21,11 @@ commit".
 
 ### Added
 
+- **A client can find out where things go.** The locations of a tenant and the
+  thirteen kinds of place they can be are now readable through the API, so
+  somewhere to put an item can be offered and chosen. Without them a physical
+  item could not be created through the API at all (**REST API**).
+
 - **A photo you upload is the one lists show.** The first image attached to an
   item or a location becomes its primary image without being asked; it stays
   selectable (**REST API**).

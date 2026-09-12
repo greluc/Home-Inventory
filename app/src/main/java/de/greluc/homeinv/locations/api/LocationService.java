@@ -70,4 +70,31 @@ public interface LocationService {
    * @param name the name; must not be blank
    */
   record CreateLocationCommand(UUID id, UUID categoryId, UUID parentId, String name) {}
+
+  /**
+   * One page of the tenant's locations, oldest first.
+   *
+   * <p>The whole tree rather than one level: a client building a picker needs the shape, and a
+   * household's tree is tens of rows, not thousands. It is paged regardless, because
+   * {@code REQ-NFR-010} admits no endpoint that loads a collection without a bound — and because a
+   * warehouse is a household with four more digits.
+   *
+   * <p>Ordered by creation and not by path. A keyset cursor needs an order that does not change
+   * under the client's feet, and renaming a location changes its label and therefore its place in a
+   * path ordering. Each row carries {@code parentId} and {@code ancestors}, which is what a tree is
+   * assembled from.
+   *
+   * @param cursor an opaque cursor from a previous page, or {@code null} for the first
+   * @param limit how many at most; capped at 200
+   * @return the page and a cursor for the next one
+   */
+  LocationPage list(String cursor, int limit);
+
+  /**
+   * One page of locations.
+   *
+   * @param items the locations on this page
+   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
+   */
+  record LocationPage(List<LocationView> items, String nextCursor) {}
 }

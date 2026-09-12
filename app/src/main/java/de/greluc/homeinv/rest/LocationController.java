@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.catalog.api.LocationCategories;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LocationController {
 
   private final LocationService locations;
+  private final LocationCategories categories;
   private final SearchService search;
 
   /**
@@ -67,6 +69,49 @@ public class LocationController {
                 request.id(), request.categoryId(), request.parentId(), request.name()),
             user.userId());
     return ResponseEntity.created(URI.create("/api/v1/locations/" + view.id())).body(view);
+  }
+
+  /**
+   * One page of the tenant's locations, oldest first.
+   *
+   * <p>The whole tree rather than one level. A client building a picker needs the shape, and each
+   * row carries its parent and its readable path, which is what a tree is assembled from.
+   *
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.LOCATION_READ)
+  @CanFail(ProblemType.MALFORMED_REQUEST)
+  public LocationService.LocationPage listLocations(
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return locations.list(cursor, limit);
+  }
+
+  /**
+   * One page of the kinds of place a location can be.
+   *
+   * <p>Thirteen shipped keys at stage 0 (REQ-CORE-042), the same for every tenant. The client
+   * translates the key and sorts by the result: they are interface text, interface text lives in a
+   * resource bundle (REQ-NFR-032), and only the client knows what order the reader's language puts
+   * thirteen words in.
+   *
+   * <p>Under {@code /api/v1/locations/categories} rather than at the top level, because that is what
+   * they are for — a category with no location to put it on is not a thing this API offers.
+   *
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(value = "/categories", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.LOCATION_READ)
+  @CanFail(ProblemType.MALFORMED_REQUEST)
+  public LocationCategories.LocationCategoryPage listLocationCategories(
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return categories.list(cursor, limit);
   }
 
   /**

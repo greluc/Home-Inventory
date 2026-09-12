@@ -7,6 +7,8 @@ package de.greluc.homeinv;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.greluc.homeinv.catalog.api.LocationCategoryView;
+import de.greluc.homeinv.catalog.api.LocationCategories;
 import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.locations.api.LocationView;
@@ -17,6 +19,7 @@ import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class LocationTreeIT extends AbstractIntegrationTest {
 
   @Autowired private LocationService locationService;
+  @Autowired private LocationCategories locationCategories;
   @Autowired private TenantProvisioningService provisioning;
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
@@ -187,6 +191,94 @@ class LocationTreeIT extends AbstractIntegrationTest {
    * @param tenantId the tenant to act as
    * @param body the work
    */
+  @Test
+  @DisplayName("is listable, so a client can offer somewhere to put an item")
+  void theTreeIsListable() {
+    Tenant tenant = newTenant("listing@example.org");
+    UUID category = inOwnTransaction(tenant.tenantId(), () -> anyCategory(tenant.tenantId()));
+
+    LocationView building =
+        inOwnTransaction(
+            tenant.tenantId(), () -> create(category, null, "Building", tenant.userId()));
+    LocationView room =
+        inOwnTransaction(
+            tenant.tenantId(), () -> create(category, building.id(), "Room", tenant.userId()));
+    inOwnTransaction(tenant.tenantId(), () -> create(category, room.id(), "Shelf", tenant.userId()));
+
+    LocationService.LocationPage page =
+        inOwnTransaction(tenant.tenantId(), () -> locationService.list(null, 50));
+
+    assertThat(page.items()).hasSize(3);
+    assertThat(page.nextCursor()).isNull();
+    // Each row carries what a tree is assembled from: the parent, and the
+    // readable path a picker shows so that two shelves called "Shelf" are
+    // distinguishable.
+    LocationView shelf = page.items().get(2);
+    assertThat(shelf.parentId()).isEqualTo(room.id());
+    assertThat(shelf.ancestors()).containsExactly("Building", "Room", "Shelf");
+  }
+
+  @Test
+  @DisplayName("is paged, and the pages do not overlap (REQ-NFR-010)")
+  void theListingIsPaged() {
+    Tenant tenant = newTenant("listing-paged@example.org");
+    UUID category = inOwnTransaction(tenant.tenantId(), () -> anyCategory(tenant.tenantId()));
+    for (int index = 0; index < 5; index++) {
+      String name = "Room " + index;
+      inOwnTransaction(tenant.tenantId(), () -> create(category, null, name, tenant.userId()));
+    }
+
+    LocationService.LocationPage first =
+        inOwnTransaction(tenant.tenantId(), () -> locationService.list(null, 2));
+    LocationService.LocationPage second =
+        inOwnTransaction(tenant.tenantId(), () -> locationService.list(first.nextCursor(), 2));
+    LocationService.LocationPage third =
+        inOwnTransaction(tenant.tenantId(), () -> locationService.list(second.nextCursor(), 2));
+
+    assertThat(first.items()).hasSize(2);
+    assertThat(second.items()).hasSize(2);
+    assertThat(third.items()).hasSize(1);
+    assertThat(third.nextCursor()).isNull();
+
+    List<UUID> seen = new java.util.ArrayList<>();
+    first.items().forEach(view -> seen.add(view.id()));
+    second.items().forEach(view -> seen.add(view.id()));
+    third.items().forEach(view -> seen.add(view.id()));
+    assertThat(seen).doesNotHaveDuplicates().hasSize(5);
+  }
+
+  @Test
+  @DisplayName("offers the shipped categories, or nothing could be created at all")
+  void theShippedCategoriesAreReadable() {
+    Tenant tenant = newTenant("categories@example.org");
+
+    LocationCategories.LocationCategoryPage page =
+        inOwnTransaction(tenant.tenantId(), () -> locationCategories.list(null, 50));
+
+    // The thirteen REQ-CORE-042 lists, by key. No assertion about their order:
+    // they are written in one transaction and share a timestamp, so the keyset
+    // tiebreaker decides, and the client sorts thirteen translated words in the
+    // reader's language anyway.
+    assertThat(page.items().stream().map(LocationCategoryView::key))
+        .containsExactlyInAnyOrder(
+            "building",
+            "floor",
+            "room",
+            "furniture",
+            "shelf",
+            "compartment",
+            "drawer",
+            "box",
+            "moving-box",
+            "vehicle",
+            "warehouse",
+            "outdoor-storage",
+            "locker");
+    // Every shipped category is stationary: mobile locations are stage 2, and a
+    // category claiming otherwise before anything honours it would be a lie.
+    assertThat(page.items()).noneMatch(LocationCategoryView::mobile);
+  }
+
   private void inTenantTransaction(UUID tenantId, Runnable body) {
     TenantContext.runAs(tenantId, () -> transactions.executeWithoutResult(status -> body.run()));
   }
