@@ -18,6 +18,49 @@ import { ApiError, api, type Media } from "./api";
  * none until the malware scan says clean (REQ-MED-013) — so it is shown as a
  * placeholder rather than as a broken image.
  */
+/**
+ * How long to wait for a verdict before letting the placeholder stand.
+ *
+ * Sixty half-second polls. ClamAV is the slow part — a cold container loads a
+ * gigabyte of signatures before it answers anything — and after thirty seconds it
+ * is friendlier to give the user their page back than to keep a spinner running;
+ * the photograph appears the next time they open the item.
+ */
+const SCAN_POLLS = 60;
+const SCAN_POLL_MS = 500;
+
+/**
+ * Waits until the malware scan has reached a verdict, or stops waiting.
+ *
+ * Resolves when the file is retrievable, and also when the polls run out — in
+ * that case nothing is wrong, the answer has just not arrived yet. Rejects with
+ * the `ApiError` when the scanner refused the file (`422`), which is the one
+ * outcome the user has to be told about: an infected upload is detached from the
+ * item and would otherwise simply not appear.
+ *
+ * Written as a chain rather than a loop with `await` in it, which is what a poll
+ * is and what the linter rightly objects to seeing in a loop.
+ *
+ * @param mediaObjectId the file the upload accepted
+ * @param attemptsLeft how many polls remain
+ */
+function settled(mediaObjectId: string, attemptsLeft: number = SCAN_POLLS): Promise<void> {
+  return api.mediaObject(mediaObjectId).then(
+    () => undefined,
+    (cause: unknown) => {
+      if (!(cause instanceof ApiError) || cause.status !== 503) {
+        throw cause;
+      }
+      if (attemptsLeft <= 0) {
+        return undefined;
+      }
+      return new Promise<void>((resume) => setTimeout(resume, SCAN_POLL_MS)).then(() =>
+        settled(mediaObjectId, attemptsLeft - 1),
+      );
+    },
+  );
+}
+
 export function ItemPhotos({
   itemId,
   itemName,
@@ -49,7 +92,13 @@ export function ItemPhotos({
   async function upload(file: File): Promise<void> {
     setBusy(true);
     try {
-      await api.uploadMedia(file, "ITEM", itemId);
+      const accepted = await api.uploadMedia(file, "ITEM", itemId);
+      // The upload is answered before the malware scan has run, so this waits for
+      // the verdict rather than showing a permanent placeholder: the scan happens
+      // in the worker and the file is not retrievable until it has cleared it.
+      // A refusal is told to the user here, because an infected file is detached
+      // from the item and would otherwise simply not appear.
+      await settled(accepted.id);
       await reload();
     } catch (cause) {
       onError(cause instanceof ApiError ? cause.detail : t("media.uploadFailed"));

@@ -47,19 +47,19 @@ public class VipsImageProcessor implements ImageProcessor {
    */
   private static final long TIMEOUT_SECONDS = 60;
 
-  private final String vips;
+  private final String vipsheader;
   private final String vipsthumbnail;
 
   /**
    * Creates the processor.
    *
-   * @param vips the {@code vips} executable, absolute in the container image
+   * @param vipsheader the {@code vipsheader} executable, on the path in the container image
    * @param vipsthumbnail the {@code vipsthumbnail} executable
    */
   public VipsImageProcessor(
-      @Value("${homeinv.media.vips-binary:vips}") String vips,
+      @Value("${homeinv.media.vipsheader-binary:vipsheader}") String vipsheader,
       @Value("${homeinv.media.vipsthumbnail-binary:vipsthumbnail}") String vipsthumbnail) {
-    this.vips = vips;
+    this.vipsheader = vipsheader;
     this.vipsthumbnail = vipsthumbnail;
   }
 
@@ -68,13 +68,15 @@ public class VipsImageProcessor implements ImageProcessor {
     // Header only: no pixels are decoded, which is the entire point. The limit
     // that protects against a decompression bomb has to be checked before the
     // bitmap it would allocate exists (REQ-SEC-040).
-    String width = run(List.of(vips, "header", "-f", "width", source.toString()));
-    String height = run(List.of(vips, "header", "-f", "height", source.toString()));
-    try {
-      return new Dimensions(Integer.parseInt(width.trim()), Integer.parseInt(height.trim()));
-    } catch (NumberFormatException notAnImage) {
-      throw new ImageProcessingException("Could not read the dimensions of " + source, notAnImage);
-    }
+    //
+    // `vipsheader`, not `vips header`. `vips` dispatches libvips OPERATIONS and
+    // there is no operation called `header`, so the latter exits 1 with `unknown
+    // action "header"` and every image upload answers 500 — which is what it did
+    // until 2026-09-12, found by running the journey suite against the stack. The
+    // JVM tests did not see it: they stub `ImageProcessor` rather than libvips.
+    String width = run(List.of(vipsheader, "-f", "width", source.toString()));
+    String height = run(List.of(vipsheader, "-f", "height", source.toString()));
+    return new Dimensions(number(width, source), number(height, source));
   }
 
   @Override
@@ -86,11 +88,38 @@ public class VipsImageProcessor implements ImageProcessor {
     // (REQ-MED-006). It is the default in recent libvips and stated anyway,
     // because a privacy guarantee that depends on a default is a guarantee that
     // changes when the default does.
-    String suffix =
+    //
+    // The OPTIONS only. libvips takes the output format from the file name's
+    // extension and the options from the brackets after it, so appending a second
+    // extension here writes `…​.avif.avif` — a file beside the one the caller is
+    // holding, leaving that one empty and the next `probe` reporting "not a known
+    // file format". That is what this did until 2026-09-12; the missing AVIF
+    // encoder failed one step earlier and hid it, and every JVM test stubs libvips.
+    String extension =
         switch (format) {
-          case AVIF -> ".avif[Q=60,strip=true]";
-          case WEBP -> ".webp[Q=80,strip=true]";
+          case AVIF -> ".avif";
+          case WEBP -> ".webp";
         };
+    String options =
+        switch (format) {
+          case AVIF -> "[Q=60,strip=true]";
+          case WEBP -> "[Q=80,strip=true]";
+        };
+
+    // The caller names the file, libvips reads the format off that name, and this
+    // method takes a format as well. If the two disagree the file is written in a
+    // format nobody asked for and everything downstream reports it as the other
+    // one, so they are required to agree rather than trusted to.
+    //
+    // `getFileName` is null for a root path, which is not a file anything can be
+    // written to either — so it fails here rather than being dereferenced.
+    Path name = target.getFileName();
+    if (name == null || !name.toString().endsWith(extension)) {
+      throw new ImageProcessingException(
+          "The target " + target + " does not end in " + extension
+              + ", which is the extension libvips would take the format from",
+          null);
+    }
 
     run(
         List.of(
@@ -99,9 +128,34 @@ public class VipsImageProcessor implements ImageProcessor {
             "--size",
             maxEdge + "x" + maxEdge + ">",
             "-o",
-            target.toAbsolutePath() + suffix));
+            target.toAbsolutePath() + options));
 
     return probe(target);
+  }
+
+  /**
+   * Picks the number out of what {@code vipsheader} printed.
+   *
+   * <p>{@link #run} merges stderr into stdout on purpose, so that a failure carries its own
+   * explanation — and libvips writes warnings there on perfectly successful reads. A real AVIF
+   * written by this very class produces
+   * {@code (vipsheader:1135): VIPS-WARNING **: heifload: ignoring nclx profile} above the number,
+   * and parsing the whole output as an integer then fails on a file that is completely fine. It did,
+   * for every image upload, until 2026-09-12.
+   *
+   * @param output everything the command printed, warnings included
+   * @param source the file, for the message
+   * @return the single line that is a number
+   * @throws ImageProcessingException when no line is one, which is what a non-image looks like
+   */
+  private static int number(String output, Path source) {
+    for (String line : output.split("\\R")) {
+      String candidate = line.strip();
+      if (!candidate.isEmpty() && candidate.chars().allMatch(Character::isDigit)) {
+        return Integer.parseInt(candidate);
+      }
+    }
+    throw new ImageProcessingException("Could not read the dimensions of " + source, null);
   }
 
   /**

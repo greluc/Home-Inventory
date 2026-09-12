@@ -9,11 +9,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.greluc.homeinv.media.api.BlobStore;
 import de.greluc.homeinv.media.api.ImageProcessor;
-import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.platform.PayloadTooLargeException;
-import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
-import de.greluc.homeinv.media.api.VirusScanner;
 import de.greluc.homeinv.media.application.UploadPipeline;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -34,9 +31,15 @@ import org.springframework.test.util.ReflectionTestUtils;
  * Proves the upload pipeline refuses what it must, in the order it must.
  *
  * <p>Hand-written stand-ins rather than a mocking framework, and not out of preference: each one
- * <em>counts</em> what reached it, which is how the ordering assertions below are made. "The scanner
- * was never called" is the assertion that proves an oversized file was refused before it could cost
- * a scan, and a mock that merely records calls would express that less clearly than a counter does.
+ * <em>counts</em> what reached it, which is how the ordering assertions below are made. "Nothing was
+ * decoded and nothing was stored" is the assertion that proves an oversized file was refused before
+ * it could cost anything, and a mock that merely records calls would express that less clearly than
+ * a counter does.
+ *
+ * <p><b>No scanner here any more.</b> Since ADR-0054 the scan runs in the {@code worker}, on the
+ * message the upload publishes — {@code MediaScanIT} covers it. What this class still owns is the
+ * ordering of the checks that DO happen in the request, and the guarantee that for an image the
+ * bytes reaching the store are the re-encoding and never the ones that arrived.
  *
  * <p>No container: none of this needs one. The libvips and ClamAV adapters are exercised in CI
  * against the real services (O30); what is under test here is the logic that decides whether they
@@ -47,17 +50,15 @@ class UploadPipelineTest {
 
   private static final UUID TENANT = UUID.randomUUID();
 
-  private CountingScanner scanner;
   private CountingProcessor processor;
   private InMemoryBlobStore blobs;
   private UploadPipeline pipeline;
 
   @BeforeEach
   void setUp() {
-    scanner = new CountingScanner(true, null);
     processor = new CountingProcessor(new ImageProcessor.Dimensions(800, 600));
     blobs = new InMemoryBlobStore();
-    pipeline = new UploadPipeline(blobs, scanner, processor);
+    pipeline = new UploadPipeline(blobs, processor);
     // The @Value fields are not injected outside a context.
     ReflectionTestUtils.setField(pipeline, "maxBytes", 1024L);
     ReflectionTestUtils.setField(pipeline, "maxPixels", 1_000_000L);
@@ -100,15 +101,15 @@ class UploadPipelineTest {
   }
 
   @Test
-  @DisplayName("refuses an oversized upload before it costs a scan")
-  void refusesOversizedBeforeScanning() {
+  @DisplayName("refuses an oversized upload before it costs a decode")
+  void refusesOversizedBeforeDecoding() {
     assertThatThrownBy(() -> pipeline.accept(TENANT, new ByteArrayInputStream(jpeg(5000))))
         .isInstanceOf(PayloadTooLargeException.class);
 
     // REQ-SEC-037 says the limit is enforced before reading, which means the
-    // expensive work must not have happened. A scan of a refused upload is work
-    // an attacker can make us do by sending large files.
-    assertThat(scanner.calls).hasValue(0);
+    // expensive work must not have happened. A decode of a refused upload is
+    // work an attacker can make us do by sending large files.
+    assertThat(processor.probes).hasValue(0);
     assertThat(blobs.stored).isEmpty();
   }
 
@@ -126,48 +127,17 @@ class UploadPipelineTest {
     // the allocation it was meant to prevent.
     assertThat(processor.probes).hasValue(1);
     assertThat(processor.derivations).hasValue(0);
-    assertThat(scanner.calls).hasValue(0);
+    assertThat(blobs.stored).isEmpty();
   }
 
   @Test
-  @DisplayName("refuses a type that is not on the allowlist, without scanning it")
+  @DisplayName("refuses a type that is not on the allowlist, without storing it")
   void refusesDisallowedType() {
     byte[] svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script/></svg>   ".getBytes(StandardCharsets.UTF_8);
 
     assertThatThrownBy(() -> pipeline.accept(TENANT, new ByteArrayInputStream(svg)))
         .isInstanceOf(UnsupportedMediaTypeException.class);
 
-    assertThat(scanner.calls).hasValue(0);
-    assertThat(blobs.stored).isEmpty();
-  }
-
-  @Test
-  @DisplayName("discards an infected upload instead of storing it")
-  void discardsInfected() {
-    scanner = new CountingScanner(false, "Eicar-Test-Signature");
-    pipeline = new UploadPipeline(blobs, scanner, processor);
-    ReflectionTestUtils.setField(pipeline, "maxBytes", 1024L);
-    ReflectionTestUtils.setField(pipeline, "maxPixels", 1_000_000L);
-
-    assertThatThrownBy(() -> pipeline.accept(TENANT, new ByteArrayInputStream(jpeg(200))))
-        .isInstanceOf(MalwareDetectedException.class);
-
-    // The decisive assertion: nothing reached the store. An infected file in the
-    // store is a file somebody will later serve.
-    assertThat(blobs.stored).isEmpty();
-  }
-
-  @Test
-  @DisplayName("refuses the upload when the scanner cannot be reached")
-  void failsClosedWhenTheScannerIsDown() {
-    pipeline = new UploadPipeline(blobs, new UnavailableScanner(), processor);
-    ReflectionTestUtils.setField(pipeline, "maxBytes", 1024L);
-    ReflectionTestUtils.setField(pipeline, "maxPixels", 1_000_000L);
-
-    // ADR-0024: mandatory in every profile. The tempting alternative during an
-    // outage - accept now, scan later - means an unscanned file in the store.
-    assertThatThrownBy(() -> pipeline.accept(TENANT, new ByteArrayInputStream(jpeg(200))))
-        .isInstanceOf(ScannerUnavailableException.class);
     assertThat(blobs.stored).isEmpty();
   }
 
@@ -218,32 +188,6 @@ class UploadPipelineTest {
       b[i] = (byte) (i % 251);
     }
     return b;
-  }
-
-  /** Records how often it was asked, so "was never called" can be asserted. */
-  private static final class CountingScanner implements VirusScanner {
-    private final AtomicInteger calls = new AtomicInteger();
-    private final boolean clean;
-    private final String signature;
-
-    CountingScanner(boolean clean, String signature) {
-      this.clean = clean;
-      this.signature = signature;
-    }
-
-    @Override
-    public Verdict scan(InputStream content) {
-      calls.incrementAndGet();
-      return new Verdict(clean, signature);
-    }
-  }
-
-  /** Stands in for a scanner that is down. */
-  private static final class UnavailableScanner implements VirusScanner {
-    @Override
-    public Verdict scan(InputStream content) {
-      throw new ScannerUnavailableException("no route to the scanner", null);
-    }
   }
 
   /** Counts probes and derivations separately, which is what the ordering test needs. */

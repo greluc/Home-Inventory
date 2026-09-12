@@ -73,6 +73,38 @@ public interface AttachmentRepository extends JpaRepository<Attachment, UUID> {
       @Param("targetId") UUID targetId);
 
   /**
+   * Whether anything this file hangs on shows it first.
+   *
+   * <p>For the single-object view, which has no target to ask about. The same blob may hang on two
+   * things and be the primary image of one of them, so the question this answers is "of at least
+   * one", which is the only reading available without a target.
+   *
+   * @param tenantId the tenant
+   * @param mediaObjectId the file
+   * @return {@code true} when at least one live attachment of it is marked primary
+   */
+  @Query("select count(a) > 0 from Attachment a where a.tenantId = :tenantId "
+      + "and a.mediaObjectId = :mediaObjectId and a.primaryImage = true and a.deletedAt is null")
+  boolean isPrimaryAnywhere(@Param("tenantId") UUID tenantId,
+      @Param("mediaObjectId") UUID mediaObjectId);
+
+  /**
+   * Every live attachment of one file, whatever it hangs on.
+   *
+   * <p>For the scanner. A file the scan refused hangs on whatever the upload attached it to, and
+   * since the upload is answered before the verdict (ADR-0054) it may already be the primary image
+   * of an item — a list would then show, first, a picture whose bytes have been deleted.
+   *
+   * @param tenantId the tenant
+   * @param mediaObjectId the file
+   * @return its live attachments
+   */
+  @Query("select a from Attachment a where a.tenantId = :tenantId "
+      + "and a.mediaObjectId = :mediaObjectId and a.deletedAt is null")
+  List<Attachment> findLiveOf(@Param("tenantId") UUID tenantId,
+      @Param("mediaObjectId") UUID mediaObjectId);
+
+  /**
    * One live attachment of a file to a target.
    *
    * @param tenantId the tenant

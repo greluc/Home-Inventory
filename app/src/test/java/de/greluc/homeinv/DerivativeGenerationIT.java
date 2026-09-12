@@ -176,10 +176,11 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
     /**
      * Replaces the ClamAV adapter.
      *
-     * <p>The scan is fail-closed and there is no scanner here, which is the design working: without
-     * this the upload is refused before anything is stored. That behaviour has its own tests and a
-     * container in the smoke suite; requiring a 1 GB signature database on every machine that runs
-     * this one test would buy nothing it proves.
+     * <p>Without this the worker reaches no verdict and never derives anything, because derivation
+     * happens only after a clean scan (ADR-0054) — so this stub is what lets the test reach the
+     * behaviour it is about. The scan itself has {@code MediaScanIT} and a real container in the
+     * smoke suite; requiring a 1 GB signature database on every machine that runs this one test
+     * would buy nothing it proves.
      *
      * @return a scanner that finds nothing
      */

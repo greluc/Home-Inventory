@@ -89,12 +89,19 @@ sequenceDiagram
     end
 
     MQ->>W: MediaUploaded
-    W->>IP: malware scan, re-encode, strip EXIF
-    W->>IP: thumb 200, preview 1024, full 4096
+    W->>IP: malware scan → CLEAN, INFECTED or no verdict
+    W->>IP: thumb 200, preview 1024
     W->>PB: PUT derivatives
     W->>MQ: MediaVariantsReady
     MQ-->>C: SSE → the view refreshes itself
 ```
+
+*The re-encode and the EXIF stripping are **not** in the worker, though an earlier
+version of this diagram put them there: `full` is produced in the request, because
+until it exists the only bytes on hand are the ones that must not be stored
+([ADR-0052](../adr/0052-one-stored-image-format.md)). The scan is the worker's
+([ADR-0054](../adr/0054-the-scan-is-asynchronous.md)), and `thumb` and `preview`
+are too ([ADR-0051](../adr/0051-broker-in-stage-0.md)).*
 
 **Demonstrates:** content addressing makes repeated uploads (offline catch-up,
 network drop) free and idempotent — **within the tenant**

@@ -17,7 +17,7 @@
 
 ## What it means
 
-The malware scanner is unreachable or timed out. The upload is rejected and the blob stays `PENDING_SCAN` and unretrievable until a catch-up run clears it.
+There is no verdict for this object yet — it is `PENDING_SCAN`, or the scanner could not be reached and it is `SCAN_FAILED`. Either way it is unretrievable, and the retry queue will ask again (ADR-0054).
 
 ## Notes
 

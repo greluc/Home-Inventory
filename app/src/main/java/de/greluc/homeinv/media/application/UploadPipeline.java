@@ -6,10 +6,8 @@ package de.greluc.homeinv.media.application;
 
 import de.greluc.homeinv.media.api.BlobStore;
 import de.greluc.homeinv.media.api.ImageProcessor;
-import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.MediaTypeDetector;
 import de.greluc.homeinv.platform.PayloadTooLargeException;
-import de.greluc.homeinv.media.api.VirusScanner;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,14 +41,28 @@ import org.springframework.stereotype.Component;
  *   <li><b>Dimensions, from the header only.</b> {@code REQ-SEC-040}: a decompression bomb is a
  *       small file that becomes an enormous bitmap, so the pixel count is read from the header and
  *       refused before anything decodes it. Checking after decoding is checking after the damage.
- *   <li><b>Scan, before anything is stored under its final name.</b> {@code REQ-MED-013} and
- *       ADR-0024 make it mandatory and fail-closed.
- *   <li><b>Store.</b> Only then, and only bytes that have a verdict.
+ *   <li><b>Re-encode, for an image.</b> {@code REQ-SEC-041}: what gets stored is the re-encoding and
+ *       never the bytes that arrived, which is also what destroys an embedded payload.
+ *   <li><b>Store</b>, in {@code PENDING_SCAN}, which is not retrievable.
  * </ol>
  *
- * <p>The upload is spooled to a temporary file rather than held in memory. A 25 MB limit times a
- * few concurrent uploads is a heap, and the file is needed twice anyway — once for the scanner and
- * once for the hash.
+ * <h2>The scan is NOT here</h2>
+ *
+ * <p>It runs in the {@code worker}, on the message this upload publishes — ADR-0024's "the scan runs
+ * in the worker, not in the request path", which this class contradicted until 2026-09-12 by calling
+ * {@link de.greluc.homeinv.media.api.VirusScanner} inline. The contradiction was not academic:
+ * {@code clamd} sits on the {@code scanner} segment, which {@code api} is deliberately not a member
+ * of (06 §6.4), so every upload through the generated deployment answered {@code 503}.
+ *
+ * <p>What that costs is the old guarantee that nothing unscanned is ever stored. What replaces it is
+ * narrower and still sufficient: nothing unscanned is ever <em>retrievable</em> — no URL is minted
+ * for an object that is not {@code CLEAN} ({@code MediaObject.isRetrievable}), and for an image the
+ * stored bytes are the re-encoding rather than what arrived, so a polyglot payload does not survive
+ * being stored in the first place.
+ *
+ * <p>The upload is spooled to a temporary file rather than held in memory. A 25 MB limit times a few
+ * concurrent uploads is a heap, and the file is needed twice anyway — once to probe and once for the
+ * hash.
  */
 @Component
 @Slf4j
@@ -58,7 +70,6 @@ import org.springframework.stereotype.Component;
 public class UploadPipeline {
 
   private final BlobStore blobs;
-  private final VirusScanner scanner;
   private final ImageProcessor images;
 
   /** REQ-SEC-037: 25 MB by default. */
@@ -88,8 +99,6 @@ public class UploadPipeline {
    *     the pixel limit
    * @throws de.greluc.homeinv.media.api.UnsupportedMediaTypeException when the detected type is not
    *     on the allowlist
-   * @throws MalwareDetectedException when the scanner found something
-   * @throws de.greluc.homeinv.media.api.ScannerUnavailableException when no verdict could be reached
    * @throws IOException when spooling or storing fails
    */
   public Stored accept(UUID tenantId, InputStream content) throws IOException {
@@ -115,18 +124,6 @@ public class UploadPipeline {
         }
         width = dimensions.width();
         height = dimensions.height();
-      }
-
-      // Fail-closed: an unreachable scanner raises, and the upload is refused
-      // rather than accepted unscanned (ADR-0024).
-      try (InputStream forScanner = Files.newInputStream(spool)) {
-        VirusScanner.Verdict verdict = scanner.scan(forScanner);
-        if (!verdict.clean()) {
-          // The bytes are never stored. An infected file that reaches the store
-          // is an infected file somebody will later serve.
-          log.warn("Discarded an upload of tenant {}: {}", tenantId, verdict.signature());
-          throw new MalwareDetectedException(verdict.signature());
-        }
       }
 
       if (!detected.image()) {
@@ -157,7 +154,9 @@ public class UploadPipeline {
       //
       // This is the one derivative produced synchronously. `thumb` and `preview`
       // are the worker's (ADR-0051); `full` cannot be, because until it exists
-      // the only bytes on hand are the ones that must not be stored.
+      // the only bytes on hand are the ones that must not be stored — and after
+      // ADR-0054 that is the reason the re-encode stays here rather than joining
+      // the scan in the worker.
       Path reEncoded = Files.createTempFile("homeinv-full-", ".avif");
       try {
         ImageProcessor.Dimensions dimensions =

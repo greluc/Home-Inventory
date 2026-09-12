@@ -65,6 +65,15 @@ public enum ProblemType {
    */
   RESOURCE_EXISTS("resource-exists", HttpStatus.CONFLICT, "Resource exists"),
 
+  /**
+   * A sibling already carries the name a location was to be given.
+   *
+   * <p>Separate from {@link #RESOURCE_EXISTS}, which is about a client-chosen <em>id</em>: a
+   * client branching on the status has to be able to tell "that identifier is taken" from
+   * "that name is taken", and only one of the two is fixed by choosing a different id.
+   */
+  NAME_TAKEN("name-taken", HttpStatus.CONFLICT, "Name taken"),
+
   /** The body exceeds the JSON limit, or an upload exceeds its size or pixel limit. */
   PAYLOAD_TOO_LARGE("payload-too-large", HttpStatus.CONTENT_TOO_LARGE, "Payload too large"),
 
@@ -100,10 +109,12 @@ public enum ProblemType {
   INTERNAL_ERROR("internal-error", HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
 
   /**
-   * The malware scanner is unreachable, so the upload is refused rather than stored unscanned.
+   * The file has no verdict yet: it is {@code PENDING_SCAN}, or the scanner could not be reached and
+   * it is {@code SCAN_FAILED}. Either way it is not retrievable.
    *
-   * <p>A {@code 503} and not a {@code 422}: the upload may be fine and the system could not say so
-   * (ADR-0024).
+   * <p>A {@code 503} and not a {@code 422}: the file may be fine and the system cannot say so yet
+   * (ADR-0024). Answered by {@code GET /api/v1/media/{id}} rather than by the upload, which is
+   * answered {@code 202} before the scan runs (ADR-0054).
    */
   SCAN_UNAVAILABLE("scan-unavailable", HttpStatus.SERVICE_UNAVAILABLE, "Scan unavailable");
 

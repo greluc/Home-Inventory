@@ -18,7 +18,11 @@ import java.util.UUID;
 public interface MediaService {
 
   /**
-   * Accepts an upload, scans it, stores it and attaches it.
+   * Accepts an upload, stores it and attaches it — and does <b>not</b> scan it.
+   *
+   * <p>The scan runs in the {@code worker}, on the event this publishes (ADR-0024, ADR-0054), so
+   * what comes back is an object in {@code PENDING_SCAN} with no URLs. {@link #findOne} is where the
+   * verdict arrives. The REST adapter answers {@code 202} for exactly this reason.
    *
    * <p>One call rather than upload-then-attach, because an upload attached to nothing is an orphan
    * the reference count cannot explain, and stage 0 has no session to hold one in.
@@ -28,12 +32,33 @@ public interface MediaService {
    * @param targetId what to attach it to
    * @param primaryImage whether this becomes the image lists show (REQ-MED-002)
    * @param actor the uploader
-   * @return the stored file, with signed URLs once it is clean
+   * @return the accepted file, in {@code PENDING_SCAN} and with no URLs yet
    * @throws IOException when spooling or storing fails
    */
   MediaView upload(
       InputStream content, String targetKind, UUID targetId, boolean primaryImage, UUID actor)
       throws IOException;
+
+  /**
+   * One file of this tenant, by id — the resource an upload's {@code Location} header points at.
+   *
+   * <p>This is the "job resource with state" ADR-0024 promises the client. It exists because the
+   * upload is answered {@code 202} before the scan has run, and polling the whole attachment list to
+   * find out what became of one upload is a worse contract than asking about the upload.
+   *
+   * <p>The state is delivered as the status code rather than only in the body, so a client can
+   * branch without parsing: {@code 200} with signed URLs when clean, {@code 422} when the scanner
+   * refused it, {@code 503} while there is no verdict. That is an exception to the corpus's usual
+   * rule of answering {@code 404} for anything a caller may not see — but the caller here is inside
+   * the tenant and uploaded the file, so nothing is revealed that they did not put there.
+   *
+   * @param mediaObjectId the file
+   * @return the file, with signed URLs
+   * @throws de.greluc.homeinv.platform.NotFoundException when this tenant has no such live file
+   * @throws MalwareDetectedException when the scanner refused it (REQ-SEC-092)
+   * @throws ScannerUnavailableException when no verdict has been reached yet, or none could be
+   */
+  MediaView findOne(UUID mediaObjectId);
 
   /**
    * One page of the files attached to one thing, oldest first.

@@ -16,7 +16,9 @@ import java.util.Locale;
  * to be one thing and is another — an HTML page named {@code photo.jpg} that a browser would render
  * as a page, a script with an image extension.
  *
- * <p>The allowlist is closed (REQ-MED-003). <b>SVG is rejected</b> and that is not an oversight: SVG
+ * <p>The allowlist is closed (REQ-MED-003, REQ-SEC-039), and the type is read from the magic
+ * bytes while the file name and the declared type are discarded (REQ-SEC-038, REQ-MED-004).
+ * <b>SVG is rejected</b> and that is not an oversight: SVG
  * is XML that can carry script, so an SVG served from our own origin is a cross-site scripting
  * vector with a picture frame around it. <b>HEIC is accepted and transcoded</b>, never stored as it
  * arrived, because it is what phones produce and almost nothing else reads.

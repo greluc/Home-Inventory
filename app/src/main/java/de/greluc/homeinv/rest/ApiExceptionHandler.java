@@ -9,6 +9,7 @@ import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
@@ -105,6 +106,33 @@ public class ApiExceptionHandler {
         problem(ProblemType.RESOURCE_EXISTS, "An item with this id already exists in this tenant with different content.",
             request);
     problem.setProperty("id", exception.getId().toString());
+    return problem;
+  }
+
+  /**
+   * Answers a location whose name a sibling already has.
+   *
+   * <p>{@code 409} and not {@code 422}: a client branching on the status has to be able to tell a
+   * conflict from a bad field, which is the same reasoning {@code resource-exists} carries. The
+   * name is echoed back because the caller sent it, and the parent because "a sibling" is only
+   * meaningful with one — {@code null} among the roots, which is a fact and not an omission.
+   *
+   * @param exception the conflict, carrying the name and the parent
+   * @param request the request
+   * @return a {@code 409} problem detail naming the name
+   */
+  @ExceptionHandler(NameTakenException.class)
+  public ProblemDetail handleNameTaken(NameTakenException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.NAME_TAKEN,
+            "Another place in the same spot is already called that. Names have to be unique "
+                + "among the things in one place.",
+            request);
+    problem.setProperty("name", exception.getName());
+    if (exception.getParentId() != null) {
+      problem.setProperty("parentId", exception.getParentId().toString());
+    }
     return problem;
   }
 
@@ -210,16 +238,27 @@ public class ApiExceptionHandler {
    */
   @ExceptionHandler(MalwareDetectedException.class)
   public ProblemDetail handleMalware(MalwareDetectedException exception, HttpServletRequest request) {
-    log.warn("Upload rejected by the malware scanner: {}", exception.getSignature());
-    return problem(ProblemType.MALWARE_DETECTED, "The malware scan rejected this upload.",
+    // DEBUG and not WARN. The finding itself was logged at WARN by the worker that
+    // made it, once; this is the caller being told about it, which happens on
+    // every poll and is not a second security event.
+    log.debug("Reporting a scanner finding to a caller: {}", exception.getSignature());
+    return problem(
+        ProblemType.MALWARE_DETECTED,
+        "The malware scan found something in this file, so it was discarded and is not "
+            + "attached to anything.",
         request);
   }
 
   /**
-   * Answers an upload that could not be scanned.
+   * Answers a file that has no verdict yet.
    *
-   * <p>A {@code 503} and not a {@code 422}: the upload may be fine, the system could not say so, and
-   * the client should retry rather than conclude the file is bad (ADR-0024).
+   * <p>A {@code 503} and not a {@code 422}: the file may be perfectly good, the system has not said
+   * so yet, and the client should ask again rather than conclude it is bad (ADR-0024).
+   *
+   * <p>Since ADR-0054 this answers a {@code GET} and not the upload. The upload was accepted and
+   * is stored; what has not happened is the scan, which runs in the worker. The message says so,
+   * because "uploads are refused" — which it said until 2026-09-12 — describes behaviour this
+   * system no longer has and would send a client away with a file it has in fact kept.
    *
    * @param exception the failure
    * @param request the request
@@ -228,8 +267,14 @@ public class ApiExceptionHandler {
   @ExceptionHandler(ScannerUnavailableException.class)
   public ProblemDetail handleScannerDown(
       ScannerUnavailableException exception, HttpServletRequest request) {
-    log.error("The malware scanner is unavailable; uploads are refused", exception);
-    return problem(ProblemType.SCAN_UNAVAILABLE, "Uploads are refused while the malware scanner cannot be reached. Try again shortly.",
+    // INFO, because on this path it is ordinary: a client polling a file the
+    // worker has not reached yet gets one of these per poll. The scanner actually
+    // being unreachable is logged by the worker, which is the half that knows.
+    log.info("A caller asked for a file that has no verdict yet: {}", exception.getMessage());
+    return problem(
+        ProblemType.SCAN_UNAVAILABLE,
+        "This file has been accepted and is being checked for malware. It becomes available "
+            + "once the check has finished.",
         request);
   }
 

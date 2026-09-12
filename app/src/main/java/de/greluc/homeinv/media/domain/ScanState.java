@@ -18,6 +18,11 @@ public enum ScanState {
   CLEAN,
   /** The scanner found something. The blob is discarded and an audit entry written. */
   INFECTED,
-  /** The scanner could not reach a verdict. Not retrievable, and retryable. */
+  /**
+   * The scanner could not be reached, on every attempt the listener made. Not retrievable, and
+   * retryable: the scan-retry queue brings the event back on a fixed delay, and
+   * {@code recordVerdict} therefore accepts a transition out of this state — it is the absence of a
+   * verdict rather than one (ADR-0054).
+   */
   SCAN_FAILED
 }

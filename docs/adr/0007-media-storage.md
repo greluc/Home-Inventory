@@ -8,6 +8,13 @@
 > port, content addressing and the adapter contract test stand unchanged, and
 > `filesystem` remains a core adapter.
 >
+> **Amended by [ADR-0052](0052-one-stored-image-format.md)** — what an image *is* when it
+> reaches an adapter is now settled, and this record did not say. Every image is transcoded
+> to **AVIF** during the upload and the transcoding is what gets stored; the bytes that
+> arrived are written nowhere, and the original is **not** retained. An adapter therefore
+> stores one image format rather than five, and `REQ-MED-003`'s *"no stored blob has a HEIC
+> magic number"* becomes something the store can satisfy.
+>
 > **Amended by [ADR-0032](0032-per-tenant-blob-addressing.md)** — content addressing
 > is scoped to the tenant (`sha256/<tenantId>/<hash>`) rather than global.
 

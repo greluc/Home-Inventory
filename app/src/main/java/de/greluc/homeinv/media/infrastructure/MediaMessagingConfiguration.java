@@ -5,11 +5,14 @@
 package de.greluc.homeinv.media.infrastructure;
 
 import org.springframework.amqp.core.ExchangeBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 /**
  * The exchange media events are published to.
@@ -30,6 +33,21 @@ public class MediaMessagingConfiguration {
 
   /** The exchange named by {@code MediaObjectStored}'s {@code @Externalized} routing target. */
   public static final String EXCHANGE = "homeinv.media";
+
+  /** The routing key {@code MediaObjectStored} is published with and the scan listener binds. */
+  public static final String SCAN_ROUTING_KEY = "media-object-stored";
+
+  /** Where a scan that reached no verdict waits before it is tried again. */
+  public static final String SCAN_RETRY_QUEUE = "homeinv.media.scan-retry";
+
+  /**
+   * How long a failed scan waits before the broker hands it back.
+   *
+   * <p>Five minutes: long enough that a restarting {@code clamav} — which loads a gigabyte of
+   * signatures before it answers — is up again, and short enough that an upload is not left
+   * unretrievable for an hour over a container restart.
+   */
+  public static final int RETRY_DELAY_MS = 300_000;
 
   /**
    * JSON on the wire, in both directions.
@@ -63,5 +81,35 @@ public class MediaMessagingConfiguration {
   @Bean
   public TopicExchange mediaExchange() {
     return ExchangeBuilder.topicExchange(EXCHANGE).durable(true).build();
+  }
+
+  /**
+   * The queue a failed scan waits in before it is tried again (ADR-0054).
+   *
+   * <h2>Why the catch-up is a queue and not a scheduled sweep</h2>
+   *
+   * <p>Because a sweep cannot be written. A run that asks "which objects are {@code SCAN_FAILED}?"
+   * is a query across every tenant, and {@code homeinv_app} has no {@code BYPASSRLS} and no way to
+   * enumerate tenants — a query with no {@code app.tenant_id} returns zero rows, which is row-level
+   * security working exactly as {@code CLAUDE.md} rule 2 requires. The only place the tenant is
+   * available outside a request is the message that carried it, so the retry carries it too.
+   *
+   * <p>Nothing consumes this queue. Messages sit here for {@link #RETRY_DELAY_MS} and are then
+   * dead-lettered back onto the media exchange with the routing key the scan listener binds, which
+   * is the standard way to express a delay in a broker that has no delayed exchange of its own. The
+   * effect is a slow, bounded retry loop rather than the hot redelivery loop an unacknowledged
+   * message would produce, and the object is visibly {@code SCAN_FAILED} in between rather than
+   * indistinguishable from one that has simply not been scanned yet.
+   *
+   * @return the delay queue, declared by {@code RabbitAdmin} at startup
+   */
+  @Bean
+  @Profile("worker")
+  public Queue mediaScanRetryQueue() {
+    return QueueBuilder.durable(SCAN_RETRY_QUEUE)
+        .ttl(RETRY_DELAY_MS)
+        .deadLetterExchange(EXCHANGE)
+        .deadLetterRoutingKey(SCAN_ROUTING_KEY)
+        .build();
   }
 }

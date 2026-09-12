@@ -18,6 +18,7 @@ import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Pattern;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -65,20 +66,22 @@ public class MediaController {
    * @param targetId what to attach it to
    * @param primary whether it becomes the image lists show
    * @param user the authenticated caller
-   * @return the stored file with its signed URLs
+   * @return {@code 202} with the accepted file, its state, and a {@code Location} pointing at it
    * @throws IOException when the upload cannot be read or stored
    */
   @PostMapping(value = "/api/v1/media", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEDIA_CREATE)
-  // Redundant at run time — the method sets the same status — and not in the
-  // document, which would otherwise describe the 200 springdoc infers from the
-  // return type for an endpoint that never answers one.
-  @ResponseStatus(HttpStatus.CREATED)
+  // 202 and not 201: the file has been accepted and stored, and it is not yet a
+  // retrievable resource, because the scan runs in the worker (ADR-0024,
+  // ADR-0054). The `Location` header names the resource that will say when it
+  // is. Redundant at run time — the method sets the same status — and needed in
+  // the document, which would otherwise describe the 200 springdoc infers from
+  // the return type for an endpoint that never answers one.
+  @ResponseStatus(HttpStatus.ACCEPTED)
   @CanFail({
     ProblemType.PAYLOAD_TOO_LARGE,
     ProblemType.VALIDATION_FAILED,
-    ProblemType.MALWARE_DETECTED,
-    ProblemType.SCAN_UNAVAILABLE
+    ProblemType.UNSUPPORTED_MEDIA_TYPE
   })
   public ResponseEntity<MediaView> uploadMedia(
       @RequestParam("file") MultipartFile file,
@@ -90,8 +93,32 @@ public class MediaController {
 
     try (InputStream content = file.getInputStream()) {
       MediaView view = media.upload(content, targetKind, targetId, primary, user.userId());
-      return ResponseEntity.status(201).body(view);
+      return ResponseEntity.accepted()
+          .location(URI.create("/api/v1/media/" + view.id()))
+          .body(view);
     }
+  }
+
+  /**
+   * One file, by id — what an upload's {@code Location} header points at.
+   *
+   * <p>The resource a client polls after an upload. Its <em>status</em> carries the scan outcome so
+   * that a client can branch without parsing a body: {@code 200} with signed URLs once the scan
+   * cleared it, {@code 422} when the scanner refused it, {@code 503} while there is no verdict yet
+   * (REQ-SEC-092, REQ-MED-013).
+   *
+   * @param mediaObjectId the file
+   * @return the file with its signed URLs
+   */
+  @GetMapping(value = "/api/v1/media/{mediaObjectId}", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.MEDIA_READ)
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.MALWARE_DETECTED,
+    ProblemType.SCAN_UNAVAILABLE
+  })
+  public MediaView findMedia(@PathVariable UUID mediaObjectId) {
+    return media.findOne(mediaObjectId);
   }
 
   /**

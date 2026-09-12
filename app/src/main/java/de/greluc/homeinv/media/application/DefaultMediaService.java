@@ -5,13 +5,14 @@
 package de.greluc.homeinv.media.application;
 
 import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.MediaObjectStored;
 import de.greluc.homeinv.media.api.MediaService;
 import de.greluc.homeinv.media.api.MediaUrlSigner;
 import de.greluc.homeinv.media.api.MediaView;
+import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.domain.Attachment;
 import de.greluc.homeinv.media.domain.MediaObject;
-import de.greluc.homeinv.media.domain.ScanState;
 import de.greluc.homeinv.media.infrastructure.AttachmentRepository;
 import de.greluc.homeinv.media.infrastructure.MediaObjectRepository;
 import de.greluc.homeinv.platform.CallerContext;
@@ -42,21 +43,22 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Uploading, attaching and serving files.
  *
- * <h2>Why the scan is synchronous at stage 0</h2>
+ * <h2>The upload is answered before the scan has run</h2>
  *
- * <p>{@code REQ-MED-013} allows a blob to sit in {@code PENDING_SCAN} until a verdict arrives. The
- * scan happens in the request anyway: the caller is waiting for an answer they can act on, and
- * "uploaded, come back later to find out whether it was rejected" is a worse experience than a
- * slower upload.
+ * <p>{@code POST} returns {@code 202} with the object in {@code PENDING_SCAN} and a {@code Location}
+ * pointing at it; the scan and the derivatives both happen in {@code worker}, over the broker
+ * ADR-0051 moved to stage 0 (REQ-MED-005, REQ-MED-013, ADR-0054). The client polls that URL until it
+ * answers {@code 200}.
  *
- * <p>That is a smaller behaviour than the requirement permits, not a larger one: nothing becomes
- * retrievable without a verdict either way. The {@code PENDING_SCAN} state and its index exist
- * because a later stage may move the scan out of the request, and a state added then would be a
- * state that did not exist for everything uploaded before it.
+ * <p>This class scanned inside the request until 2026-09-12 and returned {@code 201}. It was a
+ * deliberate choice and it was wrong on the only ground that counts: ADR-0024 and 06 §6.4 say the
+ * scan runs in the worker and put {@code clamd} on the {@code scanner} segment, which {@code api} is
+ * not a member of — so every upload in the generated deployment answered {@code 503}, while every
+ * test passed against a stubbed scanner.
  *
- * <p>The <em>derivatives</em> are already asynchronous, in {@code worker}, over the broker
- * ADR-0051 moved to stage 0 for exactly that (REQ-MED-005). This paragraph said RabbitMQ was stage 1
- * until 2026-09-12, which had stopped being true.
+ * <p>Nothing became weaker. No URL is minted for an object that is not {@code CLEAN}, the serving
+ * path checks the state again, and for an image the stored bytes are the re-encoding rather than
+ * what arrived.
  */
 @Service
 @Slf4j
@@ -106,10 +108,11 @@ public class DefaultMediaService implements MediaService {
                           stored.heightPx(),
                           actor,
                           now);
-                  // The pipeline already has a clean verdict; without it nothing
-                  // would have been stored. Recording it here keeps the state
-                  // machine honest rather than letting CLEAN be a default.
-                  fresh.recordVerdict(ScanState.CLEAN, null, now);
+                  // NO verdict here. The object is born PENDING_SCAN and stays
+                  // there until the worker has asked the scanner (ADR-0054).
+                  // `MediaObject.pending` sets that state; recording CLEAN here
+                  // was what made the scan look synchronous to everything
+                  // downstream, including the tests.
                   return objects.save(fresh);
                 });
 
@@ -139,19 +142,59 @@ public class DefaultMediaService implements MediaService {
     if (object.getDerivedAt() == null) {
       // Published inside the transaction, delivered after it commits. Spring
       // Modulith writes it to `outbox.event_publication` first, so a broker that
-      // is down delays the thumbnails and loses nothing — and a transaction that
-      // rolls back publishes nothing, rather than asking a worker to derive
-      // variants of an object that does not exist (REQ-NFR-013).
+      // is down delays the SCAN and loses nothing — and a transaction that rolls
+      // back publishes nothing, rather than asking a worker to scan an object
+      // that does not exist (REQ-NFR-013).
       //
-      // Skipped for an object that already has its derivatives: a second upload
-      // of the same photo finds the first record, and asking for the same work
-      // again would be work the consumer would discard anyway.
+      // This message is now what gets the object judged at all, not merely what
+      // gets its thumbnails made. A broker outage therefore leaves uploads
+      // unretrievable rather than merely thumbnail-less, which is the fail-closed
+      // direction and is why `rabbitmq` is in every profile (ADR-0051).
+      //
+      // Skipped for an object that already has its derivatives: it also already
+      // has a verdict, since nothing is derived before one.
       events.publishEvent(
           new MediaObjectStored(tenantId, object.getId(), object.getSha256()));
     }
 
-    log.debug("Stored media {} for {} {}", object.getId(), targetKind, targetId);
+    log.debug(
+        "Accepted media {} for {} {}; it is {} until the worker has scanned it.",
+        object.getId(),
+        targetKind,
+        targetId,
+        object.getScanState());
     return toView(object, primary);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public MediaView findOne(UUID mediaObjectId) {
+    UUID tenantId = TenantContext.require();
+
+    MediaObject object =
+        objects
+            .findLive(tenantId, mediaObjectId)
+            // Another tenant's object and one that does not exist are the same
+            // answer. The query is tenant-scoped and RLS scopes it again, so
+            // this is reached for both, and deliberately says nothing about
+            // which (REQ-SEC-025).
+            .orElseThrow(() -> new NotFoundException("media", mediaObjectId));
+
+    // The verdict, as the status code. REQ-SEC-092 keeps `422` and `503` after
+    // ADR-0054 moved the scan out of the upload — they moved with it, from the
+    // POST to this GET, because that is where a client now learns the outcome.
+    switch (object.getScanState()) {
+      case INFECTED ->
+          throw new MalwareDetectedException(object.getScanVerdict());
+      case PENDING_SCAN, SCAN_FAILED ->
+          throw new ScannerUnavailableException(
+              "Media object " + mediaObjectId + " has no verdict yet", null);
+      case CLEAN -> {
+        // Falls through to the view below.
+      }
+    }
+
+    return toView(object, attachments.isPrimaryAnywhere(tenantId, mediaObjectId));
   }
 
   @Override
@@ -267,6 +310,18 @@ public class DefaultMediaService implements MediaService {
     // media endpoint, which has already verified the signature that carries both
     // (REQ-MED-010). A second check would need a session, and the whole point of a
     // signed URL is that an <img src> carries no session.
+    //
+    // The scan state IS checked, and the check is not redundant. A URL is only
+    // minted for a CLEAN object, so in a system that behaves this cannot fire —
+    // which is exactly the reason to have it: after ADR-0054 the bytes are in the
+    // store before any verdict exists, so "no URL was minted" became the only
+    // thing standing between an unjudged blob and a client. This makes it two
+    // things. The lookup is by content address and without a tenant context, so
+    // it goes through the repository's own tenant-scoped query.
+    if (objects.findByHash(tenantId, sha256).filter(MediaObject::isRetrievable).isEmpty()) {
+      // The same 404 an invalid signature gets, for the same reason.
+      throw new NotFoundException("media", null);
+    }
     return blobs.open(tenantId, sha256);
   }
 

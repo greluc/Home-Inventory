@@ -2,6 +2,13 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 
+> **Amended by [ADR-0050](0050-blobstore-service-in-rust.md):** the service is written in
+> **Rust**, not in Java. This record left the language open and weighed the cost of the
+> service against *"for a small installation, one more container"* — an argument that only
+> holds at the size the implementation turned out to have. A second JVM would have needed
+> several hundred megabytes to move bytes between a socket and a file, which is a different
+> answer to the question this ADR asked.
+>
 > **Amended by [ADR-0044](0044-internal-is-not-a-trust-boundary.md):** the service speaks
 > **gRPC over mTLS with a pinned fingerprint**, like every other implementation of the
 > same `BlobStore` contract. As first written it had no authentication at all — its access

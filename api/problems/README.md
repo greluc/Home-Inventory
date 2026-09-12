@@ -25,11 +25,12 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`not-found`](not-found.md) | `404` | assigned | The resource does not exist, **or** exists and is not visible to this caller. One token, deliberately, for both. |
 | [`idempotency-key-conflict`](idempotency-key-conflict.md) | `409` | assigned | The `Idempotency-Key` was already used with a **different** payload. The same key with the same payload returns the original response instead. |
 | [`resource-exists`](resource-exists.md) | `409` | assigned | A creating `POST` supplied an `id` that already exists in this tenant with **different** content. The same id with the same content returns `200` instead, which is what makes a retried creation safe. |
+| [`name-taken`](name-taken.md) | `409` | assigned | A location's name is already carried by a live sibling. Names are unique among siblings, case-insensitively, so that the tree a person reads matches the tree the database holds. |
 | [`precondition-failed`](precondition-failed.md) | `412` | assigned | The `If-Match` entity tag does not match the resource's current version. |
 | [`precondition-required`](precondition-required.md) | `428` | assigned | A mutating request on a single resource arrived without `If-Match`. There is no blind overwrite. |
 | [`rate-limited`](rate-limited.md) | `429` | assigned | A per-user, per-tenant or per-IP rate limit was reached. |
-| [`malware-detected`](malware-detected.md) | `422` | assigned | The malware scan found something. The blob is discarded, an audit entry is written and the tenant administrator is notified. |
-| [`scan-unavailable`](scan-unavailable.md) | `503` | assigned | The malware scanner is unreachable or timed out. The upload is rejected and the blob stays `PENDING_SCAN` and unretrievable until a catch-up run clears it. |
+| [`malware-detected`](malware-detected.md) | `422` | assigned | The malware scan found something. The blob is deleted from the store and the object is `INFECTED`, permanently unretrievable and never derived from. |
+| [`scan-unavailable`](scan-unavailable.md) | `503` | assigned | There is no verdict for this object yet — it is `PENDING_SCAN`, or the scanner could not be reached and it is `SCAN_FAILED`. Either way it is unretrievable, and the retry queue will ask again (ADR-0054). |
 | [`payload-too-large`](payload-too-large.md) | `413` | assigned | The request body exceeds the JSON limit, or a bulk operation exceeds its entry limit. |
 | [`method-not-allowed`](method-not-allowed.md) | `405` | assigned | The path exists and does not support this method. |
 | [`not-acceptable`](not-acceptable.md) | `406` | assigned | The caller's `Accept` header allows no representation this endpoint can produce. |

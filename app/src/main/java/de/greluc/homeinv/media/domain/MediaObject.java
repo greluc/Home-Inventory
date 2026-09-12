@@ -152,12 +152,16 @@ public class MediaObject {
    * @param state what the scanner concluded
    * @param verdict the signature when infected, else {@code null}
    * @param now when it concluded it
-   * @throws IllegalStateException when a verdict has already been recorded. A second verdict would
-   *     mean something re-judged a blob, and the only direction that could go is from INFECTED to
-   *     CLEAN
+   * <p>Permitted from {@link ScanState#PENDING_SCAN} and from {@link ScanState#SCAN_FAILED}, and
+   * from nothing else. {@code SCAN_FAILED} is not a verdict but the absence of one — the scanner
+   * could not be reached — so the catch-up run that reaches it later is recording the FIRST verdict,
+   * not overruling an earlier one. {@code CLEAN} and {@code INFECTED} are final: re-judging a blob
+   * could only ever go from INFECTED to CLEAN, and nothing in this system should be able to do that.
+   *
+   * @throws IllegalStateException when a real verdict has already been recorded
    */
   public void recordVerdict(ScanState state, String verdict, Instant now) {
-    if (this.scanState != ScanState.PENDING_SCAN) {
+    if (this.scanState != ScanState.PENDING_SCAN && this.scanState != ScanState.SCAN_FAILED) {
       throw new IllegalStateException(
           "Media object " + id + " already has the verdict " + this.scanState);
     }

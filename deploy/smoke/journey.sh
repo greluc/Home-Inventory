@@ -26,7 +26,18 @@ OUT=$(mktemp)
 trap 'rm -f "$JAR" "$OUT"' EXIT
 
 say()  { printf '  %s\n' "$*"; }
-die()  { printf 'FAILED: %s\n' "$*" >&2; [ -s "$OUT" ] && head -c 800 "$OUT" >&2; exit 1; }
+# The `if` is not decoration. Written as `[ -s "$OUT" ] && head -c 800 "$OUT"`,
+# the test is the last command before `exit 1` — and under `set -e` a false test
+# ends the shell right there, so a failure with an EMPTY body printed nothing at
+# all and the run looked like it had simply stopped.
+die() {
+    printf 'FAILED: %s\n' "$*" >&2
+    if [ -s "$OUT" ]; then
+        head -c 800 "$OUT" >&2
+        printf '\n' >&2
+    fi
+    exit 1
+}
 
 # The credentials the `bootstrap` one-shot used (ADR-0053). Reading them from the
 # same two files the deployment reads is the point: a journey that invented its
@@ -34,6 +45,15 @@ die()  { printf 'FAILED: %s\n' "$*" >&2; [ -s "$OUT" ] && head -c 800 "$OUT" >&2
 EMAIL=$(sed -n 's/^HOMEINV_BOOTSTRAP_EMAIL=//p' "$HERE/compose/.env")
 PASSWORD=$(cat "$HERE/secrets/bootstrap-password")
 [ -n "$EMAIL" ] || die "HOMEINV_BOOTSTRAP_EMAIL is not in compose/.env"
+
+# Everything this journey creates is named after THIS run. Locations are unique
+# among their siblings (`location_sibling_name`), so a fixed name makes the suite
+# runnable exactly once against a given deployment and a `409` on every run after
+# — and a smoke suite that cannot be repeated is one an operator runs once, at the
+# worst possible moment. The token is also what the search step looks for, which
+# is stricter than the old `q=drill`: with several runs' items in the index, a
+# bounded result page need not contain the one this run created.
+RUN="smoke$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
 
 # Every mutating call carries the CSRF token from the cookie Spring writes. A
 # header and not a form field: a cross-site form can carry a body and cannot set
@@ -58,6 +78,27 @@ field() {
     sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$OUT" | head -n 1
 }
 
+# The upload is answered 202 before the scanner has said anything: the scan runs
+# in the worker (ADR-0054). So every upload here is followed by polling the
+# resource the Location header names, until it stops saying "no verdict yet".
+#
+# Echoes the final status, so the caller asserts on the outcome rather than on
+# the upload. ClamAV is the slow part — a cold container loads a gigabyte of
+# signatures — hence sixty seconds rather than the five that would do locally.
+await_verdict() {
+    tries=0
+    while [ "$tries" -lt 120 ]; do
+        status=$(api GET "/api/v1/media/$1")
+        if [ "$status" != "503" ]; then
+            printf '%s' "$status"
+            return 0
+        fi
+        tries=$((tries + 1))
+        sleep 0.5
+    done
+    printf '503'
+}
+
 printf '\nSigning in as the owner the bootstrap service created\n'
 status=$(curl --silent --output "$OUT" --write-out '%{http_code}' \
     --cookie-jar "$JAR" \
@@ -76,7 +117,7 @@ CATEGORY=$(field id)
 
 status=$(api POST /api/v1/locations \
     --header 'Content-Type: application/json' \
-    --data "{\"name\":\"Cellar\",\"categoryId\":\"$CATEGORY\"}")
+    --data "{\"name\":\"Cellar $RUN\",\"categoryId\":\"$CATEGORY\"}")
 [ "$status" = "201" ] || die "creating a location answered $status"
 LOCATION=$(field id)
 say "created location $LOCATION"
@@ -84,7 +125,7 @@ say "created location $LOCATION"
 printf '\nCreating an item in it\n'
 status=$(api POST /api/v1/items \
     --header 'Content-Type: application/json' \
-    --data "{\"name\":\"Cordless drill\",\"kind\":\"PHYSICAL\",\"locationId\":\"$LOCATION\"}")
+    --data "{\"name\":\"Cordless drill $RUN\",\"kind\":\"PHYSICAL\",\"locationId\":\"$LOCATION\"}")
 case "$status" in
     200|201) ;;
     *) die "creating an item answered $status" ;;
@@ -92,15 +133,47 @@ esac
 ITEM=$(field id)
 say "created item $ITEM"
 
-printf '\nREQ-SEC-092: an infected upload is refused, and nothing is stored\n'
-# The EICAR test string, assembled rather than written: a file containing it
-# verbatim is quarantined by the scanner on the machine that checks out this
-# repository, which is a strange way to break a build.
-eicar=$(mktemp)
-printf 'X5O!%%P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > "$eicar"
-status=$(api POST "/api/v1/media?targetKind=ITEM&targetId=$ITEM" --form "file=@$eicar")
-rm -f "$eicar"
-[ "$status" = "422" ] || die "the infected upload answered $status and should have answered 422"
+printf '\nREQ-SEC-092: an infected upload never becomes retrievable\n'
+# The EICAR test string, assembled rather than written out, and never put on
+# disk at all. Two different scanners object to it:
+#
+#   * the one on the machine that checks out this repository, if the 68 bytes
+#     appeared verbatim in this file — a strange way to break a build. `%%` and
+#     the doubled backslash are what printf needs anyway, and they also mean
+#     the literal signature is not in the source;
+#   * the one on the machine that RUNS this, which quarantines the temporary
+#     file between `printf` and `curl`. That is not hypothetical: it happened
+#     on the first run with a correct string, as `Permission denied`.
+#
+# So the bytes go straight into the request body through `@-`.
+eicar() { printf 'X5O!P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'; }
+
+# 68 bytes, and a signature match is exact — so a typo here does not produce a
+# weaker test, it produces a PASSING upload and a suite that reports a scanner
+# it never exercised. This string carried `%%P%%` where the standard has `P%`
+# until 2026-09-12: 69 bytes, which ClamAV rightly called clean, and the step
+# announced REQ-SEC-092 while proving nothing about it.
+bytes=$(eicar | wc -c | tr -d ' ')
+[ "$bytes" = "68" ] || die "the EICAR test string is $bytes bytes, not 68"
+status=$(eicar | api POST "/api/v1/media?targetKind=ITEM&targetId=$ITEM" \
+    --form 'file=@-;filename=eicar.txt;type=text/plain')
+[ "$status" = "202" ] || die "the upload answered $status and should have answered 202"
+
+# PENDING_SCAN on the first run of a deployment, INFECTED on every run after it:
+# the bytes are identical, so the second upload deduplicates onto the object the
+# first one left behind and gets its verdict back at once (ADR-0032). Both are
+# correct and the suite has to survive being run twice.
+grep -qE '"scanState":"(PENDING_SCAN|INFECTED)"' "$OUT" \
+    || die "the accepted upload came back in an unexpected state"
+
+# This one holds either way and is the assertion that matters: no URL is minted
+# for anything that is not CLEAN (REQ-MED-013).
+grep -q '"urls":{}' "$OUT" \
+    || die "an upload with no clean verdict was offered a URL"
+INFECTED=$(field id)
+
+status=$(await_verdict "$INFECTED")
+[ "$status" = "422" ] || die "the infected object answered $status and should have answered 422"
 grep -q 'malware-detected' "$OUT" \
     || die "the refusal did not carry the malware-detected problem type"
 say "refused with malware-detected"
@@ -115,7 +188,11 @@ AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==' \
     | base64 -d > "$photo"
 status=$(api POST "/api/v1/media?targetKind=ITEM&targetId=$ITEM" --form "file=@$photo")
 rm -f "$photo"
-[ "$status" = "201" ] || die "the upload answered $status"
+[ "$status" = "202" ] || die "the upload answered $status"
+PHOTO=$(field id)
+
+status=$(await_verdict "$PHOTO")
+[ "$status" = "200" ] || die "the photograph answered $status after the scan"
 say "stored, and the scan cleared it"
 
 status=$(api GET "/api/v1/media?targetKind=ITEM&targetId=$ITEM")
@@ -141,7 +218,13 @@ grep -q 'HOMEINV-EXIF-MARKER' "$exif" || die "the reference image carries no EXI
 
 status=$(api POST "/api/v1/media?targetKind=ITEM&targetId=$ITEM" --form "file=@$exif")
 rm -f "$exif"
-[ "$status" = "201" ] || die "the reference upload answered $status"
+[ "$status" = "202" ] || die "the reference upload answered $status"
+REFERENCE=$(field id)
+
+# The signed URL exists only once the scan has cleared it, so this waits before
+# it looks for one (REQ-MED-013).
+status=$(await_verdict "$REFERENCE")
+[ "$status" = "200" ] || die "the reference image answered $status after the scan"
 
 # Fetched through the media hostname, which is where every stored byte is served
 # from (REQ-MED-010). `--resolve` because `media.localhost` is a name the runner
@@ -159,7 +242,7 @@ rm -f "$stored"
 say "stored without its metadata"
 
 printf '\nFinding it again\n'
-status=$(api GET "/api/v1/search?q=drill&language=en&limit=10")
+status=$(api GET "/api/v1/search?q=$RUN&language=en&limit=10")
 [ "$status" = "200" ] || die "search answered $status"
 grep -q "$ITEM" "$OUT" || die "the item this journey created was not found by search"
 say "found by search"

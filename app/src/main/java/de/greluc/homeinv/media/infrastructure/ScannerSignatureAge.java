@@ -70,9 +70,10 @@ public class ScannerSignatureAge {
    * How old the signatures are.
    *
    * <p>A scanner that cannot be asked reports {@link Duration#ZERO} rather than a very large number:
-   * "unreachable" is a different condition with its own answer — uploads are refused with a {@code
-   * 503} and the blob stays unretrievable (REQ-SEC-092) — and a gauge that spiked to infinity
-   * whenever the scanner restarted would page somebody for the wrong reason.
+   * "unreachable" is a different condition with its own answer — the worker reaches no verdict, the
+   * file stays unretrievable and asking for it is answered {@code 503} (REQ-SEC-092) — and a gauge
+   * that spiked to infinity whenever the scanner restarted would page somebody for the wrong
+   * reason.
    *
    * @return the age, or zero when the scanner could not be asked
    */

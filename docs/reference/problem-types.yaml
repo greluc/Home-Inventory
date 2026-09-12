@@ -193,6 +193,27 @@ assigned:
       - "REQ-CORE-001: creation with a client-generated ID returns `201`; the same ID with the same content returns `200`"
       - "08 §8 client-generated IDs, REQ-API-003"
 
+  - token: name-taken
+    status: 409
+    since: 0
+    summary: >
+      A location's name is already carried by a live sibling. Names are unique
+      among siblings, case-insensitively, so that the tree a person reads matches
+      the tree the database holds.
+    notes: >
+      Registered 2026-09-12, during the stage-0 implementation, after
+      `deploy/smoke/journey.sh` was run twice against one deployment and the second
+      run was answered `500`: the partial unique index `location_sibling_name` was
+      enforced by the migration and answered for nowhere. Distinct from
+      `resource-exists`, which is about a client-chosen **id** — a client branching
+      on the status has to tell "that identifier is taken" from "that name is
+      taken", and only one of the two is fixed by choosing a different id. Mapping
+      it to `validation-failed` was rejected for the reason written out under
+      `resource-exists`.
+    sources:
+      - "REQ-CORE-064: names are unique among siblings"
+      - "07 §7.1: `location_sibling_name`, partial so a tombstone does not block re-use"
+
   - token: precondition-failed
     status: 412
     since: 1
@@ -229,17 +250,27 @@ assigned:
     status: 422
     since: 0
     summary: >
-      The malware scan found something. The blob is discarded, an audit entry is
-      written and the tenant administrator is notified.
-    sources: ["ADR-0024, fail-closed table: a finding → `422`", "REQ-SEC-092"]
+      The malware scan found something. The blob is deleted from the store and the
+      object is `INFECTED`, permanently unretrievable and never derived from.
+    notes: >
+      Answered by `GET /api/v1/media/{id}` and NOT by the upload. The scan runs in
+      the worker (ADR-0024, ADR-0054), so the upload is answered `202` before any
+      verdict exists and the retrieval is where a client learns the outcome. This
+      entry named the upload until 2026-09-12, which no asynchronous scan could
+      have delivered. The audit entry and the administrator's notification moved
+      to REQ-SEC-108 and stage 1 with the machinery they need.
+    sources:
+      - "ADR-0024, fail-closed table: a finding → `422`"
+      - "ADR-0054: the status moves from the POST to the GET"
+      - "REQ-SEC-092"
 
   - token: scan-unavailable
     status: 503
     since: 0
     summary: >
-      The malware scanner is unreachable or timed out. The upload is rejected and
-      the blob stays `PENDING_SCAN` and unretrievable until a catch-up run clears
-      it.
+      There is no verdict for this object yet — it is `PENDING_SCAN`, or the
+      scanner could not be reached and it is `SCAN_FAILED`. Either way it is
+      unretrievable, and the retry queue will ask again (ADR-0054).
     notes: >
       This is the one `503` that is not a degradation but a refusal, and that is
       deliberate: the scan is **fail-closed** (ADR-0024). It is also the only

@@ -313,6 +313,20 @@ export const api = {
   },
 
   /**
+   * One file, by id — what an upload's `Location` header points at.
+   *
+   * The upload answers `202` before the malware scan has run, so this is how a
+   * client finds out what became of it: `200` with signed URLs once the scan
+   * cleared it, `422` when the scanner refused it, `503` while there is no
+   * verdict yet. Both failures arrive as an `ApiError` carrying the status.
+   *
+   * @param mediaObjectId the file
+   */
+  mediaObject: (mediaObjectId: string): Promise<Media> => {
+    return request<Media>(`/api/v1/media/${mediaObjectId}`);
+  },
+
+  /**
    * Detaches a file.
    *
    * @param mediaObjectId the file
