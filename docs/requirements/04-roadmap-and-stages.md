@@ -133,7 +133,7 @@ and the app works a week offline and then reconciles without loss.
 | Area | Content |
 |---|---|
 | **Opening the contract** | `home_inv.plugin.v1` is **published** here, and only from this point is it binding under [ADR-0011](../adr/0011-api-versioning.md)'s six-month rule. The runtime itself was built in stage 1 ([ADR-0028](../adr/0028-plugin-runtime-stage-1.md)) |
-| **Plugin SDK** | `homeinv-plugin-api` (Apache-2.0), SDKs for Java and Python, the protobuf module, the **contract test suite**, a project template, three example plugins, `PLUGINS.md`, `ui:panel` |
+| **Plugin SDK** | `homeinv-plugin-api` (Apache-2.0), SDKs for **Java, Kotlin, Rust, Python and Go**, the protobuf module, the **contract test suite**, a project template, example plugins covering the SDK languages, `PLUGINS.md`, `ui:panel` |
 | **Enrichment** | The `MetadataResolver` port, ISBN and EAN resolvers, the proposal model, `FieldMapping`, caching |
 | **Further ports** | Printer plugins, `ScanSource` for Bluetooth scanners, push channels (Firebase, APNs, Web Push), `ValuationProvider` |
 | **Apps** | Kotlin Multiplatform with Compose Multiplatform, OAuth 2.1 with PKCE, camera, scanner |

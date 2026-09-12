@@ -113,6 +113,10 @@ jobs:
       # rendered text rather than the matrix, because what runs is the rendered
       # text: a generator bug that dropped `read_only` would leave the matrix
       # perfectly correct.
+      # REQ-NFR-055 and REQ-SEC-083…090: non-root inside the container, no
+      # capabilities, no host namespace, no privileged port — asserted against
+      # the generated descriptions rather than against the matrix they came
+      # from, because the generated file is what a runtime actually reads.
       - name: No forbidden setting reaches a runtime description
         run: |
           set -euo pipefail
@@ -131,6 +135,9 @@ jobs:
           check "host network"            'network_mode\s*:\s*.?host|Network=host'
           check "running as root"         'user\s*:\s*.?(root|0:0)|User=(root|0:0)'
           check "SELinux label disabled"  'SecurityLabelDisable\s*=\s*true'
+          # REQ-SEC-089: the runtime socket is mounted into NO container. A
+          # container that can reach it is a container that can start a
+          # privileged one, which makes every rule above decorative.
           check "container socket mount"  '(docker|podman)\.sock'
           # Host ports below 1024 (REQ-NFR-061): TLS terminates at the external
           # reverse proxy, so nothing here needs a privileged port.
@@ -186,8 +193,25 @@ jobs:
 
       # O29: the ImageProcessor is libvips, driven as a subprocess. An image
       # without it starts perfectly and fails on the first photo.
-      - name: libvips is present
-        run: docker run --rm --entrypoint vips home-inv:ci --version
+      #
+      # This step asked `vips --version` until 2026-09-12 and passed while every
+      # image upload answered 500: libvips was present, and the base image had no
+      # AVIF *encoder*, so `heifsave` accepted each request and failed at the last
+      # step. "Present" was never the property worth checking — ADR-0052 says every
+      # stored image is AVIF, so the check is that the image can produce one, using
+      # the same two binaries and the same arguments the adapter uses.
+      - name: libvips can write the one format we store (ADR-0052)
+        run: |
+          docker run --rm --entrypoint sh home-inv:ci -c '
+            set -eu
+            vips black /tmp/probe.png 64 64
+            vipsthumbnail /tmp/probe.png --size 32x32\> -o "/tmp/out.avif[Q=60,strip=true]"
+            # The magic bytes, not the extension: a file named .avif that libvips
+            # wrote in some other format would pass any check that trusted the name.
+            head -c 12 /tmp/out.avif | grep -q ftypavif
+            # And it reads back, because the adapter probes what it just wrote.
+            test "$(vipsheader -f width /tmp/out.avif 2>/dev/null)" = "32"
+          '
 
   web:
     name: Web client
@@ -539,6 +563,23 @@ jobs:
         run: |
           pip install --quiet pyyaml
           python tools/tracked_facts.py
+
+      # A4b in ADR-0000. An ADR is never rewritten when a decision changes: a
+      # later one amends it and the older one carries a note saying so. That
+      # relation is hand-maintained in three places — both records and the index —
+      # and a hand-maintained index is what goes stale while still reading as
+      # authoritative. Run by hand on 2026-09-11 it found nine omissions; written
+      # as a gate on 2026-09-12 it found four more, including two back-links
+      # missing since ADR-0050 and ADR-0052 were written.
+      - name: Every ADR amendment is recorded in both directions
+        run: python tools/adr_links.py
+
+      # A7 in ADR-0000, and the rule 14 §14.3 states about itself: "a property
+      # with no test is a claim". It ships with a BASELINE and fails only on new
+      # occurrences, because a bare regex over ten thousand lines of deliberately
+      # emphatic prose would be switched off within a week. The list only shrinks.
+      - name: No new claim without something that checks it
+        run: python tools/unbacked_claims.py
 
       # REQ-CON-012 and REQ-CON-002. The corpus is English, file names included.
       # A German-language document is not a translation problem — it is a second

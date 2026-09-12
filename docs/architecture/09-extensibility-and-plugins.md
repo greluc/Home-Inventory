@@ -229,16 +229,19 @@ What is provided:
 |---|---|
 | `homeinv-plugin-api` (Maven) | Java interfaces for the ports, carrier types, error types |
 | `homeinv-plugin-sdk-java` | gRPC server scaffolding, manifest validation, health endpoint, logging, test helpers |
+| `homeinv-plugin-sdk-kotlin` | The same, as its own artefact with an idiomatic API — **coroutines rather than futures**, Kotlin types, its own scaffold. Not "the Java one works from Kotlin": that is true and is not an SDK |
+| `homeinv-plugin-sdk-rust` | The same again, on `tonic`. The deployment already runs two first-party Rust services ([ADR-0050](../adr/0050-blobstore-service-in-rust.md)), so the toolchain, the base image and the release path exist before the first plugin needs them |
 | `homeinv-plugin-sdk-python` | The same for Python — because metadata and device integrations often already exist there |
+| `homeinv-plugin-sdk-go` | The same for Go — a single static binary in a `scratch` image is the shape a plugin wants, and gRPC is its native idiom |
 | `home_inv.plugin.v1` (`buf` module) | Protobuf definitions for every other language |
 | `homeinv-plugin-testkit` | **Contract tests**: a suite every port implementation must pass (correct error handling, deadlines, idempotency, behaviour on missing capabilities) |
-| Example plugins | Complete and runnable, in the repository: a `MetadataResolver` (Java), a `PrintTarget` (Python), a `CodeFormat` (Java, in-process) |
+| Example plugins | Complete and runnable, in the repository, and spread across the SDK languages rather than clustered in one: a `MetadataResolver` (Kotlin), a `PrintTarget` (Python), a `StorageAdapter` (Rust), a `WebhookTarget` (Go), a `CodeFormat` (Java, in-process). Stage 3's "done when" is an **external** author working from the published SDK alone, and an SDK whose only worked example is in another language is not that |
 
 **This is how a plugin comes about:**
 
 ```bash
-# 1. Scaffold it
-homeinv-plugin init --port MetadataResolver --lang java --id com.example.mpn
+# 1. Scaffold it — `--lang` is one of java, kotlin, rust, python, go
+homeinv-plugin init --port MetadataResolver --lang kotlin --id com.example.mpn
 
 # 2. Implement: exactly three methods
 

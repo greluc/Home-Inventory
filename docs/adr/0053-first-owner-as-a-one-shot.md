@@ -3,7 +3,12 @@
 - **Status:** Accepted
 - **Date:** 2026-09-12
 - **Deciders:** @greluc
-- **Supersedes:** nothing. It fills a gap [ADR-0028](0028-plugin-runtime-stage-1.md) named and did not close.
+- **Supersedes:** nothing.
+
+It fills a gap [ADR-0028](0028-plugin-runtime-stage-1.md) named and did not close. That
+sentence sits below the header rather than on the `Supersedes:` line, because a line that
+says "nothing" and then names an ADR reads as a declaration about that ADR — the same
+correction ADR-0021 received for the same reason.
 
 ## Context
 

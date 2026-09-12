@@ -28,7 +28,7 @@ Date: YYYY-MM-DD
 | [0004](0004-attribute-storage-model.md) | JSONB plus an application-maintained index side table | Accepted |
 | [0005](0005-identity.md) | An own identity core with optional OIDC federation | Accepted |
 | [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted |
-| [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032 |
+| [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032, 0052 |
 | [0008](0008-search.md) | OpenSearch as a derived read model | Accepted, amended by 0039, 0047 |
 | [0009](0009-messaging-and-events.md) | RabbitMQ with a transactional outbox | Accepted, extended (O13) |
 | [0010](0010-api-surfaces.md) | REST and read-only GraphQL outward, gRPC for plugins | Accepted |
@@ -45,7 +45,7 @@ Date: YYYY-MM-DD
 | [0021](0021-podman-quadlet.md) | Podman with Quadlet as an equally supported way to run it | Accepted, amended by 0027 |
 | [0022](0022-rootless.md) | Rootless as the mandatory basis for every way of running it | Accepted, amended by 0027 |
 | [0023](0023-push-notifications.md) | Push through Firebase and APNs as a plugin, content-free payload | Amended by 0026, 0037 |
-| [0024](0024-malware-scan.md) | A mandatory malware scan, fail-closed | Accepted, amended by 0036, 0037 |
+| [0024](0024-malware-scan.md) | A mandatory malware scan, fail-closed | Accepted, amended by 0036, 0037, 0054 |
 | [0025](0025-money-representation.md) | An in-house `Money` value type instead of JavaMoney or Joda-Money | Accepted |
 | [0026](0026-core-outbound-via-plugins.md) | Every outbound connection of the core moves into a plugin | Accepted, amended by 0037, 0042 |
 | [0027](0027-egress-enforcement.md) | Egress enforcement: deny-all for the core, a proxy per plugin segment | Accepted, amended by 0036, 0037; §1 withdrawn by 0042 |
@@ -73,5 +73,7 @@ Date: YYYY-MM-DD
 | [0049](0049-openapi-generated-from-the-implementation.md) | The OpenAPI document is generated from the implementation, with a drift check | Accepted |
 | [0050](0050-blobstore-service-in-rust.md) | The `blobstore` service is written in Rust | Accepted |
 | [0051](0051-broker-in-stage-0.md) | RabbitMQ moves to stage 0, because a stage-0 requirement needs the worker | Accepted |
-| [0052](0052-one-stored-image-format.md) | Every stored image is AVIF, and the bytes that arrived are never stored | Accepted |
+| [0052](0052-one-stored-image-format.md) | Every stored image is AVIF, and the bytes that arrived are never stored | Accepted, amended by 0054 |
 | [0053](0053-first-owner-as-a-one-shot.md) | The first owner is created by a one-shot service, not by an endpoint | Accepted |
+| [0054](0054-the-scan-is-asynchronous.md) | The malware scan runs in the worker, and the upload is answered before it | Accepted |
+| [0055](0055-five-first-class-plugin-sdks.md) | Five first-class plugin SDKs: Java, Kotlin, Rust, Python and Go | Accepted |

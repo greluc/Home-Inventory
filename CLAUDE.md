@@ -65,7 +65,7 @@ touches.
 Docs-as-code, exactly like the Basetool repos:
 
 - **Requirements** live in [`docs/requirements/`](docs/requirements/README.md) as
-  `REQ-<AREA>-NNN` (423 of them). IDs are stable and never reused; a dropped requirement
+  `REQ-<AREA>-NNN` (425 of them). IDs are stable and never reused; a dropped requirement
   is marked `Withdrawn`, not deleted. The count is kept current in
   [`docs/requirements/README.md`](docs/requirements/README.md) — that table is the
   source, this line follows it.
@@ -200,7 +200,8 @@ Each of these is a decision with an ADR behind it. They look like details and ar
 ## Where things go
 
 ```
-api/ app/ blobstore/ cla/ deploy/ design-system/ docs/ plugin-api/ plugin-sdk/ proto/ web/
+api/ app/ blobstore/ cla/ deploy/ design-system/ docs/ egress-proxy/ plugin-api/
+plugin-sdk/ proto/ web/
 ```
 
 Every directory has a `README.md` stating what belongs there and which stage
@@ -210,13 +211,19 @@ negotiable:
 - **`plugin-api/`, `plugin-sdk/` and `proto/` are Apache-2.0** and must never
   depend on a core module. A file that lands there by accident makes the promise
   in ADR-0018 false.
-- **`blobstore/` is the only Rust in the repository**, and it is **core, therefore
-  AGPL-3.0-or-later**. It is a service and not a plugin: it opens nothing outside
-  the deployment, holds no manifest and needs no capability grant
+- **`blobstore/` and `egress-proxy/` are the Rust in the repository**, and both are
+  **core, therefore AGPL-3.0-or-later**. Each is a service and not a plugin: neither
+  holds a manifest or needs a capability grant
   ([ADR-0043](docs/adr/0043-blobstore-as-its-own-service.md),
-  [ADR-0050](docs/adr/0050-blobstore-service-in-rust.md)). `cargo deny` gates its
-  dependencies' licences, because a crate under an incompatible one would make
-  that statement false.
+  [ADR-0050](docs/adr/0050-blobstore-service-in-rust.md)). `cargo deny` gates their
+  dependencies' licences, because a crate under an incompatible one would make that
+  statement false. **`egress-proxy` is the one core service that does open outward** —
+  that is its whole function, and it is why it sits on a non-internal segment
+  ([ADR-0027](docs/adr/0027-egress-enforcement.md),
+  [ADR-0042](docs/adr/0042-edge-is-not-internal.md)); it terminates no TLS and sees
+  host and port, never content. *This entry said `blobstore/` was the only Rust in the
+  repository until 2026-09-12, when the proxy the topology had always named was finally
+  written.*
 - **`deploy/services.yaml` is the source of truth** for the deployment topology.
   The Quadlet units and `compose.yaml` are generated from it; editing them by
   hand fails the drift check.
@@ -246,7 +253,10 @@ negotiable:
   H2 or any other substitute database is forbidden: JSONB, `ltree` and RLS behave
   differently, which is exactly where the bugs would be.
 - The smoke suite runs against **both** container runtimes (rootless Podman, rootless
-  Docker) and against `kind`. A change that works under only one runtime breaks the build.
+  Docker), as a CI matrix. A change that works under only one runtime breaks the build.
+  `kind`, SELinux `enforcing` and a RHEL-family distribution are `REQ-NFR-064` and
+  **stage 1**; `.github/workflows/smoke.yml` says so in its header rather than claiming a
+  third runtime it does not run.
 - Local start must be **one command in under ten minutes**, profile `minimal`.
 
 ## Conventions (once code exists)

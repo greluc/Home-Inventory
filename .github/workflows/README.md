@@ -4,18 +4,23 @@ CI and release workflows.
 
 ## Status
 
-One workflow exists: [`pages.yml`](pages.yml), which publishes the project
-website. It is here ahead of the others because it has something to do that does
-not need a build — and because it carries a real gate: it greps the assembled
-site for resources loaded from another host and fails, which is REQ-PRIV-015
-enforced rather than asserted.
+Four workflows exist: [`ci.yml`](ci.yml) (build, test, architecture rules, the API
+contract, the deployment descriptions, the application image, the web client and the
+documentation rules), [`smoke.yml`](smoke.yml) (the rootless matrix — Podman and Docker),
+[`security.yml`](security.yml) and [`pages.yml`](pages.yml), which publishes the project
+website and carries a real gate of its own: it greps the assembled site for resources
+loaded from another host and fails, which is `REQ-PRIV-015` verified rather than asserted.
 
-Everything else is still to come — there is no application to build yet. **The two
-documentation gates below are no longer waiting on anything**: they read Markdown, this
-directory is live, and A4b's rule has already been run by hand with its findings closed,
-so both open clean. This file
-records what those workflows will have to do, so that the gates are not invented
-ad hoc later.
+**All three documentation gates below are implemented**, in [`tools/`](../../tools/) so
+that they can be run before pushing rather than only by pushing: `adr_links.py` (A4b),
+`unbacked_claims.py` (A7) and `tracked_facts.py` (A12). The sections below are kept as the
+record of what each was specified to do — and A4b is worth re-reading, because writing it
+found four defects that the same rule run by hand had not.
+
+*This section said "One workflow exists … there is no application to build yet" until
+2026-09-12, by which point there were four workflows and an application. A status section
+that goes stale is the failure mode the gates below exist to catch, in the file that
+describes them.*
 
 ## The gates, already decided
 

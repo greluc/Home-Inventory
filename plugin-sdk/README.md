@@ -10,10 +10,20 @@ What a plugin author gets so that writing a plugin is an afternoon, not a week.
 plugin-sdk/
 ├── java/        gRPC server scaffolding, manifest validation, health endpoint,
 │                logging, test helpers
+├── kotlin/      the same, idiomatic: coroutines rather than futures. Its own
+│                artefact, because "the Java one works from Kotlin" is true and
+│                is not an SDK
+├── rust/        the same on tonic — the deployment already ships two first-party
+│                Rust services, so the toolchain is not new here
 ├── python/      the same for Python — because metadata and device integrations
 │                frequently already exist there
-└── testkit/     the contract test suite
+├── go/          the same for Go — one static binary in a scratch image
+└── testkit/     the contract test suite, which every one of them must pass
 ```
+
+**All five are first-class** and are treated as such: a scaffold, an example
+plugin and a contract-test run each (`REQ-PLG-009`). The list was Java and Python
+until 2026-09-12.
 
 ## The test suite is the important part
 

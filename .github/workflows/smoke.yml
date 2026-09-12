@@ -138,15 +138,20 @@ jobs:
           grep -q "^$USER:" /etc/subuid || echo "$USER:100000:65536" | sudo tee -a /etc/subuid
           grep -q "^$USER:" /etc/subgid || echo "$USER:100000:65536" | sudo tee -a /etc/subgid
 
-      - name: Build the application and web images
+      # Every one of them from the repository root. The Dockerfiles copy paths
+      # like `web/package.json` and `deploy/postgres/initdb/`, so a narrower
+      # context fails on a file it cannot see.
+      - name: Build the five images the deployment names
         run: |
           set -euo pipefail
           ${{ matrix.runtime }} build -f app/Dockerfile -t ghcr.io/greluc/home-inv:latest .
-          ${{ matrix.runtime }} build -f web/Dockerfile -t ghcr.io/greluc/home-inv-web:latest web
+          ${{ matrix.runtime }} build -f web/Dockerfile -t ghcr.io/greluc/home-inv-web:latest .
           ${{ matrix.runtime }} build -f deploy/images/postgres/Dockerfile \
-            -t ghcr.io/greluc/home-inv-postgres:latest deploy/images/postgres
+            -t ghcr.io/greluc/home-inv-postgres:latest .
           ${{ matrix.runtime }} build -f blobstore/Dockerfile \
-            -t ghcr.io/greluc/home-inv-blobstore:latest blobstore
+            -t ghcr.io/greluc/home-inv-blobstore:latest .
+          ${{ matrix.runtime }} build -f egress-proxy/Dockerfile \
+            -t ghcr.io/greluc/home-inv-egress-proxy:latest .
 
       # REQ-NFR-028 and REQ-NFR-051: one command, from a fresh checkout to a
       # running stack, on both runtimes. Running the real script rather than a
@@ -183,9 +188,11 @@ jobs:
           exit 1
 
       # The scanner downloads its signatures through the egress proxy on first
-      # start (ADR-0036) and uploads are refused until it can answer — fail-closed,
-      # which is the design working (REQ-SEC-092). The journey below uploads, so it
-      # waits here rather than failing there with a 503 that would read like a bug.
+      # start (ADR-0036). Until it can answer, an upload is accepted and never
+      # reaches a verdict — fail-closed, which is the design working: nothing
+      # becomes retrievable without one (REQ-SEC-092, ADR-0054). The journey below
+      # uploads and then polls for the verdict with a bounded budget, so it waits
+      # here rather than timing out there in a way that would read like a bug.
       - name: The scanner has its signatures
         timeout-minutes: 20
         run: |

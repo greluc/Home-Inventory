@@ -60,7 +60,7 @@ docs/
 ## The basis of the decisions
 
 The following choices were made up front and are binding on the whole design.
-Each has its own ADR with rationale and alternatives.
+Each has its own ADR with rationale and alternatives. *This table stopped at 48 while the directory reached 55; it was brought level on 2026-09-12. The `adrCount` tracked fact counts files, not rows here, so nothing caught the gap — which is worth knowing before trusting a count to notice a missing index entry.*
 
 | # | Subject | Decision | ADR |
 |---|---|---|---|
@@ -112,6 +112,13 @@ Each has its own ADR with rationale and alternatives.
 | 46 | Audit retention | The chain is truncatable and the truncation is recorded, so retention and tampering stop looking alike | [0046](adr/0046-truncatable-audit-chain.md) |
 | 47 | Fallback full text | Two generated `tsvector` columns, German and English — `simple` does no stemming | [0047](adr/0047-bilingual-search-vectors.md) |
 | 48 | Remote storage | No managed folders or permissions at the remote — the credential stays scoped to one folder | [0048](adr/0048-no-managed-remote-folders.md) |
+| 49 | API contract | The OpenAPI document is generated from the implementation, and a drift check makes it true | [0049](adr/0049-openapi-generated-from-the-implementation.md) |
+| 50 | `blobstore` language | Rust — a service that only moves bytes, with no runtime of its own to feed | [0050](adr/0050-blobstore-service-in-rust.md) |
+| 51 | Broker stage | RabbitMQ moves to stage 0, because a stage-0 requirement names the worker as doing the work | [0051](adr/0051-broker-in-stage-0.md) |
+| 52 | Stored image format | One format: every image is transcoded to AVIF, and the bytes that arrived are stored nowhere | [0052](adr/0052-one-stored-image-format.md) |
+| 53 | First account | A one-shot service creates the first owner and tenant — not an endpoint strangers could reach | [0053](adr/0053-first-owner-as-a-one-shot.md) |
+| 54 | Malware scan | In the worker, with the upload answered `202` — `api` has no route to `clamd` and never had | [0054](adr/0054-the-scan-is-asynchronous.md) |
+| 55 | Plugin SDKs | Five, all first-class: Java, Kotlin, Rust, Python and Go | [0055](adr/0055-five-first-class-plugin-sdks.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open** — the

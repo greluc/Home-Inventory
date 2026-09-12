@@ -19,7 +19,38 @@ The project is in its design phase; nothing is released. This section records th
 groundwork so that the first release has a history rather than a single "initial
 commit".
 
+### Changed
+
+- **An upload is answered before it has been scanned.** `POST /api/v1/media` now
+  returns `202` with a `Location`, and the file is not retrievable until the scan
+  has cleared it — poll `GET /api/v1/media/{id}`, which answers `200` with the
+  signed URLs once clean, `422` if the scanner found something and `503` while
+  there is no verdict. The scan had been running inside the request, which the
+  architecture had said for months it must not, and which meant no upload worked
+  in a real deployment at all. *REST API: breaking, pre-release.*
+
+- **The plugin SDK will ship in five languages**, not two: Java, Kotlin, Rust,
+  Python and Go, each with its own scaffold, example plugin and contract-test run.
+  Stage 3, as before.
+
 ### Fixed
+
+- **No image could be uploaded to a real deployment.** Four separate faults in the
+  libvips adapter and the image it runs in, each of which alone turned every photo
+  into a `500`: the wrong binary was called, the output path grew a second file
+  extension, warnings on standard error were parsed as part of the image's width,
+  and the container had no AVIF encoder at all. Photographs now upload, re-encode
+  and come back without their metadata.
+
+- **Two places with the same name in the same place answered `500`.** The database
+  had always refused it — names are unique among siblings — and nothing turned
+  that refusal into an answer. It is now `409` with a `name-taken` problem type,
+  and the name of a deleted place can be re-used as before. *REST API: additive.*
+
+- **An infected upload stayed attached to the item, as its main picture.** The
+  bytes were deleted and the attachment was not, so a list could lead with a
+  photograph that could not be shown. A finding now detaches the file from
+  everything it hangs on.
 
 - **Sessions were never stored in Valkey and the session cookie had none of the
   attributes it was supposed to have.** Spring Boot 4 moved session
@@ -35,6 +66,15 @@ commit".
   refused. The token is now issued on every request.
 
 ### Added
+
+- **The test suite runs the images the deployment runs**, pinned to their digests
+  and read from the one file that describes the deployment. They had drifted: the
+  tests exercised a RabbitMQ the deployment does not use.
+
+- **Tenant isolation is now proven on every table, not asserted.** The database is
+  seeded with two tenants' rows in all ten tenant-scoped tables and each is checked
+  to hide the other's data — and to show nothing at all when no tenant context is
+  set. A table added later with a wrong policy, or none, fails the build.
 
 - **The shared kernel is measured.** `platform` holds 21 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
@@ -148,10 +188,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 423 numbered, testable requirements across
+- A requirements catalogue with 425 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 54 architecture decision records, each with its alternatives and consequences —
+- 56 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

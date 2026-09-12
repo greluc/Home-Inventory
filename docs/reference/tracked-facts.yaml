@@ -96,7 +96,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 54
+    value: 56
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points
@@ -121,7 +121,7 @@ computed:
 
   - id: requirementTotal
     compute: "count of lines matching ^| REQ-<AREA>-<nnn> across docs/requirements/0[123]-*.md"
-    value: 423
+    value: 425
     pattern: '(\d+)\s+(?:numbered|testable)[^.\n]{0,48}requirements?'
     notes: >
       Withdrawn requirements stay in place and keep counting (requirements/README.md:
@@ -131,7 +131,7 @@ computed:
   - id: requirementsPerArea
     compute: "the same lines, grouped by area"
     value:
-      CORE: 42
+      CORE: 43
       MED: 13
       IDENT: 18
       LBL: 14
@@ -147,7 +147,7 @@ computed:
       PORT: 8
       NFR: 79
       CON: 15
-      SEC: 107
+      SEC: 108
       PRIV: 15
     pattern: '\b([A-Z]{3,6})\s+(\d+)\b'
     appliesTo: [docs/requirements/README.md]
