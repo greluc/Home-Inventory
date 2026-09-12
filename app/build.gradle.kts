@@ -27,7 +27,7 @@ dependencies {
     // horizontally and a session must survive the instance that created it
     // (06 Deployment view).
     implementation(libs.spring.boot.starter.data.redis)
-    implementation(libs.spring.boot.starter.session.data.redis)
+    implementation(libs.spring.boot.session.data.redis)
 
     implementation(libs.spring.modulith.starter.core)
     implementation(libs.spring.modulith.starter.jpa)

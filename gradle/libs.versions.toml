@@ -60,7 +60,13 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
-spring-boot-starter-session-data-redis = { module = "org.springframework.session:spring-session-data-redis" }
+# `org.springframework.boot:...`, not `org.springframework.session:...`. Boot 4
+# moved every auto-configuration out of `spring-boot-autoconfigure` into a module
+# per technology, and the plain Spring Session artefact carries none: with it
+# alone the session filter is never registered, sessions stay in the servlet
+# container's memory and the cookie is Tomcat's JSESSIONID with Tomcat's
+# attributes — which is neither REQ-SEC-017 nor REQ-NFR-018.
+spring-boot-session-data-redis = { module = "org.springframework.boot:spring-boot-session-data-redis" }
 
 spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "springModulith" }
 spring-modulith-starter-core = { module = "org.springframework.modulith:spring-modulith-starter-core" }

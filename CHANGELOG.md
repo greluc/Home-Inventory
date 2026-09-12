@@ -19,6 +19,21 @@ The project is in its design phase; nothing is released. This section records th
 groundwork so that the first release has a history rather than a single "initial
 commit".
 
+### Fixed
+
+- **Sessions were never stored in Valkey and the session cookie had none of the
+  attributes it was supposed to have.** Spring Boot 4 moved session
+  auto-configuration into a module of its own, and the project depended on the
+  plain Spring Session artefact — so the session filter was never registered, the
+  session lived in the container's memory, and the cookie was the container's
+  `JSESSIONID` with the container's defaults. It is now `__Host-`prefixed,
+  `Secure`, `HttpOnly` and `SameSite=Strict`, and it survives a restart.
+
+- **A client that had only read could not write.** Spring Security resolves the
+  CSRF token only when something asks for it, and a browser that signs in and
+  reads asks for nothing — so the first time a user created anything, it was
+  refused. The token is now issued on every request.
+
 ### Added
 
 - **The shared kernel is measured.** `platform` holds 21 types in the shared

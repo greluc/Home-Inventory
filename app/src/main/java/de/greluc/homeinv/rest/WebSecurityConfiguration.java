@@ -116,6 +116,11 @@ public class WebSecurityConfiguration {
                 // surface a client cannot parse the way it parses every other one
                 // (REQ-API-003).
                 handling.authenticationEntryPoint(problemEntryPoint))
+        // After the CSRF filter, which is what puts the deferred token in the
+        // request; this is what resolves it so the cookie is written even on a
+        // request that never asks (see CsrfCookieFilter).
+        .addFilterAfter(
+            new CsrfCookieFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
         .addFilterAfter(
             tenantContextFilter,
             org.springframework.security.web.context.SecurityContextHolderFilter.class)
