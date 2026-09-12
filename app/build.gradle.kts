@@ -88,6 +88,22 @@ tasks.named<ProcessResources>("processTestResources") {
     from(rootProject.file("deploy/postgres/initdb/00-roles.sql")) {
         into("db")
     }
+    // And the service matrix, for the same reason: the tests take their image
+    // coordinates from the file the deployment is generated from, so "the same
+    // images as production" (REQ-NFR-027) is one list rather than two kept in
+    // step by hand. They were not in step - the tests ran rabbitmq:4-alpine
+    // against a deployment running 4-management-alpine.
+    from(rootProject.file("deploy/services.yaml")) {
+        into("deploy")
+    }
+    // The base the first-party postgres image is built FROM. The tests cannot pull
+    // ghcr.io/greluc/home-inv-postgres - it is built from this repository, not
+    // published - so they run its base and copy the same role script in. The base
+    // is named in one file, and this is that file.
+    from(rootProject.file("deploy/images/postgres/Dockerfile")) {
+        into("deploy")
+        rename { "postgres-image.Dockerfile" }
+    }
 }
 
 tasks.withType<Test>().configureEach {

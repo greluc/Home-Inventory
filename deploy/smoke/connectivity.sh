@@ -117,18 +117,28 @@ done
 
 section "REQ-SEC-104: every store authenticates its callers"
 
+# Every one of these is asked OVER THE NETWORK, from a throwaway container that
+# shares `api`'s network namespace — not from inside the store itself. A database
+# trusts its own loopback by default, so an `exec` into the container proves the
+# opposite of what it looks like: the first version of this check ran `psql` on
+# 127.0.0.1 and reported that postgres accepts any password.
+from_internal() {
+    "$RUNTIME" run --rm --network "container:homeinv-api" "$@" 2>&1
+}
+
 # PostgreSQL: the right user, the wrong password.
-if "$RUNTIME" exec homeinv-postgres sh -c \
-        'PGPASSWORD=definitely-not-the-password psql -h 127.0.0.1 -U homeinv_app -d homeinv -c "select 1"' \
-        >/dev/null 2>&1; then
-    fail "postgres accepted a wrong password"
-else
+if from_internal --entrypoint sh docker.io/library/postgres:18-alpine -c \
+        'PGPASSWORD=definitely-not-the-password psql -h postgres -U homeinv_app -d homeinv -c "select 1"' \
+        | grep -qi "authentication failed\|password authentication"; then
     pass "postgres refuses a wrong password"
+else
+    fail "postgres accepted a wrong password"
 fi
 
 # Valkey: `default` is disabled and every caller is an ACL user, so an
 # unauthenticated PING is refused rather than answered.
-if "$RUNTIME" exec homeinv-valkey valkey-cli ping 2>&1 | grep -qi "NOAUTH\|WRONGPASS\|denied"; then
+if from_internal docker.io/valkey/valkey:8-alpine valkey-cli -h valkey ping \
+        | grep -qi "NOAUTH\|WRONGPASS\|denied"; then
     pass "valkey refuses an unauthenticated caller"
 else
     fail "valkey answered an unauthenticated PING"

@@ -5,6 +5,7 @@
 package de.greluc.homeinv;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,6 +16,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -190,6 +192,62 @@ class ErrorContractIT extends AbstractIntegrationTest {
         .isEqualTo("https://home-inv.example/problems/not-found");
     assertThat(problem.get("title").asString()).isEqualTo("Not found");
     assertThat(problem.get("traceId").asString()).isNotEmpty();
+  }
+
+  @Test
+  @DisplayName("gives away no internals: no path, no SQL, no stack frame (REQ-SEC-067)")
+  void noErrorRevealsInternals() throws Exception {
+    MockHttpSession session = tenantSession("internals");
+
+    // Four failures reached by four different routes, so the assertion is about
+    // the contract rather than about one handler: a bad body, an unknown path, a
+    // method the path does not serve, and a rejected permission.
+    List<MvcResult> failures =
+        List.of(
+            mockMvc
+                .perform(
+                    post("/api/v1/items")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": "))
+                .andReturn(),
+            mockMvc.perform(get("/api/v1/does-not-exist").session(session)).andReturn(),
+            mockMvc.perform(delete("/api/v1/items").session(session).with(csrf())).andReturn(),
+            mockMvc.perform(get("/api/v1/items/" + UUID.randomUUID()).session(session)).andReturn());
+
+    for (MvcResult result : failures) {
+      String body = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
+      assertThat(result.getResponse().getStatus())
+          .as("the request was meant to fail: %s", body)
+          .isGreaterThanOrEqualTo(400);
+
+      // Each of these is something an exception message carries by default and a
+      // caller must never receive (REQ-SEC-067, REQ-NFR-042). The traceId is what
+      // connects their report to the log line that has all of it.
+      assertThat(body)
+          .as("a class or package name reached the caller: %s", body)
+          .doesNotContain("de.greluc.homeinv")
+          .doesNotContain("org.springframework")
+          .doesNotContain("java.lang");
+      assertThat(body)
+          .as("a stack frame reached the caller: %s", body)
+          .doesNotContain(".java:")
+          .doesNotContain("\tat ");
+      assertThat(body)
+          .as("SQL reached the caller: %s", body)
+          .doesNotContainIgnoringCase("select ")
+          .doesNotContainIgnoringCase("insert into")
+          .doesNotContainIgnoringCase("sqlstate");
+      assertThat(body)
+          .as("a filesystem path reached the caller: %s", body)
+          .doesNotContain("/home/")
+          .doesNotContain("C:\\\\");
+
+      assertThat(problemOf(result).get("traceId").asString())
+          .as("every error carries the id an operator can find it by")
+          .isNotEmpty();
+    }
   }
 
   // -------------------------------------------------------------------------

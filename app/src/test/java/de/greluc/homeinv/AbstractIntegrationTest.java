@@ -54,12 +54,17 @@ public abstract class AbstractIntegrationTest {
   /**
    * PostgreSQL 18, the version the application targets.
    *
-   * <p>Pinned to a digest-free tag here for readability; CI pins the digest, because "the same
-   * image as production" is a claim a floating tag cannot support.
+   * <p>The coordinates come from {@code deploy/services.yaml} through {@link ProductionImages},
+   * digest first — so this is the image the deployment runs, and it becomes digest-pinned the day
+   * the matrix names one, without a line here changing (REQ-NFR-027, A13 in ADR-0000).
+   *
+   * <p>This comment said "CI pins the digest" until 2026-09-12. It did not — nothing in
+   * {@code ci.yml} pinned anything — which is a claim with no mechanism, sitting in the file that
+   * would have implemented it.
    */
   @SuppressWarnings("resource") // Testcontainers closes it with the JVM via Ryuk.
   protected static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>(DockerImageName.parse("postgres:18-alpine"))
+      new PostgreSQLContainer<>(ProductionImages.postgresBase().asCompatibleSubstituteFor("postgres"))
           .withDatabaseName("homeinv")
           .withUsername("postgres")
           .withPassword("test-superuser")
@@ -75,7 +80,7 @@ public abstract class AbstractIntegrationTest {
   /** Valkey, where sessions and the login throttle live. */
   @SuppressWarnings("resource")
   protected static final GenericContainer<?> VALKEY =
-      new GenericContainer<>(DockerImageName.parse("valkey/valkey:8-alpine")).withExposedPorts(6379);
+      new GenericContainer<>(ProductionImages.of("valkey")).withExposedPorts(6379);
 
   /**
    * RabbitMQ, where media events travel from {@code api} to {@code worker}.
@@ -88,7 +93,7 @@ public abstract class AbstractIntegrationTest {
    */
   @SuppressWarnings("resource")
   protected static final GenericContainer<?> RABBITMQ =
-      new GenericContainer<>(DockerImageName.parse("rabbitmq:4-alpine")).withExposedPorts(5672);
+      new GenericContainer<>(ProductionImages.of("rabbitmq")).withExposedPorts(5672);
 
   /**
    * A throwaway certificate authority, and the two identities the mTLS hop needs.
