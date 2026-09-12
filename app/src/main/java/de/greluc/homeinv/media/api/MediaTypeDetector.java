@@ -62,8 +62,7 @@ public final class MediaTypeDetector {
     // follows says which dialect. AVIF and HEIC share the container, so the
     // brand is the only thing that tells them apart.
     if (matchesAt(head, 4, 'f', 't', 'y', 'p')) {
-      String brand = new String(head, 8, 4, java.nio.charset.StandardCharsets.US_ASCII)
-          .toLowerCase(Locale.ROOT);
+      String brand = asciiLowerCase(head, 8, 4);
       return switch (brand) {
         case "avif", "avis" -> new Detected("image/avif", true);
         // Accepted and transcoded to AVIF on ingest; never stored as it arrived
@@ -76,9 +75,12 @@ public final class MediaTypeDetector {
     // SVG is XML and is rejected before anything else can accept it as text.
     // Checked explicitly rather than by omission, so the refusal is deliberate
     // rather than a consequence of the text sniffing below.
-    String asText = new String(head, java.nio.charset.StandardCharsets.UTF_8);
-    String trimmed = asText.stripLeading().toLowerCase(Locale.ROOT);
-    if (trimmed.startsWith("<?xml") || trimmed.startsWith("<svg")) {
+    // Compared as ASCII BYTES rather than as a lowercased string. Case folding is
+    // a transformation on attacker-supplied input immediately before a security
+    // decision, and the whole class of surprise there — one character folding
+    // onto another — is avoided by never folding: the only thing that matches
+    // "<svg" is those four bytes in either case, and nothing else.
+    if (startsWithAsciiIgnoringCase(head, "<?xml") || startsWithAsciiIgnoringCase(head, "<svg")) {
       throw new UnsupportedMediaTypeException("image/svg+xml");
     }
 
@@ -114,6 +116,60 @@ public final class MediaTypeDetector {
       }
     }
     return true;
+  }
+
+  /**
+   * Whether the head begins with an ASCII prefix, ignoring ASCII case only.
+   *
+   * <p>Leading ASCII whitespace is skipped, because an XML document may begin with it.
+   *
+   * @param head the first bytes of the file
+   * @param prefix the ASCII prefix to look for, written in lowercase
+   * @return true when the head starts with it
+   */
+  private static boolean startsWithAsciiIgnoringCase(byte[] head, String prefix) {
+    int start = 0;
+    while (start < head.length
+        && (head[start] == ' ' || head[start] == '\t' || head[start] == '\n'
+            || head[start] == '\r')) {
+      start++;
+    }
+    if (head.length - start < prefix.length()) {
+      return false;
+    }
+    for (int index = 0; index < prefix.length(); index++) {
+      int actual = head[start + index] & 0xFF;
+      if (actual >= 'A' && actual <= 'Z') {
+        actual += 'a' - 'A';
+      }
+      if (actual != prefix.charAt(index)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A fixed-length run of bytes as lowercase ASCII.
+   *
+   * <p>Any byte outside printable ASCII becomes {@code ?}, so a brand built from arbitrary bytes
+   * cannot carry anything into the message the refusal is reported with.
+   *
+   * @param head the first bytes of the file
+   * @param offset where to start
+   * @param length how many bytes
+   * @return the lowercased run
+   */
+  private static String asciiLowerCase(byte[] head, int offset, int length) {
+    StringBuilder out = new StringBuilder(length);
+    for (int index = offset; index < offset + length && index < head.length; index++) {
+      int value = head[index] & 0xFF;
+      if (value >= 'A' && value <= 'Z') {
+        value += 'a' - 'A';
+      }
+      out.append(value >= 0x20 && value < 0x7F ? (char) value : '?');
+    }
+    return out.toString();
   }
 
   private static boolean startsWith(byte[] data, int... signature) {

@@ -130,10 +130,16 @@ public class MediaUrlSigner {
       String variant,
       long expiresAt,
       String signature) {
+    if (signature == null) {
+      return false;
+    }
     byte[] presented;
     try {
       presented = DECODER.decode(signature);
-    } catch (IllegalArgumentException | NullPointerException malformed) {
+    } catch (IllegalArgumentException malformed) {
+      // Not base64: a forged or truncated link. Answered exactly like a link
+      // whose signature does not match, so the caller learns nothing about which
+      // of the two it was.
       return false;
     }
 

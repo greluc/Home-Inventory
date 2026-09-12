@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **The gates that read the repository rather than run it.** Secret scanning in
+  CI and as a pre-commit hook, daily vulnerability scans of the dependencies and
+  of all three images, CodeQL for Java and TypeScript, SpotBugs with
+  `find-sec-bugs`, and a check that every fact the documentation states twice
+  still agrees with the repository.
+
 - **Media has somewhere to live.** `blobstore/` is a small service that owns the
   data volume, so `api` and `worker` hold no state and can be run more than once.
   It speaks gRPC over mutual TLS with a pinned certificate, verifies every blob

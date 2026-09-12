@@ -122,3 +122,22 @@ configured to hold it
 
 Empty. Stage 0 delivers the first screens:
 [the roadmap](../docs/requirements/04-roadmap-and-stages.md).
+
+## Linting
+
+`npm run lint` runs [`oxlint`](https://oxc.rs) with `--deny-warnings`.
+
+`REQ-SEC-076` named ESLint with `eslint-plugin-security`, and that combination
+cannot run here: `typescript-eslint` refuses to load under TypeScript 7
+([upstream issue 10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)),
+so ESLint cannot parse a single `.tsx` file in this directory. `oxlint` parses
+TypeScript 7 and carries the same classes of rule, and CodeQL's
+`javascript-typescript` analysis covers the queries it does not. The requirement
+records the substitution, the reason and when to revisit it.
+
+Two rules are switched off in `.oxlintrc.json`, both with a narrow scope:
+
+| Rule | Where | Why |
+|---|---|---|
+| `react/react-in-jsx-scope` | everywhere | It is for the legacy JSX transform. React 19 uses the automatic runtime, where `React` is not in scope and does not need to be |
+| `import/no-unassigned-import` | `src/main.tsx` only | `import "./styles.css"` is how Vite gets the stylesheet into the bundle. It has no binding by design |

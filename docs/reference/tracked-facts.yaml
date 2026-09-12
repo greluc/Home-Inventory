@@ -72,6 +72,10 @@ scope:
     - docs/README.md
   exclude:
     - docs/adr/**          # the record of history — see the note above
+    # This file. It is the one place that has to spell every retired literal out
+    # in order to forbid it, and a check that failed on its own definitions would
+    # be a check nobody could write down.
+    - docs/reference/tracked-facts.yaml
     - LICENSES/**          # verbatim third-party text (REQ-CON-014)
     - LICENSE
     - CODE_OF_CONDUCT.md
@@ -265,16 +269,6 @@ computed:
 retired:
 
   forbidden:
-    - literal: "7Q2-M4X-9KD"
-      replacedBy: "7Q2M-4X9K-D2F"
-      by: ADR-0030
-      why: >
-        The eight-payload-character form with a Crockford modulo-37 check character. It
-        survived in 13 design-system files and 5 website locations while ADR-0030's own
-        consequence claimed the corpus now carried one string "everywhere". It is the
-        identifier this product prints onto physical labels, so a superseded spelling in
-        a published page is the worst place for it.
-
     - literal: "sha256/<hash>"
       replacedBy: "sha256/<tenantId>/<hash>"
       by: ADR-0032
@@ -318,6 +312,22 @@ retired:
         because it is the value most likely to be copied forward into a new document.
 
   named:
+    - pattern: "7Q2-M4X-9KD"
+      by: ADR-0030
+      allowedIn:
+        # The gate's own description, which quotes this spelling as the example of
+        # what it catches. It moved here from `forbidden` on 2026-09-12, when the
+        # check was first written and found it: a literal that is at zero
+        # occurrences everywhere EXCEPT the document explaining why is exactly what
+        # the `named` class is for.
+        - .github/workflows/README.md
+      why: >
+        The eight-payload-character form with a Crockford modulo-37 check character. It
+        survived in 13 design-system files and 5 website locations while ADR-0030's own
+        consequence claimed the corpus now carried one string "everywhere". It is the
+        identifier this product prints onto physical labels, so a superseded spelling in
+        a published page is the worst place for it.
+
     - pattern: "Cross-Origin-Embedder-Policy|\\bCOEP\\b"
       by: ADR-0040
       allowedIn:
@@ -330,6 +340,9 @@ retired:
         - docs/README.md
         - deploy/services.yaml
         - .github/workflows/README.md
+        # The gate itself. REQ-SEC-061 makes the header's reappearance a build
+        # failure, and a check cannot refuse a string without naming it.
+        - .github/workflows/ci.yml
       why: >
         The header is deliberately NOT sent, and REQ-SEC-061 fails CI if it reappears —
         so the corpus has to name it in order to say so. It survived two withdrawals

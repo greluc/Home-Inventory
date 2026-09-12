@@ -4,8 +4,10 @@
  */
 package de.greluc.homeinv.platform;
 
+import java.net.IDN;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Locale;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,7 +59,7 @@ public final class MediaHostCheck {
     String applicationHost = hostOf(publicBaseUrl, "HOMEINV_PUBLIC_BASE_URL");
     String mediaHost = hostOf(mediaBaseUrl, "HOMEINV_MEDIA_BASE_URL");
 
-    if (applicationHost.equalsIgnoreCase(mediaHost)) {
+    if (applicationHost.equals(mediaHost)) {
       throw new IllegalStateException(
           ("HOMEINV_MEDIA_BASE_URL and HOMEINV_PUBLIC_BASE_URL name the same host (%s). Media is "
                   + "arbitrary bytes a tenant uploaded; serving it from the application's own "
@@ -82,7 +84,8 @@ public final class MediaHostCheck {
    * Whether two hosts share a registrable domain, to the extent this can be decided without a
    * public-suffix list.
    *
-   * <p>The comparison is "one is a subdomain of the other, or both share their last two labels".
+   * <p>Both arguments are already normalised by {@link #hostOf}. The comparison is "one is a
+   * subdomain of the other, or both share their last two labels".
    * That is an approximation: it treats {@code a.co.uk} and {@code b.co.uk} as same-site when they
    * are not. The consequence of being wrong here is a <em>missing warning</em>, never a wrong
    * decision — nothing is enforced on the strength of it — which is why a public-suffix list and
@@ -93,12 +96,10 @@ public final class MediaHostCheck {
    * @return true when they are plausibly same-site
    */
   private static boolean sameSite(String first, String second) {
-    String a = first.toLowerCase(java.util.Locale.ROOT);
-    String b = second.toLowerCase(java.util.Locale.ROOT);
-    if (a.endsWith("." + b) || b.endsWith("." + a)) {
+    if (first.endsWith("." + second) || second.endsWith("." + first)) {
       return true;
     }
-    return registrable(a).equals(registrable(b));
+    return registrable(first).equals(registrable(second));
   }
 
   private static String registrable(String host) {
@@ -109,6 +110,19 @@ public final class MediaHostCheck {
     return labels[labels.length - 2] + "." + labels[labels.length - 1];
   }
 
+  /**
+   * The host a URL names, normalised the way a hostname is normalised.
+   *
+   * <p>{@link IDN#toASCII} first, then lowercase. That order matters and is not
+   * ceremony: a hostname is ASCII on the wire, an internationalised one is punycode, and
+   * lowercasing before the conversion would fold characters the conversion has its own rules for.
+   * After it, everything is ASCII and the case change is exact.
+   *
+   * @param url the configured URL
+   * @param variable the variable it came from, for the message
+   * @return the normalised host
+   * @throws IllegalStateException when the URL is malformed or names no host
+   */
   private static String hostOf(String url, String variable) {
     try {
       String host = new URI(url).getHost();
@@ -116,8 +130,8 @@ public final class MediaHostCheck {
         throw new IllegalStateException(
             variable + " is '" + url + "', which names no host. It must be an absolute URL.");
       }
-      return host;
-    } catch (URISyntaxException malformed) {
+      return IDN.toASCII(host).toLowerCase(Locale.ROOT);
+    } catch (URISyntaxException | IllegalArgumentException malformed) {
       throw new IllegalStateException(variable + " is not a valid URL: " + url, malformed);
     }
   }

@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The first line against a leaked secret (REQ-SEC-051).
+#
+# CI scans too, and the two are not redundant. By the time CI sees a commit the
+# secret is in the history of a branch, fetchable by anybody who can clone it,
+# and rotating it is the only remedy. A hook that refuses the commit means there
+# is nothing to rotate.
+#
+# Install once, per clone:
+#
+#     pip install pre-commit
+#     pre-commit install
+#
+# Nothing enforces that. A hook is local by nature, and a repository cannot make
+# a contributor run one — which is exactly why the same check runs in CI.
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # A control character in a text file is never intentional and is close to
+      # invisible in a diff. Two reached this repository through a shell heredoc
+      # — a NUL where a space belonged in a cursor fingerprint, and a backspace
+      # where a regex needed `\b` — and both were found by a sweep rather than by
+      # anybody reading the file.
+      - id: check-byte-order-marker
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+        exclude: '^(design-system/assets/|gradle/wrapper/|LICENSES/)'
+      - id: trailing-whitespace
+        exclude: '^(design-system/assets/|gradle/wrapper/|LICENSES/)'
+      - id: check-yaml
+        # The generated Quadlet units are systemd, not YAML, despite living
+        # beside files that are.
+        exclude: '^deploy/quadlet/'
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=2048']

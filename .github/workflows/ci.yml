@@ -46,6 +46,13 @@ jobs:
       - name: Build, test and verify the architecture
         run: ./gradlew --no-daemon build
 
+      # REQ-SEC-076. `max` effort and a `low` threshold, on a codebase where the
+      # whole analysis costs seconds — a threshold that hides findings is a
+      # threshold that hides the one that mattered. Every suppression in
+      # `config/spotbugs-exclude.xml` carries the reason it does not apply.
+      - name: SpotBugs with find-sec-bugs
+        run: ./gradlew --no-daemon :app:spotbugsMain
+
       - name: Publish the test report
         if: always()
         uses: actions/upload-artifact@v7
@@ -174,6 +181,12 @@ jobs:
 
       - name: Types
         run: npm run typecheck
+
+      # REQ-SEC-076, with `oxlint` in place of ESLint: `typescript-eslint` refuses
+      # to load under TypeScript 7 and this client is on it. The requirement
+      # records the substitution and the reason.
+      - name: Lint
+        run: npm run lint
 
       - name: Build
         run: npm run build
@@ -351,6 +364,82 @@ jobs:
           fi
           echo "Runs as $user."
 
+  contributions:
+    name: Contribution rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Every commit the pull request adds, not just its tip.
+          fetch-depth: 0
+
+      # REQ-CON-003. The DCO trailer is the contributor's statement that they
+      # have the right to submit the work; a missing one is not a formatting
+      # problem, it is a missing statement (CONTRIBUTING.md, ADR-0018).
+      - name: Every commit is signed off and conventionally named
+        run: |
+          set -uo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          if [ -z "$base" ]; then
+            # A push to main: check the commits it added.
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            echo "No base commit to compare against; nothing to check."
+            exit 0
+          fi
+
+          fail=0
+          for commit in $(git rev-list "$base..$head"); do
+            subject=$(git log -1 --format=%s "$commit")
+            # A merge commit has no author statement to make and no subject to
+            # conform to.
+            if [ "$(git rev-list --parents -n 1 "$commit" | wc -w)" -gt 2 ]; then
+              continue
+            fi
+            if ! git log -1 --format=%B "$commit" | grep -qE '^Signed-off-by: .+ <.+@.+>$'; then
+              echo "::error::$commit has no Signed-off-by trailer: $subject"
+              echo "         Use \`git commit -s\`; never type the trailer by hand."
+              fail=1
+            fi
+            if ! echo "$subject" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'; then
+              echo "::error::$commit is not a Conventional Commit: $subject"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "Every commit is signed off and conventionally named."
+          exit $fail
+
+      # REQ-SEC-078. `pull_request_target` runs with the BASE repository's
+      # secrets against the HEAD repository's code, which is a fork's code with
+      # our tokens. There is no use of it in this repository that would be worth
+      # that.
+      - name: CI permissions are minimal and pull_request_target is absent
+        run: |
+          set -uo pipefail
+          fail=0
+          for workflow in .github/workflows/*.yml; do
+            # Matched as a TRIGGER rather than as a word: this step names the
+            # string in order to refuse it, and a bare grep finds itself.
+            if grep -qE '^[[:space:]]*pull_request_target:' "$workflow"; then
+              echo "::error file=$workflow::pull_request_target is forbidden (REQ-SEC-078)"
+              fail=1
+            fi
+            if ! grep -qE '^permissions:' "$workflow"; then
+              echo "::error file=$workflow::no workflow-level permissions block; the default is"
+              echo "         whatever the repository grants, which is more than a job needs"
+              fail=1
+            fi
+            if grep -qE '^permissions:\s*write-all' "$workflow"; then
+              echo "::error file=$workflow::write-all is not minimal"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "Every workflow declares minimal permissions."
+          exit $fail
+
   documentation:
     name: Documentation rules
     runs-on: ubuntu-latest
@@ -386,6 +475,68 @@ jobs:
             exit 1
           fi
           echo "No American spelling found in the prose."
+
+      # REQ-CON-015. A fact stated twice is checked, not trusted: the number of
+      # ADRs, of requirements per area, of design-system modules, the profile
+      # memory sums — each is recorded once with the expression that computes it,
+      # and every restatement is compared against the computed value. Retired
+      # spellings fail wherever they are not explicitly allowed.
+      - name: Tracked facts and retired literals
+        run: |
+          pip install --quiet pyyaml
+          python tools/tracked_facts.py
+
+      # REQ-CON-012 and REQ-CON-002. The corpus is English, file names included.
+      # A German-language document is not a translation problem — it is a second
+      # corpus, and the second one is the one that stops being updated.
+      - name: No German-language document
+        run: |
+          set -uo pipefail
+          # Words that are German and are not also English, not identifiers, and
+          # not plausible in an English sentence. Deliberately short: a list that
+          # produces one false positive is a list somebody switches off.
+          pattern='\b(und|oder|nicht|werden|wurde|müssen|sollte|kann|dieser|diese|dieses|einen|einem|eine)\b'
+          files=$(git ls-files '*.md' | grep -v '^LICENSES/' | grep -v '^design-system/' \
+                  | grep -v '^website/' | grep -v '^CODE_OF_CONDUCT.md')
+          if grep -nEHiw "$pattern" $files | grep -v 'spelling-exempt'; then
+            echo "::error::a German-language document in the corpus (REQ-CON-012)"
+            exit 1
+          fi
+          echo "The corpus is English."
+
+      # REQ-CON-002: diagrams are Mermaid in plain text. A binary diagram is one
+      # nobody can review in a pull request and one that needs a tool to open.
+      - name: No binary diagram
+        run: |
+          set -uo pipefail
+          if git ls-files '*.drawio' '*.vsdx' '*.graffle' '*.png' '*.jpg' '*.svg' \
+             | grep -vE '^(design-system/assets/|website/)' | grep -q .; then
+            echo "::error::a binary or vector diagram outside the asset directories (REQ-CON-002)"
+            git ls-files '*.drawio' '*.vsdx' '*.graffle' '*.png' '*.jpg' '*.svg' \
+              | grep -vE '^(design-system/assets/|website/)'
+            exit 1
+          fi
+          echo "Every diagram is Mermaid in plain text."
+
+      # Two control characters reached this repository through a shell heredoc: a
+      # NUL where a space belonged in a cursor fingerprint, and a backspace where
+      # a regex needed a word boundary. Both were invisible in a diff and both
+      # changed what the code did.
+      - name: No control character in a text file
+        run: |
+          set -uo pipefail
+          fail=0
+          for file in $(git ls-files); do
+            case "$file" in
+              design-system/assets/*|gradle/wrapper/*|*.ttf|*.woff2|*.png|*.jpg|*.ico) continue ;;
+            esac
+            if LC_ALL=C grep -qP '[\x00\x07\x08\x0b\x0c\x1b]' "$file" 2>/dev/null; then
+              echo "::error file=$file::a control character in a text file"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "No stray control characters."
+          exit $fail
 
       # Every relative link in the corpus resolves. A dead link in a document
       # that calls itself the single source of truth is worse than no document.

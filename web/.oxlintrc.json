@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "plugins": [
+    "typescript",
+    "react",
+    "unicorn",
+    "oxc",
+    "import",
+    "promise"
+  ],
+  "rules": {
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "react/react-in-jsx-scope": "off"
+  },
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "nginx/**"
+  ],
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "overrides": [
+    {
+      "files": [
+        "scripts/**/*.mjs"
+      ],
+      "env": {
+        "node": true,
+        "browser": false
+      }
+    },
+    {
+      "files": [
+        "src/main.tsx"
+      ],
+      "rules": {
+        "import/no-unassigned-import": "off"
+      }
+    }
+  ]
+}

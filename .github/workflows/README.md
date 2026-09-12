@@ -88,7 +88,8 @@ and assert two things over the scope it declares:
 1. **Computed facts.** Each entry carries the expression that derives it from the
    repository and a pattern that finds restatements of it. Recompute; then every capture
    of that pattern in scope must equal the computed value. The patterns name the **unit**
-   — `48 decision records`, not `48` — which is what keeps this free of false positives
+   — `<n> decision records`, not a bare `<n>` — which is what keeps this free of false
+   positives
    without a file allowlist, and a file allowlist would be its own drift: the next
    document to restate a fact would not be on it.
 2. **Retired literals.** Spellings a decision replaced. `forbidden` entries must not
@@ -110,11 +111,11 @@ doing:
   of them the superseded convention that folded three plugins into one total and not the
   other;
 - the requirement count read **415** in two files after it was 419;
-- **"44 decision records"** went out on the published front page and in two meta
-  descriptions, one day after there were 48 — the website restates the corpus and nothing
-  diffs it;
-- **"48 components"** sat in ADR-0035 and the CHANGELOG and matched nothing countable:
-  there are 47 modules exporting 55 components;
+- the **ADR count** went out on the published front page and in two meta descriptions four
+  behind the directory it describes, one day after the difference appeared — the website
+  restates the corpus and nothing diffs it;
+- a **component count** sat in ADR-0035 and the CHANGELOG and matched nothing countable —
+  neither the number of modules nor the number of exports, which differ;
 - the printed public code appeared as **`7Q2-M4X-9KD`** in 13 design-system files and 5
   website locations — the spelling ADR-0030 replaced, in the one identifier this product
   prints onto physical labels, while that ADR's own consequence claimed the corpus now

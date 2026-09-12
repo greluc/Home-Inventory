@@ -51,9 +51,16 @@ export function App(): React.JSX.Element {
   );
 
   useEffect(() => {
-    if (session) {
-      void reload(query);
+    if (!session) {
+      return;
     }
+    // Debounced, and not for the user's benefit. This runs on every keystroke,
+    // and each run is a full-text query against PostgreSQL on a machine that may
+    // be a Raspberry Pi — typing "Bohrmaschine" unthrottled is twelve searches
+    // for one answer. 250 ms is below the point where the list feels delayed and
+    // above the interval between keystrokes.
+    const timer = setTimeout(() => void reload(query), 250);
+    return () => clearTimeout(timer);
   }, [session, query, reload]);
 
   if (checking) {

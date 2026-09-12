@@ -45,12 +45,22 @@ public class ItemSearchAdapter implements ItemSearchQuery {
    * name, and the only safe way to let input decide a column name is to let it decide only between
    * values that were written here.
    */
+  private static boolean isEnglish(String language) {
+    // Exact, and deliberately not case-insensitive. Case folding is
+    // locale-dependent — in Turkish `I` folds to a dotless character and "EN"
+    // stops equalling "en" — and this value decides which generated column a
+    // query reads. The API accepts the two-letter code the principal's display
+    // language produces, which is lowercase; a caller that sends "EN" gets the
+    // German vector, which is a wrong answer rather than a silent one.
+    return "en".equals(language);
+  }
+
   private static String vectorColumn(String language) {
-    return "en".equalsIgnoreCase(language) ? "search_vector_en" : "search_vector_de";
+    return isEnglish(language) ? "search_vector_en" : "search_vector_de";
   }
 
   private static String regconfig(String language) {
-    return "en".equalsIgnoreCase(language) ? "english" : "german";
+    return isEnglish(language) ? "english" : "german";
   }
 
   private final JdbcClient jdbc;

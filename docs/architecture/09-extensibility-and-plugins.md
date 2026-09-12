@@ -72,7 +72,7 @@ metadata:
   license: "Apache-2.0"
   homepage: "https://github.com/greluc/homeinv-plugin-isbn"
   descriptions:
-    de: "Löst ISBN-10 und ISBN-13 über Open Library und die DNB auf."
+    de: "Löst ISBN-10 und ISBN-13 über Open Library und die DNB auf."   # spelling-exempt: a manifest's own multilingual DATA, which is exactly what this example is showing
     en: "Resolves ISBN-10 and ISBN-13 via Open Library and DNB."
 
 spec:

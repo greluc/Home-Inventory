@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.protobuf)
+    alias(libs.plugins.spotbugs)
 }
 
 dependencies {
@@ -122,4 +123,45 @@ protobuf {
             }
         }
     }
+}
+
+// SpotBugs with find-sec-bugs (REQ-SEC-076). It reads bytecode, so it sees what
+// the compiler produced rather than what the source looked like — which is the
+// point for a class of finding that lives in what a framework generates around
+// the code somebody wrote.
+dependencies {
+    spotbugsPlugins(libs.findsecbugs)
+}
+
+spotbugs {
+    // `max` effort, `low` threshold: this runs on a codebase of a few thousand
+    // lines, where the whole analysis costs seconds, and a threshold that hides
+    // findings is a threshold that hides the one that mattered.
+    effort = com.github.spotbugs.snom.Effort.MAX
+    reportLevel = com.github.spotbugs.snom.Confidence.LOW
+    excludeFilter = rootProject.file("config/spotbugs-exclude.xml")
+}
+
+tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
+    reports.create("sarif") {
+        // SARIF, so GitHub shows a finding on the line that caused it rather than
+        // in a log somebody has to open.
+        required = true
+        outputLocation = layout.buildDirectory.file("reports/spotbugs/${name}.sarif")
+    }
+    reports.create("html") { required = true }
+}
+
+// The TEST sources are not analysed. SpotBugs runs to find what could be attacked
+// in the code that SHIPS, and test code is neither shipped nor reachable — while
+// it is full of the shapes find-sec-bugs is designed to shout about: a throwaway
+// certificate authority, a hardcoded fixture password, a temporary file named by
+// the test. Analysing it would bury the findings that matter under the ones that
+// cannot (REQ-SEC-076).
+tasks.named("spotbugsTest") { enabled = false }
+
+// The generated protobuf classes are not ours to fix, and SpotBugs has plenty to
+// say about generated builders. Analysing them would bury every real finding.
+tasks.named<com.github.spotbugs.snom.SpotBugsTask>("spotbugsMain") {
+    classes = classes?.filter { !it.path.contains("plugin${File.separator}v1") }
 }

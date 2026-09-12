@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-FileCopyrightText: Lucas Greuloch
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  What SpotBugs and find-sec-bugs are told not to report, and why each one is not
+  a hole (REQ-SEC-076).
+
+  Every entry here is a pattern that is WRONG for this codebase rather than one
+  that is inconvenient. A suppression added to make a build green is how a
+  security tool becomes a formality, so each carries the reason it does not
+  apply — and a reader who disagrees has something specific to argue with.
+
+  Nothing that describes a real property of this code is in here. The three
+  findings that did were fixed rather than excluded: a locale-dependent
+  comparison deciding a column name, a case fold on upload bytes immediately
+  before a security decision, and a NullPointerException used as a conditional.
+-->
+<FindBugsFilter>
+
+  <!--
+    CRLF_INJECTION_LOGS fires on every parameterised log statement carrying a
+    value that came from outside. It is worth taking seriously and it is already
+    answered twice over here:
+
+      * TextInputModule strips every control character from every string that
+        arrives through JSON, at the edge, before anything sees it (REQ-SEC-032).
+        A newline cannot reach a log line through the API;
+      * the deployment logs JSON lines (REQ-NFR-041), where the encoder escapes a
+        newline inside a value rather than ending the record.
+
+    A forged log line needs both of those to fail. What this rule would buy in
+    exchange is a suppression comment on every log statement in the codebase.
+  -->
+  <Match>
+    <Bug pattern="CRLF_INJECTION_LOGS"/>
+    <Class name="~de\.greluc\.homeinv\..*"/>
+  </Match>
+
+  <!--
+    SE_TRANSIENT_FIELD_NOT_RESTORED on our exception types. They carry an id or a
+    field name and are never serialised: they exist to cross a method boundary
+    and be turned into a problem document. `Exception` is `Serializable` by
+    inheritance, which is the only reason the rule looks at them at all.
+  -->
+  <Match>
+    <Bug pattern="SE_TRANSIENT_FIELD_NOT_RESTORED,SE_BAD_FIELD"/>
+    <Class name="~de\.greluc\.homeinv\..*Exception"/>
+  </Match>
+
+  <!--
+    CT_CONSTRUCTOR_THROW. Several configuration holders validate in their
+    constructor and refuse to be built — UrlSigningKey, TrustedProxies,
+    MediaHostCheck, MediaUrlSigner, PasswordHashingProperties. That is the
+    design: a missing or wrong security-relevant setting aborts startup rather
+    than producing an object that works and is wrong (CLAUDE.md, Security;
+    REQ-NFR-046). The partially-constructed-object attack the rule guards against
+    needs a subclass, and every one of these types is final or a Spring
+    singleton nobody extends.
+  -->
+  <Match>
+    <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    <Class name="~de\.greluc\.homeinv\..*"/>
+  </Match>
+
+  <!--
+    Lombok generates the constructors and getters, and SpotBugs reports on the
+    bytecode: a @RequiredArgsConstructor storing a collection parameter is
+    EI_EXPOSE_REP2 every time. Copying every argument by hand is the boilerplate
+    Lombok removes, on Spring beans holding other Spring beans.
+  -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    <Class name="~de\.greluc\.homeinv\..*"/>
+  </Match>
+
+  <!--
+    Generated protobuf and gRPC classes. Not ours to fix, and SpotBugs has a
+    great deal to say about generated builders.
+  -->
+  <Match>
+    <Package name="~de\.greluc\.homeinv\.plugin\.v1.*"/>
+  </Match>
+
+  <!--
+    Spring injects into @Value fields and SpotBugs cannot see it, so each reads
+    as never written and then as possibly null.
+  -->
+  <Match>
+    <Bug pattern="UWF_UNWRITTEN_FIELD,NP_UNWRITTEN_FIELD,UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR,NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+    <Class name="~de\.greluc\.homeinv\..*"/>
+  </Match>
+
+  <!--
+    RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE inside try-with-resources. The
+    compiler generates the null check; the source has none.
+  -->
+  <Match>
+    <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    <Class name="~de\.greluc\.homeinv\..*"/>
+  </Match>
+
+  <!--
+    SPRING_ENDPOINT is informational: it reports that a method is a Spring
+    endpoint, which every method in `rest` is by design. It exists to give a
+    reviewer an inventory, and an inventory that fails a build is a build that
+    fails for having endpoints.
+  -->
+  <Match>
+    <Bug pattern="SPRING_ENDPOINT"/>
+  </Match>
+
+  <!--
+    WEAK_TRUST_MANAGER on BlobStoreChannelFactory's pinned trust manager. The rule
+    assumes a custom trust manager is a weakened one; this one is STRICTER than
+    CA validation. The deployment's CA signs `api`, `worker`, `blobstore` and every
+    plugin, so accepting anything it signed would let a compromised plugin answer
+    as the blob store. Pinning the single certificate that may answer is the
+    mechanism REQ-SEC-056 asks for, and ADR-0044 is the reason.
+  -->
+  <Match>
+    <Bug pattern="WEAK_TRUST_MANAGER,WEAK_HOSTNAME_VERIFIER"/>
+    <Class name="~de\.greluc\.homeinv\.media\.infrastructure\.BlobStoreChannelFactory.*"/>
+  </Match>
+
+  <!--
+    UNENCRYPTED_SOCKET on the clamd INSTREAM connection. The clamd protocol has no
+    TLS to speak: it is a plain socket by design, on the `scanner` segment, which
+    carries this connection and nothing else (ADR-0024, ADR-0037). What travels on
+    it is an upload that has not been accepted yet, to a process whose only reply
+    is a verdict.
+  -->
+  <Match>
+    <Bug pattern="UNENCRYPTED_SOCKET"/>
+    <Class name="de.greluc.homeinv.media.infrastructure.ClamAvScanner"/>
+  </Match>
+
+  <!--
+    COMMAND_INJECTION on the libvips subprocess. There is no shell: ProcessBuilder
+    takes a LIST, so every element is one argument and nothing is parsed. The
+    elements are the configured binary name, two paths this process created with
+    `Files.createTempFile`, and a format string built from an int. No caller-supplied
+    value reaches any of them — the image the subprocess reads is a temporary file,
+    named by us, whose CONTENT is the untrusted part, which is precisely why it is
+    decoded in a subprocess rather than in this one (O29).
+  -->
+  <Match>
+    <Bug pattern="COMMAND_INJECTION"/>
+    <Class name="de.greluc.homeinv.media.infrastructure.VipsImageProcessor"/>
+  </Match>
+
+  <!--
+    SERVLET_HEADER on the forwarded-header filter. Reading X-Forwarded-For is what
+    the class is for, and it is the one place in the application that does: it
+    applies the header only when the PEER is in HOMEINV_TRUSTED_PROXIES, which is
+    the check the rule is asking for (REQ-SEC-063).
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.TrustedForwardedHeaderFilter"/>
+  </Match>
+
+  <!--
+    `throws Exception` on the security filter chain bean. It is Spring's own
+    signature for HttpSecurity.build(), and narrowing it would mean catching and
+    rethrowing an exception whose only correct handling is to fail startup.
+  -->
+  <Match>
+    <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    <Class name="de.greluc.homeinv.rest.WebSecurityConfiguration"/>
+  </Match>
+
+  <!--
+    The Hibernate UserType contract hands back the Serializable that `disassemble`
+    produced, which for this type is always a String. The cast cannot fail without
+    Hibernate handing back somebody else's value.
+  -->
+  <Match>
+    <Bug pattern="BC_UNCONFIRMED_CAST"/>
+    <Class name="de.greluc.homeinv.platform.LtreeType"/>
+  </Match>
+
+  <!--
+    PZLA_PREFER_ZERO_LENGTH_ARRAYS where null means ABSENT rather than empty:
+    `TrustedProxies.parse` returns null for "not an address" and
+    `UrlSigningKey.tryDecodeBase64` for "not base64". A zero-length array would be
+    a valid empty value, and both callers branch on exactly that difference.
+  -->
+  <Match>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+    <Class name="~de\.greluc\.homeinv\.platform\.(TrustedProxies|UrlSigningKey)"/>
+  </Match>
+
+  <!--
+    IMPROPER_UNICODE on TextInputModule's NFC normalisation. Normalising IS the
+    class's purpose, and the order is the one the rule wants: normalise, strip
+    control characters, trim — and only then does Bean Validation run on the
+    result (REQ-SEC-032). Validating before normalising is the mistake; this is
+    the other way round.
+  -->
+  <Match>
+    <Bug pattern="IMPROPER_UNICODE"/>
+    <Class name="~de\.greluc\.homeinv\.platform\.TextInputModule.*"/>
+  </Match>
+
+  <!--
+    IMPROPER_UNICODE on MediaHostCheck's hostname normalisation. `IDN.toASCII`
+    then lowercase is what normalising a hostname IS, and the order is the
+    load-bearing part: after the punycode conversion everything is ASCII and the
+    case change is exact, so the fold the rule warns about cannot happen.
+  -->
+  <Match>
+    <Bug pattern="IMPROPER_UNICODE"/>
+    <Class name="de.greluc.homeinv.platform.MediaHostCheck"/>
+  </Match>
+
+</FindBugsFilter>
