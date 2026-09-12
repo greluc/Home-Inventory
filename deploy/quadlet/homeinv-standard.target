@@ -1,0 +1,36 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory, standard profile
+Requires=homeinv-web.service
+Requires=homeinv-api.service
+Requires=homeinv-worker.service
+Requires=homeinv-migrate.service
+Requires=homeinv-bootstrap.service
+Requires=homeinv-postgres.service
+Requires=homeinv-valkey.service
+Requires=homeinv-blobstore.service
+Requires=homeinv-clamav.service
+Requires=homeinv-egress-proxy.service
+Requires=homeinv-opensearch.service
+Requires=homeinv-rabbitmq.service
+After=homeinv-web.service
+After=homeinv-api.service
+After=homeinv-worker.service
+After=homeinv-migrate.service
+After=homeinv-bootstrap.service
+After=homeinv-postgres.service
+After=homeinv-valkey.service
+After=homeinv-blobstore.service
+After=homeinv-clamav.service
+After=homeinv-egress-proxy.service
+After=homeinv-opensearch.service
+After=homeinv-rabbitmq.service
+
+[Install]
+WantedBy=default.target

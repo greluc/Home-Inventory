@@ -65,6 +65,3 @@ TimeoutStartSec=210
 MemoryMax=1536M
 MemoryLow=512M
 Restart=on-failure
-
-[Install]
-WantedBy=default.target

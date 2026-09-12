@@ -809,6 +809,23 @@ def literal(value: str) -> str:
     return value.replace("%", "%%")
 
 
+def profiles(matrix: dict) -> list[str]:
+    """Every deployment profile the matrix names, in the order it names them.
+
+    Derived rather than listed: a profile exists because a service is in it, and a
+    second place to write `minimal, standard, ha` is a second place to forget one.
+
+    :param matrix: the parsed matrix
+    :return: the profile names, first appearance first
+    """
+    found: list[str] = []
+    for service in matrix["services"].values():
+        for profile in service.get("profiles") or []:
+            if profile not in found:
+                found.append(profile)
+    return found
+
+
 def quadlet(matrix: dict) -> dict[str, str]:
     """Renders the Quadlet units.
 
@@ -990,8 +1007,43 @@ def quadlet(matrix: dict) -> dict[str, str]:
         else:
             body.append(f"Restart={service.get('restart', d['restart'])}")
 
-        body += ["", "[Install]", "WantedBy=default.target", ""]
+        # No [Install] on a container, deliberately. Every unit carried
+        # `WantedBy=default.target` until 2026-09-12, which enabled all of them:
+        # a `minimal` deployment would have started OpenSearch at the operator's
+        # next login, because nothing in a Quadlet unit knows what a profile is.
+        # The profile target below carries the [Install] instead, so enabling one
+        # target enables exactly the deployment that was installed.
         files[f"homeinv-{name}.container"] = "\n".join(body)
+
+    # A target per profile, because systemd has no profiles and Compose does.
+    #
+    # `deploy/setup.sh podman` used to install the units and say
+    # "start with: systemctl --user start homeinv-api". That starts `api` and
+    # what `api` requires — and leaves `web` down, which is the only published
+    # port in the deployment, so the documented command produced a stack with
+    # nothing to connect to. The website meanwhile promised a `homeinv.target`
+    # that did not exist.
+    #
+    # `Requires=` and `After=`, not `Wants=`: the target is reached once the
+    # whole profile is up, so `systemctl --user start homeinv-minimal.target`
+    # returns when the deployment is running and fails when it is not. That is
+    # what makes it the one command of REQ-NFR-028 on this runtime.
+    for profile in profiles(matrix):
+        members = [
+            f"homeinv-{name}.service"
+            for name, service in matrix["services"].items()
+            if profile in (service.get("profiles") or [])
+        ]
+        body = [
+            BANNER.replace("#", ";"),
+            "",
+            "[Unit]",
+            f"Description=Home Inventory, {profile} profile",
+        ]
+        body += [f"Requires={member}" for member in members]
+        body += [f"After={member}" for member in members]
+        body += ["", "[Install]", "WantedBy=default.target", ""]
+        files[f"homeinv-{profile}.target"] = "\n".join(body)
 
     return files
 

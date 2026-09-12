@@ -36,6 +36,3 @@ MemoryLow=256M
 Type=oneshot
 RemainAfterExit=yes
 Restart=no
-
-[Install]
-WantedBy=default.target

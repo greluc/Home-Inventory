@@ -256,49 +256,24 @@ jobs:
           HOMEINV_BOOTSTRAP_EMAIL: owner@example.org
         run: ./deploy/setup.sh ${{ matrix.runtime }}
 
-      - name: Start the units (podman)
+      - name: The whole profile is up (podman)
         if: matrix.runtime == 'podman'
         run: |
           set -euo pipefail
-          # setup.sh installs the Quadlet units and says how to start them; on
-          # Compose it starts the stack itself.
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          systemctl --user daemon-reload
-
-          # Quadlet turns the .container files into services through a systemd
-          # GENERATOR, and a generator that does not run leaves `systemctl start`
-          # saying only "Unit homeinv-api.service not found" — which is what this
-          # job reported, with the units sitting installed and correct one
-          # directory away. So the generator is checked before the unit is, and
-          # what it did is printed rather than guessed at.
-          if ! systemctl --user list-unit-files 'homeinv-*' | grep -q 'homeinv-api'; then
-            echo "::error::the Quadlet generator produced no units from the installed files"
-            echo "--- installed files ---"
-            ls -la "${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd/" || true
-            echo "--- generators present ---"
-            ls -la /usr/lib/systemd/user-generators/ /usr/libexec/podman/ 2>/dev/null || true
-            echo "--- what the generator makes of them ---"
-            /usr/libexec/podman/quadlet -dryrun -user 2>&1 | head -40 || true
-            exit 1
-          fi
-
-          # `systemctl start` reports only "A dependency job for
-          # homeinv-api.service failed" — the unit that actually failed, and why,
-          # are in the journal. Both are printed here, because a smoke job whose
-          # failure names no service is a smoke job somebody re-runs rather than
-          # reads.
-          if ! systemctl --user start homeinv-api.service; then
-            echo "::error::homeinv-api did not start"
-            echo "--- failed units ---"
-            systemctl --user list-units 'homeinv-*' --failed --no-pager || true
-            echo "--- what each failed unit logged ---"
-            for unit in $(systemctl --user list-units 'homeinv-*' --failed --no-legend --plain \
-                          | awk '{print $1}'); do
-              echo "===== $unit"
-              journalctl --user -n 40 --no-pager -u "$unit" || true
-            done
-            exit 1
-          fi
+          # setup.sh starts `homeinv-minimal.target` itself, on both runtimes
+          # one command. This step is the assertion that it did: the target is
+          # reached only when every service the profile names is up, so an
+          # inactive target here means the deployment is incomplete even though
+          # the command that built it returned.
+          #
+          # Until 2026-09-12 this step started `homeinv-api.service` and nothing
+          # else, which left `web` down — the only published port in the
+          # deployment — and would have failed every step below for a reason
+          # that had nothing to do with them.
+          systemctl --user list-units 'homeinv-*' --all --no-pager
+          systemctl --user is-active --quiet homeinv-minimal.target \
+            || { echo "::error::homeinv-minimal.target is not active"; exit 1; }
 
       - name: The API becomes ready
         run: |
@@ -354,7 +329,12 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.runtime }}" = "podman" ]; then
-            systemctl --user restart homeinv-api.service
+            # The whole profile down and up, which is what the Compose branch
+            # does. Restarting a target restarts nothing — a target is reached,
+            # not run — so the services are stopped by name and the target is
+            # started again, which brings back exactly the profile's set.
+            systemctl --user stop 'homeinv-*.service'
+            systemctl --user start homeinv-minimal.target
           else
             (cd deploy/compose && docker compose --profile minimal restart)
           fi
@@ -410,6 +390,17 @@ jobs:
           if [ "${{ matrix.runtime }}" = "podman" ]; then
             echo "::group::unit states"
             systemctl --user list-units 'homeinv-*' --all --no-pager
+            echo "::endgroup::"
+            # Quadlet turns the .container files into services through a systemd
+            # GENERATOR, and a generator that does not run leaves every unit
+            # "not found" with the files sitting installed and correct one
+            # directory away. That happened, and it reported itself as a missing
+            # unit, so what the generator did is printed rather than guessed at.
+            echo "::group::installed files and the generator"
+            ls -la "${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd/"
+            ls -la "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/"
+            ls -la /usr/lib/systemd/user-generators/ /usr/libexec/podman/ 2>/dev/null
+            /usr/libexec/podman/quadlet -dryrun -user 2>&1 | head -40
             echo "::endgroup::"
             # The journal rather than `podman logs`: systemd tears a timed-out unit
             # down together with its container, so the one log worth reading is

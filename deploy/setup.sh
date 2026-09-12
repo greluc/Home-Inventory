@@ -374,8 +374,21 @@ case "$mode" in
         command -v podman >/dev/null 2>&1 || die "podman is not on the PATH."
         step "Installing the Quadlet units"
         units="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
-        mkdir -p "$units"
-        cp "$HERE"/quadlet/* "$units/"
+        targets="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+        mkdir -p "$units" "$targets"
+        # Two destinations, because these are two kinds of file. The `.container`,
+        # `.volume` and `.network` files are Quadlet's, and it reads only its own
+        # directory; the profile targets are ordinary systemd units, and systemd
+        # never reads Quadlet's directory. A target copied to the wrong one of the
+        # two is a file that nothing at all looks at. The README travelled with
+        # them until now and belongs in neither.
+        for unit in "$HERE"/quadlet/*; do
+            case "$unit" in
+                *.target) cp "$unit" "$targets/" ;;
+                *.md) : ;;
+                *) cp "$unit" "$units/" ;;
+            esac
+        done
         echo "$SECRET_KINDS" | while read -r name _; do
             [ -z "$name" ] && continue
             podman secret exists "$name" 2>/dev/null \
@@ -401,8 +414,22 @@ case "$mode" in
 
         systemctl --user daemon-reload
         say "  units installed into $units"
+        say "  profile targets installed into $targets"
         say "  variables installed into $env_dir/homeinv.env"
-        say "  start with: systemctl --user start homeinv-api"
+
+        # The same promise the Compose branch keeps: one command, and the stack
+        # is running (REQ-NFR-028). This branch used to install the units and
+        # print "start with: systemctl --user start homeinv-api", which starts
+        # `api` and the six things `api` requires — leaving `web` down, and `web`
+        # holds the only published port in the deployment. The one command
+        # produced a stack with nothing to connect to.
+        step "Starting the $profile profile"
+        say "  systemctl --user start homeinv-$profile.target"
+        systemctl --user start "homeinv-$profile.target" \
+            || die "homeinv-$profile.target did not come up. systemctl --user list-units 'homeinv-*' says which unit did not."
+        say ""
+        say "  at boot:        systemctl --user enable homeinv-$profile.target"
+        say "  after a logout: loginctl enable-linger \$USER"
         ;;
     *)
         die "Unknown mode '$mode'. Use: check | docker | podman"

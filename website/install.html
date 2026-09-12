@@ -63,7 +63,7 @@ tar -xzf homeinv-quadlet.tar.gz -C ~/.config/containers/systemd
 
 cp homeinv.env.example ~/.config/homeinv/homeinv.env   # set HOMEINV_*
 systemctl --user daemon-reload
-systemctl --user start homeinv.target
+systemctl --user start homeinv-minimal.target
 
 loginctl enable-linger "$USER"   # survive a logout</pre>
   </div>

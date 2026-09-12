@@ -311,15 +311,32 @@ RestartSec=10
 MemoryMax=1536M
 CPUQuota=200%
 
-[Install]
-WantedBy=default.target
+                                                 # No [Install] on a container unit.
+                                                 # Enabling them one by one would start
+                                                 # every service in the matrix at the next
+                                                 # login, OpenSearch included, because a
+                                                 # Quadlet unit knows nothing about
+                                                 # profiles. The profile target carries it.
 ```
+
+#### The profile targets
+
+systemd has no equivalent of a Compose profile, so one is generated: a
+`homeinv-<profile>.target` per profile, naming exactly the services that profile
+contains, with `Requires=` and `After=` on each. The target is reached when the
+whole profile is up, which is what lets one command start a deployment and fail
+when part of it did not come up. The targets are ordinary systemd units and are
+installed into `~/.config/systemd/user/` — Quadlet reads only its own directory,
+and systemd never reads Quadlet's.
 
 Operation — ordinary systemd tooling, nothing container-specific:
 
 ```bash
-systemctl --user daemon-reload          # after changing the unit files
-systemctl --user start homeinv-api
+deploy/setup.sh podman minimal           # installs the units and starts the profile
+
+systemctl --user daemon-reload           # after changing the unit files
+systemctl --user start homeinv-minimal.target
+systemctl --user enable homeinv-minimal.target   # and at every boot
 systemctl --user status homeinv-api
 journalctl --user -u homeinv-api -f
 ```

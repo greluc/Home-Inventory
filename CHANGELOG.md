@@ -41,6 +41,16 @@ commit".
 
 ### Fixed
 
+- **A Podman deployment started `api` and left the user interface down.** The
+  documented command was `systemctl --user start homeinv-api`, which starts
+  `api` and the six units it requires — not `web`, which holds the only
+  published port, nor `worker`, `clamav` or the egress proxy. `deploy/setup.sh`
+  now starts the profile itself, on both runtimes one command, through a
+  generated `homeinv-<profile>.target` that is reached only once every service
+  in the profile is up. Enabling that one target also replaces enabling each
+  unit, which used to start every service in the matrix at the next login —
+  OpenSearch included, in a `minimal` deployment.
+
 - **Under Podman, not one health check could run.** `HealthCmd` was written in
   Compose's `["CMD", ...]` shape, which Podman answers by re-splitting the raw
   text of the array on spaces — so every container carried a check made of

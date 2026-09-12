@@ -28,6 +28,3 @@ HealthStartPeriod=30s
 MemoryMax=32M
 MemoryLow=16M
 Restart=on-failure
-
-[Install]
-WantedBy=default.target
