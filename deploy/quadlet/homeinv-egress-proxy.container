@@ -15,8 +15,8 @@ User=10001:10001
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-scanner.network
-Network=homeinv-egress.network
+Network=homeinv-scanner.network:alias=egress-proxy
+Network=homeinv-egress.network:alias=egress-proxy
 Tmpfs=/tmp:mode=1777
 Tmpfs=/var/run:mode=1777
 Secret=egress-proxy-egress-allowlist.conf,type=mount,target=/etc/homeinv/egress-allowlist.conf

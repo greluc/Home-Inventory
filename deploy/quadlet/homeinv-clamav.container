@@ -15,7 +15,7 @@ User=100:101
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-scanner.network
+Network=homeinv-scanner.network:alias=clamav
 Volume=homeinv-cvddata.volume:/var/lib/clamav
 Tmpfs=/tmp:mode=1777
 Tmpfs=/run/clamav:mode=1777

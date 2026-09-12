@@ -27,8 +27,8 @@ User=10001:10001
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-internal.network:alias=api-internal
-Network=homeinv-frontend.network
+Network=homeinv-internal.network:alias=api,alias=api-internal
+Network=homeinv-frontend.network:alias=api
 Tmpfs=/tmp:mode=1777
 Environment=SPRING_PROFILES_ACTIVE=api,${HOMEINV_PROFILE}
 Environment=HOMEINV_DB_URL=jdbc:postgresql://postgres:5432/homeinv

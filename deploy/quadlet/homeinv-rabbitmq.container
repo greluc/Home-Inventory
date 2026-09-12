@@ -15,7 +15,7 @@ User=999:999
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-internal.network
+Network=homeinv-internal.network:alias=rabbitmq
 Volume=homeinv-mqdata.volume:/var/lib/rabbitmq
 Tmpfs=/tmp:mode=1777
 Tmpfs=/var/log/rabbitmq:mode=1777

@@ -15,7 +15,7 @@ User=10001:10001
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-internal.network
+Network=homeinv-internal.network:alias=blobstore
 Volume=homeinv-blobdata.volume:/var/lib/homeinv/blobs
 Tmpfs=/tmp:mode=1777
 Secret=mtls-blobstore,type=mount

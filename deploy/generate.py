@@ -818,11 +818,23 @@ def quadlet(matrix: dict) -> dict[str, str]:
         # volumes correctly, which it does on its own.
 
         for network in service.get("networks", []):
-            alias = (service.get("networkAliases") or {}).get(network)
-            if alias:
-                body.append(f"Network=homeinv-{network}.network:alias={alias}")
-            else:
-                body.append(f"Network=homeinv-{network}.network")
+            # EVERY membership carries the service's own name as an alias, and
+            # that is what makes the two runtimes equals rather than similar
+            # (REQ-NFR-051). Compose gives a service its short name on every
+            # network it joins, for free; Quadlet names the container
+            # `homeinv-<service>` and aliases nothing, so `postgres` resolved
+            # under Docker and raised UnknownHostException under Podman — the
+            # migrate one-shot could not reach the database, and every service
+            # gated on it stayed down. Every URL in this matrix uses the short
+            # name, so this is the line that makes them true on both.
+            aliases = [name]
+            extra = (service.get("networkAliases") or {}).get(network)
+            if extra and extra not in aliases:
+                aliases.append(extra)
+            body.append(
+                f"Network=homeinv-{network}.network:"
+                + ",".join(f"alias={alias}" for alias in aliases)
+            )
         for volume in service.get("volumes", []):
             body.append(f"Volume=homeinv-{volume['name']}.volume:{volume['path']}")
         for path in service.get("tmpfs", []):

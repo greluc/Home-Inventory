@@ -17,7 +17,7 @@ User=10001:10001
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-internal.network
+Network=homeinv-internal.network:alias=migrate
 Tmpfs=/tmp:mode=1777
 Environment=SPRING_PROFILES_ACTIVE=migrate
 Environment=HOMEINV_DB_MIGRATE_ON_START=true

@@ -17,8 +17,8 @@ User=10001:10001
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-edge.network
-Network=homeinv-frontend.network
+Network=homeinv-edge.network:alias=web
+Network=homeinv-frontend.network:alias=web
 Tmpfs=/tmp:mode=1777
 Tmpfs=/var/cache/nginx:mode=1777
 Tmpfs=/var/run:mode=1777

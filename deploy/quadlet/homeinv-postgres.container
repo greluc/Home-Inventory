@@ -15,7 +15,7 @@ User=70:70
 ReadOnly=true
 DropCapability=ALL
 NoNewPrivileges=true
-Network=homeinv-internal.network
+Network=homeinv-internal.network:alias=postgres
 Volume=homeinv-pgdata.volume:/var/lib/postgresql
 Volume=homeinv-pgwal.volume:/var/lib/homeinv/wal-archive
 Tmpfs=/tmp:mode=1777
