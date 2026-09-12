@@ -61,6 +61,7 @@ HealthStartPeriod=90s
 Notify=healthy
 
 [Service]
+TimeoutStartSec=210
 MemoryMax=1536M
 MemoryLow=512M
 Restart=on-failure

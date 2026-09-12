@@ -221,6 +221,23 @@ def secret_environment(service: dict) -> dict[str, str]:
     }
 
 
+def seconds(duration):
+    """Reads a systemd-style duration as a whole number of seconds.
+
+    :param duration: a string like ``90s``, ``2m`` or ``15``
+    :return: the number of seconds
+    """
+    text = str(duration).strip()
+    if text.endswith("ms"):
+        return max(1, int(text[:-2]) // 1000)
+    if text.endswith("s"):
+        return int(text[:-1])
+    if text.endswith("m"):
+        return int(text[:-1]) * 60
+    if text.endswith("h"):
+        return int(text[:-1]) * 3600
+    return int(text)
+
 def memory(value: str, target: str) -> str:
     """Translates a Kubernetes-style memory quantity for one runtime.
 
@@ -903,6 +920,23 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
         resources = service.get("resources")
         body += ["", "[Service]"]
+
+        # A unit that waits for the container to report HEALTHY needs longer than
+        # systemd's default 90 s to start, because the health check is not even
+        # consulted until the start period is over. `api` declares a 90 s start
+        # period, so systemd gave up at the exact moment the container became
+        # eligible to pass — "Job for homeinv-api.service failed because a timeout
+        # was exceeded", with nothing wrong and nothing in a failed state.
+        #
+        # Derived from the matrix rather than picked: the start period, four
+        # intervals for the check to actually run and pass, and a minute for a
+        # cold image on slow storage.
+        health = service.get("health") or {}
+        if health.get("notify") == "healthy":
+            start_period = seconds(health.get("startPeriod", "0s"))
+            interval = seconds(health.get("interval", "30s"))
+            body.append(f"TimeoutStartSec={start_period + 4 * interval + 60}")
+
         if resources:
             body.append(f"MemoryMax={memory(resources.get('memoryLimit', '512Mi'), 'systemd')}")
             body.append(f"MemoryLow={memory(resources.get('memoryReservation', '128Mi'), 'systemd')}")
