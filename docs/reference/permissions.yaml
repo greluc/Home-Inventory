@@ -164,6 +164,15 @@ permissions:
     since: 1
     description: Remove somebody from the tenant, and withdraw an unused invitation.
 
+
+  - id: tenancy:tenant:delete
+    since: 1
+    description: >
+      Ask for the tenant to be erased (REQ-TEN-011). The one permission OWNER
+      holds and ADMIN does not, and the reason the two are finally different sets
+      rather than only different in what they may grant: erasing a tenant is the
+      act nobody can undo once the grace period is over.
+
 # ---------------------------------------------------------------------------
 # BUILT-IN ROLES
 #

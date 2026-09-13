@@ -111,7 +111,17 @@ public enum Permission {
    */
   MEMBER_UPDATE("tenancy:member:update"),
   /** Remove somebody from the tenant, and withdraw an invitation that has not been used. */
-  MEMBER_REMOVE("tenancy:member:remove");
+  MEMBER_REMOVE("tenancy:member:remove"),
+
+  /**
+   * Ask for the tenant to be erased (REQ-TEN-011).
+   *
+   * <p>The one permission {@code OWNER} holds and {@code ADMIN} does not, and the reason the two
+   * roles are finally different sets rather than only different in what they may grant. Erasing a
+   * tenant is the act nobody else can undo after the grace period, and an administrator who could
+   * start it could start it on their last day.
+   */
+  TENANT_DELETE("tenancy:tenant:delete");
 
   private final String id;
 

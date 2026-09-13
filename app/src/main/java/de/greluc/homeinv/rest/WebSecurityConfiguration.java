@@ -75,7 +75,13 @@ public class WebSecurityConfiguration {
                     // CSRF token would be protecting, and a page that could forge
                     // this request would need that token to begin with.
                     .ignoringRequestMatchers(
-                        "/api/v1/auth/login", "/api/v1/invitations/*/accept"))
+                        "/api/v1/auth/login",
+                        "/api/v1/invitations/*/accept",
+                        // Withdrawing an erasure is the same case again: the
+                        // caller has no session because the pending deletion is
+                        // what stopped them from having one, and the token they
+                        // carry is what a CSRF token would be protecting.
+                        "/api/v1/tenant-revocations/*"))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(
             authorize ->
@@ -100,6 +106,12 @@ public class WebSecurityConfiguration {
                     // invitations sit under /api/v1/tenants and need a permission
                     // like everything else.
                     .requestMatchers(HttpMethod.POST, "/api/v1/invitations/*/accept")
+                    .permitAll()
+                    // Undoing an erasure request has to work for somebody who
+                    // cannot sign in, because the request is what stopped them
+                    // (REQ-TEN-011). Only this path: asking for the erasure sits
+                    // under /api/v1/tenants and needs the OWNER's permission.
+                    .requestMatchers(HttpMethod.POST, "/api/v1/tenant-revocations/*")
                     .permitAll()
                     // The generated OpenAPI document. `springdoc.api-docs.enabled`
                     // is false in every deployment, so this path answers 404

@@ -11,6 +11,7 @@ import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.tenancy.api.InvitationService;
 import de.greluc.homeinv.tenancy.api.MembershipAdministration;
 import de.greluc.homeinv.tenancy.api.QuotaGuard;
+import de.greluc.homeinv.tenancy.api.TenantLifecycle;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
@@ -55,6 +56,7 @@ public class MemberController {
   private final MembershipAdministration members;
   private final InvitationService invitations;
   private final QuotaGuard quotaGuard;
+  private final TenantLifecycle lifecycle;
 
   /**
    * One page of the tenant's members.
@@ -245,6 +247,67 @@ public class MemberController {
    * @param permitted how much is allowed
    */
   public record QuotaState(long used, long permitted) {}
+
+  /**
+   * Asks for the tenant to be erased (REQ-TEN-011, REQ-PRIV-005).
+   *
+   * <p>Answered {@code 202}: nothing is erased, and for thirty days nothing will be. The tenant
+   * stops answering at once — 05 §5.9's "access blocked immediately, data still present" — and the
+   * answer carries the token that withdraws the request and the instant the erasure begins.
+   *
+   * <p>The token comes back in the response because that is the only way it reaches anybody where
+   * {@code plugin-smtp} is not installed, which a {@code minimal} installation is by design. Where
+   * it is, the same link goes out by mail.
+   *
+   * <p>{@code REQ-SEC-021} requires the second factor to be confirmed again for an operation like
+   * this one. It is wired in with the second factor itself; until then the permission and the
+   * owner's session are what stands in front of it, and no release ships without the rest.
+   *
+   * @param tenantId the tenant, which must be the session's
+   * @param user the owner asking
+   * @return the revocation token and when the erasure begins
+   */
+  @DeleteMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @RequiresPermission(Permission.TENANT_DELETE)
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.FORBIDDEN,
+    ProblemType.DELETION_PENDING
+  })
+  public TenantLifecycle.DeletionRequest requestDeletion(
+      @PathVariable UUID tenantId, @AuthenticationPrincipal AuthenticatedUser user) {
+    requireOwnTenant(tenantId, user);
+    return lifecycle.requestDeletion(user.userId());
+  }
+
+  /**
+   * What state the tenant is in.
+   *
+   * <p>Reachable while it is blocked, deliberately: a member who is being refused everything else
+   * is entitled to know why, and 05 §5.9 and open point O26 both say the state is visible to a
+   * member in the administration view.
+   *
+   * @param tenantId the tenant, which must be the session's
+   * @param user the authenticated caller
+   * @return the state
+   */
+  @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TENANT_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.FORBIDDEN})
+  public TenantStateView state(
+      @PathVariable UUID tenantId, @AuthenticationPrincipal AuthenticatedUser user) {
+    requireOwnTenant(tenantId, user);
+    return new TenantStateView(tenantId, lifecycle.state().name());
+  }
+
+  /**
+   * A tenant's state.
+   *
+   * @param id the tenant
+   * @param state {@code ACTIVE}, {@code SUSPENDED} or {@code PENDING_DELETION}
+   */
+  public record TenantStateView(UUID id, String state) {}
 
   /**
    * Refuses a path that names a tenant other than the session's.

@@ -819,6 +819,7 @@ data loss, no migration.
 | `HOMEINV_TRUSTED_PROXIES` | yes | CIDR list; `X-Forwarded-*` is honoured only from here. **Both hops**: the operator's reverse proxy **and** `web`'s address on `frontend` (`REQ-SEC-103`) |
 | `HOMEINV_REGISTRATION_MODE` | no (`invite_only`) | `invite_only` / `open` / `closed` |
 | `HOMEINV_QUOTA_ITEMS`, `_STORAGE_BYTES`, `_PLUGINS`, `_API_CALLS` | no (`100000`, `53687091200`, `10`, `100000`) | The instance-wide default for each of the four quotas of `REQ-TEN-009`, used for any tenant the operator has set no limit for. Storage is 50 GiB; API calls are counted per calendar month. A tenant that reaches one is answered `403` with `quota-exceeded` and both numbers — distinct from the rate limiting of `REQ-SEC-064`, which answers `429` and means "too fast" rather than "spent" |
+| `HOMEINV_TENANT_ERASURE_GRACE_DAYS` | no (`30`) | How long a tenant waits between being asked to be erased and being erased (`REQ-TEN-011`, `REQ-PRIV-005`). Configurable so that a test does not have to wait a month; the shipped default is what the requirements name |
 | `HOMEINV_TENANTS_PER_USER` | no (`10`) | How many tenants one account may be in, unless the operator sets a limit on the account itself. Between 0 and **200**, which is the page size `REQ-NFR-010` caps every collection at — so a person's tenants always fit in one answer and the switcher never silently omits one. A value outside that range **aborts startup** rather than being clamped ([ADR-0057](../adr/0057-the-instance-operator.md)) |
 | `HOMEINV_PROFILE` | no (`standard`) | see 6.10 |
 

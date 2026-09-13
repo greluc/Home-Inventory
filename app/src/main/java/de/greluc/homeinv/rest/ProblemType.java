@@ -70,6 +70,16 @@ public enum ProblemType {
   INVITATION_NOT_YOURS("invitation-not-yours", HttpStatus.FORBIDDEN, "Invitation not yours"),
 
   /**
+   * The tenant is suspended or waiting to be erased (open point O26).
+   *
+   * <p>One token for <b>both</b> states. Two would say which state a tenant is in, and that is a
+   * status oracle over a boundary REQ-SEC-025 closes deliberately — the same reason
+   * {@link #NOT_FOUND} must not be split. A member sees the state in the administration view, where
+   * they are authenticated and entitled to it.
+   */
+  TENANT_INACCESSIBLE("tenant-inaccessible", HttpStatus.FORBIDDEN, "Tenant inaccessible"),
+
+  /**
    * The resource does not exist, <em>or</em> exists and is not visible to this caller.
    *
    * <p>The two are deliberately one token. Separating them would let a caller confirm that a foreign
@@ -108,6 +118,14 @@ public enum ProblemType {
    * grants nothing inside a tenant (ADR-0057).
    */
   LAST_OWNER("last-owner", HttpStatus.CONFLICT, "Last owner"),
+
+  /**
+   * The tenant has already been asked to be erased (REQ-TEN-011).
+   *
+   * <p>Carries when the erasure begins, so a client can say "already requested, and it happens on
+   * the 12th" rather than "something went wrong".
+   */
+  DELETION_PENDING("deletion-pending", HttpStatus.CONFLICT, "Deletion pending"),
 
   /**
    * A sibling already carries the name a location was to be given.
@@ -174,6 +192,15 @@ public enum ProblemType {
    * for them and "this no longer works" is true of every one of the four.
    */
   INVITATION_UNUSABLE("invitation-unusable", HttpStatus.GONE, "Invitation unusable"),
+
+  /**
+   * The revocation link no longer works: unknown, already used, or past the grace period.
+   *
+   * <p>One token for all three, for the reason {@link #INVITATION_UNUSABLE} is one for four:
+   * telling them apart would let whoever holds a link learn that a tenant here was asked to be
+   * erased.
+   */
+  REVOCATION_UNUSABLE("revocation-unusable", HttpStatus.GONE, "Revocation unusable"),
 
   /**
    * Something failed that this application has no specific answer for.

@@ -215,8 +215,8 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 30
-    pattern: '(?:(\d+)|thirty)\s+(?:named\s+)?permissions?\b'
+    value: 31
+    pattern: '(?:(\d+)|thirty-one)\s+(?:named\s+)?permissions?\b'
     notes: >
       Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on
       2026-09-13, and the tenancy block's six with the member administration the same day.

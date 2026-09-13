@@ -28,6 +28,7 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
 
   private final PermissionInterceptor permissionInterceptor;
   private final ApiCallQuotaInterceptor apiCallQuotaInterceptor;
+  private final TenantAccessInterceptor tenantAccessInterceptor;
 
   /**
    * Puts the permission check in front of every handler.
@@ -42,6 +43,10 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
   @Override
   public void addInterceptors(@NonNull InterceptorRegistry registry) {
     registry.addInterceptor(permissionInterceptor);
+    // Before the quota, and after the permission check. A request to a tenant
+    // that is suspended or waiting to be erased answers 403 and should not come
+    // out of anybody's monthly allowance either (REQ-TEN-011, O26).
+    registry.addInterceptor(tenantAccessInterceptor);
     // After the permission check, deliberately. A call the caller was never
     // allowed to make should not come out of their monthly allowance, and the
     // order here is what decides that (REQ-TEN-009).

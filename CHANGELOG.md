@@ -125,6 +125,14 @@ commit".
 
 ### Added
 
+- **A tenant can ask to be erased, and has thirty days to change its mind.** The
+  owner — and only the owner, which is the first thing an administrator may not
+  do — asks, and the tenant stops answering straight away while its data stays
+  exactly where it is. The request comes back with a link that undoes it, and the
+  link works for somebody who cannot sign in, because being unable to sign in is
+  what the request caused. A tenant that is blocked still tells its members why,
+  and still lets them switch to another one. *REST API: additive.*
+
 - **A membership can be confined to one part of the storage tree.** Somebody
   given the garage sees the garage and everything below it — places, items,
   searches — and nothing else, and cannot put anything anywhere else either. The

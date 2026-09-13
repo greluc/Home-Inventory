@@ -359,6 +359,20 @@ components:
       required:
       - key
       type: object
+    DeletionRequest:
+      description: What an erasure request produced.
+      properties:
+        eraseAfter:
+          description: when the grace period runs out and the erasure begins
+          format: date-time
+          type: string
+        revocationToken:
+          description: |-
+            the secret that withdraws it. Returned **once**: where
+            `plugin-smtp` is installed it also goes out by mail, and where it is not — which a
+            `minimal` installation is by design — this is the only way it reaches anybody
+          type: string
+      type: object
     EntitlementsRequest:
       description: The body of an entitlement change.
       properties:
@@ -1194,6 +1208,17 @@ components:
           description: the state it produced, as JSON text
           type: string
       type: object
+    RevokedView:
+      description: The tenant that is answering again.
+      properties:
+        id:
+          description: the tenant
+          format: uuid
+          type: string
+        state:
+          description: its state, which is `ACTIVE` by the time this is returned
+          type: string
+      type: object
     RolePage:
       description: One page of roles.
       properties:
@@ -1460,6 +1485,17 @@ components:
           type: string
         role:
           description: the role the caller holds in it
+          type: string
+      type: object
+    TenantStateView:
+      description: A tenant's state.
+      properties:
+        id:
+          description: the tenant
+          format: uuid
+          type: string
+        state:
+          description: '`ACTIVE`, `SUSPENDED` or `PENDING_DELETION`'
           type: string
       type: object
     TenantView:
@@ -3285,7 +3321,7 @@ paths:
         Withdrawing one that was never made is not an error, for the reason deleting twice is not.
         What it cannot do is take a field from `OWNER`: that grant is the default rather than a
         row, and a tenant whose owner cannot read its own data is one nobody can administer.
-      operationId: revoke
+      operationId: revoke_1
       parameters:
       - description: the field's key
         in: path
@@ -7128,6 +7164,57 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Merges one tag into another (REQ-CORE-063)
+  /api/v1/tenant-revocations/{token}:
+    post:
+      description: Withdraws the erasure request the token belongs to.
+      operationId: revoke
+      parameters:
+      - description: the secret from the link
+        in: path
+        name: token
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokedView'
+          description: the tenant that is active again
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '410':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Revocation unusable (`revocation-unusable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Withdraws the erasure request the token belongs to.
   /api/v1/tenants:
     post:
       description: |-
@@ -7206,6 +7293,141 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Creates a tenant and makes the caller its owner
+  /api/v1/tenants/{tenantId}:
+    delete:
+      description: |-
+        Asks for the tenant to be erased (REQ-TEN-011, REQ-PRIV-005).
+
+        Answered `202`: nothing is erased, and for thirty days nothing will be. The tenant
+        stops answering at once — 05 §5.9's "access blocked immediately, data still present" — and the
+        answer carries the token that withdraws the request and the instant the erasure begins.
+
+        The token comes back in the response because that is the only way it reaches anybody where
+        `plugin-smtp` is not installed, which a `minimal` installation is by design. Where
+        it is, the same link goes out by mail.
+
+        `REQ-SEC-021` requires the second factor to be confirmed again for an operation like
+        this one. It is wired in with the second factor itself; until then the permission and the
+        owner's session are what stands in front of it, and no release ships without the rest.
+      operationId: requestDeletion
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionRequest'
+          description: the revocation token and when the erasure begins
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Deletion pending (`deletion-pending`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Asks for the tenant to be erased (REQ-TEN-011, REQ-PRIV-005)
+    get:
+      description: |-
+        What state the tenant is in.
+
+        Reachable while it is blocked, deliberately: a member who is being refused everything else
+        is entitled to know why, and 05 §5.9 and open point O26 both say the state is visible to a
+        member in the administration view.
+      operationId: state
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantStateView'
+          description: the state
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What state the tenant is in
   /api/v1/tenants/{tenantId}/invitations:
     get:
       description: One page of the tenant's invitations, newest first.

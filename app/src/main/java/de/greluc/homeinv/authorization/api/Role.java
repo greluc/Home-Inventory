@@ -39,11 +39,12 @@ import java.util.Set;
  *   <li>{@code ADMIN} adds configuration: the type system, the value lists, and the members —
  *       inviting, promoting, removing. Not content it does not already hold, but the power to
  *       decide what content may look like and who may make it.
- *   <li>{@code OWNER} is the person the tenant belongs to. It holds everything {@code ADMIN} does;
- *       what it will also hold, and {@code ADMIN} will not, is deleting the tenant
- *       ({@code REQ-TEN-011}). Until that exists the two permission sets are equal, and what
- *       already separates them is {@code REQ-TEN-010}: only an {@code OWNER} may make somebody an
- *       {@code OWNER}, because ownership is a relationship and not a permission set.
+ *   <li>{@code OWNER} is the person the tenant belongs to. It holds everything {@code ADMIN} does
+ *       and one thing more: asking for the tenant to be erased ({@code REQ-TEN-011}). That is the
+ *       act nobody can undo once the grace period is over, and an administrator who could start it
+ *       could start it on their last day. The two are also separated by {@code REQ-TEN-010}: only
+ *       an {@code OWNER} may make somebody an {@code OWNER}, because ownership is a relationship
+ *       and not a permission set.
  * </ul>
  *
  * <p>The change from stage 0 is {@code MEMBER}. It held every permission there was, because stage 0
@@ -157,13 +158,16 @@ public enum Role {
       Permission.MEMBER_INVITE,
       Permission.MEMBER_UPDATE,
       Permission.MEMBER_REMOVE)),
+  // Deliberately NOT Permission.TENANT_DELETE: that is OWNER's, and it is what
+  // makes these two different permission sets rather than only different in what
+  // they may grant (REQ-TEN-011).
 
   /**
    * The person the tenant belongs to.
    *
-   * <p>Equal to {@code ADMIN} in permissions today and not equal in authority: REQ-TEN-010 reserves
-   * granting {@code OWNER} to an {@code OWNER}, and REQ-TEN-011's tenant deletion will be the
-   * permission the two sets differ by.
+   * <p>Everything {@code ADMIN} holds and {@code tenancy:tenant:delete} besides, which is the
+   * permission the two sets differ by. They differ in authority too: REQ-TEN-010 reserves granting
+   * {@code OWNER} to an {@code OWNER}, because ownership is a relationship rather than a set.
    */
   OWNER(EnumSet.allOf(Permission.class));
 

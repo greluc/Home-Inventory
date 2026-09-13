@@ -18,7 +18,10 @@ import de.greluc.homeinv.tenancy.api.InvitationAlreadyOpenException;
 import de.greluc.homeinv.tenancy.api.InvitationNotYoursException;
 import de.greluc.homeinv.tenancy.api.InvitationUnusableException;
 import de.greluc.homeinv.tenancy.api.LastOwnerException;
+import de.greluc.homeinv.tenancy.api.AlreadyPendingDeletionException;
 import de.greluc.homeinv.tenancy.api.QuotaExceededException;
+import de.greluc.homeinv.tenancy.api.RevocationUnusableException;
+import de.greluc.homeinv.tenancy.api.TenantInaccessibleException;
 import de.greluc.homeinv.tenancy.api.RoleEscalationException;
 import de.greluc.homeinv.tenancy.api.TenantLimitReachedException;
 import de.greluc.homeinv.locations.api.TooDeepException;
@@ -142,6 +145,51 @@ public class ApiExceptionHandler {
     ProblemDetail problem = problem(ProblemType.NAME_TAKEN, exception.getMessage(), request);
     problem.setProperty("name", exception.getName());
     return problem;
+  }
+
+  /**
+   * Answers a request to a tenant that is suspended or waiting to be erased (open point O26).
+   *
+   * <p>One token for both states, and no member saying which. That is the point: a caller able to
+   * tell them apart learns something about a tenant they are being kept out of.
+   *
+   * @param exception the refusal
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 403} with {@code tenant-inaccessible}
+   */
+  @ExceptionHandler(TenantInaccessibleException.class)
+  public ProblemDetail handleTenantInaccessible(
+      TenantInaccessibleException exception, HttpServletRequest request) {
+    return problem(ProblemType.TENANT_INACCESSIBLE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a second erasure request for a tenant that already has one.
+   *
+   * @param exception the refusal, carrying when the erasure begins
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 409} with {@code deletion-pending}
+   */
+  @ExceptionHandler(AlreadyPendingDeletionException.class)
+  public ProblemDetail handleAlreadyPendingDeletion(
+      AlreadyPendingDeletionException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(ProblemType.DELETION_PENDING, exception.getMessage(), request);
+    problem.setProperty("eraseAfter", exception.getEraseAfter().toString());
+    return problem;
+  }
+
+  /**
+   * Answers a revocation link that is unknown, spent, or past its grace period.
+   *
+   * @param exception the refusal
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 410} with {@code revocation-unusable}
+   */
+  @ExceptionHandler(RevocationUnusableException.class)
+  public ProblemDetail handleRevocationUnusable(
+      RevocationUnusableException exception, HttpServletRequest request) {
+    return problem(ProblemType.REVOCATION_UNUSABLE, exception.getMessage(), request);
   }
 
   /**

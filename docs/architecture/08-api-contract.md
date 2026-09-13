@@ -45,6 +45,7 @@ forbids database and repository access from the access blocks.
 ├── /instance    /accounts {id}/entitlements · /operators · /tenants/{id}/quotas
 │                                                      (the instance operator only)
 ├── /invitations {token}/accept          (no session: this is how an account is made)
+├── /tenant-revocations {token}          (no session: the erasure is what removed it)
 ├── /roles       {id}   tenant-owned roles and the permissions they add
 ├── /field-visibility   which roles read which sensitive fields
 ├── /item-types  {id}/versions {id}/fields   (the type system)

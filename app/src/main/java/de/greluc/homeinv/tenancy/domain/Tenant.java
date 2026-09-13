@@ -46,6 +46,31 @@ public class Tenant {
   @Column(name = "locale", nullable = false)
   private String locale;
 
+  /**
+   * {@code ACTIVE}, {@code SUSPENDED} or {@code PENDING_DELETION} (REQ-TEN-011).
+   *
+   * <p>The last two are both <em>inaccessible</em> and the API answers them identically, with one
+   * token: which of the two a tenant is in is a status oracle over a boundary REQ-SEC-025 closes
+   * (open point O26).
+   */
+  @Column(name = "lifecycle_state", nullable = false)
+  private String lifecycleState = "ACTIVE";
+
+  @Column(name = "deletion_requested_at")
+  private Instant deletionRequestedAt;
+
+  @Column(name = "deletion_requested_by")
+  private UUID deletionRequestedBy;
+
+  /**
+   * The SHA-256 of the token that withdraws an erasure request (REQ-SEC-048).
+   *
+   * <p>A hash and not the token: a leaked database is not a set of working revocations. The value
+   * itself exists once, in the answer to the request.
+   */
+  @Column(name = "revocation_token_hash")
+  private String revocationTokenHash;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -87,5 +112,59 @@ public class Tenant {
       throw new IllegalArgumentException("A tenant needs a name");
     }
     return new Tenant(id, name, now);
+  }
+
+  /**
+   * Whether this tenant answers at all.
+   *
+   * @return {@code true} only while it is {@code ACTIVE}
+   */
+  public boolean isAccessible() {
+    return "ACTIVE".equals(lifecycleState);
+  }
+
+  /**
+   * Whether an erasure has been asked for and not withdrawn.
+   *
+   * @return {@code true} while the grace period runs
+   */
+  public boolean isPendingDeletion() {
+    return "PENDING_DELETION".equals(lifecycleState);
+  }
+
+  /**
+   * Records an erasure request (REQ-TEN-011).
+   *
+   * <p>The state, the instant and the token move together, and the table's check constraint says
+   * so: a {@code PENDING_DELETION} with no timestamp would be a grace period that never elapses,
+   * and one with no token would be a request nobody can withdraw.
+   *
+   * @param tokenHash the SHA-256 of the revocation token
+   * @param actor the owner asking
+   * @param now the instant of the request
+   */
+  public void requestDeletion(String tokenHash, UUID actor, Instant now) {
+    this.lifecycleState = "PENDING_DELETION";
+    this.deletionRequestedAt = now;
+    this.deletionRequestedBy = actor;
+    this.revocationTokenHash = tokenHash;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Withdraws the request and makes the tenant answer again.
+   *
+   * <p>The token is cleared with it. A token that survived its own revocation would be a second
+   * withdrawal of a request that no longer exists, and the next request gets a token of its own.
+   *
+   * @param now the instant of the withdrawal
+   */
+  public void revokeDeletion(Instant now) {
+    this.lifecycleState = "ACTIVE";
+    this.deletionRequestedAt = null;
+    this.deletionRequestedBy = null;
+    this.revocationTokenHash = null;
+    this.updatedAt = now;
   }
 }
