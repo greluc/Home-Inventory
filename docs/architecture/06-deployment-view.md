@@ -805,7 +805,9 @@ data loss, no migration.
 | `HOMEINV_DB_MIGRATION_USER`, `_PASSWORD_FILE` | yes, **on the `migrate` service only** | For Flyway. The one-shot migration service holds it and exits; `api` and `worker` never see it ([ADR-0041](../adr/0041-migration-as-its-own-service.md)) |
 | `HOMEINV_DB_MIGRATE_ON_START` | no (`false` on `api`/`worker`, `true` on `migrate`) | The application validates the schema at startup; it does not change it |
 | `HOMEINV_JWT_SIGNING_KEY_FILE` | yes | Ed25519 key pair, rotatable (two active keys) |
-| `HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE` | yes | Master key for envelope encryption ([ADR-0019](../adr/0019-sensitive-field-encryption.md)) |
+| `HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE` | yes | Master key for envelope encryption ([ADR-0019](../adr/0019-sensitive-field-encryption.md)). At least 32 bytes, raw or base64; **startup fails without it**, because a generated key differs per instance and every value sealed under it would be unreadable by the next process to start — data loss that looks like a configuration change |
+| `HOMEINV_DATA_ENCRYPTION_MASTER_KEY_VERSION` | no (`1`) | Which version the mounted master key is, 1…255. It is one byte of the authenticated data that wraps each tenant's data key, so a wrapped key cannot be replayed as if another master had produced it — `SensitiveFieldCryptoIT` relabels one and the unwrap refuses it |
+| `HOMEINV_DATA_ENCRYPTION_PREVIOUS_MASTER_KEY_FILE` | no | The version **one below** the active one, mounted only while a rotation is in progress (`REQ-SEC-049`). Decided 2026-09-13 as a second file rather than a second key inside the first: every secret here is one file holding one key, which is what a container runtime's secret is, and a file with a syntax of its own would need a parser in the application and tooling everywhere else. Mounting it while the active version is still 1 aborts startup, because the version below 1 is not a version |
 | `HOMEINV_PUBLIC_BASE_URL` | yes | Base for code resolution, links in e-mails, CORS, cookie domain, and the relying party every **passkey** is bound to (`REQ-AUTH-002`). **⚠ This value is printed onto every label. Changing it later invalidates every label already printed** — see [10 §10.2.1](10-identification-and-labels.md) — **and stops every registered passkey verifying**, which is recoverable with a code or a recovery code but affects everybody at once ([ADR-0062](../adr/0062-passkeys-with-webauthn4j.md)). |
 | `HOMEINV_LEGACY_BASE_URLS` | no | Comma-separated list of former bases under which `/c/{code}` is still accepted, so old labels keep working after a domain change |
 | `HOMEINV_MEDIA_BASE_URL` | yes | **A dedicated hostname** for serving media. Prefer a subdomain of the application host: media responses send `Cross-Origin-Resource-Policy: same-site` to stop foreign sites embedding tenant media, and from a **different registrable domain** that same header blocks our own pages — such a host must send `cross-origin` instead, or every image silently fails to load. CORP is enforced independently of `Cross-Origin-Embedder-Policy`, which this deployment does not send at all ([12 §12.9](12-security.md), [ADR-0040](../adr/0040-no-cross-origin-isolation.md)). A startup check warns when the two hosts are not same-site |
@@ -825,6 +827,38 @@ data loss, no migration.
 | `HOMEINV_TENANT_ERASURE_INTERVAL_MS` | no (`3600000`) | How often the `worker` looks for tenants whose grace period has elapsed (`REQ-TEN-011`). A fixed delay measured from the end of the last run, so a sweep that took longer than the interval does not have a second one starting on top of it. `api` reads it and never acts on it: the sweep is `worker`-only ([ADR-0060](../adr/0060-the-erasure-runs-in-one-pass.md)) |
 | `HOMEINV_TENANTS_PER_USER` | no (`10`) | How many tenants one account may be in, unless the operator sets a limit on the account itself. Between 0 and **200**, which is the page size `REQ-NFR-010` caps every collection at — so a person's tenants always fit in one answer and the switcher never silently omits one. A value outside that range **aborts startup** rather than being clamped ([ADR-0057](../adr/0057-the-instance-operator.md)) |
 | `HOMEINV_PROFILE` | no (`standard`) | see 6.10 |
+
+### 6.11.1 Rotating the data encryption master key
+
+`REQ-SEC-049` asks for a rotation that touches no ciphertext, and this is it. The
+master key wraps each tenant's **data** key; the data keys seal the fields. Rotating
+the master therefore re-wraps a handful of small rows and leaves every sealed value
+exactly as it was.
+
+1. Create the new key and mount it as
+   `HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE`, with the old one moved to
+   `HOMEINV_DATA_ENCRYPTION_PREVIOUS_MASTER_KEY_FILE`.
+2. Raise `HOMEINV_DATA_ENCRYPTION_MASTER_KEY_VERSION` by one and restart `api`
+   and `worker`. Both keys are now active: the new one wraps, either one unwraps.
+3. **Nothing else is required of the operator.** Each tenant re-wraps its own
+   data key the next time it writes a sealed field, in the transaction that was
+   writing anyway. There is no sweep across tenants, and deliberately so — row
+   level security means an instance-wide one would have to be able to read every
+   tenant's rows, which is the property this whole chapter exists to keep.
+4. Watch the rows that still name the old version, as the read-only role:
+
+   ```sql
+   SELECT kek_version, count(*) FROM crypto.tenant_data_key GROUP BY kek_version;
+   ```
+
+   When none name it, unmount the previous key. A tenant that never writes again
+   keeps its old wrapping, so a long-idle instance may need step 5.
+5. Optional, for the last stragglers: sign in as each remaining tenant's owner and
+   change anything sealed. There is no cross-tenant shortcut on purpose.
+
+**A lost master key is permanent loss of every sealed field.** It is backed up
+separately from the database backup, in a different place — see
+[6.13](#613-backup-and-restore).
 
 ## 6.12 Upgrading
 

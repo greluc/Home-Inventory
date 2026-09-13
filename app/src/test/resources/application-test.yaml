@@ -53,6 +53,12 @@ homeinv:
     # not one anywhere else either.
     url-signing-key-file: build/resources/test/db/test-url-signing.key
     credential-key-file: build/resources/test/db/test-credential.key
+    # Version 2 active with version 1 mounted beside it, which is the state a
+    # deployment is in DURING a rotation (REQ-SEC-049). The tests run in it
+    # permanently so that the rotation path is the tested path.
+    data-encryption-master-key-file: build/resources/test/db/test-data-encryption.key
+    data-encryption-master-key-version: 2
+    data-encryption-previous-master-key-file: build/resources/test/db/test-data-encryption-previous.key
 
   # A dedicated media host, distinct from the application host and same-site with
   # it. Both properties are stated rather than defaulted, because the check that

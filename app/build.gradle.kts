@@ -163,12 +163,40 @@ val generateTestCredentialKey by tasks.registering {
     }
 }
 
+// The master keys of ADR-0019, in the two-file shape REQ-SEC-049 needs: an
+// active version and the one below it, so a test can rotate and prove that
+// re-wrapping touches no ciphertext. Fixed values, like every key above: they
+// seal nothing that outlives a test container, and a random one would make a
+// failure depend on which run wrote it.
+val generateTestDataEncryptionKeys by tasks.registering {
+    val active = layout.buildDirectory.file("generated/test-secrets/test-data-encryption.key")
+    val previous =
+        layout.buildDirectory.file("generated/test-secrets/test-data-encryption-previous.key")
+    outputs.files(active, previous)
+    doLast {
+        listOf(
+            active to "home-inv test data encryption master key v2 - not a secret",
+            previous to "home-inv test data encryption master key v1 - not a secret",
+        ).forEach { (target, phrase) ->
+            val file = target.get().asFile
+            file.parentFile.mkdirs()
+            file.writeText(
+                Base64.getEncoder()
+                    .encodeToString(phrase.toByteArray(Charsets.UTF_8).copyOf(32)) + "\n"
+            )
+        }
+    }
+}
+
 tasks.named<ProcessResources>("processTestResources") {
-    dependsOn(generateTestUrlSigningKey, generateTestCredentialKey)
+    dependsOn(generateTestUrlSigningKey, generateTestCredentialKey, generateTestDataEncryptionKeys)
     from(generateTestUrlSigningKey.map { it.outputs.files.singleFile }) {
         into("db")
     }
     from(generateTestCredentialKey.map { it.outputs.files.singleFile }) {
+        into("db")
+    }
+    from(generateTestDataEncryptionKeys.map { it.outputs.files }) {
         into("db")
     }
     from(rootProject.file("deploy/postgres/initdb/00-roles.sql")) {

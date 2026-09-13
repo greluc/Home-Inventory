@@ -133,6 +133,14 @@ commit".
 
 ### Added
 
+- **Sensitive fields have a lock on them.** Each tenant gets a data key of its
+  own, wrapped with the master key the deployment mounts, and a value sealed with
+  it is bound to the tenant, the record and the field it belongs to — copied
+  anywhere else it simply does not open. The master key can be rotated without
+  rewriting a single stored value: mount the new one beside the old, raise the
+  version, and each tenant catches up on its next write. An instance without a
+  master key no longer starts, rather than starting and sealing nothing.
+
 - **A retry no longer creates a second thing.** Creating an item or a place
   accepts `Idempotency-Key`: send the same key twice and the second request
   answers what the first one answered and creates nothing, however long the gap

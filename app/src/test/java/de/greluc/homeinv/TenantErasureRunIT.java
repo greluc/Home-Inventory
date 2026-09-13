@@ -104,7 +104,7 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
         .extracting(TenantErasure.BlockReport::block)
         .containsExactly(
             "idempotency", "media", "tagging", "inventory", "tenancy", "locations", "catalog",
-            "authorization", "audit");
+            "authorization", "crypto", "audit");
 
     // And the blocks that held something say how much.
     assertThat(reportOf(certificate, "inventory").rowsRemoved()).isPositive();

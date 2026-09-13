@@ -92,6 +92,10 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
   /** The columns of a {@code num_nonnulls(a, b) = 1} check. */
   private static final Pattern ONE_OF =
       Pattern.compile("num_nonnulls\\(([^)]*)\\)\\s*=\\s*1");
+  /** The lower bound of a {@code BETWEEN a AND b} check, as pg prints it. */
+  private static final Pattern BETWEEN =
+      Pattern.compile(">=\\s*\\(?(-?\\d+)\\)?\\s*\\)?\\s*AND", Pattern.CASE_INSENSITIVE);
+
   private static final Pattern HEX_LENGTH = Pattern.compile("\\^\\[0-9a-f]\\{(\\d+)}\\$");
 
   @Autowired private JdbcClient jdbc;
@@ -583,10 +587,10 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       // `(depth = 0) = (parent_id IS NULL)` with no parent — while `byte_size` and
       // the pixel dimensions carry `> 0`. Both are read off the constraint rather
       // than guessed, which is what keeps this generic.
-      case "integer", "bigint", "smallint" -> check.contains("> 0") ? "1" : "0";
-      case "numeric", "double precision", "real" -> check.contains("> 0") ? "1" : "0";
+      case "integer", "bigint", "smallint" -> numberValue(check);
+      case "numeric", "double precision", "real" -> numberValue(check);
       case "jsonb", "json" -> "'{}'::jsonb";
-      case "bytea" -> "'\\x00'::bytea";
+      case "bytea" -> byteaValue(check);
       case "ltree" -> "text2ltree('n' + '')";
       // `USER-DEFINED` is what information_schema calls a domain or an extension
       // type; here that is `ltree`, and the only one is `location.path`, whose
@@ -640,6 +644,45 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       }
     }
     return "'isolation-proof-" + unique + "'";
+  }
+
+  /**
+   * A number the column's check accepts.
+   *
+   * <p>Zero unless a check demands otherwise. {@code location.depth} must be 0 for the row to be a
+   * root — {@code nlevel(path) = depth + 1} with one label, and {@code (depth = 0) = (parent_id IS
+   * NULL)} with no parent — while {@code byte_size} and the pixel dimensions carry {@code > 0}, and
+   * {@code crypto.tenant_data_key.kek_version} carries a {@code BETWEEN 1 AND 255}. All of them are
+   * read off the constraint rather than guessed, which is what keeps this generic.
+   *
+   * @param check the check clause naming this column, or an empty string
+   * @return a SQL numeric literal
+   */
+  private static String numberValue(String check) {
+    Matcher between = BETWEEN.matcher(check);
+    if (between.find()) {
+      return between.group(1);
+    }
+    return check.contains("> 0") ? "1" : "0";
+  }
+
+  /**
+   * Bytes the column's check accepts.
+   *
+   * <p>One zero byte unless a length is demanded, in which case exactly the lower bound of it.
+   * {@code crypto.tenant_data_key.wrapped_dek} is the case that asked for this: a wrapped AES-256
+   * key is a nonce, a ciphertext and a tag, and the constraint says so rather than accepting
+   * whatever length a row happens to carry.
+   *
+   * @param check the check clause naming this column, or an empty string
+   * @return a SQL bytea literal
+   */
+  private static String byteaValue(String check) {
+    Matcher between = BETWEEN.matcher(check);
+    if (between.find()) {
+      return "decode(repeat('00', " + between.group(1) + "), 'hex')";
+    }
+    return "'\\x00'::bytea";
   }
 
   private record Column(String name, String type) {}

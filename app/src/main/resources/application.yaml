@@ -259,6 +259,19 @@ homeinv:
     # factor, and because a credential belongs to a person rather than to a
     # tenant, whose keys ADR-0019 wraps with a different master.
     credential-key-file: ${HOMEINV_CREDENTIAL_KEY_FILE:}
+    # Wraps every tenant's data key, which in turn seals every field marked
+    # `sensitive` (ADR-0019). Two versions may be active at once, which is what
+    # REQ-SEC-049 asks for and what makes a rotation possible without touching a
+    # single ciphertext: mount the new key as the active one, bump the version,
+    # keep the old one mounted as `previous` until the re-wrap has finished.
+    #
+    # Decided 2026-09-13 as two FILES rather than two keys in one file: every
+    # other secret here is one file holding one key, which is what a container
+    # runtime's secret is, and a file with a syntax of its own would need a
+    # parser here and tooling everywhere else.
+    data-encryption-master-key-file: ${HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE:}
+    data-encryption-master-key-version: ${HOMEINV_DATA_ENCRYPTION_MASTER_KEY_VERSION:1}
+    data-encryption-previous-master-key-file: ${HOMEINV_DATA_ENCRYPTION_PREVIOUS_MASTER_KEY_FILE:}
     # What an authenticator app calls this instance in its list. Shown to a
     # person and nothing depends on it, which is why it has a default.
     totp-issuer: ${HOMEINV_TOTP_ISSUER:Home Inventory}
