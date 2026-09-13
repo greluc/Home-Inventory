@@ -38,6 +38,7 @@ public class InventoryErasure implements TenantErasure {
   private static final List<String> DELETES =
       List.of(
           "delete from inventory.item_attr_index",
+          "delete from inventory.item_bundle",
           "delete from inventory.item_relation",
           "delete from inventory.item");
 

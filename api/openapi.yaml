@@ -121,6 +121,44 @@ components:
           format: int64
           type: integer
       type: object
+    BundleMemberPage:
+      description: One page of memberships.
+      properties:
+        items:
+          description: the memberships on this page
+          items:
+            $ref: '#/components/schemas/BundleMemberView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    BundleMemberRequest:
+      description: The body that puts an item into a bundle.
+      properties:
+        memberId:
+          description: the item to put in
+          format: uuid
+          type: string
+      required:
+      - memberId
+      type: object
+    BundleMemberView:
+      description: One membership.
+      properties:
+        bundleId:
+          description: the item that contains
+          format: uuid
+          type: string
+        id:
+          description: the membership, which is what a sync reconciles
+          format: uuid
+          type: string
+        memberId:
+          description: the item in it
+          format: uuid
+          type: string
+      type: object
     CategoryPage:
       description: One page of location categories.
       properties:
@@ -5730,6 +5768,347 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces the mutable fields of an item.
+  /api/v1/items/{id}/bundle:
+    get:
+      description: |-
+        What this bundle contains (REQ-CORE-007).
+
+        Direct members only: a bundle inside a bundle is one entry here and answers for its own
+        contents when it is asked, which is what keeps a page bounded however deep the graph goes.
+        Something in the trash is left out — it is restorable, and a list of what is in a box must not
+        offer what is no longer in it.
+      operationId: bundleContents
+      parameters:
+      - description: the item that contains
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BundleMemberPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What this bundle contains (REQ-CORE-007)
+    post:
+      description: |-
+        Puts an item into this bundle (REQ-CORE-007).
+
+        It does not move: a bundle is not a place, and the member stays in the location it is kept
+        in. Refused with `409` when it would make the bundle contain itself, through any chain.
+      operationId: addToBundle
+      parameters:
+      - description: the item that contains
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BundleMemberRequest'
+        description: the item to put in it
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BundleMemberView'
+          description: the membership
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Bundle would contain itself (`bundle-cycle`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Puts an item into this bundle (REQ-CORE-007)
+  /api/v1/items/{id}/bundle/{memberId}:
+    delete:
+      description: |-
+        Takes an item out of this bundle (REQ-CORE-007).
+
+        Addressed by the pair rather than by the membership's id, because that is how a client holds
+        it: it is looking at a bundle and at a thing in it. Nothing moves here either.
+      operationId: removeFromBundle
+      parameters:
+      - description: the item that contains
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the item to take out
+        in: path
+        name: memberId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Takes an item out of this bundle (REQ-CORE-007)
+  /api/v1/items/{id}/bundles:
+    get:
+      description: |-
+        Which bundles this item is in (REQ-CORE-007).
+
+        A list and not a value: an item may be in the camera bag and in the insured-equipment set at
+        once, and forcing a choice would make one of the two wrong about the same object.
+      operationId: bundlesContaining
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BundleMemberPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Which bundles this item is in (REQ-CORE-007)
   /api/v1/items/{id}/permanently:
     delete:
       description: |-

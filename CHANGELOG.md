@@ -125,6 +125,13 @@ commit".
 
 ### Added
 
+- **An item can be a bundle.** `POST /api/v1/items/{id}/bundle` puts something
+  into it, `GET` lists what is in it and `GET /api/v1/items/{id}/bundles` says
+  what an item is part of. Nothing moves: the lens in the camera bag is still in
+  the drawer in the study, which is where you will go to find it. An item can be
+  in several bundles at once, and a bundle cannot end up inside itself — not even
+  through a chain of other bundles. *REST API: additive.*
+
 - **Types and categories can be edited while the system runs.** A location
   category's name, icon and mobility change through `PUT
   /api/v1/catalog/location-categories/{id}`, an item type's icon through `PUT

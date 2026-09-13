@@ -57,7 +57,8 @@ forbids database and repository access from the access blocks.
 ├── /catalog     /item-types /location-categories /versions /fields /value-lists
 │                {id}/child-categories   (what a category takes under it)
 ├── /items       {id} {id}/attachments {id}/relations {id}/maintenance
-│                {id}/loans {id}/history {id}/codes  · /items/bulk
+│                {id}/loans {id}/history {id}/codes {id}/bundle {id}/bundles
+│                · /items/bulk
 ├── /locations   {id} {id}/children {id}/items {id}/move {id}/seal {id}/tags
 ├── /tags        {id} /tags/merge
 ├── /media       /uploads (tus) {id} {id}/variants

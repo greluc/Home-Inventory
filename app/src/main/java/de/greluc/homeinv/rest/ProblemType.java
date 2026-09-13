@@ -184,6 +184,17 @@ public enum ProblemType {
   DELETION_PENDING("deletion-pending", HttpStatus.CONFLICT, "Deletion pending"),
 
   /**
+   * The membership would make a bundle contain itself (REQ-CORE-007).
+   *
+   * <p>A {@code 409} for the same reason {@code INVALID_MOVE} is: nothing about the request is
+   * malformed, and the same request against a different bundle works. Its own token rather than
+   * that one, because a client acts on them in different places — one is a tree of places, the
+   * other a graph of things — and a shared token would have to be disambiguated by reading the
+   * detail text, which is exactly what a stable {@code type} exists to avoid.
+   */
+  BUNDLE_CYCLE("bundle-cycle", HttpStatus.CONFLICT, "Bundle would contain itself"),
+
+  /**
    * The move would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>A {@code 409}: nothing about the request is malformed, and the same request would work

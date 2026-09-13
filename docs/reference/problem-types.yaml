@@ -261,6 +261,26 @@ assigned:
       - "REQ-CORE-064: names are unique among siblings"
       - "07 §7.1: `location_sibling_name`, partial so a tombstone does not block re-use"
 
+  - token: bundle-cycle
+    status: 409
+    since: 1
+    summary: >
+      Putting that item into that bundle would make the bundle contain itself —
+      directly, or through a chain of bundles.
+    notes: >
+      Its own token rather than `invalid-move`, which says the same thing about
+      the tree of PLACES. A client acts on the two in different screens — one is
+      where things are kept, the other what a thing is part of — and a shared
+      token would have to be told apart by reading the detail text, which is what
+      a stable `type` exists to avoid. Registered with REQ-CORE-007's
+      implementation. An item may be in several bundles, so the loop can be long
+      and is visible from neither end of the request that would close it; the
+      check is a reachability walk and the answer names no intermediate step,
+      because the way out is the same whatever the chain was.
+    sources:
+      - "REQ-CORE-007: an item can be a bundle containing other items"
+      - "04 §4.4: a bundle does not contain itself"
+
   - token: invalid-move
     status: 409
     since: 1

@@ -253,10 +253,11 @@ attributes, quantities, relations, lifecycle.
 |---|---|
 | Schema | `inventory` |
 | Key notions | `Item` (aggregate root), `ItemAttributes` (JSONB), `ItemRelation`, `ItemLifecycle`, `MaintenanceEntry`, `Loan`, `Bundle`, `ConsumableStock`, `Valuation` (purchase price, current value, replacement value) |
-| Publishes | `ItemService`, `ItemQuery`, `ItemRelations`, `ItemView`, `ItemRef` |
+| Publishes | `ItemService`, `ItemQuery`, `ItemRelations`, `ItemBundles`, `ItemView`, `ItemRef` |
 | Outbound ports | `AttributeValidator` (catalog), `LocationLookup` (locations), `QuotaGuard` (tenancy), `AccessControl` (authorization), `CodeAssignment` (identification), **`AuditService` (audit)** — [05 §5.1](05-runtime-view.md) writes an audit entry inside the item transaction, and without this port that write would be a block reaching into a foreign schema, which [4.5](#45-mapping-blocks-to-database-schemas) forbids |
 | Events | `ItemCreated`, `ItemUpdated`, `ItemMoved`, `ItemDeleted`, `ItemRestored`, `ItemLent`, `ItemReturned`, `ItemDisposed`, `QuantityChanged`, `StockBelowMinimum` |
 | Item kinds | `PHYSICAL` (has a location, can carry a code) and `DIGITAL` (no physical place, instead a carrier/account, licence key, expiry, seat count) |
+| Bundles | An item contains other items **without owning where they are** (`REQ-CORE-007`): the camera bag contains the lens, the lens is still in the drawer in the study. One directed table, `inventory.item_bundle`, and no flag on the item — a thing that contains something is a bundle, and a flag would be a second answer to what the rows already say. An item may be in **several** bundles at once (decided 2026-09-13), so the shape is a directed acyclic graph rather than a second tree, and the invariant below is therefore a reachability walk: the edge is refused when the bundle can already be reached from the member. A diamond is not a cycle and is allowed. |
 | States | `ACTIVE` → `LENT` → `ACTIVE` · `ACTIVE` → `ARCHIVED` · `ACTIVE` → `TRASHED` → `ACTIVE`/`PURGED` · `ACTIVE` → `SOLD`/`DISPOSED` |
 | Invariants | A physical item has exactly one location · attributes are valid against the type version · quantity ≥ 0 · no item is related to itself · a bundle does not contain itself · a lent item is not deleted |
 

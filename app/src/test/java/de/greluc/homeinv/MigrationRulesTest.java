@@ -96,6 +96,7 @@ class MigrationRulesTest {
           "identification.public_code",
           "identification.code_binding",
           "inventory.item_relation",
+          "inventory.item_bundle",
           // A rule that exists or does not.
           "catalog.location_category_child");
 

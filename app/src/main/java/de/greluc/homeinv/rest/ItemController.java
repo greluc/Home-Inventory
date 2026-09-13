@@ -5,6 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.audit.api.RevisionLog;
+import de.greluc.homeinv.inventory.api.ItemBundles;
 import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -60,6 +61,7 @@ public class ItemController {
 
   private final ItemService items;
   private final ItemRelations relations;
+  private final ItemBundles bundles;
 
   /**
    * Creates an item, or returns the one that is already there.
@@ -228,6 +230,100 @@ public class ItemController {
       @AuthenticationPrincipal AuthenticatedUser user) {
     relations.unrelate(relationId, user.userId());
   }
+
+  /**
+   * What this bundle contains (REQ-CORE-007).
+   *
+   * <p>Direct members only: a bundle inside a bundle is one entry here and answers for its own
+   * contents when it is asked, which is what keeps a page bounded however deep the graph goes.
+   * Something in the trash is left out — it is restorable, and a list of what is in a box must not
+   * offer what is no longer in it.
+   *
+   * @param id the item that contains
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(path = "/{id}/bundle", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public ItemBundles.BundleMemberPage bundleContents(
+      @PathVariable UUID id,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return bundles.contentsOf(id, cursor, limit);
+  }
+
+  /**
+   * Which bundles this item is in (REQ-CORE-007).
+   *
+   * <p>A list and not a value: an item may be in the camera bag and in the insured-equipment set at
+   * once, and forcing a choice would make one of the two wrong about the same object.
+   *
+   * @param id the item
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(path = "/{id}/bundles", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public ItemBundles.BundleMemberPage bundlesContaining(
+      @PathVariable UUID id,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return bundles.bundlesOf(id, cursor, limit);
+  }
+
+  /**
+   * Puts an item into this bundle (REQ-CORE-007).
+   *
+   * <p>It does not move: a bundle is not a place, and the member stays in the location it is kept
+   * in. Refused with {@code 409} when it would make the bundle contain itself, through any chain.
+   *
+   * @param id the item that contains
+   * @param request the item to put in it
+   * @param user the authenticated caller
+   * @return the membership
+   */
+  @PostMapping(path = "/{id}/bundle", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.BUNDLE_CYCLE, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.CREATED)
+  public ItemBundles.BundleMemberView addToBundle(
+      @PathVariable UUID id,
+      @Valid @RequestBody BundleMemberRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return bundles.add(id, request.memberId(), user.userId());
+  }
+
+  /**
+   * Takes an item out of this bundle (REQ-CORE-007).
+   *
+   * <p>Addressed by the pair rather than by the membership's id, because that is how a client holds
+   * it: it is looking at a bundle and at a thing in it. Nothing moves here either.
+   *
+   * @param id the item that contains
+   * @param memberId the item to take out
+   * @param user the authenticated caller
+   */
+  @DeleteMapping(path = "/{id}/bundle/{memberId}")
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail(ProblemType.NOT_FOUND)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeFromBundle(
+      @PathVariable UUID id,
+      @PathVariable UUID memberId,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    bundles.remove(id, memberId, user.userId());
+  }
+
+  /**
+   * The body that puts an item into a bundle.
+   *
+   * @param memberId the item to put in
+   */
+  public record BundleMemberRequest(@jakarta.validation.constraints.NotNull UUID memberId) {}
 
   /**
    * The body of a relation.

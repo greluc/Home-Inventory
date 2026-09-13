@@ -11,6 +11,7 @@ import de.greluc.homeinv.identity.api.RegistrationClosedException;
 import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
+import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -562,6 +563,22 @@ public class ApiExceptionHandler {
             request);
     problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
     return problem;
+  }
+
+  /**
+   * Answers a move that would break the tree (REQ-CORE-045, REQ-CORE-047).
+   *
+   * <p>The detail says which of the two it was — a place moving into itself, or a category that
+   * does not take this kind of place — because the fix differs even though the token does not.
+   *
+   * @param exception the refusal, carrying which
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(BundleCycleException.class)
+  public ProblemDetail handleBundleCycle(
+      BundleCycleException exception, HttpServletRequest request) {
+    return problem(ProblemType.BUNDLE_CYCLE, exception.getMessage(), request);
   }
 
   /**
