@@ -78,6 +78,27 @@ public class PendingLogin {
   }
 
   /**
+   * Reads the pending login without spending it.
+   *
+   * <p>For the one call that has to know <em>who</em> is half-way through a login without
+   * finishing it: the passkey challenge, which needs the account to say which credentials may
+   * answer. Spending the pending login there would mean a client could never actually complete one.
+   *
+   * @param request the servlet request, for the session
+   * @return who is half-way through logging in
+   * @throws InvalidCredentialsException when there is no pending login, or it has expired
+   */
+  AuthenticatedUser peek(HttpServletRequest request) {
+    HttpSession session = request.getSession(false);
+    Object stored = session == null ? null : session.getAttribute(ATTRIBUTE);
+    if (!(stored instanceof Pending pending)
+        || pending.since().plus(WINDOW).isBefore(Instant.now(clock))) {
+      throw new InvalidCredentialsException();
+    }
+    return pending.user();
+  }
+
+  /**
    * Takes the pending login, if there is a live one.
    *
    * <p>Removed as it is read, whether or not the code that follows turns out to be right: a pending

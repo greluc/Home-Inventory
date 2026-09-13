@@ -83,3 +83,4 @@ Date: YYYY-MM-DD
 | [0059](0059-subtree-scope-has-two-lines.md) | The location scope holds in the application **and** in row-level security | Accepted |
 | [0060](0060-the-erasure-runs-in-one-pass.md) | A tenant erasure is one ordered pass in the worker, not a choreography | Accepted |
 | [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
+| [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |

@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, api, type TotpEnrolment } from "./api";
+import { createPasskey, passkeysAvailable } from "./passkeys";
 
 /**
  * Setting up the second factor an OWNER or ADMIN cannot work without (REQ-AUTH-003).
@@ -32,6 +33,20 @@ export function SecondFactorSetup({
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function registerPasskey(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const ceremony = await api.beginPasskey();
+      await api.confirmPasskey(await createPasskey(ceremony.options), t("mfa.passkeyLabel"));
+      onEnrolled();
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.detail : t("mfa.passkeyFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function begin(): Promise<void> {
     setBusy(true);
@@ -92,6 +107,11 @@ export function SecondFactorSetup({
             <button type="button" disabled={busy} onClick={() => void begin()}>
               {busy ? t("mfa.working") : t("mfa.begin")}
             </button>
+            {passkeysAvailable() && (
+              <button type="button" disabled={busy} onClick={() => void registerPasskey()}>
+                {t("mfa.usePasskey")}
+              </button>
+            )}
           </>
         ) : (
           <>

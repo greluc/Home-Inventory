@@ -39,7 +39,8 @@ forbids database and repository access from the access blocks.
 /api/v1
 ├── /auth        /login /logout /refresh /password-reset
 │             /mfa  (answer a login) · /mfa/enrolment · /mfa/totp {,/confirmation,/removal}
-│             /mfa/recovery-codes · /mfa/step-up  (prove it again) · /passkeys
+│             /mfa/recovery-codes · /mfa/step-up  (prove it again)
+│             /mfa/passkeys {,/challenge,/confirmation,{id}/removal}
 │             /authorize /token /revoke /clients      (OAuth 2.1, see below)
 ├── /.well-known /oauth-authorization-server /jwks.json
 ├── /me          profile, devices, sessions, settings · /tenants (memberships) · /tenant (switch)

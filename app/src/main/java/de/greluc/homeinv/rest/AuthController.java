@@ -124,7 +124,13 @@ public class AuthController {
       HttpServletResponse httpResponse) {
 
     AuthenticatedUser user = pendingLogin.claim(httpRequest);
-    SecondFactor.Kind kind = secondFactor.verify(user.userId(), request.code());
+    SecondFactor.Kind kind = SecondFactor.Kind.PASSKEY;
+    if (request.isPasskey()) {
+      secondFactor.verifyPasskey(
+          user.userId(), request.credential(), PasskeyChallenge.claim(httpRequest));
+    } else {
+      kind = secondFactor.verify(user.userId(), request.requireCode());
+    }
     SessionView session = sessions.establish(user, httpRequest, httpResponse, true);
     if (kind == SecondFactor.Kind.RECOVERY_CODE) {
       log.warn("Account {} completed a login with a recovery code.", user.userId());
@@ -190,26 +196,57 @@ public class AuthController {
   }
 
   /**
-   * The body of a second-factor answer.
+   * The body of a second-factor answer: a code, or a passkey assertion.
    *
-   * @param code the six digits from the authenticator app, or one of the recovery codes. Bounded
-   *     because it reaches an Argon2id comparison, where an unbounded field is an invitation to
-   *     spend 19 MiB on a megabyte of nothing
+   * <p>Exactly one of the two. One body for both because the question is the same one — "prove the
+   * second factor" — and a client that had to choose an endpoint would be a client that has to know
+   * which kinds this account has before it asks.
+   *
+   * @param code the six digits from the authenticator app, or one of the recovery codes, or null
+   *     when a passkey is answering. Bounded because it reaches an Argon2id comparison, where an
+   *     unbounded field is an invitation to spend 19 MiB on a megabyte of nothing
+   * @param credential what {@code navigator.credentials.get()} produced, as JSON, or null when a
+   *     code is answering. Bounded generously: an assertion carries a signature, client data and
+   *     the authenticator's own bytes
    */
-  public record SecondFactorRequest(@NotBlank @Size(max = 64) String code) {
+  public record SecondFactorRequest(
+      @Size(max = 64) String code, @Size(max = 20_000) String credential) {
 
     /**
-     * The fact that there was a code, and never the code.
+     * Checks that exactly one way of answering was given.
+     *
+     * @return the code, when that is what was sent
+     * @throws de.greluc.homeinv.identity.api.InvalidSecondFactorException when neither or both were
+     *     sent, which is a client that does not know what it is answering with
+     */
+    public String requireCode() {
+      if (code == null || code.isBlank() || credential != null) {
+        throw new de.greluc.homeinv.identity.api.InvalidSecondFactorException();
+      }
+      return code;
+    }
+
+    /**
+     * Whether a passkey is answering.
+     *
+     * @return true when the body carries an assertion
+     */
+    public boolean isPasskey() {
+      return credential != null && !credential.isBlank();
+    }
+
+    /**
+     * The fact that there was an answer, and never the answer.
      *
      * <p>Spring MVC logs the deserialised body at {@code DEBUG} through this record's generated
      * {@code toString}; a one-time code in a log is a one-time code somebody else can still use
      * inside its window (REQ-SEC-050). The same trap {@link LoginRequest} carries.
      *
-     * @return the record with the code masked
+     * @return the record with both fields masked
      */
     @Override
     public String toString() {
-      return "SecondFactorRequest[code=***]";
+      return "SecondFactorRequest[code=***, credential=***]";
     }
   }
 

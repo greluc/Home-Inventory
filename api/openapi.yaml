@@ -166,6 +166,16 @@ components:
           format: uuid
           type: string
       type: object
+    CeremonyView:
+      description: The options one side of a ceremony needs.
+      properties:
+        options:
+          description: |-
+            the WebAuthn options, as the JSON `navigator.credentials` takes. Passed
+            through as text rather than re-modelled: the shape is the specification's, and a second
+            model of it here would be a second thing to keep in step with browsers
+          type: string
+      type: object
     Certificate:
       description: One certificate.
       properties:
@@ -442,6 +452,11 @@ components:
           description: when it was confirmed, or null
           format: date-time
           type: string
+        passkeys:
+          description: the registered passkeys, oldest first
+          items:
+            $ref: '#/components/schemas/PasskeyView'
+          type: array
         recoveryCodesLeft:
           description: |-
             how many single-use codes are unspent. Zero beside a confirmed factor
@@ -449,9 +464,7 @@ components:
           format: int32
           type: integer
         totpConfirmed:
-          description: |-
-            whether a confirmed authenticator exists, which is what makes the second
-            factor required at login
+          description: whether a confirmed authenticator app exists
           type: boolean
       type: object
     EntitlementsRequest:
@@ -1126,6 +1139,41 @@ components:
           description: where the next page starts, or null when this was the last
           type: string
       type: object
+    PasskeyRegistrationRequest:
+      description: What finishes a passkey registration.
+      properties:
+        credential:
+          description: what `navigator.credentials.create()` produced, as JSON
+          maxLength: 20000
+          minLength: 0
+          type: string
+        label:
+          description: what to call this authenticator, or null
+          maxLength: 100
+          minLength: 0
+          type: string
+      required:
+      - credential
+      type: object
+    PasskeyView:
+      description: One registered passkey.
+      properties:
+        id:
+          description: the credential, for removing it
+          format: uuid
+          type: string
+        label:
+          description: what the person called it
+          type: string
+        lastUsedAt:
+          description: when it was last used, or null
+          format: date-time
+          type: string
+        registeredAt:
+          description: when it was registered
+          format: date-time
+          type: string
+      type: object
     Problem:
       additionalProperties: true
       description: 'An error, as RFC 9457 describes one. A client branches on `type` and never on `detail`:
@@ -1400,18 +1448,32 @@ components:
           type: string
       type: object
     SecondFactorRequest:
-      description: The body of a second-factor answer.
+      description: |-
+        The body of a second-factor answer: a code, or a passkey assertion.
+
+        Exactly one of the two. One body for both because the question is the same one — "prove the
+        second factor" — and a client that had to choose an endpoint would be a client that has to know
+        which kinds this account has before it asks.
       properties:
         code:
           description: |-
-            the six digits from the authenticator app, or one of the recovery codes. Bounded
-            because it reaches an Argon2id comparison, where an unbounded field is an invitation to
-            spend 19 MiB on a megabyte of nothing
+            the six digits from the authenticator app, or one of the recovery codes, or null
+            when a passkey is answering. Bounded because it reaches an Argon2id comparison, where an
+            unbounded field is an invitation to spend 19 MiB on a megabyte of nothing
           maxLength: 64
           minLength: 0
           type: string
-      required:
-      - code
+        credential:
+          description: |-
+            what `navigator.credentials.get()` produced, as JSON, or null when a
+            code is answering. Bounded generously: an assertion carries a signature, client data and
+            the authenticator's own bytes
+          maxLength: 20000
+          minLength: 0
+          type: string
+        passkey:
+          description: Whether a passkey is answering.
+          type: boolean
       type: object
     SessionView:
       description: |-
@@ -2045,7 +2107,11 @@ paths:
       summary: Answers the second factor and finishes the login (REQ-AUTH-002)
   /api/v1/auth/mfa/enrolment:
     get:
-      description: What the caller's account holds.
+      description: |-
+        What the caller's account holds.
+
+        /**
+        What the caller's account holds.
       operationId: enrolment
       responses:
         '200':
@@ -2079,6 +2145,204 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: What the caller's account holds.
+  /api/v1/auth/mfa/passkeys:
+    post:
+      description: The options a browser needs to create a passkey (REQ-AUTH-002).
+      operationId: beginPasskey
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeremonyView'
+          description: the options, as JSON, for `navigator.credentials.create()`
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The options a browser needs to create a passkey (REQ-AUTH-002).
+  /api/v1/auth/mfa/passkeys/challenge:
+    post:
+      description: |-
+        The options a browser needs to prove a passkey (REQ-AUTH-002).
+
+        Serves both moments a passkey is proved: the second half of a login, where the account comes
+        from the pending login the password left behind, and a re-confirmation, where it comes from the
+        session. Hence no session requirement and no user id in the request — the one thing a caller
+        may not do is say whose passkeys it wants the options for.
+      operationId: passkeyChallenge
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeremonyView'
+          description: the options, as JSON, for `navigator.credentials.get()`
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`), or Second factor invalid (`second-factor-invalid`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The options a browser needs to prove a passkey (REQ-AUTH-002)
+  /api/v1/auth/mfa/passkeys/confirmation:
+    post:
+      description: Finishes registering a passkey.
+      operationId: confirmPasskey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasskeyRegistrationRequest'
+        description: what the browser produced, and what to call this authenticator
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`), or Second factor invalid (`second-factor-invalid`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Finishes registering a passkey.
+  /api/v1/auth/mfa/passkeys/{passkeyId}/removal:
+    post:
+      description: |-
+        Removes one passkey.
+
+        Asks for the second factor to have been proved recently (REQ-AUTH-011) rather than for a
+        code in the body, which is how the TOTP removal beside it works: an account whose only factor
+        is a passkey has no code to type, and the re-confirmation takes either kind.
+      operationId: removePasskey
+      parameters:
+      - description: which one
+        in: path
+        name: passkeyId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Second factor stale (`second-factor-stale`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes one passkey
   /api/v1/auth/mfa/recovery-codes:
     post:
       description: Issues a fresh set of recovery codes, retiring whatever is left of the old one.

@@ -72,6 +72,20 @@ export interface SecondFactorEnrolment {
   totpConfirmed: boolean;
   enrolledAt: string | null;
   recoveryCodesLeft: number;
+  passkeys: Passkey[];
+}
+
+/** One registered passkey. */
+export interface Passkey {
+  id: string;
+  label: string;
+  registeredAt: string;
+  lastUsedAt: string | null;
+}
+
+/** The options one side of a WebAuthn ceremony needs, as the specification's own JSON. */
+export interface Ceremony {
+  options: string;
 }
 
 /** A secret that has just been generated, readable this once. */
@@ -240,6 +254,38 @@ export const api = {
   /** What the account holds besides its password. */
   secondFactor: (): Promise<SecondFactorEnrolment> =>
     request<SecondFactorEnrolment>("/api/v1/auth/mfa/enrolment"),
+
+  /**
+   * Answers a second factor with a passkey instead of a code.
+   *
+   * @param credential what the browser produced
+   * @returns who the caller now is
+   */
+  completeWithPasskey: (credential: string): Promise<Session> =>
+    request<Session>("/api/v1/auth/mfa", {
+      method: "POST",
+      body: JSON.stringify({ credential }),
+    }),
+
+  /** The options for proving a passkey, whether in a login or in a re-confirmation. */
+  passkeyChallenge: (): Promise<Ceremony> =>
+    request<Ceremony>("/api/v1/auth/mfa/passkeys/challenge", { method: "POST" }),
+
+  /** The options for registering a passkey. */
+  beginPasskey: (): Promise<Ceremony> =>
+    request<Ceremony>("/api/v1/auth/mfa/passkeys", { method: "POST" }),
+
+  /**
+   * Finishes registering a passkey.
+   *
+   * @param credential what the browser produced
+   * @param label what to call this authenticator
+   */
+  confirmPasskey: (credential: string, label: string): Promise<void> =>
+    request<void>("/api/v1/auth/mfa/passkeys/confirmation", {
+      method: "POST",
+      body: JSON.stringify({ credential, label }),
+    }),
 
   /**
    * Begins an enrolment; the secret comes back once and is never readable again.

@@ -45,6 +45,13 @@ dependencies {
     // checks the generated document itself, so the server and an offline client
     // reach the same verdict rather than two implementations of the same rules.
     implementation(libs.json.schema.validator)
+    // WebAuthn/passkeys (REQ-AUTH-002). Configured with no metadata service and
+    // no certificate-path validation: the core opens no outbound connection
+    // (ADR-0026), and a self-hosted instance has nothing to attest against.
+    implementation(libs.webauthn4j.core)
+    // Only so javac can read webauthn4j's annotated signatures; its own POM marks
+    // these provided, and nothing needs them at run time.
+    compileOnly(libs.jetbrains.annotations)
     implementation(libs.spring.boot.starter.actuator)
 
     // Sessions live in Valkey, not in the JVM heap: the api role scales
@@ -101,6 +108,10 @@ dependencies {
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.rabbitmq)
     testImplementation(libs.archunit.junit5)
+    // The authenticator emulator, so the passkey ceremonies are proved against
+    // real attestation and assertion objects rather than against a stub that
+    // agrees with the code under test.
+    testImplementation(libs.webauthn4j.test)
     testImplementation(libs.bouncycastle.pkix)
 }
 

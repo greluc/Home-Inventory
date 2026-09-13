@@ -139,6 +139,12 @@ commit".
   with a password alone. The web client shows the setup instead of an error.
   *REST API: additive.*
 
+- **A passkey can be the second factor instead of an app.** Register one from the
+  browser, sign in with it, and use it where a code would be asked for again.
+  Nothing about the authenticator's make is checked — what is checked is that the
+  response answers this instance's challenge — and a passkey is bound to the
+  address this instance answers at. *REST API: additive.*
+
 - **An account can be protected by a second factor.** An authenticator app is set
   up in two steps — the code is shown once, and a code generated from it is what
   makes it count — and ten single-use recovery codes come with it, shown once and
@@ -392,7 +398,7 @@ commit".
 - A requirements catalogue with 426 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 62 architecture decision records, each with its alternatives and consequences —
+- 63 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -123,7 +123,7 @@ configurable but accompanied by four mechanisms.
 
 | Variable | Required | Meaning |
 |---|---|---|
-| `HOMEINV_PUBLIC_BASE_URL` | yes | The **currently valid** base. Printed onto new labels and linked in e-mails. |
+| `HOMEINV_PUBLIC_BASE_URL` | yes | The **currently valid** base. Printed onto new labels and linked in e-mails. It is also the **relying party a passkey is bound to** (`REQ-AUTH-002`, [ADR-0062](../adr/0062-passkeys-with-webauthn4j.md)): changing it stops every registered passkey verifying, and the four mechanisms below are about labels only. Nothing is lost silently — the login asks for a code instead, and somebody who has only passkeys uses a recovery code — but it is the second thing this value writes itself into. |
 | `HOMEINV_LEGACY_BASE_URLS` | no | Comma-separated list of former bases. `/c/{code}` is accepted under these hostnames too, so that **old labels keep working**. |
 
 #### What the instance remembers

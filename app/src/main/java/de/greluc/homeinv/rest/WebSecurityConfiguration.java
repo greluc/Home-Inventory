@@ -107,7 +107,8 @@ public class WebSecurityConfiguration {
                     // without. Exactly this path: everything under
                     // /api/v1/auth/mfa/ administers the caller's own credentials
                     // and needs a session like anything else.
-                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/mfa")
+                    .requestMatchers(
+                        HttpMethod.POST, "/api/v1/auth/mfa", "/api/v1/auth/mfa/passkeys/challenge")
                     .permitAll()
                     // Accepting an invitation is how somebody becomes a person on
                     // this instance (REQ-AUTH-004), so it cannot require being one.

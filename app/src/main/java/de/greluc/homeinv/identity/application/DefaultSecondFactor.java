@@ -10,6 +10,8 @@ import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.identity.domain.Credential;
 import de.greluc.homeinv.identity.infrastructure.CredentialKey;
 import de.greluc.homeinv.identity.infrastructure.CredentialRepository;
+import de.greluc.homeinv.identity.infrastructure.WebAuthnCeremonies;
+import de.greluc.homeinv.platform.NotFoundException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
@@ -63,6 +65,7 @@ public class DefaultSecondFactor implements SecondFactor {
 
   private final CredentialRepository credentials;
   private final CredentialKey credentialKey;
+  private final WebAuthnCeremonies webAuthn;
   private final PasswordEncoder passwordEncoder;
   private final Clock clock;
   private final String issuer;
@@ -70,6 +73,7 @@ public class DefaultSecondFactor implements SecondFactor {
   /**
    * @param credentials where authenticators are stored
    * @param credentialKey what seals a TOTP secret at rest
+   * @param webAuthn the two passkey ceremonies and the relying party they are bound to
    * @param passwordEncoder the Argon2id encoder, which hashes recovery codes as well as passwords
    * @param clock the clock use cases read time from
    * @param issuer what an authenticator app calls this instance in its list, from
@@ -79,11 +83,13 @@ public class DefaultSecondFactor implements SecondFactor {
   public DefaultSecondFactor(
       CredentialRepository credentials,
       CredentialKey credentialKey,
+      WebAuthnCeremonies webAuthn,
       PasswordEncoder passwordEncoder,
       Clock clock,
       @Value("${homeinv.security.totp-issuer:Home Inventory}") String issuer) {
     this.credentials = credentials;
     this.credentialKey = credentialKey;
+    this.webAuthn = webAuthn;
     this.passwordEncoder = passwordEncoder;
     this.clock = clock;
     this.issuer = issuer;
@@ -97,13 +103,91 @@ public class DefaultSecondFactor implements SecondFactor {
     return new Enrolment(
         confirmed,
         confirmed ? totp.get().getConfirmedAt() : null,
-        credentials.findUnspentRecoveryCodes(userId).size());
+        credentials.findUnspentRecoveryCodes(userId).size(),
+        credentials.findPasskeys(userId).stream()
+            .map(
+                passkey ->
+                    new Passkey(
+                        passkey.getId(),
+                        passkey.getLabel(),
+                        passkey.getCreatedAt(),
+                        passkey.getLastUsedAt()))
+            .toList());
   }
 
   @Override
   @Transactional(readOnly = true)
   public boolean isRequiredFor(UUID userId) {
-    return credentials.findTotp(userId).map(Credential::isUsable).orElse(false);
+    return credentials.findTotp(userId).map(Credential::isUsable).orElse(false)
+        || !credentials.findPasskeys(userId).isEmpty();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Ceremony beginPasskeyRegistration(UUID userId, String account, String displayName) {
+    String challenge = webAuthn.newChallenge();
+    List<String> existing =
+        credentials.findPasskeys(userId).stream().map(Credential::getCredentialId).toList();
+    return new Ceremony(
+        webAuthn.registrationOptions(challenge, userId, account, displayName, existing), challenge);
+  }
+
+  @Override
+  @Transactional
+  public void confirmPasskeyRegistration(
+      UUID userId, String credentialJson, String challenge, String label) {
+    WebAuthnCeremonies.Registered registered =
+        webAuthn.verifyRegistration(credentialJson, challenge);
+    Instant now = Instant.now(clock);
+    credentials.save(
+        Credential.passkey(
+            userId,
+            registered.credentialId(),
+            registered.attestedCredentialData(),
+            registered.signCount(),
+            registered.transports(),
+            label == null || label.isBlank() ? "Passkey" : label,
+            now));
+    log.info("Account {} registered a passkey.", userId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Ceremony beginPasskeyAssertion(UUID userId) {
+    List<String> ids =
+        credentials.findPasskeys(userId).stream().map(Credential::getCredentialId).toList();
+    if (ids.isEmpty()) {
+      throw new InvalidSecondFactorException();
+    }
+    String challenge = webAuthn.newChallenge();
+    return new Ceremony(webAuthn.authenticationOptions(challenge, ids), challenge);
+  }
+
+  @Override
+  @Transactional
+  public void verifyPasskey(UUID userId, String credentialJson, String challenge) {
+    Credential passkey =
+        credentials
+            .findPasskey(userId, webAuthn.credentialIdOf(credentialJson))
+            .orElseThrow(InvalidSecondFactorException::new);
+    long signCount =
+        webAuthn.verifyAssertion(
+            credentialJson, challenge, passkey.material(), passkey.getSignCount());
+    passkey.asserted(signCount, Instant.now(clock));
+  }
+
+  @Override
+  @Transactional
+  public void removePasskey(UUID userId, UUID passkeyId) {
+    Credential passkey =
+        credentials
+            .findById(passkeyId)
+            .filter(candidate -> candidate.getUserId().equals(userId))
+            .filter(candidate -> Credential.PASSKEY.equals(candidate.getKind()))
+            .filter(candidate -> candidate.getDeletedAt() == null)
+            .orElseThrow(() -> new NotFoundException("passkey", passkeyId));
+    passkey.remove(userId, Instant.now(clock));
+    log.warn("Account {} removed a passkey.", userId);
   }
 
   @Override

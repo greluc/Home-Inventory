@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, api, type Session } from "./api";
 import { LanguageToggle } from "./LanguageToggle";
+import { passkeysAvailable, provePasskey } from "./passkeys";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -73,6 +74,22 @@ export function LoginForm({
     }
   }
 
+  async function submitPasskey(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const ceremony = await api.passkeyChallenge();
+      onAuthenticated(await api.completeWithPasskey(await provePasskey(ceremony.options)));
+    } catch {
+      // Whether the authenticator refused, the browser cancelled or the server
+      // rejected the assertion, the answer here is the same: try again, or use a
+      // code. Telling them apart would say whether this account has passkeys.
+      setError(t("login.passkeyFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (needsCode) {
     return (
       <main className="login">
@@ -107,6 +124,12 @@ export function LoginForm({
               {busy ? t("login.working") : t("login.submitCode")}
             </button>
           </form>
+
+          {passkeysAvailable() && (
+            <button type="button" disabled={busy} onClick={() => void submitPasskey()}>
+              {t("login.usePasskey")}
+            </button>
+          )}
         </div>
       </main>
     );

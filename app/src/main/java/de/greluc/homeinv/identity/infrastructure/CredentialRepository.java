@@ -46,6 +46,32 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
   List<Credential> findUnspentRecoveryCodes(@Param("userId") UUID userId);
 
   /**
+   * The account's passkeys, oldest first.
+   *
+   * @param userId the account
+   * @return the live passkeys
+   */
+  @Query("select c from Credential c where c.userId = :userId and c.kind = 'PASSKEY'"
+      + " and c.deletedAt is null order by c.createdAt asc")
+  List<Credential> findPasskeys(@Param("userId") UUID userId);
+
+  /**
+   * One passkey by the credential id an assertion presents.
+   *
+   * <p>Scoped to the account as well as to the id: an assertion says which credential answered, and
+   * this is a second factor, so whose login it is answering is already known. A lookup by id alone
+   * would be the passwordless flow, which this is not (REQ-AUTH-002).
+   *
+   * @param userId the account
+   * @param credentialId base64url of the credential id
+   * @return the passkey, or empty
+   */
+  @Query("select c from Credential c where c.userId = :userId and c.kind = 'PASSKEY'"
+      + " and c.credentialId = :credentialId and c.deletedAt is null")
+  Optional<Credential> findPasskey(
+      @Param("userId") UUID userId, @Param("credentialId") String credentialId);
+
+  /**
    * Every live recovery code, spent or not, for reissuing a set.
    *
    * @param userId the account

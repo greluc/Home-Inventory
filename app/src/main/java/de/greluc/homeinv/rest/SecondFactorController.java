@@ -5,6 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
+import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.SecondFactor;
 import jakarta.validation.Valid;
@@ -12,11 +13,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,6 +45,7 @@ public class SecondFactorController {
 
   private final SecondFactor secondFactor;
   private final SessionEstablisher sessions;
+  private final PendingLogin pendingLogin;
 
   /**
    * Proves the second factor again, for an operation that asks (REQ-AUTH-011).
@@ -66,9 +70,117 @@ public class SecondFactorController {
       @Valid @RequestBody AuthController.SecondFactorRequest request,
       @AuthenticationPrincipal AuthenticatedUser user,
       jakarta.servlet.http.HttpServletRequest httpRequest) {
-    secondFactor.verify(user.userId(), request.code());
+    if (request.isPasskey()) {
+      secondFactor.verifyPasskey(
+          user.userId(), request.credential(), PasskeyChallenge.claim(httpRequest));
+    } else {
+      secondFactor.verify(user.userId(), request.requireCode());
+    }
     sessions.secondFactorProved(httpRequest);
   }
+
+  /**
+   * The options a browser needs to prove a passkey (REQ-AUTH-002).
+   *
+   * <p>Serves both moments a passkey is proved: the second half of a login, where the account comes
+   * from the pending login the password left behind, and a re-confirmation, where it comes from the
+   * session. Hence no session requirement and no user id in the request — the one thing a caller
+   * may not do is say whose passkeys it wants the options for.
+   *
+   * @param user the authenticated principal, or null in the middle of a login
+   * @param httpRequest the servlet request, whose session carries the pending login and takes the
+   *     challenge
+   * @return the options, as JSON, for {@code navigator.credentials.get()}
+   */
+  @PostMapping(value = "/passkeys/challenge", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.SECOND_FACTOR_INVALID})
+  @PublicEndpoint(
+      reason =
+          "Half of it happens between the password and the session, where there is "
+              + "nothing to be permitted by. It reveals the credential ids of an account "
+              + "whose password has just been presented, and nothing else.")
+  public CeremonyView passkeyChallenge(
+      @AuthenticationPrincipal AuthenticatedUser user,
+      jakarta.servlet.http.HttpServletRequest httpRequest) {
+    UUID account = user != null ? user.userId() : pendingLogin.peek(httpRequest).userId();
+    SecondFactor.Ceremony ceremony = secondFactor.beginPasskeyAssertion(account);
+    PasskeyChallenge.rememberAssertion(httpRequest, ceremony.challenge());
+    return new CeremonyView(ceremony.optionsJson());
+  }
+
+  /**
+   * The options a browser needs to create a passkey (REQ-AUTH-002).
+   *
+   * @param user the authenticated principal
+   * @param httpRequest the servlet request, whose session takes the challenge
+   * @return the options, as JSON, for {@code navigator.credentials.create()}
+   */
+  @PostMapping(value = "/passkeys", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail(ProblemType.UNAUTHENTICATED)
+  @PublicEndpoint(
+      reason =
+          "Registering a passkey is something every account may do for itself, whatever "
+              + "role it holds — the same case the TOTP enrolment beside it makes.")
+  public CeremonyView beginPasskey(
+      @AuthenticationPrincipal AuthenticatedUser user,
+      jakarta.servlet.http.HttpServletRequest httpRequest) {
+    SecondFactor.Ceremony ceremony =
+        secondFactor.beginPasskeyRegistration(user.userId(), user.email(), user.email());
+    PasskeyChallenge.rememberRegistration(httpRequest, ceremony.challenge());
+    return new CeremonyView(ceremony.optionsJson());
+  }
+
+  /**
+   * Finishes registering a passkey.
+   *
+   * @param request what the browser produced, and what to call this authenticator
+   * @param user the authenticated principal
+   * @param httpRequest the servlet request, whose session holds the challenge
+   */
+  @PostMapping(value = "/passkeys/confirmation")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.SECOND_FACTOR_INVALID})
+  @PublicEndpoint(
+      reason =
+          "The other half of a registration every account may make for itself. It "
+              + "verifies a response against the caller's own challenge and can do nothing "
+              + "else.")
+  public void confirmPasskey(
+      @Valid @RequestBody PasskeyRegistrationRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user,
+      jakarta.servlet.http.HttpServletRequest httpRequest) {
+    secondFactor.confirmPasskeyRegistration(
+        user.userId(),
+        request.credential(),
+        PasskeyChallenge.claimRegistration(httpRequest),
+        request.label());
+  }
+
+  /**
+   * Removes one passkey.
+   *
+   * <p>Asks for the second factor to have been proved recently (REQ-AUTH-011) rather than for a
+   * code in the body, which is how the TOTP removal beside it works: an account whose only factor
+   * is a passkey has no code to type, and the re-confirmation takes either kind.
+   *
+   * @param passkeyId which one
+   * @param user the authenticated principal
+   */
+  @PostMapping(value = "/passkeys/{passkeyId}/removal")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @RequiresRecentSecondFactor
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.NOT_FOUND, ProblemType.SECOND_FACTOR_STALE})
+  @PublicEndpoint(
+      reason =
+          "Taking off one's own passkey needs the second factor proved again and nothing "
+              + "else. A permission would be a way for somebody else's role to decide it.")
+  public void removePasskey(
+      @PathVariable UUID passkeyId, @AuthenticationPrincipal AuthenticatedUser user) {
+    secondFactor.removePasskey(user.userId(), passkeyId);
+  }
+
+  /**
+   * What the caller's account holds.
 
   /**
    * What the caller's account holds.
@@ -86,7 +198,18 @@ public class SecondFactorController {
   public EnrolmentView enrolment(@AuthenticationPrincipal AuthenticatedUser user) {
     SecondFactor.Enrolment enrolment = secondFactor.enrolmentOf(user.userId());
     return new EnrolmentView(
-        enrolment.totpConfirmed(), enrolment.totpEnrolledAt(), enrolment.recoveryCodesLeft());
+        enrolment.totpConfirmed(),
+        enrolment.totpEnrolledAt(),
+        enrolment.recoveryCodesLeft(),
+        enrolment.passkeys().stream()
+            .map(
+                passkey ->
+                    new PasskeyView(
+                        passkey.id(),
+                        passkey.label(),
+                        passkey.registeredAt(),
+                        passkey.lastUsedAt()))
+            .toList());
   }
 
   /**
@@ -178,13 +301,56 @@ public class SecondFactorController {
   /**
    * What an account holds.
    *
-   * @param totpConfirmed whether a confirmed authenticator exists, which is what makes the second
-   *     factor required at login
+   * @param totpConfirmed whether a confirmed authenticator app exists
    * @param enrolledAt when it was confirmed, or null
    * @param recoveryCodesLeft how many single-use codes are unspent. Zero beside a confirmed factor
    *     is worth showing: losing the phone then loses the account
+   * @param passkeys the registered passkeys, oldest first
    */
-  public record EnrolmentView(boolean totpConfirmed, Instant enrolledAt, int recoveryCodesLeft) {}
+  public record EnrolmentView(
+      boolean totpConfirmed,
+      Instant enrolledAt,
+      int recoveryCodesLeft,
+      List<PasskeyView> passkeys) {}
+
+  /**
+   * One registered passkey.
+   *
+   * @param id the credential, for removing it
+   * @param label what the person called it
+   * @param registeredAt when it was registered
+   * @param lastUsedAt when it was last used, or null
+   */
+  public record PasskeyView(UUID id, String label, Instant registeredAt, Instant lastUsedAt) {}
+
+  /**
+   * The options one side of a ceremony needs.
+   *
+   * @param options the WebAuthn options, as the JSON {@code navigator.credentials} takes. Passed
+   *     through as text rather than re-modelled: the shape is the specification's, and a second
+   *     model of it here would be a second thing to keep in step with browsers
+   */
+  public record CeremonyView(String options) {}
+
+  /**
+   * What finishes a passkey registration.
+   *
+   * @param credential what {@code navigator.credentials.create()} produced, as JSON
+   * @param label what to call this authenticator, or null
+   */
+  public record PasskeyRegistrationRequest(
+      @NotBlank @Size(max = 20_000) String credential, @Size(max = 100) String label) {
+
+    /**
+     * The fact that there was a response, and never its contents.
+     *
+     * @return the record with the response masked
+     */
+    @Override
+    public String toString() {
+      return "PasskeyRegistrationRequest[credential=***, label=" + label + "]";
+    }
+  }
 
   /**
    * A secret that has just been generated.

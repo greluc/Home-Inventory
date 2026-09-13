@@ -40,6 +40,9 @@ public class Credential {
   /** One single-use code for an account that has lost its authenticator. */
   public static final String RECOVERY_CODE = "RECOVERY_CODE";
 
+  /** A passkey: a key pair whose private half never leaves the authenticator. */
+  public static final String PASSKEY = "PASSKEY";
+
   @Id
   @Column(name = "id", nullable = false, updatable = false)
   private UUID id;
@@ -77,6 +80,28 @@ public class Credential {
   /** When a code from it was last accepted — the replay guard, and for a recovery code the spend. */
   @Column(name = "last_used_at")
   private Instant lastUsedAt;
+
+  /**
+   * Base64url of a passkey's credential id, or null for the other kinds.
+   *
+   * <p>What an assertion presents, and therefore what a stored credential is found by. The table's
+   * check constraint ties it to the kind in both directions.
+   */
+  @Column(name = "credential_id", updatable = false)
+  private String credentialId;
+
+  /**
+   * The authenticator's own counter, as it stood at the last acceptance.
+   *
+   * <p>A response carrying a counter that did not move forward is a cloned authenticator. The
+   * library compares against this; the column is what makes the comparison possible at all.
+   */
+  @Column(name = "sign_count", nullable = false)
+  private long signCount;
+
+  /** How the authenticator can be reached — {@code usb}, {@code internal}, … — or null. */
+  @Column(name = "transports")
+  private String transports;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
@@ -138,6 +163,49 @@ public class Credential {
     Credential credential = enrol(userId, RECOVERY_CODE, hash, null, now);
     credential.confirmedAt = now;
     return credential;
+  }
+
+  /**
+   * Registers a passkey, which counts from the moment it is verified.
+   *
+   * <p>Confirmed on creation, like a recovery code and unlike a TOTP secret: the registration
+   * ceremony <em>is</em> the proof, so there is nothing left for the account holder to demonstrate.
+   *
+   * @param userId whose it is
+   * @param credentialId base64url of the credential id
+   * @param attestedCredentialData the credential id and the public key together, base64
+   * @param signCount the authenticator's counter as it stands
+   * @param transports how it can be reached, or null
+   * @param label what the person calls it
+   * @param now when it was registered
+   * @return the new credential
+   */
+  public static Credential passkey(
+      UUID userId,
+      String credentialId,
+      String attestedCredentialData,
+      long signCount,
+      String transports,
+      String label,
+      Instant now) {
+    Credential credential = enrol(userId, PASSKEY, attestedCredentialData, label, now);
+    credential.credentialId = credentialId;
+    credential.signCount = signCount;
+    credential.transports = transports;
+    credential.confirmedAt = now;
+    return credential;
+  }
+
+  /**
+   * Records an assertion: the counter moves and the credential counts as used.
+   *
+   * @param signCount the counter the authenticator now reports
+   * @param now when
+   */
+  public void asserted(long signCount, Instant now) {
+    this.signCount = signCount;
+    this.lastUsedAt = now;
+    this.updatedAt = now;
   }
 
   /**

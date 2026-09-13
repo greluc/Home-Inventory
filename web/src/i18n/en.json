@@ -22,7 +22,9 @@
     "code": "Code",
     "submitCode": "Confirm",
     "codeHint": "Your account is protected by a second factor. Enter the code from your authenticator app, or one of your recovery codes.",
-    "codeFailed": "That code is not valid. Sign in again and try the next one."
+    "codeFailed": "That code is not valid. Sign in again and try the next one.",
+    "usePasskey": "Use a passkey instead",
+    "passkeyFailed": "That passkey could not be used. Try again, or enter a code."
   },
   "session": {
     "signOut": "Sign out"
@@ -109,6 +111,9 @@
     "confirm": "Confirm",
     "recoveryTitle": "Your recovery codes",
     "recoveryHint": "Keep these somewhere safe. Each one signs you in once if you lose your phone, and they are shown here and nowhere else.",
-    "continue": "Continue"
+    "continue": "Continue",
+    "usePasskey": "Use a passkey instead",
+    "passkeyLabel": "This device",
+    "passkeyFailed": "This device could not create a passkey."
   }
 }

@@ -80,10 +80,10 @@ docs/architecture/07-data-model.md:559:guaranteed
 docs/architecture/07-data-model.md:564:enforces
 docs/architecture/07-data-model.md:583:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:183:enforced
 docs/architecture/08-api-contract.md:184:enforced
-docs/architecture/08-api-contract.md:265:cannot
-docs/architecture/08-api-contract.md:343:fails the build
+docs/architecture/08-api-contract.md:185:enforced
+docs/architecture/08-api-contract.md:266:cannot
+docs/architecture/08-api-contract.md:344:fails the build
 docs/architecture/09-extensibility-and-plugins.md:183:cannot
 docs/architecture/09-extensibility-and-plugins.md:196:cannot
 docs/architecture/09-extensibility-and-plugins.md:219:cannot
@@ -98,9 +98,9 @@ docs/architecture/11-offline-synchronisation.md:143:cannot
 docs/architecture/11-offline-synchronisation.md:170:cannot
 docs/architecture/11-offline-synchronisation.md:265:is refused
 docs/architecture/12-security.md:16:cannot
-docs/architecture/12-security.md:181:fails the build
-docs/architecture/12-security.md:204:enforced
-docs/architecture/12-security.md:329:enforced
+docs/architecture/12-security.md:182:fails the build
+docs/architecture/12-security.md:205:enforced
+docs/architecture/12-security.md:330:enforced
 docs/architecture/13-operations-and-observability.md:129:cannot
 docs/architecture/13-operations-and-observability.md:73:cannot
 docs/architecture/14-quality-risks-glossary.md:117:enforces

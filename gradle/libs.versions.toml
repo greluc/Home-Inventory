@@ -51,6 +51,20 @@ findSecBugs = "1.14.0"
 # resolves nothing over the network in the configuration ADR-0056 fixes.
 jsonSchemaValidator = "3.0.7"
 
+# WebAuthn/passkeys, the second half of REQ-AUTH-002. Apache-2.0, and the one
+# configuration that matters is what it is NOT told to do: no metadata service,
+# no certificate path validation against FIDO's MDS, because the core makes no
+# outbound connection (ADR-0026) and a self-hosted instance attests nothing.
+# From 0.31 it is on Jackson 3, which is what the rest of this application uses:
+# an older line would have brought a second Jackson major along for one library.
+webauthn4j = "0.31.10.RELEASE"
+
+# webauthn4j's API is annotated with JetBrains' @NotNull/@Nullable, which its POM
+# marks provided: javac cannot resolve an annotated signature without them on the
+# compile classpath. Compile-only here for the same reason it is provided there —
+# nothing of it is needed at run time.
+jetbrainsAnnotations = "26.1.0"
+
 # Test-only
 testcontainers = "2.0.5"
 archunit = "1.5.0"
@@ -95,6 +109,9 @@ lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 # the same document the clients get, which is what REQ-CORE-027's acceptance
 # ("a client validates offline with the same result as the server") asks for.
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "jsonSchemaValidator" }
+webauthn4j-core = { module = "com.webauthn4j:webauthn4j-core", version.ref = "webauthn4j" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrainsAnnotations" }
+webauthn4j-test = { module = "com.webauthn4j:webauthn4j-test", version.ref = "webauthn4j" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 # Test-only: certificate generation. The deployment's PKI is made by
 # deploy/setup.sh with openssl; the tests make a throwaway one in memory, so no
