@@ -146,6 +146,9 @@ components:
           description: the version being edited, or `null`
           format: uuid
           type: string
+        icon:
+          description: an icon name for the client, or `null`
+          type: string
         id:
           description: the category
           format: uuid
@@ -983,20 +986,36 @@ components:
         returned from here would be one the server would have to translate, in a language the server does
         not know the user prefers.
 
-        That changes at stage 1, when a tenant may define its own: a category nobody shipped has no
-        key in any bundle, and its labels then travel with the row as multilingual data (REQ-CORE-031).
+        That changed at stage 1, and the labels are here now. A category nobody shipped has no key in
+        any bundle, so it has to carry its own name; a shipped one may have been renamed by its tenant
+        (REQ-CORE-042, "all present and editable"), and that name has to win over the translation.
+
+        So the rule for a client is one sentence: **use the label for the reader's language when
+        there is one, and translate the key when there is not.** Nothing here is display text the
+        server invented — every label in this map was typed by somebody in the tenant, which is what
+        keeps REQ-NFR-032 true.
       properties:
+        icon:
+          description: an icon name for the client, or `null`
+          type: string
         id:
           description: the category, which is what a location references
           format: uuid
           type: string
         key:
-          description: the shipped key — `room`, `shelf`, `box` — which a client translates
+          description: |-
+            the shipped key — `room`, `shelf`, `box` — which a client translates
+            when the tenant has given the category no name of its own
           type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: the tenant's own name per language tag, empty when it has none
+          type: object
         mobile:
           description: |-
-            whether locations of this category travel with their contents; every shipped one is
-            stationary at stage 0, and the field exists because the column does
+            whether locations of this category travel with their contents. Every shipped one is
+            stationary; the flag marks the relocation case a client offers, not a restriction on moving
           type: boolean
       type: object
     LocationPage:
@@ -1838,6 +1857,29 @@ components:
           description: the shared secret in base32, for somebody typing it in by hand
           type: string
       type: object
+    UpdateCategoryRequest:
+      description: |-
+        What to change about a location category.
+
+        Replaced whole, every field of it: a partial body would make removing a translation
+        impossible, since there is no spelling for "drop this language" in a merge.
+      properties:
+        icon:
+          description: an icon name for clients, or omitted
+          maxLength: 64
+          minLength: 0
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: |-
+            the name per language tag; omitted or empty leaves it nameless and a client falls
+            back to translating the key
+          type: object
+        mobile:
+          description: whether its places travel with their contents
+          type: boolean
+      type: object
     UpdateItemRequest:
       description: 'The body of an update. `kind` is absent: a physical item does not become a digital
         one.'
@@ -1883,6 +1925,15 @@ components:
           type: string
       required:
       - name
+      type: object
+    UpdateItemTypeRequest:
+      description: What to change about an item type.
+      properties:
+        icon:
+          description: an icon name for clients, or omitted to remove the one it has
+          maxLength: 64
+          minLength: 0
+          type: string
       type: object
     ValueListEntryView:
       description: One permitted value.
@@ -3203,9 +3254,95 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Creates an item type, with an empty draft version to fill in.
+  /api/v1/catalog/item-types/{id}:
+    put:
+      description: 'Archives an item type: offered for nothing new, still referenced by what exists.'
+      operationId: updateItemType
+      parameters:
+      - description: the type
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItemTypeRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemTypeView'
+          description: the archived type
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: 'Archives an item type: offered for nothing new, still referenced by what exists.'
   /api/v1/catalog/item-types/{id}/archive:
     post:
-      description: 'Archives an item type: offered for nothing new, still referenced by what exists.'
+      description: Archives an item type.
       operationId: archiveItemType
       parameters:
       - description: the type
@@ -3264,7 +3401,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: 'Archives an item type: offered for nothing new, still referenced by what exists.'
+      summary: Archives an item type.
   /api/v1/catalog/location-categories:
     get:
       description: |-
@@ -3421,6 +3558,92 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Creates a location category, with an empty draft version.
+  /api/v1/catalog/location-categories/{id}:
+    put:
+      description: Archives a location category.
+      operationId: updateCategory
+      parameters:
+      - description: the category
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryView'
+          description: the archived category
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Archives a location category.
   /api/v1/catalog/location-categories/{id}/archive:
     post:
       description: Archives a location category.

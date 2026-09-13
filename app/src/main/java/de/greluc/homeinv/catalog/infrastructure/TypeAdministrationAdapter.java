@@ -160,6 +160,21 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   @Override
   @Transactional
+  public ItemTypeView updateItemType(UUID typeId, UpdateItemTypeCommand command, UUID actor) {
+    loadItemType(typeId).orElseThrow(() -> unknown("item type", typeId));
+    jdbc.sql(
+            """
+            update catalog.item_type
+            set icon = ?, updated_at = now(), updated_by = ?, version = version + 1
+            where tenant_id = ? and id = ?
+            """)
+        .params(command.icon(), actor, TenantContext.require(), typeId)
+        .update();
+    return loadItemType(typeId).orElseThrow();
+  }
+
+  @Override
+  @Transactional
   public ItemTypeView archiveItemType(UUID typeId, UUID actor) {
     ItemTypeView type = loadItemType(typeId).orElseThrow(() -> unknown("item type", typeId));
     if (type.builtin()) {
@@ -235,6 +250,35 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             CATEGORY_CURSOR,
             (rs, rowNum) -> categoryOf(rs));
     return new CategoryPage(rows, nextCursor(rows.size(), size, CATEGORY_CURSOR, lastPosition()));
+  }
+
+  @Override
+  @Transactional
+  public CategoryView updateCategory(
+      UUID categoryId, UpdateCategoryCommand command, UUID actor) {
+
+    loadCategory(categoryId).orElseThrow(() -> unknown("location category", categoryId));
+    // `builtin` is not consulted. A shipped category is one this instance seeded,
+    // not one it owns: REQ-CORE-042 asks for all thirteen to be present AND
+    // editable, and a tenant that calls its `room` "Zimmer" is naming its own
+    // tree. What stays fixed is the KEY, which is what a client translates and
+    // what an export writes down.
+    jdbc.sql(
+            """
+            update catalog.location_category
+            set labels = ?::jsonb, icon = ?, is_mobile = ?,
+                updated_at = now(), updated_by = ?, version = version + 1
+            where tenant_id = ? and id = ?
+            """)
+        .params(
+            json(command.labels()),
+            command.icon(),
+            command.mobile(),
+            actor,
+            TenantContext.require(),
+            categoryId)
+        .update();
+    return loadCategory(categoryId).orElseThrow();
   }
 
   @Override
@@ -912,7 +956,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   private static final String CATEGORY_SELECT =
       """
-      select c.id, c.key, c.labels, c.is_mobile, c.builtin, c.archived_at, c.created_at,
+      select c.id, c.key, c.labels, c.icon, c.is_mobile, c.builtin, c.archived_at, c.created_at,
              (select v.id from catalog.location_category_version v
                where v.tenant_id = c.tenant_id and v.location_category_id = c.id
                  and v.published_at is not null
@@ -1044,6 +1088,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         rs.getObject("id", UUID.class),
         rs.getString("key"),
         labels(rs.getString("labels")),
+        rs.getString("icon"),
         rs.getBoolean("is_mobile"),
         rs.getBoolean("builtin"),
         rs.getTimestamp("archived_at") != null,

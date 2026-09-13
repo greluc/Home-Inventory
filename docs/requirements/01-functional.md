@@ -45,7 +45,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-CORE-020 | Item types are creatable and editable **in the running system**, without a release and without a restart. | M | 1 | A new type with fields in ≤ 2 min without developer involvement |
+| REQ-CORE-020 | Item types are creatable and editable **in the running system**, without a release and without a restart. Editing a type in place covers its icon; its key, kind and parent are fixed, because each would reinterpret items already written against it, and what it *declares* changes through a draft version. | M | 1 | A new type with fields in ≤ 2 min without developer involvement |
 | REQ-CORE-021 | A type defines fields with: key, multilingual label, data type, required, default, unit, constraints, help text, group, order. | M | 1 | Every property settable in the UI and represented in the API |
 | REQ-CORE-022 | Supported data types: `text`, `multiline`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `enum`, `multi-enum`, `url`, `email`, `quantity`, `reference`, `secret`, `file`. | M | 1 | An acceptance test per data type for input, storage, validation and display |
 | REQ-CORE-023 | Fields are individually markable as `searchable`, `sortable`, `facetable` and `sensitive`. | M | 1 | The marking takes effect on index, sorting, facets and encryption |
@@ -65,7 +65,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 |---|---|---|---|---|
 | REQ-CORE-040 | Locations form an **arbitrarily deep tree** (default ceiling 12 levels). | M | 0 | Building → room → shelf → box → compartment is creatable |
 | REQ-CORE-041 | Locations have **categories with their own fields**, configurable in the running system. | M | 1 | A "moving box" category with target room, packing date and seal number is creatable |
-| REQ-CORE-042 | Shipped categories: building, floor, room, furniture, shelf, compartment, drawer, box, moving box, vehicle, warehouse, outdoor storage, locker. | S | 1 | All present and editable |
+| REQ-CORE-042 | Shipped categories: building, floor, room, furniture, shelf, compartment, drawer, box, moving box, vehicle, warehouse, outdoor storage, locker. They are seeded **nameless** and translated from their keys in the client; a tenant may give any of them a name of its own, which then wins. | S | 1 | All thirteen present; each one's name, icon and mobility changeable through `PUT /catalog/location-categories/{id}`, the tenant's name reaching the picker a client builds a location with |
 | REQ-CORE-043 | A category can be marked **mobile**; a mobile location is moved as a whole without moving its contents individually. | M | 1 | Moving a box with 200 items produces **one** event, not 200 |
 | REQ-CORE-044 | A location's full path is retrievable without recursion. | M | 0 | `ltree` path; subtree queries served by an index |
 | REQ-CORE-045 | Cycles in the tree are impossible. | M | 0 | Moving a node under its own child is rejected with `409` `invalid-move` |

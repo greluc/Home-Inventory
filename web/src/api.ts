@@ -133,6 +133,14 @@ export interface LocationPage {
 export interface LocationCategory {
   id: string;
   key: string;
+  /**
+   * The tenant's own name per language tag, empty when it has given the category none.
+   *
+   * A shipped category starts nameless and is translated from its `key`; a tenant may rename it or
+   * define one of its own, and then this wins. See `categoryName` in `LocationPanel.tsx`.
+   */
+  labels: Record<string, string>;
+  icon: string | null;
   mobile: boolean;
 }
 

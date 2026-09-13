@@ -109,6 +109,24 @@ public class CatalogController {
    * @param user the authenticated caller
    * @return the archived type
    */
+  @PutMapping(path = "/item-types/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TYPE_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public TypeAdministration.ItemTypeView updateItemType(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateItemTypeRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return types.updateItemType(
+        id, new TypeAdministration.UpdateItemTypeCommand(request.icon()), user.userId());
+  }
+
+  /**
+   * Archives an item type.
+   *
+   * @param id the type
+   * @param user the authenticated caller
+   * @return the archived type
+   */
   @PostMapping(path = "/item-types/{id}/archive", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TYPE_DELETE)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
@@ -163,6 +181,29 @@ public class CatalogController {
     return ResponseEntity.created(
             URI.create("/api/v1/catalog/location-categories/" + view.id()))
         .body(view);
+  }
+
+  /**
+   * Archives a location category.
+   *
+   * @param id the category
+   * @param user the authenticated caller
+   * @return the archived category
+   */
+  @PutMapping(path = "/location-categories/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TYPE_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public TypeAdministration.CategoryView updateCategory(
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateCategoryRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return types.updateCategory(
+        id,
+        new TypeAdministration.UpdateCategoryCommand(
+            request.labels() == null ? Map.of() : request.labels(),
+            request.icon(),
+            request.mobile()),
+        user.userId());
   }
 
   /**
@@ -492,6 +533,27 @@ public class CatalogController {
    *     category takes everything again; the cap is the one every collection here carries
    */
   public record ChildCategoriesRequest(@Size(max = 200) List<UUID> permitted) {}
+
+  /**
+   * What to change about an item type.
+   *
+   * @param icon an icon name for clients, or omitted to remove the one it has
+   */
+  public record UpdateItemTypeRequest(@Size(max = 64) String icon) {}
+
+  /**
+   * What to change about a location category.
+   *
+   * <p>Replaced whole, every field of it: a partial body would make removing a translation
+   * impossible, since there is no spelling for "drop this language" in a merge.
+   *
+   * @param labels the name per language tag; omitted or empty leaves it nameless and a client falls
+   *     back to translating the key
+   * @param icon an icon name for clients, or omitted
+   * @param mobile whether its places travel with their contents
+   */
+  public record UpdateCategoryRequest(
+      Map<String, String> labels, @Size(max = 64) String icon, boolean mobile) {}
 
   /**
    * What to call a new location category.

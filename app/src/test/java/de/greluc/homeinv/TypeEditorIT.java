@@ -10,6 +10,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.greluc.homeinv.catalog.api.FieldConstraints;
 import de.greluc.homeinv.catalog.api.FieldDataType;
 import de.greluc.homeinv.catalog.api.FieldDefinitionView;
+import de.greluc.homeinv.catalog.api.LocationCategories;
+import de.greluc.homeinv.catalog.api.LocationCategoryView;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.catalog.api.TypeKind;
 import de.greluc.homeinv.catalog.api.TypeRegistry;
@@ -41,6 +43,7 @@ class TypeEditorIT extends AbstractIntegrationTest {
 
   @Autowired private TypeAdministration types;
   @Autowired private TypeRegistry registry;
+  @Autowired private LocationCategories categories;
   @Autowired private TenantProvisioningService provisioning;
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
@@ -372,6 +375,107 @@ class TypeEditorIT extends AbstractIntegrationTest {
               .extracting(FieldDefinitionView::key)
               .containsExactlyInAnyOrder("targetRoom", "packedOn", "sealNumber");
           assertThat(registry.publishedCategoryVersion(movingBox.id())).isEqualTo(published.id());
+        });
+  }
+
+  @Test
+  @DisplayName("renames a shipped category, and the picker answers with the tenant's own name")
+  void everyCategoryIsEditable() {
+    Tenant tenant = newTenant("type-editor-editable@example.org");
+    inTenant(
+        tenant,
+        () -> {
+          // REQ-CORE-042 asks for the thirteen to be "all present AND editable",
+          // and a shipped category is one this instance seeded rather than one it
+          // owns: a tenant calling its `room` "Zimmer" is naming its own tree.
+          TypeAdministration.CategoryView room =
+              types.categories(null, 200).items().stream()
+                  .filter(view -> "room".equals(view.key()))
+                  .findFirst()
+                  .orElseThrow();
+          assertThat(room.builtin()).isTrue();
+          assertThat(room.labels()).isEmpty();
+          assertThat(room.mobile()).isFalse();
+
+          TypeAdministration.CategoryView renamed =
+              types.updateCategory(
+                  room.id(),
+                  new TypeAdministration.UpdateCategoryCommand(
+                      Map.of("en", "Room", "de", "Zimmer"), "door-open", false),
+                  tenant.userId());
+
+          // The key does not move. It is what a client translates, what an export
+          // writes down, and what makes the rename additive rather than a new
+          // category wearing an old id.
+          assertThat(renamed.key()).isEqualTo("room");
+          assertThat(renamed.labels()).containsEntry("de", "Zimmer").containsEntry("en", "Room");
+          assertThat(renamed.icon()).isEqualTo("door-open");
+
+          // And the picker a client actually reads carries it, which is the half
+          // that makes the edit visible to anybody (REQ-CORE-041).
+          LocationCategoryView asOffered =
+              categories.list(null, 200).items().stream()
+                  .filter(view -> view.id().equals(room.id()))
+                  .findFirst()
+                  .orElseThrow();
+          assertThat(asOffered.labels()).containsEntry("de", "Zimmer");
+          assertThat(asOffered.icon()).isEqualTo("door-open");
+          assertThat(asOffered.mobile()).isFalse();
+
+          // Mobility is settable, which is what REQ-CORE-043's "can be marked
+          // mobile" means: every shipped category ships stationary, and marking
+          // one is the tenant's to do.
+          assertThat(
+                  types
+                      .updateCategory(
+                          room.id(),
+                          new TypeAdministration.UpdateCategoryCommand(
+                              Map.of("de", "Zimmer"), null, true),
+                          tenant.userId())
+                      .mobile())
+              .isTrue();
+
+          // Replaced whole, never merged: dropping a language is how a tenant
+          // undoes a translation, and a merge offers no spelling for it.
+          TypeAdministration.CategoryView narrowed =
+              types.updateCategory(
+                  room.id(),
+                  new TypeAdministration.UpdateCategoryCommand(Map.of(), null, false),
+                  tenant.userId());
+          assertThat(narrowed.labels()).isEmpty();
+          assertThat(narrowed.icon()).isNull();
+        });
+  }
+
+  @Test
+  @DisplayName("changes a type's icon and nothing that would reinterpret its items")
+  void anItemTypeIsEditable() {
+    Tenant tenant = newTenant("type-editor-icon@example.org");
+    inTenant(
+        tenant,
+        () -> {
+          TypeAdministration.ItemTypeView tool = newType(tenant, "power-tool");
+          assertThat(tool.icon()).isNull();
+
+          TypeAdministration.ItemTypeView withIcon =
+              types.updateItemType(
+                  tool.id(), new TypeAdministration.UpdateItemTypeCommand("drill"), tenant.userId());
+          assertThat(withIcon.icon()).isEqualTo("drill");
+          // The three that would reinterpret existing items are not in the
+          // command at all, so there is nothing to assert about them beyond this:
+          // they came back unchanged.
+          assertThat(withIcon.key()).isEqualTo("power-tool");
+          assertThat(withIcon.kind()).isEqualTo(TypeKind.PHYSICAL);
+          assertThat(withIcon.parentId()).isNull();
+
+          assertThat(
+                  types
+                      .updateItemType(
+                          tool.id(),
+                          new TypeAdministration.UpdateItemTypeCommand(null),
+                          tenant.userId())
+                      .icon())
+              .isNull();
         });
   }
 

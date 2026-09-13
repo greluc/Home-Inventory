@@ -125,6 +125,14 @@ commit".
 
 ### Added
 
+- **Types and categories can be edited while the system runs.** A location
+  category's name, icon and mobility change through `PUT
+  /api/v1/catalog/location-categories/{id}`, an item type's icon through `PUT
+  /api/v1/catalog/item-types/{id}`. The thirteen shipped categories are editable
+  like any other — calling your `room` a *Zimmer* is naming your own tree, and the
+  name reaches the picker you create a location with. Keys never move, so a client
+  that translates the shipped ones keeps working. *REST API: additive.*
+
 - **A place can be moved, and what is inside it comes along.** `POST
   /api/v1/locations/{id}/move` re-parents a location and everything under it —
   moving a box with two hundred things in it is one operation and one event, not

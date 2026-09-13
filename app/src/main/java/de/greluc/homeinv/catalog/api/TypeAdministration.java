@@ -92,6 +92,22 @@ public interface TypeAdministration {
   CategoryPage categories(String cursor, int limit);
 
   /**
+   * Changes an item type's icon (REQ-CORE-020).
+   *
+   * <p>The icon and nothing else. The key is the identifier, the kind decides whether an item of
+   * the type has a location at all, and the parent decides which fields it inherits — each of the
+   * three would reinterpret items that already exist, and a type change devalues no existing item
+   * (REQ-CORE-025). What a type <em>declares</em> is edited through its draft version.
+   *
+   * @param typeId the type
+   * @param command the new icon, or one naming {@code null} to remove it
+   * @param actor the authenticated user
+   * @return the type as it now stands
+   * @throws TypeRegistry.UnknownTypeException when the tenant has no such type
+   */
+  ItemTypeView updateItemType(UUID typeId, UpdateItemTypeCommand command, UUID actor);
+
+  /**
    * Archives a location category.
    *
    * @param categoryId the category
@@ -100,6 +116,26 @@ public interface TypeAdministration {
    * @throws TypeRegistry.UnknownTypeException when the tenant has no such category
    */
   CategoryView archiveCategory(UUID categoryId, UUID actor);
+
+  /**
+   * Changes what a location category is called and how it behaves (REQ-CORE-042).
+   *
+   * <p>Its name, its icon and whether its locations travel with their contents — not its key, which
+   * is the identifier every client and every export writes down, and not its fields, which belong to
+   * a version and change through one.
+   *
+   * <p>A shipped category is editable exactly like a tenant's own, which is what "all present and
+   * editable" asks for. Renaming {@code room} to "Zimmer" is a tenant deciding what its own tree is
+   * called; the key stays {@code room}, so a client that translates the shipped keys keeps working
+   * and a tenant that overrides the labels wins over the translation.
+   *
+   * @param categoryId the category
+   * @param command the new name, icon and mobility
+   * @param actor the authenticated user
+   * @return the category as it now stands
+   * @throws TypeRegistry.UnknownTypeException when the tenant has no such category
+   */
+  CategoryView updateCategory(UUID categoryId, UpdateCategoryCommand command, UUID actor);
 
   /**
    * What a category takes underneath it (REQ-CORE-047).
@@ -301,6 +337,28 @@ public interface TypeAdministration {
   record CreateCategoryCommand(String key, Map<String, String> labels, boolean mobile) {}
 
   /**
+   * What may be changed about a location category.
+   *
+   * <p>Every field is replaced, none is merged: a caller that sends two labels means the category
+   * has two, and a merge would make removing one impossible through an API that offers no way to
+   * say "delete this language".
+   *
+   * @param labels the name per language tag, as the tenant wrote it; empty leaves the category
+   *     nameless, which is the state every shipped one starts in and which makes a client fall back
+   *     to translating the key
+   * @param icon an icon name for the client, or {@code null} for none
+   * @param mobile whether its locations travel with their contents (REQ-CORE-043)
+   */
+  record UpdateCategoryCommand(Map<String, String> labels, String icon, boolean mobile) {}
+
+  /**
+   * What may be changed about an item type.
+   *
+   * @param icon an icon name for the client, or {@code null} for none
+   */
+  record UpdateItemTypeCommand(String icon) {}
+
+  /**
    * A field, as it is added or changed.
    *
    * @param key the attribute key; ignored when changing, because items already carry it
@@ -384,6 +442,7 @@ public interface TypeAdministration {
    * @param id the category
    * @param key its stable key
    * @param labels its name per language tag
+   * @param icon an icon name for the client, or {@code null}
    * @param mobile whether its locations travel with their contents
    * @param builtin whether it was provisioned with the tenant
    * @param archived whether it is offered for nothing new
@@ -394,6 +453,7 @@ public interface TypeAdministration {
       UUID id,
       String key,
       Map<String, String> labels,
+      String icon,
       boolean mobile,
       boolean builtin,
       boolean archived,

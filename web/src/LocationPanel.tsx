@@ -15,8 +15,10 @@ import { ApiError, api, type Location, type LocationCategory } from "./api";
  * with twenty locations is scanned faster as twenty lines than as four levels of
  * disclosure. The indent carries the shape without hiding anything.
  *
- * Categories come from the server as keys and are translated here: they are
- * interface text, and interface text lives in the resource bundle (REQ-NFR-032).
+ * A shipped category comes from the server as a key and is translated here: those names are
+ * interface text, and interface text lives in the resource bundle (REQ-NFR-032). A category the
+ * tenant named carries its own labels and they win — that name is tenant data, not interface text,
+ * and no bundle can contain it.
  */
 export function LocationPanel({
   locations,
@@ -29,14 +31,18 @@ export function LocationPanel({
   onCreated: () => void;
   onError: (message: string) => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [chosenCategory, setChosenCategory] = useState("");
   const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const offered = useMemo(() => sorted(categories, t), [categories, t]);
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  const offered = useMemo(
+    () => sorted(categories, t, language),
+    [categories, t, language],
+  );
 
   // Derived rather than stored, so that the categories arriving after the first
   // render do not need a second one to become selectable. A select whose value
@@ -100,7 +106,7 @@ export function LocationPanel({
             >
               {offered.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {t(`location.categories.${category.key}`, category.key)}
+                  {categoryName(category, t, language)}
                 </option>
               ))}
             </select>
@@ -136,12 +142,7 @@ export function LocationPanel({
           {locations.map((location) => (
             <li key={location.id} style={{ paddingInlineStart: `${location.depth * 1.25}rem` }}>
               <span className="name">{location.name}</span>
-              <span className="muted">
-                {t(
-                  `location.categories.${categoryKeyOf(categories, location.categoryId)}`,
-                  categoryKeyOf(categories, location.categoryId),
-                )}
-              </span>
+              <span className="muted">{categoryNameOf(categories, location.categoryId, t, language)}</span>
             </li>
           ))}
         </ul>
@@ -159,25 +160,56 @@ export function LocationPanel({
  *
  * @param categories what the server sent
  * @param t the translator
- * @returns a new array, sorted by the translated label
+ * @param language the reader's language tag
+ * @returns a new array, sorted by the name actually shown
  */
-function sorted(categories: LocationCategory[], t: TFunction): LocationCategory[] {
+function sorted(
+  categories: LocationCategory[],
+  t: TFunction,
+  language: string,
+): LocationCategory[] {
   const collator = new Intl.Collator(undefined, { sensitivity: "base" });
   return categories.toSorted((left, right) =>
-    collator.compare(
-      t(`location.categories.${left.key}`, left.key),
-      t(`location.categories.${right.key}`, right.key),
-    ),
+    collator.compare(categoryName(left, t, language), categoryName(right, t, language)),
   );
 }
 
 /**
- * The shipped key of a category, for translation.
+ * What to call a category.
+ *
+ * The tenant's own label for the reader's language if there is one, then its label for the bare
+ * language (`de` for `de-AT`), then any label it has at all — a category named in one language is
+ * better shown under that name than under a key nobody chose — and only then the translation of the
+ * shipped key. A category the tenant never named has no labels, which is where every shipped one
+ * starts, so this reduces to the translation for all thirteen of them.
+ *
+ * @param category the category
+ * @param t the translator
+ * @param language the reader's language tag
+ * @returns the name to show
+ */
+function categoryName(category: LocationCategory, t: TFunction, language: string): string {
+  const labels = category.labels ?? {};
+  const primary = language.split("-")[0] ?? language;
+  const own = labels[language] ?? labels[primary] ?? Object.values(labels)[0];
+  return own ?? t(`location.categories.${category.key}`, category.key);
+}
+
+/**
+ * What to call the category a location is of.
  *
  * @param categories the known categories
  * @param id the one a location references
- * @returns the key, or the id when the category is not on this page
+ * @param t the translator
+ * @param language the reader's language tag
+ * @returns the name, or the id when the category is not on this page
  */
-function categoryKeyOf(categories: LocationCategory[], id: string): string {
-  return categories.find((category) => category.id === id)?.key ?? id;
+function categoryNameOf(
+  categories: LocationCategory[],
+  id: string,
+  t: TFunction,
+  language: string,
+): string {
+  const category = categories.find((candidate) => candidate.id === id);
+  return category === undefined ? id : categoryName(category, t, language);
 }

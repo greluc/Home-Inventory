@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -17,12 +18,22 @@ import java.util.UUID;
  * returned from here would be one the server would have to translate, in a language the server does
  * not know the user prefers.
  *
- * <p>That changes at stage 1, when a tenant may define its own: a category nobody shipped has no
- * key in any bundle, and its labels then travel with the row as multilingual data (REQ-CORE-031).
+ * <p>That changed at stage 1, and the labels are here now. A category nobody shipped has no key in
+ * any bundle, so it has to carry its own name; a shipped one may have been renamed by its tenant
+ * (REQ-CORE-042, "all present and editable"), and that name has to win over the translation.
+ *
+ * <p>So the rule for a client is one sentence: <b>use the label for the reader's language when
+ * there is one, and translate the key when there is not.</b> Nothing here is display text the
+ * server invented — every label in this map was typed by somebody in the tenant, which is what
+ * keeps REQ-NFR-032 true.
  *
  * @param id the category, which is what a location references
  * @param key the shipped key — {@code room}, {@code shelf}, {@code box} — which a client translates
- * @param mobile whether locations of this category travel with their contents; every shipped one is
- *     stationary at stage 0, and the field exists because the column does
+ *     when the tenant has given the category no name of its own
+ * @param labels the tenant's own name per language tag, empty when it has none
+ * @param icon an icon name for the client, or {@code null}
+ * @param mobile whether locations of this category travel with their contents. Every shipped one is
+ *     stationary; the flag marks the relocation case a client offers, not a restriction on moving
  */
-public record LocationCategoryView(UUID id, String key, boolean mobile) {}
+public record LocationCategoryView(
+    UUID id, String key, Map<String, String> labels, String icon, boolean mobile) {}

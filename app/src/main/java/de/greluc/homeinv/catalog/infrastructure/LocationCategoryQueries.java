@@ -10,18 +10,23 @@ import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.TenantContext;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 /**
- * Reads the shipped location categories.
+ * Reads the location categories a tenant may put a place into — the shipped ones and its own.
  *
  * <p>{@link JdbcClient} rather than a JPA entity, for the reason
- * {@link CatalogProvisioningAdapter} gives: the catalog tables are read-only at stage 0, and an
- * aggregate for a table nothing mutates would be structure written for a stage that has not arrived.
+ * {@link CatalogProvisioningAdapter} gives: these rows are edited by exactly one caller, the
+ * statements are flat, and an aggregate per row would be structure written for nobody. Editing them
+ * is {@link de.greluc.homeinv.catalog.api.TypeAdministration}'s, not this port's — this one answers
+ * the picker.
  *
  * <p>Row-level security does the tenant scoping, as everywhere else — the query still names
  * {@code tenant_id} so that a missing context is a failure here rather than a silent empty list one
@@ -39,6 +44,7 @@ public class LocationCategoryQueries implements LocationCategories {
 
   private final JdbcClient jdbc;
   private final CursorCodec cursors;
+  private final ObjectMapper mapper;
 
   @Override
   @Transactional(readOnly = true)
@@ -51,7 +57,7 @@ public class LocationCategoryQueries implements LocationCategories {
       rows =
           jdbc.sql(
                   """
-                  select id, key, is_mobile, created_at
+                  select id, key, labels, icon, is_mobile, created_at
                   from catalog.location_category
                   where tenant_id = ? and archived_at is null
                   order by created_at asc, id asc
@@ -66,7 +72,7 @@ public class LocationCategoryQueries implements LocationCategories {
       rows =
           jdbc.sql(
                   """
-                  select id, key, is_mobile, created_at
+                  select id, key, labels, icon, is_mobile, created_at
                   from catalog.location_category
                   where tenant_id = ? and archived_at is null
                     and (created_at > ? or (created_at = ? and id > ?))
@@ -80,7 +86,10 @@ public class LocationCategoryQueries implements LocationCategories {
 
     List<LocationCategoryView> views =
         rows.stream()
-            .map(row -> new LocationCategoryView(row.id(), row.key(), row.isMobile()))
+            .map(
+                row ->
+                    new LocationCategoryView(
+                        row.id(), row.key(), labels(row.labels()), row.icon(), row.isMobile()))
             .toList();
 
     String nextCursor = null;
@@ -93,12 +102,31 @@ public class LocationCategoryQueries implements LocationCategories {
   }
 
   /**
+   * The tenant's own name for a category, as JSON in the row.
+   *
+   * <p>Parsed here rather than mapped by the driver: the column is {@code jsonb} and the view wants
+   * a map, and a category that has never been named carries {@code {}} rather than null.
+   *
+   * @param json the column, which is never null
+   * @return the labels per language tag, empty when there are none
+   */
+  private Map<String, String> labels(String json) {
+    if (json == null || json.isBlank()) {
+      return Map.of();
+    }
+    return mapper.readValue(json, new TypeReference<Map<String, String>>() {});
+  }
+
+  /**
    * One row as the query returns it.
    *
    * @param id the category
    * @param key the shipped key
+   * @param labels the tenant's own name per language tag, as JSON text
+   * @param icon an icon name for the client, or null
    * @param isMobile whether its locations travel with their contents
    * @param createdAt the position half of the keyset cursor
    */
-  public record Row(UUID id, String key, boolean isMobile, Instant createdAt) {}
+  public record Row(
+      UUID id, String key, String labels, String icon, boolean isMobile, Instant createdAt) {}
 }
