@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.id
+import java.math.BigDecimal
 import java.util.Base64
 
 // The Spring Boot application. One Gradle project, eighteen building blocks as
@@ -10,6 +11,10 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.protobuf)
     alias(libs.plugins.spotbugs)
+    // REQ-NFR-070 asks for `Money` to be held at 100 % branch coverage. The plugin
+    // is here for that one class and for nothing else -- see the verification
+    // rule below.
+    jacoco
 }
 
 // Two transitive versions Spring Boot's BOM pins, raised past the ones trivy
@@ -186,6 +191,34 @@ val generateTestDataEncryptionKeys by tasks.registering {
             )
         }
     }
+}
+
+// REQ-NFR-070 asks for `Money` to be held at 100 % branch coverage, and this is
+// what holds it there. Scoped to that ONE class deliberately: a coverage number
+// over a whole application is a number people learn to argue with, while a
+// hundred and fifty lines carrying every monetary invariant in the system either
+// have every branch exercised or do not.
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    dependsOn(tasks.named("test"))
+    violationRules {
+        rule {
+            element = "CLASS"
+            includes = listOf("de.greluc.homeinv.platform.Money")
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = BigDecimal.ONE
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(tasks.named("jacocoTestCoverageVerification"))
 }
 
 // The item type templates of REQ-CORE-030. The file in docs/reference is the

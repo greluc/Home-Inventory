@@ -133,6 +133,12 @@ commit".
 
 ### Added
 
+- **Money has a type of its own now**, so a total can never mix currencies: adding
+  euros to dollars throws rather than producing a number that looks right.
+  Rounding never happens without being asked for, amounts travel as text rather
+  than as JSON numbers, and `49.9` and `49.90` are one value. No `double` or
+  `float` may appear anywhere in the application any more — a build rule says so.
+
 - **Eight ready-made item types.** Book, tool, appliance, furniture, clothing,
   software licence, document and food each arrive with their fields already
   defined — nine to twelve of them — and one call turns any of them into a type
@@ -376,7 +382,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 26 types in the shared
+- **The shared kernel is measured.** `platform` holds 27 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

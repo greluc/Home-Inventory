@@ -353,6 +353,58 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("let no money ever touch a double or a float (REQ-NFR-070)")
+  void moneyNeverTouchesABinaryFloat() {
+    // Stated over the WHOLE application rather than over "the money path",
+    // because the money path is not a package: a price reaches a request record,
+    // a projection, a report and a total, and a rule that named those four would
+    // be a rule that missed the fifth. Nothing here has ever needed a binary
+    // float — measures are SI base units in `BigDecimal`, money is `Money` — so
+    // the strict form costs nothing and cannot be quietly widened.
+    fields()
+        .should()
+        .notHaveRawType(double.class)
+        .andShould()
+        .notHaveRawType(float.class)
+        .because(
+            "0.1 + 0.2 is not 0.3, and a price wrong in the seventh decimal is a price nobody "
+                + "can reconcile (ADR-0025, REQ-NFR-070)")
+        .check(CLASSES);
+
+    methods()
+        .should(
+            new ArchCondition<JavaMethod>("declare no double or float") {
+              @Override
+              public void check(JavaMethod method, ConditionEvents events) {
+                boolean binaryFloat =
+                    isBinaryFloat(method.getRawReturnType())
+                        || method.getRawParameterTypes().stream()
+                            .anyMatch(ArchitectureRulesTest::isBinaryFloat);
+                if (binaryFloat) {
+                  events.add(
+                      SimpleConditionEvent.violated(
+                          method,
+                          method.getFullName()
+                              + " takes or returns a double or a float. A constructor, factory or "
+                              + "helper that accepts one is how a binary float gets onto the money "
+                              + "path (REQ-NFR-070)."));
+                }
+              }
+            })
+        .check(CLASSES);
+  }
+
+  /**
+   * Whether a type is one of the two binary floating-point types.
+   *
+   * @param type the type
+   * @return true for {@code double} and {@code float}
+   */
+  private static boolean isBinaryFloat(JavaClass type) {
+    return type.isEquivalentTo(double.class) || type.isEquivalentTo(float.class);
+  }
+
+  @Test
   @DisplayName("keep SQL out of string concatenation")
   void sqlIsNeverConcatenated() {
     // REQ-SEC-031. Dynamic SQL goes through a checked builder whose field and
