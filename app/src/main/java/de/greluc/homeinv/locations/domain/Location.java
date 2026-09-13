@@ -60,9 +60,16 @@ public class Location {
   @Column(name = "tenant_id", nullable = false, updatable = false)
   private UUID tenantId;
 
-  /** Which kind of place this is, from the tenant's seeded categories. */
-  @Column(name = "category_id", nullable = false)
-  private UUID categoryId;
+  /**
+   * Which kind of place this is — a category VERSION, not the category.
+   *
+   * <p>The same rule an item follows for its type (REQ-CORE-025): a location is written against the
+   * fields the category declared at that moment, and a later edit to the category leaves it alone.
+   * Callers name a category; {@code catalog} resolves it to the published version, and only this
+   * block stores the answer.
+   */
+  @Column(name = "category_version_id", nullable = false)
+  private UUID categoryVersionId;
 
   /** The parent, or null for a root. */
   @Column(name = "parent_id")
@@ -120,7 +127,7 @@ public class Location {
   private Location(
       UUID id,
       UUID tenantId,
-      UUID categoryId,
+      UUID categoryVersionId,
       UUID parentId,
       String name,
       String path,
@@ -129,7 +136,7 @@ public class Location {
       Instant now) {
     this.id = id;
     this.tenantId = tenantId;
-    this.categoryId = categoryId;
+    this.categoryVersionId = categoryVersionId;
     this.parentId = parentId;
     this.name = name;
     this.path = path;
@@ -145,16 +152,16 @@ public class Location {
    *
    * @param id the identifier
    * @param tenantId the owning tenant
-   * @param categoryId the category
+   * @param categoryVersionId the published version of the category this place is
    * @param name the name; must not be blank
    * @param actor the user creating it
    * @param now the creation instant
    * @return the new root, not yet persisted
    */
   public static Location createRoot(
-      UUID id, UUID tenantId, UUID categoryId, String name, UUID actor, Instant now) {
+      UUID id, UUID tenantId, UUID categoryVersionId, String name, UUID actor, Instant now) {
     requireName(name);
-    return new Location(id, tenantId, categoryId, null, name, labelOf(id), 0, actor, now);
+    return new Location(id, tenantId, categoryVersionId, null, name, labelOf(id), 0, actor, now);
   }
 
   /**
@@ -162,7 +169,7 @@ public class Location {
    *
    * @param id the identifier
    * @param tenantId the owning tenant
-   * @param categoryId the category
+   * @param categoryVersionId the published version of the category this place is
    * @param parent the parent, which supplies the path this one extends
    * @param name the name; must not be blank
    * @param actor the user creating it
@@ -173,14 +180,28 @@ public class Location {
    *     constraint violation surfacing as a {@code 500}
    */
   public static Location createChild(
-      UUID id, UUID tenantId, UUID categoryId, Location parent, String name, UUID actor, Instant now) {
+      UUID id,
+      UUID tenantId,
+      UUID categoryVersionId,
+      Location parent,
+      String name,
+      UUID actor,
+      Instant now) {
     requireName(name);
     int depth = parent.depth + 1;
     if (depth > MAX_DEPTH) {
       throw new TooDeepException(parent.id, MAX_DEPTH);
     }
     return new Location(
-        id, tenantId, categoryId, parent.id, name, parent.path + "." + labelOf(id), depth, actor, now);
+        id,
+        tenantId,
+        categoryVersionId,
+        parent.id,
+        name,
+        parent.path + "." + labelOf(id),
+        depth,
+        actor,
+        now);
   }
 
   /**

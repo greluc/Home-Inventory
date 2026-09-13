@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.locations.application;
 
+import de.greluc.homeinv.catalog.api.TypeRegistry;
 import de.greluc.homeinv.inventory.api.ItemLocationUsage;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.locations.api.LocationService;
@@ -18,6 +19,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +49,11 @@ public class DefaultLocationService implements LocationService {
   private final LocationRepository locations;
   private final LocationTreeQueries tree;
   private final ItemLocationUsage itemUsage;
+  // A location stores the category VERSION it was written against; a caller names
+  // the category. Only `catalog` may turn one into the other, because the tables
+  // that answer it belong to `catalog` and 04 §4.5 does not let this block read
+  // them.
+  private final TypeRegistry types;
   private final CursorCodec cursors;
   private final Clock clock;
 
@@ -86,22 +93,25 @@ public class DefaultLocationService implements LocationService {
     // that race still leaves the database refusing the row.
     requireNameFree(tenantId, command.parentId(), command.name(), null);
 
+    // Resolved once, here, and stored: the location keeps the fields the category
+    // declared at this moment even after the category moves on (REQ-CORE-025).
+    UUID categoryVersionId = types.publishedCategoryVersion(command.categoryId());
+
     Location created;
     if (command.parentId() == null) {
-      created = Location.createRoot(id, tenantId, command.categoryId(), command.name(), actor, now);
+      created = Location.createRoot(id, tenantId, categoryVersionId, command.name(), actor, now);
     } else {
       Location parent =
           locations
               .findLive(tenantId, command.parentId())
               .orElseThrow(() -> new NotFoundException("location", command.parentId()));
       created =
-          Location.createChild(
-              id, tenantId, command.categoryId(), parent, command.name(), actor, now);
+          Location.createChild(id, tenantId, categoryVersionId, parent, command.name(), actor, now);
     }
 
     locations.save(created);
     log.debug("Location {} created in tenant {}", id, tenantId);
-    return toView(created);
+    return toView(created, Map.of(categoryVersionId, command.categoryId()));
   }
 
   /**
@@ -117,7 +127,7 @@ public class DefaultLocationService implements LocationService {
     UUID tenantId = TenantContext.require();
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
-    return toView(location);
+    return toView(location, categoryOf(location));
   }
 
   /**
@@ -140,7 +150,7 @@ public class DefaultLocationService implements LocationService {
     // conflict with the row being renamed.
     requireNameFree(tenantId, location.getParentId(), name, id);
     location.rename(name, actor, Instant.now(clock));
-    return toView(location);
+    return toView(location, categoryOf(location));
   }
 
   /**
@@ -223,7 +233,11 @@ public class DefaultLocationService implements LocationService {
               tenantId, after.createdAt(), after.id(), PageRequest.of(0, size));
     }
 
-    List<LocationView> views = rows.stream().map(this::toView).toList();
+    // One lookup for the page rather than one per row: a full page carries two
+    // hundred locations, and the category of each is a join this block may not make.
+    Map<UUID, UUID> categories =
+        types.categoriesOfVersions(rows.stream().map(Location::getCategoryVersionId).toList());
+    List<LocationView> views = rows.stream().map(row -> toView(row, categories)).toList();
 
     // A cursor only when the page was full: a short page is the last one, and a
     // cursor for it would cost a client a request to discover that.
@@ -241,13 +255,27 @@ public class DefaultLocationService implements LocationService {
    * Builds the published view, including the readable path.
    *
    * @param location the aggregate
+   * @param categories version id to category id, covering at least this location's version
    * @return the view
    */
-  private LocationView toView(Location location) {
+  /**
+   * The category behind one location's version.
+   *
+   * <p>For the single-location paths. The listing resolves a page in one call instead, because two
+   * hundred of these would be two hundred statements.
+   *
+   * @param location the location
+   * @return a map with the one entry {@link #toView} needs
+   */
+  private Map<UUID, UUID> categoryOf(Location location) {
+    return types.categoriesOfVersions(List.of(location.getCategoryVersionId()));
+  }
+
+  private LocationView toView(Location location, Map<UUID, UUID> categories) {
     return new LocationView(
         location.getId(),
         location.getName(),
-        location.getCategoryId(),
+        categories.get(location.getCategoryVersionId()),
         location.getParentId(),
         location.getDepth(),
         tree.ancestorNames(location.getTenantId(), location.getId()));

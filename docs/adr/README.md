@@ -77,3 +77,4 @@ Date: YYYY-MM-DD
 | [0053](0053-first-owner-as-a-one-shot.md) | The first owner is created by a one-shot service, not by an endpoint | Accepted |
 | [0054](0054-the-scan-is-asynchronous.md) | The malware scan runs in the worker, and the upload is answered before it | Accepted |
 | [0055](0055-five-first-class-plugin-sdks.md) | Five first-class plugin SDKs: Java, Kotlin, Rust, Python and Go | Accepted |
+| [0056](0056-schema-validation-with-the-shipped-document.md) | Attributes are validated with the shipped schema document, and it resolves nothing remotely | Accepted |

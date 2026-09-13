@@ -129,32 +129,98 @@ CREATE TABLE catalog.item_type_version (
         REFERENCES catalog.item_type (tenant_id, id) ON DELETE CASCADE
 );
 
+CREATE TABLE catalog.location_category_version (   -- the mirror of item_type_version
+    id                   uuid PRIMARY KEY DEFAULT uuidv7(),
+    location_category_id uuid NOT NULL,
+    tenant_id            uuid NOT NULL,
+    version_number       int  NOT NULL,
+    json_schema          jsonb NOT NULL DEFAULT '{}'::jsonb,
+    published_at         timestamptz,
+    created_at           timestamptz NOT NULL DEFAULT now(),
+    created_by           uuid,
+    version              bigint NOT NULL DEFAULT 1,
+    UNIQUE (location_category_id, version_number),
+    UNIQUE (tenant_id, id),
+    FOREIGN KEY (tenant_id, location_category_id)
+        REFERENCES catalog.location_category (tenant_id, id) ON DELETE CASCADE
+);
+
+CREATE TABLE catalog.value_list (                 -- an enum source, reusable (REQ-CORE-029)
+    id          uuid PRIMARY KEY DEFAULT uuidv7(),
+    tenant_id   uuid NOT NULL,
+    key         text NOT NULL,
+    labels      jsonb NOT NULL DEFAULT '{}'::jsonb,
+    builtin     boolean NOT NULL DEFAULT false,
+    archived_at timestamptz,
+    -- audit columns and `version` as everywhere
+    UNIQUE (tenant_id, key),
+    UNIQUE (tenant_id, id)
+);
+
+CREATE TABLE catalog.value_list_entry (
+    id            uuid PRIMARY KEY DEFAULT uuidv7(),
+    tenant_id     uuid NOT NULL,
+    value_list_id uuid NOT NULL,
+    value         text NOT NULL,        -- what lands in `attributes`; stable
+    labels        jsonb NOT NULL DEFAULT '{}'::jsonb,
+    display_order int NOT NULL DEFAULT 0,
+    archived_at   timestamptz,          -- still valid for items that carry it
+    UNIQUE (value_list_id, value),
+    UNIQUE (tenant_id, id),
+    FOREIGN KEY (tenant_id, value_list_id)
+        REFERENCES catalog.value_list (tenant_id, id) ON DELETE CASCADE
+);
+
 CREATE TABLE catalog.field_definition (
-    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
-    item_type_version_id uuid NOT NULL,
-    tenant_id           uuid NOT NULL,
-    key                 text NOT NULL,                -- 'isbn', 'purchasePrice'
-    data_type           text NOT NULL,                -- see the type list in 04
-    labels              jsonb NOT NULL,               -- {"de":"ISBN","en":"ISBN"}
-    required            boolean NOT NULL DEFAULT false,
-    default_value       jsonb,
-    constraints         jsonb,        -- {"pattern":"…","min":0,"max":10,"unit":"g"}
-    field_group         text,
-    display_order       int NOT NULL DEFAULT 0,
-    searchable          boolean NOT NULL DEFAULT false,
-    sortable            boolean NOT NULL DEFAULT false,
-    facetable           boolean NOT NULL DEFAULT false,
-    sensitive           boolean NOT NULL DEFAULT false,   -- encrypted + permission-gated
-    deprecated_at       timestamptz,
-    created_at          timestamptz NOT NULL DEFAULT now(),
-    updated_at          timestamptz NOT NULL DEFAULT now(),
-    created_by          uuid, updated_by uuid,
-    version             bigint NOT NULL DEFAULT 1,
+    id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+    tenant_id                    uuid NOT NULL,
+    -- EXACTLY ONE of these two. A field belongs to an item type version or to a
+    -- location category version, and both are versioned for the same reason: a
+    -- definition change must not reach back into rows already written.
+    item_type_version_id         uuid,
+    location_category_version_id uuid,
+    key                          text NOT NULL,   -- 'isbn', 'purchasePrice'
+    data_type                    text NOT NULL,   -- the sixteen kinds listed in 04
+    labels                       jsonb NOT NULL DEFAULT '{}'::jsonb,  -- {"de":"ISBN","en":"ISBN"}
+    help_texts                   jsonb NOT NULL DEFAULT '{}'::jsonb,
+    required                     boolean NOT NULL DEFAULT false,
+    default_value                jsonb,
+    constraints                  jsonb,  -- {"pattern":"…","min":0,"max":10,"unit":"g",
+                                         --  "minLength":1,"maxLength":80,"referenceKind":"item"}
+    value_list_id                uuid,   -- `enum` and `multi-enum` only, and always
+    visibility                   jsonb,  -- {"field":"hasWarranty","operator":"equals","value":true}
+    field_group                  text,
+    display_order                int NOT NULL DEFAULT 0,
+    searchable                   boolean NOT NULL DEFAULT false,
+    sortable                     boolean NOT NULL DEFAULT false,
+    facetable                    boolean NOT NULL DEFAULT false,
+    sensitive                    boolean NOT NULL DEFAULT false,   -- encrypted + permission-gated
+    deprecated_at                timestamptz,
+    created_at                   timestamptz NOT NULL DEFAULT now(),
+    updated_at                   timestamptz NOT NULL DEFAULT now(),
+    created_by                   uuid, updated_by uuid,
+    version                      bigint NOT NULL DEFAULT 1,
+    CHECK (num_nonnulls(item_type_version_id, location_category_version_id) = 1),
+    CHECK ((data_type IN ('enum','multi-enum')) = (value_list_id IS NOT NULL)),
     UNIQUE (item_type_version_id, key),
+    UNIQUE (location_category_version_id, key),
     FOREIGN KEY (tenant_id, item_type_version_id)
-        REFERENCES catalog.item_type_version (tenant_id, id) ON DELETE CASCADE
+        REFERENCES catalog.item_type_version (tenant_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (tenant_id, location_category_version_id)
+        REFERENCES catalog.location_category_version (tenant_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (tenant_id, value_list_id)
+        REFERENCES catalog.value_list (tenant_id, id)
 );
 ```
+
+> **Why a location category is versioned at all** (decided 2026-09-13). An item
+> references a type *version*, so a type change devalues nothing that exists
+> (`REQ-CORE-025`). A location referenced its *category* — and `REQ-CORE-041`
+> gives categories their own fields, which would have made a category the one
+> configurable thing whose every edit reached back into rows already written,
+> tightening a constraint under locations nobody was looking at. Categories are
+> versioned the same way, their fields hang off the version, and `location`
+> points at the version. One shape, one generator, one validator.
 
 ### Values (JSONB, one item = one row)
 
@@ -300,18 +366,23 @@ Validation happens in **three** places, deliberately redundant:
 2. **Application layer** against the same schema — the binding check. Plus domain
    rules JSON Schema cannot express (references exist and belong to the tenant,
    units are convertible).
-3. **Database** through a `CHECK` that secures the basic shape (`attributes` is
-   an object, no forbidden keys, size limit) — protection against writes that
-   bypass the application.
+3. **Database** through a `CHECK` that secures the basic shape — protection
+   against writes that bypass the application. It is one `IMMUTABLE` function,
+   `catalog.attribute_shape_is_valid(jsonb)`, on both tables that carry
+   attributes: the value is an object, every key is shaped like a field key
+   (`^[a-z][A-Za-z0-9]*$`), and the whole set is at most **64 KiB**. It cannot
+   check a value against its definition — a `CHECK` sees one row and no
+   catalogue — and it is not meant to: it holds what is true of every attribute
+   set whatever the type says.
 
 ## 7.4 The location tree
 
 ```sql
 CREATE TABLE locations.location (
-    id              uuid PRIMARY KEY,
-    tenant_id       uuid NOT NULL,
-    category_id     uuid NOT NULL,
-    parent_id       uuid,
+    id                  uuid PRIMARY KEY,
+    tenant_id           uuid NOT NULL,
+    category_version_id uuid NOT NULL,   -- the VERSION, as an item references a type version
+    parent_id           uuid,
     name            text NOT NULL,
     path            ltree NOT NULL,      -- materialised path
     depth           int   NOT NULL,
@@ -325,8 +396,8 @@ CREATE TABLE locations.location (
     version         bigint NOT NULL DEFAULT 1,
     CONSTRAINT depth_limit CHECK (depth <= 12),
     UNIQUE (tenant_id, id),               -- the target of composite FKs, see 7.5
-    FOREIGN KEY (tenant_id, category_id)
-        REFERENCES catalog.location_category (tenant_id, id),
+    FOREIGN KEY (tenant_id, category_version_id)
+        REFERENCES catalog.location_category_version (tenant_id, id),
     FOREIGN KEY (tenant_id, parent_id)
         REFERENCES locations.location (tenant_id, id)
 );

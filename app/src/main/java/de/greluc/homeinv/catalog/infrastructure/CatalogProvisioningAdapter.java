@@ -5,6 +5,7 @@
 package de.greluc.homeinv.catalog.infrastructure;
 
 import de.greluc.homeinv.catalog.api.CatalogProvisioning;
+import de.greluc.homeinv.catalog.application.JsonSchemaGenerator;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +60,7 @@ public class CatalogProvisioningAdapter implements CatalogProvisioning {
           "locker");
 
   private final JdbcClient jdbc;
+  private final JsonSchemaGenerator schemas;
 
   @Override
   public UUID provisionDefaults(UUID tenantId, UUID actor) {
@@ -73,26 +75,42 @@ public class CatalogProvisioningAdapter implements CatalogProvisioning {
         .params(typeId, tenantId, BUILTIN_TYPE_KEY, actor, actor)
         .update();
 
-    // An empty JSON Schema, because the type defines no fields: stage 0 has the
-    // five fixed columns and nothing else (REQ-CORE-002). Stage 1 generates a
-    // real schema per version (REQ-CORE-027) and this row is simply version 1.
+    // A schema that accepts an attribute set with nothing in it, because the
+    // built-in type declares no fields. Generated rather than written as `{}`:
+    // `{}` accepts anything at all, including keys no field declares, and this
+    // document is what the validator uses (ADR-0056).
     jdbc.sql(
             """
             insert into catalog.item_type_version
                 (id, tenant_id, item_type_id, version_number, json_schema, published_at, created_by)
-            values (?, ?, ?, 1, '{}'::jsonb, now(), ?)
+            values (?, ?, ?, 1, ?::jsonb, now(), ?)
             """)
-        .params(versionId, tenantId, typeId, actor)
+        .params(versionId, tenantId, typeId, emptySchema(versionId), actor)
         .update();
 
     for (String key : SHIPPED_CATEGORIES) {
+      UUID categoryId = UUID.randomUUID();
       jdbc.sql(
               """
               insert into catalog.location_category
                   (id, tenant_id, key, labels, builtin, is_mobile, created_by, updated_by)
               values (?, ?, ?, '{}'::jsonb, true, false, ?, ?)
               """)
-          .params(UUID.randomUUID(), tenantId, key, actor, actor)
+          .params(categoryId, tenantId, key, actor, actor)
+          .update();
+
+      // Published straight away, and with an empty schema: a category declares no
+      // fields until a tenant adds one, and a location references a VERSION
+      // (V14), so a category whose only version were a draft could hold nothing.
+      UUID categoryVersionId = UUID.randomUUID();
+      jdbc.sql(
+              """
+              insert into catalog.location_category_version
+                  (id, tenant_id, location_category_id, version_number, json_schema,
+                   published_at, created_by)
+              values (?, ?, ?, 1, ?::jsonb, now(), ?)
+              """)
+          .params(categoryVersionId, tenantId, categoryId, emptySchema(categoryVersionId), actor)
           .update();
     }
 
@@ -102,6 +120,20 @@ public class CatalogProvisioningAdapter implements CatalogProvisioning {
         BUILTIN_TYPE_KEY,
         SHIPPED_CATEGORIES.size());
     return versionId;
+  }
+
+  /**
+   * The schema of a version that declares no fields.
+   *
+   * <p>Not {@code {}}: an empty schema accepts every document, so a type with no fields would
+   * accept attributes nobody declared. This one accepts exactly the empty object, which is what a
+   * type with no fields means.
+   *
+   * @param versionId the version the document describes, which becomes its {@code $id}
+   * @return the document, as JSON text
+   */
+  private String emptySchema(UUID versionId) {
+    return schemas.generate(versionId, List.of(), valueListId -> List.of());
   }
 
   @Override

@@ -249,7 +249,7 @@ commit".
 - A requirements catalogue with 425 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 56 architecture decision records, each with its alternatives and consequences —
+- 57 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

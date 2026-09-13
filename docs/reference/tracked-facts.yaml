@@ -56,7 +56,7 @@
 # ---------------------------------------------------------------------------
 
 schemaVersion: 1
-updated: 2026-09-11
+updated: 2026-09-13
 
 scope:
   include:
@@ -96,7 +96,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 56
+    value: 57
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points

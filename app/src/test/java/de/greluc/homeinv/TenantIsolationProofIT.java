@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -77,6 +78,17 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
   private static final Set<String> NOT_DOMAIN = Set.of("flyway", "pg_catalog", "information_schema");
 
   private static final Pattern ANY_ARRAY = Pattern.compile("'([^']+)'::");
+
+  /** The regular expression of a {@code column ~ 'pattern'} check, as pg prints it. */
+  private static final Pattern REGEX_CHECK = Pattern.compile("~ '([^']+)'");
+
+  /** The constraint PostgreSQL names when it refuses a row. */
+  private static final Pattern REFUSED_CONSTRAINT =
+      Pattern.compile("violates check constraint \"([^\"]+)\"");
+
+  /** The columns of a {@code num_nonnulls(a, b) = 1} check. */
+  private static final Pattern ONE_OF =
+      Pattern.compile("num_nonnulls\\(([^)]*)\\)\\s*=\\s*1");
   private static final Pattern HEX_LENGTH = Pattern.compile("\\^\\[0-9a-f]\\{(\\d+)}\\$");
 
   @Autowired private JdbcClient jdbc;
@@ -326,19 +338,145 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       values.add("'" + (generatesTenantIdFromId(superuser, table) ? tenant : id) + "'");
     }
 
-    String sql =
-        "insert into " + table + " (" + String.join(", ", columns) + ") values ("
-            + String.join(", ", values) + ")";
-    try (Statement statement = superuser.createStatement()) {
-      statement.executeUpdate(sql);
-    } catch (SQLException refused) {
-      throw new AssertionError(
-          "The isolation proof could not seed " + table + ". Teach the seeder the column it "
-              + "could not derive a value for rather than exempting the table — an unseeded "
-              + "table makes this proof vacuous for it.\n  " + sql + "\n  " + refused.getMessage(),
-          refused);
+    // The nullable columns above are filled optimistically, and some tables say
+    // which combinations are legal: `field_definition` carries exactly one owner,
+    // and its value list belongs to enumerations only. Rather than teaching the
+    // seeder each rule, the row is offered to PostgreSQL and narrowed by whatever
+    // it names — which is the one description of those rules that cannot drift.
+    for (int attempt = 0; ; attempt++) {
+      String sql =
+          "insert into " + table + " (" + String.join(", ", columns) + ") values ("
+              + String.join(", ", values) + ")";
+      try (Statement statement = superuser.createStatement()) {
+        statement.executeUpdate(sql);
+        break;
+      } catch (SQLException refused) {
+        // Read from the message rather than from the driver's own exception type:
+        // `org.postgresql.util` is a runtime dependency here, and a test that
+        // imported it would pull the driver onto the compile classpath to learn
+        // one word PostgreSQL already puts in the text.
+        Matcher named = REFUSED_CONSTRAINT.matcher(String.valueOf(refused.getMessage()));
+        String constraint = named.find() ? named.group(1) : null;
+        if (attempt >= 3
+            || constraint == null
+            || !relax(superuser, table, constraint, columns, values)) {
+          throw new AssertionError(
+              "The isolation proof could not seed " + table + ". Teach the seeder the column it "
+                  + "could not derive a value for rather than exempting the table — an unseeded "
+                  + "table makes this proof vacuous for it.\n  " + sql + "\n  "
+                  + refused.getMessage(),
+              refused);
+        }
+      }
     }
     perTenant.put(tenant, id);
+  }
+
+  /**
+   * Drops or narrows the columns a refused check names, so the row can be offered again.
+   *
+   * <p>Two shapes are understood, and both come from the catalogue rather than from a list here.
+   * {@code num_nonnulls(a, b) = 1} keeps the first of its columns that the row carries and drops the
+   * rest; anything else drops every nullable column the clause names. A clause that names only
+   * mandatory columns cannot be satisfied by dropping anything, and this says so by changing nothing
+   * — which surfaces as the original failure with its own message.
+   *
+   * @param superuser the connection that may read the catalogue
+   * @param table the qualified table name
+   * @param constraint the constraint PostgreSQL refused on
+   * @param columns the columns of the pending insert, modified in place
+   * @param values their values, kept in step with the columns
+   * @return whether anything changed, and a retry is therefore worth making
+   * @throws SQLException when the catalogue cannot be read
+   */
+  private boolean relax(
+      Connection superuser,
+      String table,
+      String constraint,
+      List<String> columns,
+      List<String> values)
+      throws SQLException {
+
+    String clause = constraintDefinition(superuser, table, constraint);
+    if (clause == null) {
+      return false;
+    }
+
+    Matcher oneOf = ONE_OF.matcher(clause);
+    if (oneOf.find()) {
+      List<String> named = Arrays.stream(oneOf.group(1).split(",")).map(String::trim).toList();
+      boolean kept = false;
+      boolean changed = false;
+      for (String column : named) {
+        int at = columns.indexOf(column);
+        if (at < 0) {
+          continue;
+        }
+        if (!kept) {
+          kept = true;
+          continue;
+        }
+        columns.remove(at);
+        values.remove(at);
+        changed = true;
+      }
+      return changed;
+    }
+
+    Set<String> nullable = nullableColumns(superuser, table);
+    boolean changed = false;
+    for (String column : new ArrayList<>(columns)) {
+      if (nullable.contains(column) && clause.contains(column)) {
+        int at = columns.indexOf(column);
+        columns.remove(at);
+        values.remove(at);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /**
+   * The definition of one named constraint.
+   *
+   * @param superuser the connection that may read the catalogue
+   * @param table the qualified table name
+   * @param constraint the constraint name
+   * @return the clause as PostgreSQL prints it, or {@code null} when there is no such constraint
+   * @throws SQLException when the catalogue cannot be read
+   */
+  private String constraintDefinition(Connection superuser, String table, String constraint)
+      throws SQLException {
+    String sql =
+        "select pg_get_constraintdef(oid) from pg_constraint "
+            + "where conrelid = '" + table + "'::regclass and conname = '" + constraint + "'";
+    try (Statement statement = superuser.createStatement();
+        ResultSet rows = statement.executeQuery(sql)) {
+      return rows.next() ? rows.getString(1) : null;
+    }
+  }
+
+  /**
+   * Which of a table's columns accept null.
+   *
+   * @param superuser the connection that may read the catalogue
+   * @param table the qualified table name
+   * @return the nullable column names
+   * @throws SQLException when the catalogue cannot be read
+   */
+  private Set<String> nullableColumns(Connection superuser, String table) throws SQLException {
+    String[] parts = table.split("\\.");
+    Set<String> nullable = new LinkedHashSet<>();
+    String sql =
+        "select column_name from information_schema.columns where table_schema = '"
+            + parts[0] + "' and table_name = '" + parts[1] + "' and is_nullable = 'YES'";
+    try (Statement statement = superuser.createStatement();
+        ResultSet rows = statement.executeQuery(sql)) {
+      while (rows.next()) {
+        nullable.add(rows.getString(1));
+      }
+    }
+    return nullable;
   }
 
   /**
@@ -420,6 +558,21 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     if (hex.find()) {
       int length = Integer.parseInt(hex.group(1));
       return "'" + unique.repeat(length / unique.length() + 1).substring(0, length) + "'";
+    }
+    Matcher regex = REGEX_CHECK.matcher(check);
+    if (regex.find()) {
+      // Verified rather than guessed: the candidates are tried against the column's
+      // own expression and the first that matches wins. A shape none of them fits
+      // fails here by name, which is the signal to add a candidate.
+      String expression = regex.group(1);
+      for (String candidate : List.of("ip" + unique, unique, "isolation-proof-" + unique)) {
+        if (candidate.matches(expression)) {
+          return "'" + candidate + "'";
+        }
+      }
+      throw new AssertionError(
+          "The isolation proof has no seed value matching " + expression + ". Add one to the "
+              + "candidates in textValue rather than relaxing the constraint.");
     }
     if (check.contains("= ANY")) {
       // An enumerated column takes one of its literals exactly; nothing may be

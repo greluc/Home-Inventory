@@ -41,6 +41,10 @@ dependencies {
     // its own and silently is not there without this.
     implementation(libs.bouncycastle)
     implementation(libs.spring.boot.starter.validation)
+    // The attribute validator of the configurable type system (ADR-0056). It
+    // checks the generated document itself, so the server and an offline client
+    // reach the same verdict rather than two implementations of the same rules.
+    implementation(libs.json.schema.validator)
     implementation(libs.spring.boot.starter.actuator)
 
     // Sessions live in Valkey, not in the JVM heap: the api role scales

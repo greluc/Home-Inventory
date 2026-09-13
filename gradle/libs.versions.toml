@@ -47,6 +47,10 @@ therapi = "0.15.0"
 spotbugsPlugin = "6.5.11"
 findSecBugs = "1.14.0"
 
+# The JSON Schema validator of REQ-CORE-027. Draft 2020-12, Apache-2.0, and it
+# resolves nothing over the network in the configuration ADR-0056 fixes.
+jsonSchemaValidator = "3.0.7"
+
 # Test-only
 testcontainers = "2.0.5"
 archunit = "1.5.0"
@@ -87,6 +91,10 @@ flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", versio
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+# Validates an attribute set against the JSON Schema the type version generated -
+# the same document the clients get, which is what REQ-CORE-027's acceptance
+# ("a client validates offline with the same result as the server") asks for.
+json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "jsonSchemaValidator" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 # Test-only: certificate generation. The deployment's PKI is made by
 # deploy/setup.sh with openssl; the tests make a throwaway one in memory, so no
