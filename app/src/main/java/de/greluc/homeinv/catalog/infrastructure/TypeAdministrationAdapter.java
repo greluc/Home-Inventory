@@ -422,7 +422,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     String schema = schemas.generate(versionId, fields, registry::valueListEntries);
 
     jdbc.sql(meta.category() ? PUBLISH_CATEGORY_VERSION : PUBLISH_ITEM_TYPE_VERSION)
-        .params(schema, tenantId, versionId)
+        .params(schema, actor, tenantId, versionId)
         .update();
 
     events.publishEvent(
@@ -676,7 +676,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
       String schema =
           schemas.generate(versionId, registry.fields(versionId), registry::valueListEntries);
       jdbc.sql(meta.category() ? RESCHEMA_CATEGORY_VERSION : RESCHEMA_ITEM_TYPE_VERSION)
-          .params(schema, tenantId, versionId)
+          .params(schema, actor, tenantId, versionId)
           .update();
     }
     log.info(
@@ -865,16 +865,20 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   private static final String PUBLISH_ITEM_TYPE_VERSION =
       "update catalog.item_type_version set json_schema = ?::jsonb, published_at = now(),"
-          + " version = version + 1 where tenant_id = ? and id = ?";
+          + " updated_at = now(), updated_by = ?, version = version + 1"
+          + " where tenant_id = ? and id = ?";
   private static final String PUBLISH_CATEGORY_VERSION =
       "update catalog.location_category_version set json_schema = ?::jsonb, published_at = now(),"
-          + " version = version + 1 where tenant_id = ? and id = ?";
+          + " updated_at = now(), updated_by = ?, version = version + 1"
+          + " where tenant_id = ? and id = ?";
 
   private static final String RESCHEMA_ITEM_TYPE_VERSION =
-      "update catalog.item_type_version set json_schema = ?::jsonb, version = version + 1"
+      "update catalog.item_type_version set json_schema = ?::jsonb,"
+          + " updated_at = now(), updated_by = ?, version = version + 1"
           + " where tenant_id = ? and id = ?";
   private static final String RESCHEMA_CATEGORY_VERSION =
-      "update catalog.location_category_version set json_schema = ?::jsonb, version = version + 1"
+      "update catalog.location_category_version set json_schema = ?::jsonb,"
+          + " updated_at = now(), updated_by = ?, version = version + 1"
           + " where tenant_id = ? and id = ?";
 
   private static final String ITEM_TYPE_VERSIONS =

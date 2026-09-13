@@ -202,10 +202,10 @@ public class TagAdapter implements TagService {
         jdbc.sql(
                 """
                 update tagging.tag_assignment
-                set tag_id = ?, version = version + 1
+                set tag_id = ?, updated_at = now(), updated_by = ?, version = version + 1
                 where tenant_id = ? and tag_id = ?
                 """)
-            .params(targetId, tenantId, sourceId)
+            .params(targetId, actor, tenantId, sourceId)
             .update();
 
     // A tombstone, not a deletion: a client holding the old id is redirected

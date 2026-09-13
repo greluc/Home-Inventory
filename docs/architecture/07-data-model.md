@@ -31,7 +31,12 @@
    `created_at`/`updated_at`/`created_by`/`updated_by`. The DDL in this chapter
    spells them out rather than eliding them for brevity — the first draft did
    elide them, and four of the five sample tables then disagreed with this rule.
-   A migration check enforces it, so the samples and the rule cannot drift again.
+   `MigrationRulesTest.everyDomainTableIsVersionedAndAudited` enforces it, so the
+   samples and the rule cannot drift again. *That sentence read "a migration
+   check enforces it" from the day the chapter was written until 2026-09-13, when
+   the check was finally written and found five tables: two that were right to
+   have no such columns and are on the list below, three that were wrong and now
+   have them.*
 
    **A *domain* table is one that holds mutable state a user edits.** Five kinds
    of table are not that. They carry no `version`, and of the four audit columns
@@ -44,10 +49,10 @@
    | Kind | Tables | Why the columns would be meaningless |
    |---|---|---|
    | **Derived** | `inventory.item_attr_index` | A projection of `item.attributes`, rebuilt wholesale by `REINDEX_ATTRIBUTES`. It has no version of its own — the row it mirrors does — and no author but the application |
-   | **Append-only records of an event** | `sync.change_log`, `audit.audit_entry`, `audit.chain_anchor`, `audit.chain_truncation` ([ADR-0046](../adr/0046-truncatable-audit-chain.md)), `identification.label_base_url_usage`, `tenancy.erasure_certificate` | Nothing updates them, so `version`, `updated_at` and `updated_by` would be dead columns. `occurred_at` and the actor are already in the row, under the names the record uses |
+   | **Append-only records of an event** | `sync.change_log`, `audit.audit_entry`, `audit.chain_anchor`, `audit.chain_truncation` ([ADR-0046](../adr/0046-truncatable-audit-chain.md)), `audit.revision_record`, `identification.label_base_url_usage`, `tenancy.erasure_certificate` | Nothing updates them, so `version`, `updated_at` and `updated_by` would be dead columns. `occurred_at` and the actor are already in the row, under the names the record uses. `revision_record` is the history *of* an edit — a row per change with the state after it — and editing the history is the one thing it must not permit |
    | **Infrastructure** | `outbox.event_publication`, `idempotency.processed_request`, `crypto.tenant_data_key` | Owned by a mechanism, not by a block's domain model. A data key is issued and retired, never edited |
    | **A rule that exists or does not** | `catalog.location_category_child` | A row *is* the permission for one category to sit under another (`REQ-CORE-047`). There is nothing in it to edit — withdrawing it is a `DELETE` and granting it again is an `INSERT` — so an `updated_by` could only ever repeat `created_by`. The whole set is replaced in one transaction, which is also why it needs no optimistic lock: the last writer's set is the rule, and half a whitelist is not a smaller answer but a wrong one |
-   | **Issued, never edited** | `identification.public_code`, `identification.code_binding` | A code is drawn, printed and bound; nobody edits one. `public_code` has no `tenant_id` at all (see rule 2), so it has no `updated_by` that could mean anything, and `code_binding` is **historised** — a reassignment appends a row rather than updating one, which is what preserves the binding history (`REQ-IDENT-004`). Both were on rule 2's closed list and on neither of rule 4's, so rule 4 demanded `version` and four audit columns from tables with no tenant and no editing user |
+   | **Issued, never edited** | `identification.public_code`, `identification.code_binding`, `inventory.item_relation` | A code is drawn, printed and bound; nobody edits one. `public_code` has no `tenant_id` at all (see rule 2), so it has no `updated_by` that could mean anything, and `code_binding` is **historised** — a reassignment appends a row rather than updating one, which is what preserves the binding history (`REQ-IDENT-004`). Both were on rule 2's closed list and on neither of rule 4's, so rule 4 demanded `version` and four audit columns from tables with no tenant and no editing user. A relation is made or broken and never altered — changing one is a delete and an insert, which is also what its `UNIQUE (tenant_id, source_id, target_id, relation_type)` leaves room for |
 
    **The list is closed.** A new table that is none of the five needs the columns;
    a new table that claims to be one of the five needs a row here.
@@ -127,7 +132,9 @@ CREATE TABLE catalog.item_type_version (
     json_schema     jsonb NOT NULL,       -- generated, never hand-written
     published_at    timestamptz,
     created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
     created_by      uuid,
+    updated_by      uuid,                 -- who published it, or removed a field from it
     version         bigint NOT NULL DEFAULT 1,
     UNIQUE (item_type_id, version_number),
     UNIQUE (tenant_id, id),
@@ -143,7 +150,9 @@ CREATE TABLE catalog.location_category_version (   -- the mirror of item_type_ve
     json_schema          jsonb NOT NULL DEFAULT '{}'::jsonb,
     published_at         timestamptz,
     created_at           timestamptz NOT NULL DEFAULT now(),
+    updated_at           timestamptz NOT NULL DEFAULT now(),
     created_by           uuid,
+    updated_by           uuid,
     version              bigint NOT NULL DEFAULT 1,
     UNIQUE (location_category_id, version_number),
     UNIQUE (tenant_id, id),
@@ -647,7 +656,7 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | `audit.revision_record` | Domain history | JSONB snapshot per version, restore possible |
 | `tagging.tag` | A tenant-wide label | `UNIQUE(tenant_id, lower(name))` **where it is still itself**: a merged tag keeps its name so history reads correctly, and `merged_into` points at what it became so a client holding the old id is redirected rather than told it never existed (`REQ-CORE-063`) |
 | `tagging.tag_group` | A group of tags | `exclusive` makes a thing carry at most one of them — "condition" is new, used or broken, never two of those |
-| `tagging.tag_assignment` | Tag → item or place | Exactly one target, in two nullable columns with `num_nonnulls(...) = 1` and a composite foreign key each. A polymorphic `(kind, id)` pair would be a reference the database cannot check, which is the same reason [7.5](#75-tenant-isolation-row-level-security) gives for every composite key here, and `MigrationRulesTest` fails a reference between tenant-scoped tables that is not composite |
+| `tagging.tag_assignment` | Tag → item or place | Carries `updated_at`/`updated_by` since 2026-09-13, and not as bookkeeping: merging two tags rewrites `tag_id` on every assignment of the losing one (`REQ-CORE-063`), which is an edit with an author the row used to lose. Exactly one target, in two nullable columns with `num_nonnulls(...) = 1` and a composite foreign key each. A polymorphic `(kind, id)` pair would be a reference the database cannot check, which is the same reason [7.5](#75-tenant-isolation-row-level-security) gives for every composite key here, and `MigrationRulesTest` fails a reference between tenant-scoped tables that is not composite |
 | `tenancy.invitation` | An invitation into a tenant | Single-use, time-limited and bound to an address — the three properties `REQ-TEN-004` names, each a column rather than a rule in a service, because an invitation outlives both the request that made it and the request that redeems it. The token is stored **only as its SHA-256** (`REQ-SEC-048`), globally unique because the redeemer presents a token and nothing else. A partial unique index allows one open invitation per address per tenant, so a used or withdrawn one does not block the next. Read before any tenant is known through `tenancy.invitation_by_token`, the second `SECURITY DEFINER` function of [7.5](#75-tenant-isolation-row-level-security) — and it deliberately does **not** filter on expiry or acceptance, so that "unknown" and "already used" cannot be told apart by how far a request gets |
 | `inventory.item_relation` | Relations between items | `relation_type` (`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR`, `RELATED`). **Directed and stored once:** "the lens is an accessory of the camera" is one row, which the camera reads the other way round — two rows for one fact are two rows that can disagree, and the read is a union of the two directions carrying a flag for which end was asked. `CHECK (source_id <> target_id)`, because an item is not an accessory of itself; `UNIQUE (tenant_id, source_id, target_id, relation_type)`, so asking twice yields the first; a composite foreign key at each end ([7.5](#75-tenant-isolation-row-level-security)) with `ON DELETE CASCADE`, because a relation to an item that is gone is not a fact about anything |
 | `inventory.loan` | Lending | Borrower (internal or free text), handed out, due back, returned |

@@ -68,6 +68,46 @@ class MigrationRulesTest {
           // user id, and no operator path reaches somebody else's authenticator.
           "identity.credential");
 
+  /**
+   * The tables rule 4 exempts, as 07 §7.1 lists them.
+   *
+   * <p>Closed, like the instance-wide list above and for the same reason: a check a table could opt
+   * itself out of enforces nothing. Five kinds, and the chapter says of each why the columns would
+   * be meaningless — derived from another row, a record of something that happened, infrastructure
+   * owned by a mechanism, issued and never edited, or a rule that exists or does not.
+   */
+  private static final List<String> NOT_DOMAIN_TABLES =
+      List.of(
+          // Derived.
+          "inventory.item_attr_index",
+          // Append-only records of an event.
+          "sync.change_log",
+          "audit.audit_entry",
+          "audit.chain_anchor",
+          "audit.chain_truncation",
+          "audit.revision_record",
+          "identification.label_base_url_usage",
+          "tenancy.erasure_certificate",
+          // Infrastructure.
+          "outbox.event_publication",
+          "idempotency.processed_request",
+          "crypto.tenant_data_key",
+          // Issued, never edited.
+          "identification.public_code",
+          "identification.code_binding",
+          "inventory.item_relation",
+          // A rule that exists or does not.
+          "catalog.location_category_child");
+
+  /** What rule 4 demands of every other table. */
+  private static final List<String> REQUIRED_COLUMNS =
+      List.of("version", "created_at", "updated_at", "created_by", "updated_by");
+
+  /** Where a column reaches a table that already exists. */
+  private static final Pattern ADD_COLUMN =
+      Pattern.compile(
+          "alter\\s+table\\s+([a-z_]+\\.[a-z_]+)\\s+add\\s+column", Pattern.CASE_INSENSITIVE);
+
   private static final Pattern CREATE_TABLE =
       Pattern.compile("create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([a-z_]+\\.[a-z_]+)",
           Pattern.CASE_INSENSITIVE);
@@ -172,6 +212,48 @@ class MigrationRulesTest {
   }
 
   @Test
+  @DisplayName("give every domain table `version` and the four audit columns (07 §7.1, rule 4)")
+  void everyDomainTableIsVersionedAndAudited() throws IOException {
+    // 07 §7.1 rule 4 has said "a migration check enforces it" since the chapter
+    // was written, and until 2026-09-13 nothing did: the rule was a sentence and
+    // the list of tables it exempts was a list nothing read. A rule with no
+    // mechanism is exactly the drift that chapter exists to prevent, and this one
+    // was sitting in the paragraph that describes the mechanism.
+    //
+    // Run for the first time it found five tables. Two of them were right to have
+    // no such columns and joined the list; three were wrong and got the columns,
+    // because a version row records who published it and an assignment records
+    // who merged the tag out from under it.
+    Map<String, String> tables = tablesWithTheirScript();
+    Map<String, String> added = columnsAddedLater();
+    List<String> offenders = new ArrayList<>();
+
+    for (Map.Entry<String, String> entry : tables.entrySet()) {
+      String table = entry.getKey();
+      if (NOT_DOMAIN_TABLES.contains(table)) {
+        continue;
+      }
+      String columns =
+          definitionOf(entry.getValue().toLowerCase(Locale.ROOT), table)
+              + added.getOrDefault(table, "");
+      List<String> absent =
+          REQUIRED_COLUMNS.stream().filter(column -> !columns.contains(column)).toList();
+      if (!absent.isEmpty()) {
+        offenders.add(table + " is missing " + absent);
+      }
+    }
+
+    assertThat(offenders)
+        .describedAs(
+            "Every domain table carries `version bigint` and created_at/updated_at/created_by/"
+                + "updated_by (07 §7.1, rule 4). A table that is derived, append-only, "
+                + "infrastructure, issued-never-edited or a bare rule is exempt — and that list is "
+                + "CLOSED: add the row to the table in 07 §7.1 and the name to NOT_DOMAIN_TABLES, "
+                + "in the same change, or add the columns.")
+        .isEmpty();
+  }
+
+  @Test
   @DisplayName("use version numbers that are unique across every block directory")
   void versionsAreUnique() throws IOException {
     // Flyway keeps one history table for all locations, so two blocks that both
@@ -187,6 +269,33 @@ class MigrationRulesTest {
       }
     }
     assertThat(duplicates).isEmpty();
+  }
+
+  /**
+   * Every column added to an existing table by a later migration, per table.
+   *
+   * <p>Without this the audit-column check reads the {@code CREATE TABLE} body alone and fails on a
+   * table that has the columns — added in a migration of its own, which is the only way a table
+   * that already exists can get one. One statement may add several columns, so the text runs from
+   * the match to the next semicolon rather than to the end of the line.
+   *
+   * @return table name to the text of everything added to it afterwards
+   * @throws IOException when a script cannot be read
+   */
+  private static Map<String, String> columnsAddedLater() throws IOException {
+    Map<String, String> additions = new LinkedHashMap<>();
+    for (Path script : scripts()) {
+      String text =
+          stripComments(Files.readString(script, StandardCharsets.UTF_8)).toLowerCase(Locale.ROOT);
+      Matcher matcher = ADD_COLUMN.matcher(text);
+      while (matcher.find()) {
+        int end = text.indexOf(';', matcher.start());
+        String statement =
+            end < 0 ? text.substring(matcher.start()) : text.substring(matcher.start(), end);
+        additions.merge(matcher.group(1), statement, (before, now) -> before + " " + now);
+      }
+    }
+    return additions;
   }
 
   private static List<Path> scripts() throws IOException {
