@@ -79,7 +79,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                             null,
                             BigDecimal.ONE,
                             null,
-                            "{\"carrier\":\"vendor account\",\"licenceKey\":\"ABCD-1234-EFGH\"}",
+                            "{\"carrier\":\"vendor account\",\"licenceKey\":\"not a real licence key\"}",
                             null,
                             null),
                         Optional.empty(),
@@ -91,11 +91,11 @@ class SealedAttributesIT extends AbstractIntegrationTest {
     // The column. Not the API, which would be the same code answering its own
     // question: a system that stored the key in the clear would pass that.
     String stored = rawAttributes(tenant, item);
-    assertThat(stored).doesNotContain("ABCD-1234-EFGH");
+    assertThat(stored).doesNotContain("not a real licence key");
     assertThat(stored).contains("vendor account");
 
     // An owner with a fresh second factor reads the value itself.
-    assertThat(attributesAsOwner(tenant, item)).contains("ABCD-1234-EFGH");
+    assertThat(attributesAsOwner(tenant, item)).contains("not a real licence key");
 
     // A caller who proved no second factor does not: REQ-AUTH-011 makes reading
     // one of these an operation that asks for the factor again, and the field is
@@ -111,7 +111,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                   () -> seen.set(transactions.execute(status -> items.get(item).attributes())));
               return seen.get();
             });
-    assertThat(toStranger).doesNotContain("ABCD-1234-EFGH").contains("vendor account");
+    assertThat(toStranger).doesNotContain("not a real licence key").contains("vendor account");
   }
 
   @Test
@@ -136,7 +136,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                             null,
                             BigDecimal.ONE,
                             null,
-                            "{\"carrier\":\"vendor account\",\"licenceKey\":\"ABCD-1234-EFGH\"}",
+                            "{\"carrier\":\"vendor account\",\"licenceKey\":\"not a real licence key\"}",
                             null,
                             null),
                         Optional.empty(),
@@ -172,7 +172,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
     // The edit landed, and the key is still there. Without the merge it would be
     // gone, and the person who deleted it would have no way of knowing.
     String afterwards = attributesAsOwner(tenant, item);
-    assertThat(afterwards).contains("a different account").contains("ABCD-1234-EFGH");
+    assertThat(afterwards).contains("a different account").contains("not a real licence key");
   }
 
   @Test

@@ -55,10 +55,10 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     UUID item = UUID.randomUUID();
     UUID otherItem = UUID.randomUUID();
 
-    String value = inTenant(tenant, () -> sealed.seal(item, "licenceKey", "ABCD-1234-EFGH-5678"));
+    String value = inTenant(tenant, () -> sealed.seal(item, "licenceKey", "not a real licence key"));
 
     assertThat(inTenant(tenant, () -> sealed.open(item, "licenceKey", value)))
-        .isEqualTo("ABCD-1234-EFGH-5678");
+        .isEqualTo("not a real licence key");
 
     // Another field of the same item.
     assertThatThrownBy(() -> inTenant(tenant, () -> sealed.open(item, "serialNumber", value)))
@@ -89,7 +89,7 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     // Two header bytes, a 12-byte nonce, at least a 16-byte tag.
     assertThat(raw.length).isGreaterThanOrEqualTo(2 + 12 + 16);
     assertThat(sealed.isSealed(value)).isTrue();
-    assertThat(sealed.isSealed("ABCD-1234-EFGH-5678")).isFalse();
+    assertThat(sealed.isSealed("not a real licence key")).isFalse();
 
     // Flipping the key version is refused rather than read under another key:
     // the header is authenticated, not merely present.
