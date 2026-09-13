@@ -181,6 +181,16 @@
   </Match>
 
   <!--
+    And the same for the jsonb type beside it, for the same reason and in the same
+    method: `assemble` receives what `disassemble` returned, which is the String
+    this type maps.
+  -->
+  <Match>
+    <Bug pattern="BC_UNCONFIRMED_CAST"/>
+    <Class name="de.greluc.homeinv.platform.JsonbType"/>
+  </Match>
+
+  <!--
     PZLA_PREFER_ZERO_LENGTH_ARRAYS where null means ABSENT rather than empty:
     `TrustedProxies.parse` returns null for "not an address" and
     `UrlSigningKey.tryDecodeBase64` for "not base64". A zero-length array would be
