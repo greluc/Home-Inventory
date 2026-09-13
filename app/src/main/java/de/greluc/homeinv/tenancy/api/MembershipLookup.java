@@ -35,8 +35,11 @@ public interface MembershipLookup {
    * @param tenantName the tenant's display name. Read here because a switcher that offers ids is
    *     not a switcher, and the person choosing has no context in which to look the names up
    * @param role the membership's role, as stored - one of the six in the table's check constraint
+   * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null. Read here
+   *     for the same reason the role is: both are established at login, and re-reading per request
+   *     would be a second path to the same fact
    */
-  record Membership(UUID tenantId, String tenantName, String role) {}
+  record Membership(UUID tenantId, String tenantName, String role, UUID roleDefinitionId) {}
 
   /**
    * The membership a user acts under when they log in.

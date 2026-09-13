@@ -103,7 +103,7 @@ public class MemberController {
       @AuthenticationPrincipal AuthenticatedUser user) {
 
     requireOwnTenant(tenantId, user);
-    return members.changeRole(userId, request.role(), user.userId());
+    return members.changeRole(userId, request.role(), request.roleDefinitionId(), user.userId());
   }
 
   /**
@@ -264,8 +264,11 @@ public class MemberController {
    * @param role one of {@code OWNER}, {@code ADMIN}, {@code MEMBER}, {@code CONTRIBUTOR},
    *     {@code VIEWER}, {@code GUEST}. A name this build does not know grants nothing and is
    *     refused
+   * @param roleDefinitionId a tenant-owned role extending it (REQ-TEN-006), or omitted for a plain
+   *     built-in role. Where it is given it decides the base, and {@code role} is ignored
    */
-  public record RoleRequest(@NotBlank @Size(max = 32) String role) {}
+  public record RoleRequest(
+      @NotBlank @Size(max = 32) String role, UUID roleDefinitionId) {}
 
   /**
    * The body of an invitation.

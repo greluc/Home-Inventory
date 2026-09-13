@@ -36,11 +36,12 @@ public class MembershipLookupAdapter implements MembershipLookup {
   // membership in order, and `optional()` throws when there is more than one row.
   // At stage 0 that never happens, which is exactly why it would be found later.
   private static final String PRIMARY =
-      "select tenant_id, role, tenant_name from tenancy.tenants_of_user(?) limit 1";
+      "select tenant_id, role, tenant_name, role_definition_id"
+          + " from tenancy.tenants_of_user(?) limit 1";
 
   /** The same function without the limit: every tenant this person belongs to. */
   private static final String ALL =
-      "select tenant_id, role, tenant_name from tenancy.tenants_of_user(?)";
+      "select tenant_id, role, tenant_name, role_definition_id from tenancy.tenants_of_user(?)";
 
   private final JdbcClient jdbc;
 
@@ -77,6 +78,9 @@ public class MembershipLookupAdapter implements MembershipLookup {
    */
   private static Membership membershipOf(ResultSet rs, int rowNum) throws SQLException {
     return new Membership(
-        rs.getObject("tenant_id", UUID.class), rs.getString("tenant_name"), rs.getString("role"));
+        rs.getObject("tenant_id", UUID.class),
+        rs.getString("tenant_name"),
+        rs.getString("role"),
+        rs.getObject("role_definition_id", UUID.class));
   }
 }

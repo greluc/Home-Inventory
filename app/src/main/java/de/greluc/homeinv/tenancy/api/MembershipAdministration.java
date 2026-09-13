@@ -24,10 +24,20 @@ public interface MembershipAdministration {
    * @param userId the account
    * @param email the address they sign in with
    * @param displayName what the interface calls them
-   * @param role the role they hold here
+   * @param role the built-in role they hold here
+   * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null
+   * @param roleName what to call the role: the tenant-owned role's name where there is one,
+   *     otherwise the built-in name. A member list shows this rather than making a client join
    * @param joinedAt when the membership was written
    */
-  record MemberView(UUID userId, String email, String displayName, String role, Instant joinedAt) {}
+  record MemberView(
+      UUID userId,
+      String email,
+      String displayName,
+      String role,
+      UUID roleDefinitionId,
+      String roleName,
+      Instant joinedAt) {}
 
   /**
    * One page of members.
@@ -56,14 +66,18 @@ public interface MembershipAdministration {
    * nobody can delete.
    *
    * @param userId the member to change
-   * @param role the new role, one of the six built-in names
+   * @param role the new built-in role, one of the six names
+   * @param roleDefinitionId a tenant-owned role extending it (REQ-TEN-006), or null for a plain
+   *     built-in role. Where it is given, its base must be the role named above — a definition and
+   *     a base that disagreed would be two answers to what the person may do
    * @param actor who is making the change
    * @return the member as they now stand
-   * @throws de.greluc.homeinv.platform.NotFoundException when the person is not a member here
+   * @throws de.greluc.homeinv.platform.NotFoundException when the person is not a member here, or
+   *     when this tenant has no such role definition
    * @throws RoleEscalationException when the actor may not grant that role
    * @throws LastOwnerException when the change would leave the tenant without an owner
    */
-  MemberView changeRole(UUID userId, String role, UUID actor);
+  MemberView changeRole(UUID userId, String role, UUID roleDefinitionId, UUID actor);
 
   /**
    * Removes somebody from the tenant.

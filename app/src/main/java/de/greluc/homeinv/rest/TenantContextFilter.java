@@ -69,7 +69,8 @@ public class TenantContextFilter extends OncePerRequestFilter {
         // none, and a missing one yields zero rows rather than foreign data —
         // which is exactly the behaviour such a session should have (ADR-0003).
         CallerContext.runAs(
-            new CallerContext.Caller(user.userId(), user.tenantId(), user.role()),
+            new CallerContext.Caller(
+                user.userId(), user.tenantId(), user.role(), user.roleDefinitionId()),
             () -> {
               if (user.tenantId() == null) {
                 proceed(request, response, chain);

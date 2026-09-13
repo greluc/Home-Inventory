@@ -11,6 +11,7 @@ import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
+import de.greluc.homeinv.authorization.api.RoleNameTakenException;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.tagging.api.TagService;
 import de.greluc.homeinv.tenancy.api.InvitationAlreadyOpenException;
@@ -121,6 +122,25 @@ public class ApiExceptionHandler {
     problem.setProperty("current", exception.getCurrent());
     problem.setProperty("permitted", exception.getPermitted());
     problem.setProperty("quota", "tenants-per-user");
+    return problem;
+  }
+
+  /**
+   * Answers a tenant-owned role whose name is taken (REQ-TEN-006).
+   *
+   * <p>The same token a location's sibling-name collision gets, and for the same reason: a client
+   * has to tell "that name is taken" from "that identifier is taken", and only one of the two is
+   * fixed by choosing a different id.
+   *
+   * @param exception the refusal, naming the name
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 409} with {@code name-taken}
+   */
+  @ExceptionHandler(RoleNameTakenException.class)
+  public ProblemDetail handleRoleNameTaken(
+      RoleNameTakenException exception, HttpServletRequest request) {
+    ProblemDetail problem = problem(ProblemType.NAME_TAKEN, exception.getMessage(), request);
+    problem.setProperty("name", exception.getName());
     return problem;
   }
 

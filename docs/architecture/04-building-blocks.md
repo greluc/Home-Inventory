@@ -210,14 +210,15 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 
 | | |
 |---|---|
-| Schema | `authorization` — **from stage 1**. Stage 0 has none and creates none: the six built-in roles and their grants are code, and an empty schema passes every check while documenting nothing (the same rule `V1__extensions_schemas_grants.sql` follows). The registry is [`docs/reference/permissions.yaml`](../reference/permissions.yaml), compared against the code on every build |
+| Schema | **`authz`** — from stage 1, and **not** `authorization`: that is a reserved word PostgreSQL will not take as a bare identifier, so the one block whose schema name differs from the block name is this one ([ADR-0058](../adr/0058-authz-schema-name.md)). Stage 0 had none and created none: the six built-in roles and their grants are code, and an empty schema passes every check while documenting nothing (the same rule `V1__extensions_schemas_grants.sql` follows). The registry is [`docs/reference/permissions.yaml`](../reference/permissions.yaml), compared against the code on every build |
 | Key notions | `Role` (built-in from stage 0, tenant-owned from stage 1), `Permission`, `Entitlement` (instance-level, from stage 1 — [ADR-0057](../adr/0057-the-instance-operator.md)), `PolicyDecision`, `Scope` |
 | Publishes | `AccessControl.require(permission)`, `require(permission, resource)`, `require(entitlement)` and `mayGrant(actorRole, targetRole)` (`REQ-TEN-010`, asked by `tenancy` and answered here because what a role is *worth* is this block's question), `Permission`, `Role`, `Entitlement`, `@RequiresPermission`, `@RequiresEntitlement`, `@PublicEndpoint`, and the `AccountEntitlements` port that `identity` implements |
 | Events | `RoleAssigned`, `RoleDefinitionChanged`, `AccessDenied` (for audit) |
 | Permission model | `<block>:<resource>:<action>` — e.g. `inventory:item:create`, `catalog:type:update`, `labeling:job:print`. Field-level visibility through `field-visibility` rules per role (e.g. purchase price only for `ADMIN`). |
 | Built-in roles | `OWNER`, `ADMIN`, `MEMBER`, `CONTRIBUTOR`, `VIEWER`, `GUEST` — tenant-owned roles extend, they do not replace. **Three bands:** *content* is the things in the inventory and is `MEMBER`'s in full, deletion and final removal included; *configuration* is the type system, the value lists and the members, and is `ADMIN`'s; *ownership* is the tenant itself. `ADMIN` and `OWNER` hold the same permissions until `REQ-TEN-011` adds tenant deletion; what separates them already is `REQ-TEN-010` — only an `OWNER` may make somebody an `OWNER`. The grants are in [`permissions.yaml`](../reference/permissions.yaml) and compared against the code on every build |
 | Entitlements | `INSTANCE_OPERATOR` and `CREATE_TENANT`, on the **account** rather than in a tenant. A permission is evaluated against the role a session holds in the tenant it acts for; these are read where there is none — creating one's first tenant, administering the instance — and no tenant could grant one anyway ([ADR-0057](../adr/0057-the-instance-operator.md)) |
-| Notable | **Never** decides on data it loads itself. Resources are handed in as already-loaded, tenant-checked objects. This closes time-of-check/time-of-use gaps. |
+| Tenant-owned roles | A definition names one of the six as its **base** and adds permissions to it; nothing subtracts, because a role that took a permission away from its base would be a role whose name lies about what it is. A tenant never defines a new *permission* — that would be a tenant deciding what the application does, the line [ADR-0020](../adr/0020-configuration-as-data.md) draws for the type system. Removing a definition **demotes its holders to its base** rather than stranding them, which is why a membership keeps a built-in name as well (`REQ-TEN-006`) |
+| Notable | **Never** decides on data it loads itself. Resources are handed in as already-loaded, tenant-checked objects. This closes time-of-check/time-of-use gaps. A definition's permissions are read **per request** rather than carried in the session: a role edited while somebody is signed in has to reach them, which is the same reason an entitlement is read from the account ([ADR-0057](../adr/0057-the-instance-operator.md)) |
 
 ---
 
@@ -447,6 +448,7 @@ translates protocol into use-case call and back.
 | `tenancy` | tenancy | Source schema for `tenant_id` foreign keys |
 | `authorization` | authorization | |
 | `catalog` | catalog | Type and field definitions, JSON Schema cache |
+| `authorization` | **`authz`** | Holds `role_definition` and `role_permission`. The one block whose schema is not named after it, because `authorization` is a reserved word ([ADR-0058](../adr/0058-authz-schema-name.md)) |
 | `inventory` | inventory | Holds `item`, `item_attr_index`, `item_relation` |
 | `locations` | locations | Requires the `ltree` extension |
 | `tagging` | tagging | |

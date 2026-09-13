@@ -10,10 +10,14 @@ import de.greluc.homeinv.authorization.api.AccountEntitlements;
 import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.Role;
+import de.greluc.homeinv.authorization.api.RoleRef;
 import de.greluc.homeinv.authorization.api.TenantOwned;
+import de.greluc.homeinv.authorization.infrastructure.RoleDefinitionAdapter;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.NotFoundException;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +42,7 @@ import org.springframework.stereotype.Service;
 public class DefaultAccessControl implements AccessControl {
 
   private final AccountEntitlements entitlements;
+  private final RoleDefinitionAdapter definitions;
 
   @Override
   public void require(Entitlement entitlement) {
@@ -85,31 +90,70 @@ public class DefaultAccessControl implements AccessControl {
   }
 
   @Override
-  public boolean mayGrant(String actorRole, String targetRole) {
-    Optional<Role> actor = Role.named(actorRole);
-    Optional<Role> target = Role.named(targetRole);
-    if (actor.isEmpty() || target.isEmpty()) {
+  public Set<Permission> permissionsOf(RoleRef role) {
+    Set<Permission> held = EnumSet.noneOf(Permission.class);
+    if (role == null) {
+      return held;
+    }
+    Role.named(role.builtIn()).map(Role::permissions).ifPresent(held::addAll);
+    if (role.definitionId() != null) {
+      // Read now rather than carried in the session, which is what makes a change
+      // to a role take effect for somebody who is signed in while it happens.
+      CallerContext.current()
+          .map(CallerContext.Caller::tenantId)
+          .ifPresent(
+              tenantId -> held.addAll(definitions.grantsOf(tenantId, role.definitionId())));
+    }
+    return held;
+  }
+
+  @Override
+  public boolean mayDefine(RoleRef actor, Role base, Set<Permission> added) {
+    Set<Permission> result = EnumSet.noneOf(Permission.class);
+    result.addAll(base.permissions());
+    result.addAll(added);
+
+    if (!permissionsOf(actor).containsAll(result)) {
+      return false;
+    }
+    // And the ownership rule, which no permission set expresses: only an OWNER
+    // may define a role that starts from OWNER.
+    return base != Role.OWNER || Role.OWNER.name().equals(actor == null ? null : actor.builtIn());
+  }
+
+  @Override
+  public boolean mayGrant(RoleRef actor, RoleRef target) {
+    Optional<Role> actorBase = Role.named(actor == null ? null : actor.builtIn());
+    Optional<Role> targetBase = Role.named(target == null ? null : target.builtIn());
+    if (actorBase.isEmpty() || targetBase.isEmpty()) {
       // An unknown role on either side grants nothing and receives nothing. A
       // downgraded build or a hand-edited membership row must not be an argument
       // for allowing something.
-      log.warn(
-          "Refused a grant involving a role this build does not know: {} -> {}",
-          actorRole,
-          targetRole);
+      log.warn("Refused a grant involving a role this build does not know: {} -> {}", actor, target);
       return false;
     }
-    if (!actor.get().permissions().containsAll(target.get().permissions())) {
+    if (!permissionsOf(actor).containsAll(permissionsOf(target))) {
       return false;
     }
     // OWNER and ADMIN hold the same permissions today, so the set test alone
     // would let an administrator hand out ownership. Ownership decides who may
     // delete the tenant and who may step down, and neither follows from a set.
-    return target.get() != Role.OWNER || actor.get() == Role.OWNER;
+    return targetBase.get() != Role.OWNER || actorBase.get() == Role.OWNER;
   }
 
   @Override
   public boolean holds(Permission permission) {
-    return roleOf(CallerContext.require()).map(role -> role.holds(permission)).orElse(false);
+    CallerContext.Caller caller = CallerContext.require();
+    if (Role.named(caller.role()).isEmpty()) {
+      // A membership row carrying a role this build does not know - a downgrade,
+      // or a hand-edited row. It grants nothing, and it says so once per denial
+      // rather than being silently equivalent to GUEST.
+      log.warn("The caller's role '{}' is not one this build knows; it grants nothing.",
+          caller.role());
+      return false;
+    }
+    return permissionsOf(new RoleRef(caller.role(), caller.roleDefinitionId()))
+        .contains(permission);
   }
 
   /**
@@ -127,20 +171,4 @@ public class DefaultAccessControl implements AccessControl {
     return segments.length == 3 ? segments[1] : "resource";
   }
 
-  /**
-   * The caller's role, if it is one this build knows.
-   *
-   * @param caller the current caller
-   * @return the role, or empty
-   */
-  private static Optional<Role> roleOf(CallerContext.Caller caller) {
-    Optional<Role> role = Role.named(caller.role());
-    if (role.isEmpty()) {
-      // A membership row carrying a role this build does not know - a downgrade,
-      // or a hand-edited row. It grants nothing, and it says so once per denial
-      // rather than being silently equivalent to GUEST.
-      log.warn("The caller's role '{}' is not one this build knows; it grants nothing.", caller.role());
-    }
-    return role;
-  }
 }

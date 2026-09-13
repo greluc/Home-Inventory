@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **A tenant can define roles of its own.** Each one starts from a built-in role
+  and adds permissions to it, so nobody has to assemble a role out of thirty
+  choices, and a change to a role reaches people who are signed in while it
+  happens rather than at their next sign-in. Nobody can define a role that adds
+  something they do not hold themselves — defining one and handing it out are the
+  same act, and both are measured against the same reach. Removing a role leaves
+  its holders on the role it extended rather than stranding them.
+  *REST API: additive.*
+
 - **A tenant is bounded in what it may hold.** Items, stored bytes, plugins and
   API calls each have a limit; reaching one is refused with both numbers, so a
   client can say "48 000 of 50 000" rather than "something went wrong". The
@@ -325,7 +334,7 @@ commit".
 - A requirements catalogue with 425 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 58 architecture decision records, each with its alternatives and consequences —
+- 59 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -96,7 +96,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 58
+    value: 59
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points

@@ -41,17 +41,35 @@ import java.util.UUID;
  * @param email the address the user logged in with, kept for logging and for the UI to show
  * @param locale the interface language, from the account
  * @param role the role held in {@code tenantId}, or null when there is no tenant
+ * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null when the role
+ *     is a plain built-in one
  */
 public record AuthenticatedUser(
-    UUID userId, UUID tenantId, String email, String locale, String role)
+    UUID userId, UUID tenantId, String email, String locale, String role, UUID roleDefinitionId)
     implements Serializable {
+
+  /**
+   * A session whose role is a plain built-in one.
+   *
+   * @param userId the person
+   * @param tenantId the tenant this session acts for, or null
+   * @param email the address they signed in with
+   * @param locale their interface language
+   * @param role the built-in role, or null
+   */
+  public AuthenticatedUser(
+      UUID userId, UUID tenantId, String email, String locale, String role) {
+    this(userId, tenantId, email, locale, role, null);
+  }
 
   /**
    * The session is serialised into Valkey; a changed shape must not silently deserialise wrong.
    *
    * <p>Raised when {@code locale} was added: a session written by the previous version deserialises
    * into a record without it, and a principal whose language is silently null is worse than a
-   * session the user has to establish again.
+   * session the user has to establish again. Raised again when {@code roleDefinitionId} arrived
+   * with REQ-TEN-006, for the sharper version of the same reason: a principal that silently lost
+   * its tenant-owned role would be one quietly demoted to the role's base.
    */
-  private static final long serialVersionUID = 2L;
+  private static final long serialVersionUID = 3L;
 }

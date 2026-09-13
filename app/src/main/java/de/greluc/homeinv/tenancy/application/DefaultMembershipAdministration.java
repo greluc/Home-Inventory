@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.tenancy.application;
 
+import de.greluc.homeinv.authorization.api.RoleAdministration;
+import de.greluc.homeinv.authorization.api.RoleRef;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
@@ -43,6 +45,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
   private final MembershipRepository memberships;
   private final AccountRegistry accounts;
   private final RoleGrantRules grants;
+  private final RoleAdministration roles;
   private final CursorCodec cursors;
   private final Clock clock;
 
@@ -73,6 +76,8 @@ public class DefaultMembershipAdministration implements MembershipAdministration
                       account == null ? null : account.email(),
                       account == null ? null : account.displayName(),
                       membership.getRole(),
+                      membership.getRoleDefinitionId(),
+                      roleNameOf(membership),
                       membership.getCreatedAt());
                 })
             .toList();
@@ -88,21 +93,34 @@ public class DefaultMembershipAdministration implements MembershipAdministration
 
   @Override
   @Transactional
-  public MemberView changeRole(UUID userId, String role, UUID actor) {
+  public MemberView changeRole(UUID userId, String role, UUID roleDefinitionId, UUID actor) {
     Membership membership = liveMembership(userId);
-    String actorRole = roleOf(actor);
+    RoleRef actorRole = refOf(liveMembership(actor));
+
+    // A definition whose base is not the role being given would be two answers to
+    // what this person may do, and the one that applied would depend on which of
+    // the two a later reader happened to look at.
+    String base = role;
+    if (roleDefinitionId != null) {
+      base =
+          roles
+              .byId(roleDefinitionId)
+              .orElseThrow(() -> new NotFoundException("role", roleDefinitionId))
+              .baseRole()
+              .name();
+    }
 
     // Both directions are checked: the role being granted, and the role being
     // taken away. An administrator who could demote an owner could demote every
     // owner and then be the only person left who may invite.
-    grants.requireGrantable(actorRole, role);
-    grants.requireGrantable(actorRole, membership.getRole());
+    grants.requireGrantable(actorRole, new RoleRef(base, roleDefinitionId));
+    grants.requireGrantable(actorRole, refOf(membership));
 
-    if ("OWNER".equals(membership.getRole()) && !"OWNER".equals(role) && isLastOwner(userId)) {
+    if ("OWNER".equals(membership.getRole()) && !"OWNER".equals(base) && isLastOwner(userId)) {
       throw new LastOwnerException();
     }
 
-    membership.changeRole(role, actor, Instant.now(clock));
+    membership.changeRole(base, roleDefinitionId, actor, Instant.now(clock));
     log.info(
         "Member {} of tenant {} is now {} (changed by {})",
         userId,
@@ -119,7 +137,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
         .findLiveInTenant(userId)
         .ifPresent(
             membership -> {
-              grants.requireGrantable(roleOf(actor), membership.getRole());
+              grants.requireGrantable(refOf(liveMembership(actor)), refOf(membership));
               if ("OWNER".equals(membership.getRole()) && isLastOwner(userId)) {
                 throw new LastOwnerException();
               }
@@ -146,18 +164,17 @@ public class DefaultMembershipAdministration implements MembershipAdministration
   }
 
   /**
-   * The role somebody holds in this tenant.
+   * What a membership says its holder's role is.
    *
-   * <p>Read from the membership rather than from the session's principal. The two agree in the
-   * ordinary case, and where they do not — a role changed while somebody was signed in — the row is
-   * the one that is current, and this is exactly the decision that must not be made on a stale one.
+   * <p>Read from the row rather than from the session's principal. The two agree in the ordinary
+   * case, and where they do not — a role changed while somebody was signed in — the row is the one
+   * that is current, and this is exactly the decision that must not run on a stale copy.
    *
-   * @param userId the person
-   * @return their role
-   * @throws NotFoundException when they are not a member here
+   * @param membership the membership
+   * @return the built-in role and the tenant-owned one extending it, if any
    */
-  private String roleOf(UUID userId) {
-    return liveMembership(userId).getRole();
+  private static RoleRef refOf(Membership membership) {
+    return new RoleRef(membership.getRole(), membership.getRoleDefinitionId());
   }
 
   /**
@@ -183,6 +200,30 @@ public class DefaultMembershipAdministration implements MembershipAdministration
         account == null ? null : account.email(),
         account == null ? null : account.displayName(),
         membership.getRole(),
+        membership.getRoleDefinitionId(),
+        roleNameOf(membership),
         membership.getCreatedAt());
+  }
+
+  /**
+   * What to call a membership's role in a list.
+   *
+   * <p>The tenant-owned role's name where there is one, and the built-in name otherwise. A client
+   * showing a member list wants a word, and making it join two collections to find one is how a
+   * list ends up showing a UUID.
+   *
+   * @param membership the membership
+   * @return the name
+   */
+  private String roleNameOf(Membership membership) {
+    if (membership.getRoleDefinitionId() == null) {
+      return membership.getRole();
+    }
+    return roles
+        .byId(membership.getRoleDefinitionId())
+        .map(RoleAdministration.RoleDefinitionView::name)
+        // Removed while somebody still held it: the membership falls back to the
+        // base, which is exactly what their permissions do too.
+        .orElse(membership.getRole());
   }
 }

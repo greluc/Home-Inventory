@@ -36,8 +36,31 @@ public final class CallerContext {
 
   private CallerContext() {}
 
-  /** The authenticated caller of the current request. */
-  public record Caller(UUID userId, UUID tenantId, String role) {}
+  /**
+   * The authenticated caller of the current request.
+   *
+   * <p>Both role components are strings and ids rather than anything richer, for the reason the
+   * class comment gives: {@code platform} is the shared kernel and carries no domain logic, so what
+   * a role <em>means</em> belongs to {@code authorization} and only there.
+   *
+   * @param userId the person
+   * @param tenantId the tenant they are acting for, or null when they are in none
+   * @param role the built-in role they hold there, or null when there is no tenant
+   * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null
+   */
+  public record Caller(UUID userId, UUID tenantId, String role, UUID roleDefinitionId) {
+
+    /**
+     * A caller holding a plain built-in role.
+     *
+     * @param userId the person
+     * @param tenantId the tenant they are acting for
+     * @param role the built-in role
+     */
+    public Caller(UUID userId, UUID tenantId, String role) {
+      this(userId, tenantId, role, null);
+    }
+  }
 
   /**
    * Runs an action with the caller published, and clears it afterwards.

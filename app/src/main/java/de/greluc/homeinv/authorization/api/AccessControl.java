@@ -62,6 +62,36 @@ public interface AccessControl {
   void require(Entitlement entitlement);
 
   /**
+   * Every permission a role reference holds (REQ-TEN-006).
+   *
+   * <p>The built-in role's set, plus whatever a tenant-owned role extending it adds. Asked by this
+   * block's own decisions and by {@code tenancy}, which needs it to compare two people's reach
+   * without knowing what a role means.
+   *
+   * @param role which role, built-in and optionally tenant-owned
+   * @return the permissions it holds; empty for a role this build does not know
+   */
+  java.util.Set<Permission> permissionsOf(RoleRef role);
+
+  /**
+   * Whether somebody may <b>define</b> a tenant-owned role of this shape (REQ-TEN-006, REQ-TEN-010).
+   *
+   * <p>The requirement reaches further than assignment. An administrator who could define a role
+   * adding a permission they lack would only have to give it to somebody to exercise it, so the
+   * same test runs when a definition is written and not only when it is handed out.
+   *
+   * <p>Here rather than in the endpoint that offers it, for the reason every other "may" is here:
+   * reading a role's grant set outside this block is how a second answer appears, and ArchUnit
+   * refuses it.
+   *
+   * @param actor the role the caller holds
+   * @param base the built-in role the definition would extend
+   * @param added the permissions it would add
+   * @return {@code true} when the whole result is within the caller's own reach
+   */
+  boolean mayDefine(RoleRef actor, Role base, java.util.Set<Permission> added);
+
+  /**
    * Whether somebody in one role may grant, or withdraw, another (REQ-TEN-010).
    *
    * <p>Here rather than in {@code tenancy}, because it is a question about what a role is worth and
@@ -76,12 +106,17 @@ public interface AccessControl {
    * first rule alone would let an administrator hand out ownership, and ownership is a relationship
    * rather than a permission set.
    *
-   * @param actorRole the role the actor holds, as stored
-   * @param targetRole the role being granted or withdrawn, as stored
-   * @return {@code true} when the grant is within the actor's own reach. A role name this build does
-   *     not know is {@code false} on either side, for the reason an unknown role grants nothing
+   * <p>It works the same for a tenant-owned role: what is compared is the permission set, and the
+   * built-in ladder is only what a definition starts from. An administrator cannot define a role
+   * that adds something they do not hold and then assign it — the set test catches that, which is
+   * the whole of what REQ-TEN-010 asks for.
+   *
+   * @param actor the role the actor holds
+   * @param target the role being granted or withdrawn
+   * @return {@code true} when the grant is within the actor's own reach. A role this build does not
+   *     know is {@code false} on either side, for the reason an unknown role grants nothing
    */
-  boolean mayGrant(String actorRole, String targetRole);
+  boolean mayGrant(RoleRef actor, RoleRef target);
 
   /**
    * Whether the caller holds a permission, without throwing.

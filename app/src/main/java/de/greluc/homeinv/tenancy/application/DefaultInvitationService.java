@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.application;
 
+import de.greluc.homeinv.authorization.api.RoleRef;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
@@ -92,7 +93,7 @@ public class DefaultInvitationService implements InvitationService {
     String address = email.trim().toLowerCase(Locale.ROOT);
     Instant now = Instant.now(clock);
 
-    grants.requireGrantable(roleOf(actor), role);
+    grants.requireGrantable(roleOf(actor), RoleRef.of(role));
 
     invitations
         .findOpenFor(address, now)
@@ -191,14 +192,15 @@ public class DefaultInvitationService implements InvitationService {
    * what is current, and this is exactly the decision that must not run on a stale copy.
    *
    * @param userId the person
-   * @return their role here
+   * @return their built-in role here, and the tenant-owned one extending it if any
    * @throws NotFoundException when they are not a member of this tenant
    */
-  private String roleOf(UUID userId) {
-    return memberships
-        .findLiveInTenant(userId)
-        .orElseThrow(() -> new NotFoundException("member", userId))
-        .getRole();
+  private RoleRef roleOf(UUID userId) {
+    var membership =
+        memberships
+            .findLiveInTenant(userId)
+            .orElseThrow(() -> new NotFoundException("member", userId));
+    return new RoleRef(membership.getRole(), membership.getRoleDefinitionId());
   }
 
   /**

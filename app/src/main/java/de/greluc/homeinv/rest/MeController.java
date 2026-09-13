@@ -133,7 +133,8 @@ public class MeController {
             membership.tenantId(),
             user.email(),
             user.locale(),
-            membership.role());
+            membership.role(),
+            membership.roleDefinitionId());
 
     Authentication token =
         UsernamePasswordAuthenticationToken.authenticated(switched, null, List.of());

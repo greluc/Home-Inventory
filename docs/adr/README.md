@@ -79,3 +79,4 @@ Date: YYYY-MM-DD
 | [0055](0055-five-first-class-plugin-sdks.md) | Five first-class plugin SDKs: Java, Kotlin, Rust, Python and Go | Accepted |
 | [0056](0056-schema-validation-with-the-shipped-document.md) | Attributes are validated with the shipped schema document, and it resolves nothing remotely | Accepted |
 | [0057](0057-the-instance-operator.md) | The instance operator is a flag on an account, not a role in a tenant | Accepted |
+| [0058](0058-authz-schema-name.md) | The `authorization` block's schema is called `authz`, because the name is reserved | Accepted |

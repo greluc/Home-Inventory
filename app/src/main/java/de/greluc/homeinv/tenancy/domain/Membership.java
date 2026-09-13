@@ -44,6 +44,16 @@ public class Membership {
   @Column(name = "role", nullable = false)
   private String role;
 
+  /**
+   * The tenant-owned role extending {@link #role}, or null (REQ-TEN-006).
+   *
+   * <p>The built-in name above stays meaningful either way: a tenant-owned role EXTENDS one of the
+   * six, so there is always an answer to "what is this person at least" — and it is what they fall
+   * back to if the definition is later removed.
+   */
+  @Column(name = "role_definition_id")
+  private UUID roleDefinitionId;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -93,11 +103,13 @@ public class Membership {
    * the ladder — the entity knows what a role is called and nothing about what one is worth.
    *
    * @param newRole one of the six built-in role names
+   * @param newRoleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null
    * @param actor who is making the change
    * @param now the instant of the change
    */
-  public void changeRole(String newRole, UUID actor, Instant now) {
+  public void changeRole(String newRole, UUID newRoleDefinitionId, UUID actor, Instant now) {
     this.role = newRole;
+    this.roleDefinitionId = newRoleDefinitionId;
     this.updatedBy = actor;
     this.updatedAt = now;
   }
