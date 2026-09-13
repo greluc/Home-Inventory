@@ -108,6 +108,24 @@ permissions:
   - id: catalog:value-list:create
     since: 1
     description: Create a value list.
+  - id: tagging:tag:read
+    since: 1
+    description: Read the tenant's tags and the groups they sit in.
+  - id: tagging:tag:create
+    since: 1
+    description: Create a tag or a tag group.
+  - id: tagging:tag:update
+    since: 1
+    description: >
+      Rename a tag, recolour it, move it between groups, or merge two. Editing the
+      vocabulary, which is a different capability from using it.
+  - id: tagging:tag:assign
+    since: 1
+    description: >
+      Put a tag on an item or a place, or take one off. Held by everybody who
+      works with the inventory, including a contributor who may not edit the tag
+      list itself.
+
   - id: catalog:value-list:update
     since: 1
     description: >
@@ -132,6 +150,7 @@ roles:
       - media:object:read
       - catalog:type:read
       - catalog:value-list:read
+      - tagging:tag:read
 
   - name: VIEWER
     rationale: >
@@ -144,6 +163,7 @@ roles:
       - search:index:query
       - catalog:type:read
       - catalog:value-list:read
+      - tagging:tag:read
 
   - name: CONTRIBUTOR
     rationale: >
@@ -161,6 +181,8 @@ roles:
       - search:index:query
       - catalog:type:read
       - catalog:value-list:read
+      - tagging:tag:read
+      - tagging:tag:assign
 
   - name: MEMBER
     rationale: Everything a person working with the inventory needs.

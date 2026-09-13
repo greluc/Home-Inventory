@@ -45,7 +45,8 @@ public enum Role {
       // attributes a client shows unlabelled keys, so withholding them hides
       // nothing and breaks the page.
       Permission.TYPE_READ,
-      Permission.VALUE_LIST_READ)),
+      Permission.VALUE_LIST_READ,
+      Permission.TAG_READ)),
 
   /** Read and search. */
   VIEWER(EnumSet.of(
@@ -54,7 +55,8 @@ public enum Role {
       Permission.MEDIA_READ,
       Permission.SEARCH_QUERY,
       Permission.TYPE_READ,
-      Permission.VALUE_LIST_READ)),
+      Permission.VALUE_LIST_READ,
+      Permission.TAG_READ)),
 
   /** Adds and changes, deletes nothing. */
   CONTRIBUTOR(EnumSet.of(
@@ -68,7 +70,11 @@ public enum Role {
       Permission.MEDIA_CREATE,
       Permission.SEARCH_QUERY,
       Permission.TYPE_READ,
-      Permission.VALUE_LIST_READ)),
+      Permission.VALUE_LIST_READ,
+      Permission.TAG_READ,
+      // Labelling things is what a contributor does; editing the tag vocabulary
+      // is a different capability and is not granted here.
+      Permission.TAG_ASSIGN)),
 
   /** Everything a person working with the inventory needs, deletion included. */
   MEMBER(EnumSet.allOf(Permission.class)),

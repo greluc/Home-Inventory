@@ -12,6 +12,7 @@ import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.locations.api.NameTakenException;
+import de.greluc.homeinv.tagging.api.TagService;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
@@ -160,6 +161,25 @@ public class ApiExceptionHandler {
     ProblemDetail problem =
         problem(ProblemType.CONSTRAINT_LOOSENED, exception.getMessage(), request);
     problem.setProperty("fieldKey", exception.getFieldKey());
+    return problem;
+  }
+
+  /**
+   * Answers a tag name, or a tag group key, the tenant has already used.
+   *
+   * <p>The same token as a location's sibling name: from a client's point of view both say "that
+   * name is taken, pick another", and inventing a second token for the same branch would make a
+   * client handle two.
+   *
+   * @param exception the conflict, carrying the name
+   * @param request the request
+   * @return a {@code 409} problem detail naming the name
+   */
+  @ExceptionHandler(TagService.TagNameTakenException.class)
+  public ProblemDetail handleTagNameTaken(
+      TagService.TagNameTakenException exception, HttpServletRequest request) {
+    ProblemDetail problem = problem(ProblemType.NAME_TAKEN, exception.getMessage(), request);
+    problem.setProperty("name", exception.getName());
     return problem;
   }
 

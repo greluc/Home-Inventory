@@ -842,6 +842,133 @@ components:
           format: uuid
           type: string
       type: object
+    TagGroupPage:
+      description: One page of tag groups.
+      properties:
+        items:
+          description: the groups on this page
+          items:
+            $ref: '#/components/schemas/TagGroupView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    TagGroupRequest:
+      description: The body of a group creation.
+      properties:
+        displayOrder:
+          description: where the group sits among the others
+          format: int32
+          type: integer
+        exclusive:
+          description: whether a thing may carry only one tag of this group
+          type: boolean
+        key:
+          description: the stable key
+          maxLength: 64
+          minLength: 0
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: the group's name per language tag
+          type: object
+      required:
+      - key
+      type: object
+    TagGroupView:
+      description: A group of tags — "condition", "room", "owner" (REQ-CORE-061).
+      properties:
+        displayOrder:
+          description: where the group sits among the others on a form
+          format: int32
+          type: integer
+        exclusive:
+          description: |-
+            whether a thing may carry only one tag of this group. "Condition" is one of new,
+            used or broken; a thing that was both would be a thing whose condition nobody can read
+          type: boolean
+        id:
+          description: the group
+          format: uuid
+          type: string
+        key:
+          description: the stable key, which is what an import or an export names
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: |-
+            the group's name per language tag, as the tenant wrote it. Multilingual data rather
+            than interface text: the server cannot translate a word a tenant invented (REQ-NFR-032)
+          type: object
+      type: object
+    TagPage:
+      description: One page of tags.
+      properties:
+        items:
+          description: the tags on this page
+          items:
+            $ref: '#/components/schemas/TagView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    TagRequest:
+      description: The body of a tag creation or change.
+      properties:
+        colour:
+          description: '`#rrggbb`, or omitted'
+          maxLength: 7
+          minLength: 0
+          type: string
+        groupId:
+          description: the group it belongs to, or omitted
+          format: uuid
+          type: string
+        icon:
+          description: an icon name for clients, or omitted
+          maxLength: 64
+          minLength: 0
+          type: string
+        name:
+          description: the name a person reads and types
+          maxLength: 120
+          minLength: 0
+          type: string
+      required:
+      - name
+      type: object
+    TagView:
+      description: A tag as everything outside this block sees it.
+      properties:
+        colour:
+          description: '`#rrggbb`, or `null` when the tenant chose none (REQ-CORE-062)'
+          type: string
+        groupId:
+          description: the group it belongs to, or `null`
+          format: uuid
+          type: string
+        icon:
+          description: an icon name for clients, or `null`
+          type: string
+        id:
+          description: the tag
+          format: uuid
+          type: string
+        mergedInto:
+          description: |-
+            what this tag became, or `null` while it is itself. A tag with a value
+            here is a tombstone: it is offered nowhere, carries nothing, and exists so a client holding
+            its id is redirected rather than told the tag never existed (REQ-CORE-063)
+          format: uuid
+          type: string
+        name:
+          description: the name a person reads, unique per tenant among the live ones
+          type: string
+      type: object
     UpdateItemRequest:
       description: 'The body of an update. `kind` is absent: a physical item does not become a digital
         one.'
@@ -2796,6 +2923,213 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces the mutable fields of an item.
+  /api/v1/items/{id}/tags:
+    get:
+      description: The tags one item carries.
+      operationId: itemTags
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tags one item carries.
+  /api/v1/items/{id}/tags/{tagId}:
+    delete:
+      description: Takes a tag off an item.
+      operationId: untagItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the tag
+        in: path
+        name: tagId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Takes a tag off an item.
+    put:
+      description: |-
+        Puts a tag on an item.
+
+        `PUT` because it is idempotent: the same request twice leaves the same one assignment,
+        which is what a client retrying a request it never saw the answer to needs.
+      operationId: tagItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the tag
+        in: path
+        name: tagId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Puts a tag on an item
   /api/v1/locations:
     get:
       description: |-
@@ -3347,6 +3681,209 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: The items in a location, optionally including everything below it (REQ-CORE-049)
+  /api/v1/locations/{id}/tags:
+    get:
+      description: The tags one place carries.
+      operationId: locationTags
+      parameters:
+      - description: the place
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tags one place carries.
+  /api/v1/locations/{id}/tags/{tagId}:
+    delete:
+      description: Takes a tag off a place.
+      operationId: untagLocation
+      parameters:
+      - description: the place
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the tag
+        in: path
+        name: tagId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Takes a tag off a place.
+    put:
+      description: Puts a tag on a place.
+      operationId: tagLocation
+      parameters:
+      - description: the place
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the tag
+        in: path
+        name: tagId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Puts a tag on a place.
   /api/v1/media:
     get:
       description: One page of the files attached to one thing, oldest first.
@@ -3762,6 +4299,481 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Searches items by name and description.
+  /api/v1/tag-groups:
+    get:
+      description: One page of the tenant's tag groups.
+      operationId: listGroups
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagGroupPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's tag groups.
+    post:
+      description: Creates a tag group.
+      operationId: createGroup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagGroupRequest'
+        description: the key, labels, exclusivity and order
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagGroupView'
+          description: the new group
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Name taken (`name-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a tag group.
+  /api/v1/tags:
+    get:
+      description: One page of the tenant's tags.
+      operationId: listTags
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's tags.
+    post:
+      description: Creates a tag.
+      operationId: createTag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+        description: the name, optional group, colour and icon
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagView'
+          description: the new tag
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Name taken (`name-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a tag.
+  /api/v1/tags/{id}:
+    put:
+      description: Renames a tag, recolours it, or moves it between groups.
+      operationId: updateTag
+      parameters:
+      - description: the tag
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+        description: the new state
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagView'
+          description: the changed tag
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Name taken (`name-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Renames a tag, recolours it, or moves it between groups.
+  /api/v1/tags/{id}/merge-into/{targetId}:
+    post:
+      description: |-
+        Merges one tag into another (REQ-CORE-063).
+
+        `POST` rather than `DELETE`: this is not a deletion. The source becomes a
+        tombstone pointing at the target, every assignment moves, and a client holding the old id is
+        redirected rather than told it never existed.
+      operationId: mergeTag
+      parameters:
+      - description: the tag that disappears
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the tag that absorbs it
+        in: path
+        name: targetId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagView'
+          description: the target, now carrying both sets of assignments
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Merges one tag into another (REQ-CORE-063)
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

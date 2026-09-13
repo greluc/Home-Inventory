@@ -281,7 +281,7 @@ attributes, quantities, relations, lifecycle.
 |---|---|
 | Schema | `tagging` |
 | Key notions | `Tag`, `TagGroup`, `TagAssignment` |
-| Publishes | `TagService`, `TagQuery`, `TagView` |
+| Publishes | `TagService` — creating, renaming, merging, assigning and reading what one thing carries — plus `TagView` and `TagGroupView` |
 | Events | `TagCreated`, `TagMerged`, `TagAssigned`, `TagUnassigned` |
 | Properties | Tenant-wide, flat with optional groups (e.g. group "condition" with `new`/`used`/`broken`), colour and icon, merging two tags as an administrative operation, applies to items **and** locations |
 

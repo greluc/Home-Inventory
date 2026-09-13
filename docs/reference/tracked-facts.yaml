@@ -215,10 +215,10 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 19
-    pattern: '(?:(\d+)|nineteen)\s+(?:named\s+)?permissions?\b'
+    value: 23
+    pattern: '(?:(\d+)|twenty-three)\s+(?:named\s+)?permissions?\b'
     notes: >
-      Twelve at stage 0; the seven of the type editor arrived with it on 2026-09-13. `AuthorizationRegistryTest` already proves the registry and the
+      Twelve at stage 0; the type editor's seven and the tag block's four arrived on 2026-09-13. `AuthorizationRegistryTest` already proves the registry and the
       `Permission` enum name the same set on every build; this is the third copy — the number as it
       appears in prose — and it is tracked on the same principle as the rest: a fact stated twice is
       checked, not trusted.

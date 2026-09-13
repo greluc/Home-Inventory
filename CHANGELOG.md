@@ -125,6 +125,13 @@ commit".
 
 ### Added
 
+- **Tags.** One tenant-wide vocabulary that goes on items and on places alike,
+  with optional groups, a colour and an icon. A group can be made exclusive, so a
+  thing carries one of new, used or broken rather than two of them. Two tags can
+  be merged: every assignment moves, duplicates are dropped rather than failing
+  the merge, and the tag that disappears leaves a marker pointing at what it
+  became, so a link to the old one still leads somewhere. *REST API: additive.*
+
 - **Items and places carry the fields their type declares.** A creation names a
   type, the server resolves it to the version published at that moment, and the
   attributes are checked against that version's schema — an offending value is a

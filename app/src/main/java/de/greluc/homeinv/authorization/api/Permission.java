@@ -67,7 +67,22 @@ public enum Permission {
   /** Create a value list. */
   VALUE_LIST_CREATE("catalog:value-list:create"),
   /** Add an entry to a value list, relabel one, or archive one. */
-  VALUE_LIST_UPDATE("catalog:value-list:update");
+  VALUE_LIST_UPDATE("catalog:value-list:update"),
+
+  /** Read the tenant's tags and the groups they sit in. */
+  TAG_READ("tagging:tag:read"),
+  /** Create a tag or a tag group. */
+  TAG_CREATE("tagging:tag:create"),
+  /** Rename a tag, recolour it, move it between groups, or merge two. */
+  TAG_UPDATE("tagging:tag:update"),
+  /**
+   * Put a tag on an item or a place, or take one off.
+   *
+   * <p>Separate from {@link #TAG_UPDATE}: labelling things is what everybody working with the
+   * inventory does, and editing the tag vocabulary is not. A contributor helping with a stocktake
+   * holds this and not that.
+   */
+  TAG_ASSIGN("tagging:tag:assign");
 
   private final String id;
 
