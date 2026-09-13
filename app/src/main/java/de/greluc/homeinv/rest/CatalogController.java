@@ -84,6 +84,43 @@ public class CatalogController {
    * @param user the authenticated caller
    * @return the new type
    */
+  @GetMapping(path = "/type-templates", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TYPE_READ)
+  public TypeAdministration.TemplateList typeTemplates() {
+    return types.templates();
+  }
+
+  /**
+   * Creates a type from a shipped template (REQ-CORE-030).
+   *
+   * <p>A copy rather than a link: what comes out is an ordinary type, fully editable, and a later
+   * release changing the template reaches nothing already imported.
+   *
+   * @param key which template
+   * @param user the authenticated caller
+   * @return the new type, with its published version
+   */
+  @PostMapping(
+      path = "/type-templates/{key}/import",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TYPE_CREATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.TYPE_KEY_TAKEN})
+  @ResponseStatus(HttpStatus.CREATED)
+  public ResponseEntity<TypeAdministration.ItemTypeView> importTypeTemplate(
+      @PathVariable @NotBlank @Size(max = 64) String key,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    TypeAdministration.ItemTypeView type = types.importTemplate(key, user.userId());
+    return ResponseEntity.created(URI.create("/api/v1/catalog/item-types/" + type.id()))
+        .body(type);
+  }
+
+  /**
+   * Creates an item type with an empty draft.
+   *
+   * @param request what to call it
+   * @param user the authenticated caller
+   * @return the type, with the id of its draft version
+   */
   @PostMapping(path = "/item-types", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TYPE_CREATE)
   @CanFail({ProblemType.TYPE_KEY_TAKEN, ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})

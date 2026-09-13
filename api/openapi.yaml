@@ -1849,6 +1849,43 @@ components:
           description: the name a person reads, unique per tenant among the live ones
           type: string
       type: object
+    TemplateList:
+      description: |-
+        The templates this build ships.
+
+        No cursor and no page, and that is not an oversight: the set is fixed by the release, the
+        same for every tenant, and eight entries long. A cursor here would be a cursor over a constant.
+      properties:
+        templates:
+          description: the templates, in the order the shipped file lists them
+          items:
+            $ref: '#/components/schemas/TemplateView'
+          type: array
+      type: object
+    TemplateView:
+      description: One shipped template, as a picker shows it.
+      properties:
+        fieldCount:
+          description: |-
+            how many fields it brings, so a person can tell a starting point from a
+            catalogue before importing one
+          format: int32
+          type: integer
+        key:
+          description: the template's key, which becomes the type's key on import
+          type: string
+        kind:
+          description: whether its items exist physically
+          enum:
+          - PHYSICAL
+          - DIGITAL
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: its name per language tag
+          type: object
+      type: object
     TenantMembershipView:
       description: One of the caller's memberships.
       properties:
@@ -3212,14 +3249,14 @@ paths:
           description: Internal error (`internal-error`)
       summary: One page of the tenant's item types.
     post:
-      description: Creates an item type, with an empty draft version to fill in.
+      description: Creates an item type with an empty draft.
       operationId: createItemType
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateItemTypeRequest'
-        description: the key, kind and optional parent
+        description: what to call it
         required: true
       responses:
         '201':
@@ -3227,7 +3264,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemTypeView'
-          description: the new type
+          description: the type, with the id of its draft version
         '400':
           content:
             application/problem+json:
@@ -3294,7 +3331,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: Creates an item type, with an empty draft version to fill in.
+      summary: Creates an item type with an empty draft.
   /api/v1/catalog/item-types/{id}:
     put:
       description: 'Archives an item type: offered for nothing new, still referenced by what exists.'
@@ -3888,6 +3925,121 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces what a category takes underneath it (REQ-CORE-047)
+  /api/v1/catalog/type-templates:
+    get:
+      description: Creates an item type, with an empty draft version to fill in.
+      operationId: typeTemplates
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateList'
+          description: the new type
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates an item type, with an empty draft version to fill in.
+  /api/v1/catalog/type-templates/{key}/import:
+    post:
+      description: |-
+        Creates a type from a shipped template (REQ-CORE-030).
+
+        A copy rather than a link: what comes out is an ordinary type, fully editable, and a later
+        release changing the template reaches nothing already imported.
+      operationId: importTypeTemplate
+      parameters:
+      - description: which template
+        in: path
+        name: key
+        required: true
+        schema:
+          maxLength: 64
+          minLength: 0
+          type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemTypeView'
+          description: the new type, with its published version
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Type key taken (`type-key-taken`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a type from a shipped template (REQ-CORE-030)
   /api/v1/catalog/types/{ownerId}/versions:
     post:
       description: Starts a draft of a type or a category, copying what is published now.

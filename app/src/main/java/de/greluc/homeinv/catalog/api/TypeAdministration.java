@@ -45,6 +45,34 @@ public interface TypeAdministration {
   ItemTypeView createItemType(CreateItemTypeCommand command, UUID actor);
 
   /**
+   * The item type templates this instance ships (REQ-CORE-030).
+   *
+   * <p>Eight of them, defined in {@code docs/reference/type-templates.yaml} and carried in the
+   * artifact. The same eight for every tenant and every instance of this build, which is why the
+   * answer takes no cursor: it is a property of the release rather than of the data.
+   *
+   * @return the templates, in the order the file lists them
+   */
+  TemplateList templates();
+
+  /**
+   * Creates a type from a template (REQ-CORE-030).
+   *
+   * <p>A copy, not a link. What comes out is an ordinary type with an ordinary published version,
+   * and nothing afterwards remembers where it came from — a tenant renames what it likes, adds its
+   * own fields and deprecates the rest, which is the "fully editable" half of the requirement. A
+   * later change to the shipped file reaches no type already imported.
+   *
+   * @param templateKey which template
+   * @param actor the authenticated user
+   * @return the new type, with its published version
+   * @throws TypeRegistry.UnknownTypeException when this build ships no such template
+   * @throws TypeKeyTakenException when the tenant already has a type with that key — importing the
+   *     same template twice is refused rather than producing {@code book-2}
+   */
+  ItemTypeView importTemplate(String templateKey, UUID actor);
+
+  /**
    * One page of the tenant's item types, archived ones included.
    *
    * <p>Paged like every other collection (REQ-NFR-010). A tenant with three types gets all three on
@@ -326,6 +354,27 @@ public interface TypeAdministration {
    * @param icon an icon name for the client, or {@code null}
    */
   record CreateItemTypeCommand(String key, TypeKind kind, UUID parentId, String icon) {}
+
+  /**
+   * One shipped template, as a picker shows it.
+   *
+   * @param key the template's key, which becomes the type's key on import
+   * @param labels its name per language tag
+   * @param kind whether its items exist physically
+   * @param fieldCount how many fields it brings, so a person can tell a starting point from a
+   *     catalogue before importing one
+   */
+  record TemplateView(String key, Map<String, String> labels, TypeKind kind, int fieldCount) {}
+
+  /**
+   * The templates this build ships.
+   *
+   * <p>No cursor and no page, and that is not an oversight: the set is fixed by the release, the
+   * same for every tenant, and eight entries long. A cursor here would be a cursor over a constant.
+   *
+   * @param templates the templates, in the order the shipped file lists them
+   */
+  record TemplateList(List<TemplateView> templates) {}
 
   /**
    * What to call a new location category.

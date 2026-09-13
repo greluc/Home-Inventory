@@ -133,6 +133,13 @@ commit".
 
 ### Added
 
+- **Eight ready-made item types.** Book, tool, appliance, furniture, clothing,
+  software licence, document and food each arrive with their fields already
+  defined — nine to twelve of them — and one call turns any of them into a type
+  of your own that you can rename, extend and prune like any other. The software
+  licence brings what a digital item needs: the account it sits in, the expiry,
+  the number of seats, and a licence key that is stored encrypted.
+
 - **A licence key is no longer readable in the database.** Any field a type marks
   sensitive is stored encrypted, and a database dump yields nothing without the
   master key the deployment mounts. Somebody who may not read such a field still

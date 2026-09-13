@@ -188,6 +188,16 @@ val generateTestDataEncryptionKeys by tasks.registering {
     }
 }
 
+// The item type templates of REQ-CORE-030. The file in docs/reference is the
+// source of truth -- reviewed where the other reference files are reviewed -- and
+// the artifact carries a copy, so the running application reads exactly what a
+// reader read.
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("docs/reference/type-templates.yaml")) {
+        into("catalog")
+    }
+}
+
 tasks.named<ProcessResources>("processTestResources") {
     dependsOn(generateTestUrlSigningKey, generateTestCredentialKey, generateTestDataEncryptionKeys)
     from(generateTestUrlSigningKey.map { it.outputs.files.singleFile }) {

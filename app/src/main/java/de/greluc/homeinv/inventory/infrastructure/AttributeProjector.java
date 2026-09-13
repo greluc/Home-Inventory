@@ -137,7 +137,20 @@ public class AttributeProjector {
                  ref_value, unit_value)
             values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """)
-        .params(tenantId, itemId, field.key(), number, text, date, flag, reference, unit)
+        .params(
+            tenantId,
+            itemId,
+            field.key(),
+            number,
+            text,
+            // Wrapped, not passed as an Instant: the driver cannot infer a SQL
+            // type for one and refuses the statement. Nothing caught it until a
+            // shipped template brought the first sortable `date` field, because
+            // every earlier test projected text, numbers and money only.
+            date == null ? null : java.sql.Timestamp.from(date),
+            flag,
+            reference,
+            unit)
         .update();
   }
 

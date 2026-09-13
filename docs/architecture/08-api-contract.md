@@ -55,6 +55,7 @@ forbids database and repository access from the access blocks.
 ├── /roles       {id}   tenant-owned roles and the permissions they add
 ├── /field-visibility   which roles read which sensitive fields
 ├── /catalog     /item-types /location-categories /versions /fields /value-lists
+│                /type-templates {key}/import   (the eight of REQ-CORE-030)
 │                {id}/child-categories   (what a category takes under it)
 ├── /items       {id} {id}/attachments {id}/relations {id}/maintenance
 │                {id}/loans {id}/history {id}/codes {id}/bundle {id}/bundles

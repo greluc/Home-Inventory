@@ -69,6 +69,9 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   private final CursorCodec cursors;
 
+  /** The eight templates of REQ-CORE-030, read from the file that defines them. */
+  private final TypeTemplates shipped;
+
   /** The cap REQ-NFR-010 puts on every page of every collection. */
   private static final int MAX_PAGE = 200;
 
@@ -154,6 +157,67 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             (rs, rowNum) -> itemTypeOf(rs, last));
     return new ItemTypePage(
         rows, nextCursor(rows.size(), size, ITEM_TYPE_CURSOR, last.position()));
+  }
+
+  @Override
+  public TemplateList templates() {
+    return new TemplateList(
+        shipped.all().stream()
+            .map(
+                template ->
+                    new TemplateView(
+                        template.key(),
+                        template.labels(),
+                        template.kind(),
+                        template.fields().size()))
+            .toList());
+  }
+
+  @Override
+  @Transactional
+  public ItemTypeView importTemplate(String templateKey, UUID actor) {
+    TypeTemplates.Template template = shipped.byKey(templateKey);
+    if (template == null) {
+      throw new TypeRegistry.UnknownTypeException(
+          "This build ships no item type template called '" + templateKey + "'.");
+    }
+
+    // Through the ordinary editor, deliberately. A template that wrote rows of
+    // its own would be a second way of creating a type, and the second way is the
+    // one that forgets the schema, the event or the key check.
+    ItemTypeView type =
+        createItemType(
+            new CreateItemTypeCommand(template.key(), template.kind(), null, null), actor);
+    int order = 0;
+    for (TypeTemplates.TemplateField field : template.fields()) {
+      addField(
+          type.draftVersionId(),
+          new FieldCommand(
+              field.key(),
+              field.dataType(),
+              field.labels(),
+              Map.of(),
+              false,
+              null,
+              field.constraints(),
+              null,
+              null,
+              null,
+              order++,
+              field.searchable(),
+              field.sortable(),
+              field.facetable(),
+              field.sensitive()),
+          actor);
+    }
+    publish(type.draftVersionId(), actor);
+    log.info(
+        "Imported template '{}' as type {} with {} field(s) in tenant {}.",
+        templateKey,
+        type.id(),
+        template.fields().size(),
+        TenantContext.require());
+    return loadItemType(type.id()).orElseThrow();
   }
 
   @Override

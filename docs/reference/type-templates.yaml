@@ -1,0 +1,449 @@
+# Home Inventory — the shipped item type templates (REQ-CORE-030)
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR WHAT A TEMPLATE CONTAINS.
+#
+# `REQ-CORE-030` names eight templates — book, tool, appliance, furniture,
+# clothing, software licence, document, food — and says what a tenant may do with
+# one: "importable and fully editable". It says nothing about which fields each
+# brings, and that is what this file decides, in one place a person can read
+# rather than scattered across a seeding class nobody opens.
+#
+# The same treatment `docs/reference/permissions.yaml` and
+# `docs/reference/problem-types.yaml` get, for the same reason: a list that lives
+# only in code is a list that changes without anybody noticing it changed.
+#
+# ---------------------------------------------------------------------------
+# A TEMPLATE IS A STARTING POINT, NOT A CONTRACT
+#
+# Importing one creates an ordinary item type with an ordinary published version.
+# Nothing afterwards remembers it came from here: the tenant renames fields, adds
+# its own, deprecates the ones it does not want, and the template is not consulted
+# again. That is what "fully editable" means, and it is why a template may be
+# generous — a field nobody fills costs an empty row on a form, while a field
+# nobody has costs somebody the work of adding it.
+#
+# Decided 2026-09-13, with the owner: the templates are DETAILED, 8–12 fields
+# each, rather than minimal.
+#
+# ---------------------------------------------------------------------------
+# THE RULES A FIELD HERE OBEYS
+#
+#   * `key` is the attribute key, stable and lower camel case. It appears inside
+#     every item written against the type, so it is chosen once.
+#   * `labels` carries `en` and `de`. A tenant's own name for a field is data and
+#     lives in the row; these are the names the template arrives with.
+#   * `sensitive: true` means the value is stored encrypted (ADR-0019). Such a
+#     field may NOT also be searchable, sortable or facetable — the index would
+#     hold ciphertext and match nothing — and the type editor refuses the
+#     combination, so this file may not state it either.
+#   * `searchable`, `sortable`, `facetable` decide what `item_attr_index` mirrors.
+#     Marked where a person would plausibly filter or sort by the value, and left
+#     off free text, which full-text search covers anyway.
+#   * `unit` belongs to `quantity` and `money` carries its currency per value, so
+#     no template states a currency.
+
+schemaVersion: 1
+updated: 2026-09-13
+
+templates:
+
+  - key: book
+    kind: PHYSICAL
+    labels:
+      en: Book
+      de: Buch
+    fields:
+      - key: author
+        labels: { en: Author, de: Autor }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: isbn
+        labels: { en: ISBN, de: ISBN }
+        dataType: text
+        searchable: true
+      - key: publisher
+        labels: { en: Publisher, de: Verlag }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: published
+        labels: { en: Year of publication, de: Erscheinungsjahr }
+        dataType: integer
+        sortable: true
+      - key: edition
+        labels: { en: Edition, de: Auflage }
+        dataType: text
+      - key: series
+        labels: { en: Series, de: Reihe }
+        dataType: text
+        facetable: true
+      - key: pages
+        labels: { en: Pages, de: Seiten }
+        dataType: integer
+        sortable: true
+      - key: language
+        labels: { en: Language, de: Sprache }
+        dataType: text
+        facetable: true
+      - key: binding
+        labels: { en: Binding, de: Einband }
+        dataType: text
+        facetable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: summary
+        labels: { en: Summary, de: Inhalt }
+        dataType: multiline
+
+  - key: tool
+    kind: PHYSICAL
+    labels:
+      en: Tool
+      de: Werkzeug
+    fields:
+      - key: manufacturer
+        labels: { en: Manufacturer, de: Hersteller }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: model
+        labels: { en: Model, de: Modell }
+        dataType: text
+        searchable: true
+      - key: serialNumber
+        labels: { en: Serial number, de: Seriennummer }
+        dataType: text
+        searchable: true
+      - key: power
+        labels: { en: Power, de: Leistung }
+        dataType: quantity
+        unit: W
+        sortable: true
+      - key: voltage
+        labels: { en: Voltage, de: Spannung }
+        dataType: quantity
+        unit: V
+      - key: corded
+        labels: { en: Mains powered, de: Netzbetrieben }
+        dataType: boolean
+        facetable: true
+      - key: batteryPlatform
+        labels: { en: Battery platform, de: Akku-System }
+        dataType: text
+        facetable: true
+      - key: purchasedOn
+        labels: { en: Purchased on, de: Gekauft am }
+        dataType: date
+        sortable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: warrantyUntil
+        labels: { en: Warranty until, de: Garantie bis }
+        dataType: date
+        sortable: true
+      - key: manual
+        labels: { en: Manual, de: Anleitung }
+        dataType: url
+
+  - key: appliance
+    kind: PHYSICAL
+    labels:
+      en: Appliance
+      de: Gerät
+    fields:
+      - key: manufacturer
+        labels: { en: Manufacturer, de: Hersteller }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: model
+        labels: { en: Model, de: Modell }
+        dataType: text
+        searchable: true
+      - key: serialNumber
+        labels: { en: Serial number, de: Seriennummer }
+        dataType: text
+        searchable: true
+      - key: energyClass
+        labels: { en: Energy class, de: Energieklasse }
+        dataType: text
+        facetable: true
+      - key: powerConsumption
+        labels: { en: Power consumption, de: Leistungsaufnahme }
+        dataType: quantity
+        unit: W
+        sortable: true
+      - key: installedOn
+        labels: { en: Installed on, de: Eingebaut am }
+        dataType: date
+        sortable: true
+      - key: purchasedOn
+        labels: { en: Purchased on, de: Gekauft am }
+        dataType: date
+        sortable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: warrantyUntil
+        labels: { en: Warranty until, de: Garantie bis }
+        dataType: date
+        sortable: true
+      - key: serviceIntervalMonths
+        labels: { en: Service interval (months), de: Wartungsintervall (Monate) }
+        dataType: integer
+      - key: manual
+        labels: { en: Manual, de: Anleitung }
+        dataType: url
+
+  - key: furniture
+    kind: PHYSICAL
+    labels:
+      en: Furniture
+      de: Möbel
+    fields:
+      - key: manufacturer
+        labels: { en: Manufacturer, de: Hersteller }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: model
+        labels: { en: Model, de: Modell }
+        dataType: text
+        searchable: true
+      - key: material
+        labels: { en: Material, de: Material }
+        dataType: text
+        facetable: true
+      - key: colour
+        labels: { en: Colour, de: Farbe }
+        dataType: text
+        facetable: true
+      - key: widthMm
+        labels: { en: Width, de: Breite }
+        dataType: quantity
+        unit: mm
+        sortable: true
+      - key: heightMm
+        labels: { en: Height, de: Höhe }
+        dataType: quantity
+        unit: mm
+        sortable: true
+      - key: depthMm
+        labels: { en: Depth, de: Tiefe }
+        dataType: quantity
+        unit: mm
+        sortable: true
+      - key: purchasedOn
+        labels: { en: Purchased on, de: Gekauft am }
+        dataType: date
+        sortable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: assemblyRequired
+        labels: { en: Needs assembling, de: Aufbau nötig }
+        dataType: boolean
+      - key: manual
+        labels: { en: Assembly instructions, de: Aufbauanleitung }
+        dataType: url
+
+  - key: clothing
+    kind: PHYSICAL
+    labels:
+      en: Clothing
+      de: Kleidung
+    fields:
+      - key: brand
+        labels: { en: Brand, de: Marke }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: size
+        labels: { en: Size, de: Größe }
+        dataType: text
+        facetable: true
+      - key: colour
+        labels: { en: Colour, de: Farbe }
+        dataType: text
+        facetable: true
+      - key: material
+        labels: { en: Material, de: Material }
+        dataType: text
+        facetable: true
+      - key: season
+        labels: { en: Season, de: Saison }
+        dataType: text
+        facetable: true
+      - key: careInstructions
+        labels: { en: Care instructions, de: Pflegehinweise }
+        dataType: multiline
+      - key: purchasedOn
+        labels: { en: Purchased on, de: Gekauft am }
+        dataType: date
+        sortable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: condition
+        labels: { en: Condition, de: Zustand }
+        dataType: text
+        facetable: true
+
+  - key: software-licence
+    kind: DIGITAL
+    labels:
+      en: Software licence
+      de: Softwarelizenz
+    # REQ-CORE-004's four fields are the first four here, and they are the reason
+    # this template exists: "a digital item has no physical location but instead a
+    # carrier/account, licence key, expiry date and seat count". The licence key
+    # is `sensitive` and therefore stored encrypted (ADR-0019) — and therefore not
+    # searchable, sortable or facetable, which the type editor would refuse.
+    #
+    # It is NOT required (decided 2026-09-13): a licence is often recorded before
+    # the key is to hand, and a required field somebody may not read is a field
+    # they cannot supply — a lock in the wrong place.
+    fields:
+      - key: carrier
+        labels: { en: Carrier or account, de: Träger oder Konto }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: licenceKey
+        labels: { en: Licence key, de: Lizenzschlüssel }
+        dataType: secret
+        sensitive: true
+      - key: expiresOn
+        labels: { en: Expires on, de: Läuft ab am }
+        dataType: date
+        sortable: true
+      - key: seats
+        labels: { en: Seats, de: Sitzplätze }
+        dataType: integer
+        sortable: true
+      - key: vendor
+        labels: { en: Vendor, de: Anbieter }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: edition
+        labels: { en: Edition, de: Edition }
+        dataType: text
+        facetable: true
+      - key: licenceType
+        labels: { en: Licence type, de: Lizenzart }
+        dataType: text
+        facetable: true
+      - key: purchasedOn
+        labels: { en: Purchased on, de: Gekauft am }
+        dataType: date
+        sortable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: renewal
+        labels: { en: Renews automatically, de: Verlängert sich automatisch }
+        dataType: boolean
+        facetable: true
+      - key: portalUrl
+        labels: { en: Vendor portal, de: Anbieterportal }
+        dataType: url
+      - key: supportEmail
+        labels: { en: Support address, de: Support-Adresse }
+        dataType: email
+
+  - key: document
+    kind: PHYSICAL
+    labels:
+      en: Document
+      de: Dokument
+    fields:
+      - key: documentType
+        labels: { en: Kind of document, de: Art des Dokuments }
+        dataType: text
+        facetable: true
+      - key: issuer
+        labels: { en: Issued by, de: Ausgestellt von }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: referenceNumber
+        labels: { en: Reference number, de: Aktenzeichen }
+        dataType: text
+        searchable: true
+      - key: issuedOn
+        labels: { en: Issued on, de: Ausgestellt am }
+        dataType: date
+        sortable: true
+      - key: validUntil
+        labels: { en: Valid until, de: Gültig bis }
+        dataType: date
+        sortable: true
+      - key: keepUntil
+        labels: { en: Keep until, de: Aufbewahren bis }
+        dataType: date
+        sortable: true
+      - key: originalOrCopy
+        labels: { en: Original or copy, de: Original oder Kopie }
+        dataType: text
+        facetable: true
+      - key: relatedParty
+        labels: { en: Concerns, de: Betrifft }
+        dataType: text
+        searchable: true
+      - key: summary
+        labels: { en: Summary, de: Inhalt }
+        dataType: multiline
+
+  - key: food
+    kind: PHYSICAL
+    labels:
+      en: Food
+      de: Lebensmittel
+    fields:
+      - key: brand
+        labels: { en: Brand, de: Marke }
+        dataType: text
+        searchable: true
+        facetable: true
+      - key: bestBefore
+        labels: { en: Best before, de: Mindestens haltbar bis }
+        dataType: date
+        sortable: true
+      - key: openedOn
+        labels: { en: Opened on, de: Geöffnet am }
+        dataType: date
+        sortable: true
+      - key: netWeight
+        labels: { en: Net weight, de: Füllmenge }
+        dataType: quantity
+        unit: g
+        sortable: true
+      - key: storage
+        labels: { en: Storage, de: Lagerung }
+        dataType: text
+        facetable: true
+      - key: allergens
+        labels: { en: Allergens, de: Allergene }
+        dataType: text
+        searchable: true
+      - key: origin
+        labels: { en: Country of origin, de: Herkunftsland }
+        dataType: text
+        facetable: true
+      - key: purchasePrice
+        labels: { en: Purchase price, de: Kaufpreis }
+        dataType: money
+        sortable: true
+      - key: notesOnUse
+        labels: { en: Notes on use, de: Hinweise zur Verwendung }
+        dataType: multiline
