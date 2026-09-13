@@ -31,6 +31,14 @@ RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /
 # time anybody built it.
 COPY proto/ ./proto/
 COPY app/src ./app/src
+
+# The shipped item type templates (REQ-CORE-030). `TypeTemplates` reads them
+# while the context starts, so an artifact without them is one that refuses to
+# start — which is what `api` did inside this image until the file was copied
+# here. `.dockerignore` excludes `docs/` wholesale and re-includes this one
+# path, so this line names the file rather than the directory: nothing else
+# under `docs/` is in the context to copy.
+COPY docs/reference/type-templates.yaml ./docs/reference/
 RUN ./gradlew --no-daemon :app:bootJar -x test
 
 # The layered jar, so the runtime image gets the dependencies in one layer and
