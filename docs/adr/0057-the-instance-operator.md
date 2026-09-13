@@ -93,15 +93,32 @@ address appearing in a variable says nothing about who put it there or when, and
   table is the one instance-wide table there is
   ([07 §7.1](../architecture/07-data-model.md)).
 - `identity` still knows no tenants and no permissions ([ADR-0005](0005-identity.md)).
-  A flag saying "this account may be asked" is not a permission model; nothing in
-  `identity` evaluates it, and `authorization` never reads it.
-- **The flag is visible in the session.** `AuthenticatedUser` carries it, so the
-  serial version changes and existing sessions are invalidated — the same
-  handling a changed principal shape has had since `locale` was added.
+  It **stores** the three columns and evaluates none of them: `authorization`
+  declares the `AccountEntitlements` port and answers with it, which is the same
+  direction every other cross-block question runs in and what keeps the two
+  acyclic.
+- **The flag is not in the session.** `AuthenticatedUser` does not carry it, and
+  that is the difference between an entitlement and a role: a role is established
+  at login and travels with the principal, while an entitlement is granted by an
+  operator to somebody who may be signed in while it happens. It is read from the
+  account on every call, so a grant takes effect at once rather than at the
+  granted person's next sign-in — which is what the table above promises.
 - An operator locking themselves out is possible and is **not** guarded against
-  in code: the last operator can clear their own flag. The recovery is the same
-  one-shot service that created the first account, run again with the same
-  address, which restores the flag on an existing account rather than creating a
-  second one.
+  in code: the last operator can clear their own flag, and deciding in the
+  application which operator is the last one is a question it cannot answer while
+  somebody else is deleting an account. The recovery is the one-shot service that
+  created the first account, run again with the same address. It restores the flag
+  **only when no operator is left**: doing so unconditionally would mean an
+  instance that has deliberately moved operatorship elsewhere gets it handed back
+  to the bootstrap address on every redeploy, silently.
 - The administration surface every chapter refers to now has an address:
   `/api/v1/instance/**` in the API, and the operator area of the web client.
+- **The one-shot `bootstrap` service now depends on this block**, because the
+  first account has to be made an operator and nobody else can do it. That
+  service runs with the database credentials and nothing else
+  ([ADR-0053](0053-first-owner-as-a-one-shot.md)), so everything it reaches must
+  need no other secret — a constraint that was discovered the hard way on the day
+  this was written, when a paged operator listing pulled in the URL signing key
+  and a fresh deployment stopped at "Error starting ApplicationContext". The
+  listing lives in its own port for that reason, and `BootstrapIsolationIT` now
+  fails the build rather than the smoke suite failing the deployment.

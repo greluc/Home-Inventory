@@ -8,6 +8,7 @@ import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
+import de.greluc.homeinv.identity.api.OperatorDirectory;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -48,6 +49,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InstanceController {
 
   private final AccountAdministration accounts;
+  private final OperatorDirectory operators;
 
   /**
    * Finds an account by its login address.
@@ -103,7 +105,7 @@ public class InstanceController {
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
 
-    AccountAdministration.OperatorPage page = accounts.operators(cursor, limit);
+    OperatorDirectory.OperatorPage page = operators.operators(cursor, limit);
     return new OperatorPage(
         page.items().stream().map(InstanceController::viewOf).toList(), page.nextCursor());
   }

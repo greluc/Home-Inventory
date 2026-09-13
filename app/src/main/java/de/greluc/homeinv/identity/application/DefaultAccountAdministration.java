@@ -7,7 +7,6 @@ package de.greluc.homeinv.identity.application;
 import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
-import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import java.time.Clock;
 import java.time.Instant;
@@ -27,20 +26,19 @@ import org.springframework.transaction.annotation.Transactional;
  * That is the minimum until the audit log carries instance-level entries of its own: an
  * entitlement grant is the act that makes every later act possible, so an instance whose log cannot
  * say who granted what has no answer to the only question worth asking afterwards.
+ *
+ * <p><b>Nothing here signs anything</b>, and that is a constraint rather than an observation. The
+ * one-shot {@code bootstrap} service depends on this bean, and it runs with the database
+ * credentials alone — no URL signing key, because it serves no request. The paged operator listing
+ * therefore lives in {@link DefaultOperatorDirectory}, which does need one; {@code BootstrapIsolationTest}
+ * fails the build if this chain ever reaches a secret the one-shot is not given.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class DefaultAccountAdministration implements AccountAdministration {
 
-  /** The cap REQ-NFR-010 puts on every page of every collection. */
-  private static final int MAX_PAGE = 200;
-
-  /** What an operator cursor is bound to, so it cannot be replayed against another listing. */
-  private static final String CURSOR = "instance-operators";
-
   private final AppUserRepository users;
-  private final CursorCodec cursors;
   private final Clock clock;
 
   @Override
@@ -57,23 +55,8 @@ public class DefaultAccountAdministration implements AccountAdministration {
 
   @Override
   @Transactional(readOnly = true)
-  public OperatorPage operators(String cursor, int limit) {
-    int size = Math.clamp(limit, 1, MAX_PAGE);
-    List<AppUser> rows;
-    if (cursor == null || cursor.isBlank()) {
-      rows = users.findInstanceOperators(Limit.of(size));
-    } else {
-      CursorCodec.Position from = cursors.decode(cursor, CURSOR);
-      rows = users.findInstanceOperatorsAfter(from.createdAt(), from.id(), Limit.of(size));
-    }
-
-    String next = null;
-    if (rows.size() == size) {
-      AppUser last = rows.getLast();
-      next = cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), CURSOR);
-    }
-    return new OperatorPage(
-        rows.stream().map(DefaultAccountAdministration::viewOf).toList(), next);
+  public boolean hasInstanceOperator() {
+    return !users.findInstanceOperators(Limit.of(1)).isEmpty();
   }
 
   @Override

@@ -181,7 +181,7 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 |---|---|
 | Schema | `identity` |
 | Key notions | `User`, `Credential` (password/TOTP/passkey), `Session`, `RefreshToken`, `ServiceAccount`, `IdentityProvider` |
-| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else) |
+| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else), `OperatorDirectory` (the paged listing of operators, its own port because paging signs a cursor and the one-shot `bootstrap` service is given no signing key), `AccountRegistry` implemented for `tenancy` |
 | Outbound ports | `PasswordHasher` (Argon2id, in-core) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
 | Events | `UserRegistered`, `UserDeactivated`, `CredentialChanged`, `SuspiciousLoginDetected` |
 | Notable | Knows **no** tenants and **no** permissions. Who someone is and what someone may do are separate questions. The account nevertheless carries three **instance-level** facts — `instance_operator`, `may_create_tenants` and `tenant_limit` ([ADR-0057](../adr/0057-the-instance-operator.md)) — and they are not a contradiction: nothing here evaluates them. This block stores them, `authorization` answers with them through the `AccountEntitlements` port, and no tenant can grant one. |

@@ -4,7 +4,6 @@
  */
 package de.greluc.homeinv.identity.api;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -69,25 +68,17 @@ public interface AccountAdministration {
   Optional<AccountView> byId(UUID userId);
 
   /**
-   * One page of the accounts that administer the instance.
+   * Whether anybody administers this instance at all.
    *
-   * <p>The answer to "who can do this to us", which an operator and an auditor both ask. Paged like
-   * every other collection this application answers with (REQ-NFR-010): an instance is unlikely to
-   * have two pages of operators, and "unlikely" is not a bound.
+   * <p>A yes-or-no rather than a listing, and that is not a convenience. The one-shot
+   * {@code bootstrap} service asks it, and it runs with the database credentials and nothing else —
+   * no URL signing key, because it serves no request and signs no cursor. Reaching the answer
+   * through the paged listing would make the bootstrap depend on a secret it is deliberately not
+   * given, which is how it failed to start on 2026-09-13.
    *
-   * @param cursor an opaque cursor from a previous page, or null for the first
-   * @param limit how many at most, capped at 200
-   * @return the page, oldest account first, with a cursor when there is more
+   * @return {@code true} when at least one live account holds {@code INSTANCE_OPERATOR}
    */
-  OperatorPage operators(String cursor, int limit);
-
-  /**
-   * One page of operators.
-   *
-   * @param items the accounts
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  record OperatorPage(List<AccountView> items, String nextCursor) {}
+  boolean hasInstanceOperator();
 
   /**
    * Replaces what an account is entitled to do on the instance.

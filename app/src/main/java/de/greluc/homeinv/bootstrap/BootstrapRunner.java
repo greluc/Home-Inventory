@@ -134,7 +134,7 @@ public class BootstrapRunner implements ApplicationRunner {
    * else gets it handed back to the bootstrap address on the next redeploy, silently, forever.
    */
   private void restoreOperatorIfNoneIsLeft() {
-    if (!accounts.operators(null, 1).items().isEmpty()) {
+    if (accounts.hasInstanceOperator()) {
       log.info("This instance already has its owner; nothing to do.");
       return;
     }
