@@ -52,7 +52,7 @@ Date: YYYY-MM-DD
 | [0028](0028-plugin-runtime-stage-1.md) | The plugin runtime moves to stage 1 | Accepted |
 | [0029](0029-session-cookie-and-oidc-state.md) | `SameSite=Strict` stays; code resolution and OIDC state are decoupled | Accepted |
 | [0030](0030-public-code-format.md) | The public code: 10 payload characters and a Damm check symbol | Accepted |
-| [0031](0031-audit-chain-per-tenant.md) | The audit chain runs per tenant and is anchored in time | Accepted, amended by 0046 |
+| [0031](0031-audit-chain-per-tenant.md) | The audit chain runs per tenant and is anchored in time | Accepted, amended by 0046, 0063 |
 | [0032](0032-per-tenant-blob-addressing.md) | Blobs are content-addressed within a tenant, never across | Accepted |
 | [0033](0033-dark-as-default-appearance.md) | Dark is the default appearance, on every platform | Accepted, amended by 0038 |
 | [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted |
@@ -84,3 +84,4 @@ Date: YYYY-MM-DD
 | [0060](0060-the-erasure-runs-in-one-pass.md) | A tenant erasure is one ordered pass in the worker, not a choreography | Accepted |
 | [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
+| [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |

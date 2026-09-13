@@ -35,8 +35,8 @@ docs/adr/0029-session-cookie-and-oidc-state.md:53:cannot
 docs/adr/0030-public-code-format.md:105:guarantees
 docs/adr/0030-public-code-format.md:46:cannot
 docs/adr/0030-public-code-format.md:99:impossible
-docs/adr/0031-audit-chain-per-tenant.md:42:cannot
-docs/adr/0031-audit-chain-per-tenant.md:55:cannot
+docs/adr/0031-audit-chain-per-tenant.md:52:cannot
+docs/adr/0031-audit-chain-per-tenant.md:65:cannot
 docs/adr/0034-icon-set-and-no-third-party-hosts.md:22:enforces
 docs/adr/0034-icon-set-and-no-third-party-hosts.md:88:enforces
 docs/adr/0035-design-system.md:180:enforced
@@ -57,8 +57,8 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:476:enforced
-docs/architecture/04-building-blocks.md:481:enforced
+docs/architecture/04-building-blocks.md:477:enforced
+docs/architecture/04-building-blocks.md:482:enforced
 docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot

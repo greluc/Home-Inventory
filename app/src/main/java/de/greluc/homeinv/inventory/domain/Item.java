@@ -385,6 +385,54 @@ public class Item {
   }
 
   /**
+   * Puts the item in another place.
+   *
+   * <p>Only the place, so that a move cannot carry an edit with it. {@link #update} is what changes
+   * anything else, and a bulk move (REQ-CORE-011) has nothing else to send.
+   *
+   * @param locationId the new place; must not be null
+   * @param actor the user making the change
+   * @param now the instant of the change
+   * @throws IllegalArgumentException when the item is digital, which resides nowhere, or when no
+   *     place is named
+   */
+  public void movedTo(UUID locationId, UUID actor, Instant now) {
+    if (this.kind != ItemKind.PHYSICAL) {
+      throw new IllegalArgumentException("A digital item has no location to move between");
+    }
+    if (locationId == null) {
+      throw new IllegalArgumentException("A physical item resides in exactly one location");
+    }
+    this.locationId = locationId;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Writes the item against another type version (REQ-CORE-011).
+   *
+   * <p>The two move together and cannot be set apart: a type version and the attribute set written
+   * against it are one fact, and an item holding the version of one and the values of another would
+   * fail validation from then on with nothing to point at. Which values survive the change is the
+   * caller's decision and is made before this is called.
+   *
+   * @param typeVersionId the published version of the new type
+   * @param attributes the carried-over attribute set, already validated and sealed by the caller
+   * @param actor the user making the change
+   * @param now the instant of the change
+   * @throws IllegalArgumentException when no version is named
+   */
+  public void changedType(UUID typeVersionId, String attributes, UUID actor, Instant now) {
+    if (typeVersionId == null) {
+      throw new IllegalArgumentException("An item is always written against a type version");
+    }
+    this.itemTypeVersionId = typeVersionId;
+    this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
    * Records what the item cost, what covers it and what replacing it would cost.
    *
    * <p>Whole, never in part: an update sends the three figures it means the item to have, and one

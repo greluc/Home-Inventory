@@ -5,6 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.audit.api.RevisionLog;
+import de.greluc.homeinv.inventory.api.BulkItemOperations;
 import de.greluc.homeinv.inventory.api.ItemBundles;
 import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.authorization.api.Permission;
@@ -26,9 +27,13 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.net.URI;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -66,6 +71,7 @@ public class ItemController {
   private final ItemService items;
   private final ItemRelations relations;
   private final ItemBundles bundles;
+  private final BulkItemOperations bulk;
 
   /**
    * The mapper the request body is re-serialised with, for an {@code Idempotency-Key}'s hash.
@@ -128,6 +134,219 @@ public class ItemController {
     }
     return ResponseEntity.created(URI.create("/api/v1/items/" + view.id())).body(view);
   }
+
+  /**
+   * Applies one change to many items (REQ-CORE-011).
+   *
+   * <p>Up to 500 entries, each with an outcome of its own. The status code says whether anything
+   * failed and the body says what: {@code 200} when every entry was applied, {@code 207} when at
+   * least one was not (08 §8.2, decided with the owner 2026-09-13). A client that only wants to
+   * know whether to re-read its list reads the code; one that wants to tell a person what happened
+   * reads the body.
+   *
+   * <p>The permission on this handler is deliberately the weakest one: the path serves four
+   * operations and an annotation is a constant, so what actually gates the change is the
+   * application layer, which requires {@code inventory:item:update},
+   * {@code tagging:tag:assign} or {@code inventory:item:delete} depending on the operation
+   * (ADR-0010).
+   *
+   * @param request the operation, its target and the items
+   * @param user the authenticated caller
+   * @return one status line per entry, in the order they were sent
+   */
+  @PostMapping(path = "/bulk", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @ApiResponse(
+      responseCode = "200",
+      description = "Every entry was applied.",
+      content = @Content(schema = @Schema(implementation = BulkResponse.class)))
+  @ApiResponse(
+      responseCode = "207",
+      description = "At least one entry was not applied; each entry says what became of it.",
+      content = @Content(schema = @Schema(implementation = BulkResponse.class)))
+  public ResponseEntity<BulkResponse> bulkChangeItems(
+      @Valid @RequestBody BulkRequest request, @AuthenticationPrincipal AuthenticatedUser user) {
+
+    BulkItemOperations.BulkCommand command =
+        new BulkItemOperations.BulkCommand(
+            request.operation(),
+            request.locationId(),
+            request.tagId(),
+            request.itemTypeId(),
+            request.entries().stream().map(entry -> asEntry(request, entry)).toList());
+
+    BulkItemOperations.BulkOutcome outcome = bulk.apply(command, user.userId());
+    BulkResponse body =
+        new BulkResponse(outcome.entries().stream().map(ItemController::statusLine).toList());
+    return ResponseEntity.status(outcome.complete() ? HttpStatus.OK : HttpStatus.MULTI_STATUS)
+        .body(body);
+  }
+
+  /**
+   * Turns one requested entry into the one the application layer takes.
+   *
+   * @param request the whole call, for what the entry's key is spent on
+   * @param entry the entry as it arrived
+   * @return the entry, with its version and key in their absent-value forms
+   */
+  private BulkItemOperations.Entry asEntry(BulkRequest request, BulkEntryRequest entry) {
+    return new BulkItemOperations.Entry(
+        entry.itemId(),
+        entry.version() == null ? OptionalLong.empty() : OptionalLong.of(entry.version()),
+        entry.idempotencyKey() == null || entry.idempotencyKey().isBlank()
+            ? Optional.empty()
+            : Optional.of(
+                IdempotencyKeys.of(
+                    entry.idempotencyKey(),
+                    // What the key is spent on: this operation, this target, this
+                    // item. The same key sent later for a different change is then
+                    // a conflict rather than a change nobody asked for twice.
+                    new BulkEntryFingerprint(
+                        request.operation().name(),
+                        request.locationId(),
+                        request.tagId(),
+                        request.itemTypeId(),
+                        entry.itemId()),
+                    json)));
+  }
+
+  /**
+   * One entry's outcome as a status line.
+   *
+   * <p>The fields are those of an RFC 9457 problem, so a client already parsing errors can parse
+   * these too. What they are not is a problem document: the response as a whole succeeded, the
+   * media type is {@code application/json}, and there is one {@code traceId} for the request rather
+   * than one per entry.
+   *
+   * @param outcome what the application layer reported
+   * @return the line for this entry
+   */
+  private static BulkEntryStatus statusLine(BulkItemOperations.EntryOutcome outcome) {
+    if (outcome.applied()) {
+      return new BulkEntryStatus(outcome.itemId(), HttpStatus.OK.value(), null, null, null);
+    }
+    ProblemType type = problemFor(outcome.failure());
+    return new BulkEntryStatus(
+        outcome.itemId(),
+        type.status().value(),
+        type.uri().toString(),
+        type.title(),
+        detailFor(outcome.failure(), type));
+  }
+
+  /**
+   * Which registered condition an entry's failure is.
+   *
+   * <p>Six cases, and they are the six these four operations can raise. This is not a second copy
+   * of {@link ApiExceptionHandler}: that advice answers a whole request and has a
+   * {@code HttpServletRequest} to build an {@code instance} from, and an entry has neither.
+   *
+   * @param failure what the entry raised
+   * @return the type whose status and title describe it
+   */
+  private static ProblemType problemFor(RuntimeException failure) {
+    return switch (failure) {
+      case de.greluc.homeinv.platform.NotFoundException ignored -> ProblemType.NOT_FOUND;
+      case de.greluc.homeinv.authorization.api.AccessDeniedException ignored ->
+          ProblemType.FORBIDDEN;
+      case de.greluc.homeinv.platform.StaleVersionException ignored ->
+          ProblemType.PRECONDITION_FAILED;
+      case de.greluc.homeinv.catalog.api.InvalidAttributesException ignored ->
+          ProblemType.VALIDATION_FAILED;
+      case de.greluc.homeinv.idempotency.api.IdempotencyKeyConflictException ignored ->
+          ProblemType.IDEMPOTENCY_KEY_CONFLICT;
+      case IllegalArgumentException ignored -> ProblemType.VALIDATION_FAILED;
+      default -> ProblemType.INTERNAL_ERROR;
+    };
+  }
+
+  /**
+   * What the entry's line says in prose.
+   *
+   * <p>Never the exception of a failure nobody planned for: that text can carry a class name, a
+   * path or a fragment of SQL, and 08 §8.2 forbids all three in an error. The log line has it,
+   * and the response has the {@code traceId} that finds the log line.
+   *
+   * @param failure what the entry raised
+   * @param type what it was classified as
+   * @return the detail for this entry's line
+   */
+  private static String detailFor(RuntimeException failure, ProblemType type) {
+    if (type == ProblemType.INTERNAL_ERROR) {
+      return Problems.INTERNAL_DETAIL;
+    }
+    if (failure instanceof de.greluc.homeinv.platform.NotFoundException absent) {
+      return "No such " + absent.getResource() + " is visible to you.";
+    }
+    if (failure instanceof de.greluc.homeinv.authorization.api.AccessDeniedException) {
+      return "Your role does not permit this operation.";
+    }
+    return failure.getMessage();
+  }
+
+  /**
+   * One change, its target, and the items it applies to.
+   *
+   * @param operation which of the four
+   * @param locationId where a move puts them
+   * @param tagId what a tag assignment assigns
+   * @param itemTypeId the type a change of type writes them against
+   * @param entries the items, at most 500
+   */
+  public record BulkRequest(
+      @NotNull BulkItemOperations.Operation operation,
+      UUID locationId,
+      UUID tagId,
+      UUID itemTypeId,
+      @NotEmpty @Size(min = 1, max = 500) List<@Valid BulkEntryRequest> entries) {}
+
+  /**
+   * One item in a bulk call.
+   *
+   * @param itemId the item
+   * @param version the version the caller acted on, from the {@code ETag} of its last read, or
+   *     {@code null} to skip the check for this entry. In the body and not in {@code If-Match},
+   *     because a header cannot carry 500 of them
+   * @param idempotencyKey this entry's own key, or {@code null}. In the body for the same reason
+   */
+  public record BulkEntryRequest(
+      @NotNull UUID itemId,
+      @PositiveOrZero Long version,
+      @Size(max = 255) String idempotencyKey) {}
+
+  /**
+   * What an entry's idempotency key is spent on.
+   *
+   * <p>Hashed, never sent or stored as it stands. It exists so that one key cannot be spent moving
+   * an item and then accepted as having deleted it.
+   *
+   * @param operation the operation's name
+   * @param locationId a move's target, or null
+   * @param tagId a tag assignment's target, or null
+   * @param itemTypeId a change of type's target, or null
+   * @param itemId the item this entry names
+   */
+  private record BulkEntryFingerprint(
+      String operation, UUID locationId, UUID tagId, UUID itemTypeId, UUID itemId) {}
+
+  /**
+   * What became of every entry.
+   *
+   * @param entries one line per entry, in the order they were sent
+   */
+  public record BulkResponse(List<BulkEntryStatus> entries) {}
+
+  /**
+   * What became of one entry.
+   *
+   * @param itemId the item this line is about
+   * @param status the status this entry would have had as a request of its own
+   * @param type the problem type URI, or {@code null} when the entry was applied
+   * @param title the stable name of the condition, or {@code null} when the entry was applied
+   * @param detail what went wrong in prose, or {@code null} when nothing did
+   */
+  public record BulkEntryStatus(
+      UUID itemId, int status, String type, String title, String detail) {}
 
   /**
    * Reads one item.

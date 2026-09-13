@@ -133,6 +133,14 @@ commit".
 
 ### Added
 
+- **Five hundred items at a time.** Pick items in a list and move them, put a tag
+  on them, write them against another type or delete them, in one call. Each item
+  gets its own answer: one that somebody else has deleted in the meantime is
+  reported on its own line and the rest still happen. A change of type keeps the
+  values the new type has a field for and the revision keeps the others.
+  *REST API: additive — `POST /api/v1/items/bulk`, which answers `207` when an
+  entry failed.*
+
 - **An item records what it cost, what covers it and what replacing it would
   cost.** Purchase price with its date and where it came from, a warranty that
   either ends on a day or lasts for life, a replacement value with the day it was
@@ -504,7 +512,7 @@ commit".
 - A requirements catalogue with 426 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 63 architecture decision records, each with its alternatives and consequences —
+- 64 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

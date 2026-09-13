@@ -67,6 +67,56 @@ public interface ItemService {
       UUID id, UpdateItemCommand command, OptionalLong expectedVersion, UUID actor);
 
   /**
+   * Puts an item in another place.
+   *
+   * <p>A use case of its own rather than an {@link #update} carrying the other eight fields
+   * unchanged. A caller that has to resend a name in order to move something is a caller that can
+   * overwrite a name it never meant to touch, and a bulk move (REQ-CORE-011) has no name to resend
+   * in the first place.
+   *
+   * <p>There is no REST path of its own: moving one item is an ordinary {@code PUT}, and this is
+   * what {@code POST /api/v1/items/bulk} calls per entry.
+   *
+   * @param id the item
+   * @param locationId where it goes; must be a place this session may see
+   * @param expectedVersion the version the caller acted on; empty skips the check (REQ-API-004)
+   * @param actor the authenticated user
+   * @return the item, in its new place
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant has no such live item, or
+   *     when the place is outside the subtree this session is confined to (REQ-TEN-007)
+   * @throws IllegalArgumentException when the item is digital, which has no place to be in
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
+   */
+  ItemView move(UUID id, UUID locationId, OptionalLong expectedVersion, UUID actor);
+
+  /**
+   * Writes an item against another type (REQ-CORE-011).
+   *
+   * <p>The TYPE and not one of its versions: the version published today is the server's to
+   * resolve, exactly as on creation (REQ-CORE-025). An item already on that type is left alone and
+   * the call succeeds, so a selection that mixes types can be given one type in a single pass.
+   *
+   * <p>What happens to the attributes was decided with the owner on 2026-09-13: a value whose key
+   * the new type declares <b>with the same data type</b> is carried over, and everything else is
+   * dropped. Nothing is lost by it — the revision the change writes holds the whole earlier set,
+   * and 04 §4.2 says a revision is what makes that true. A carried-over value the new type refuses
+   * fails the call instead, because a caller who is told "invalid" can fix it and a caller whose
+   * value silently vanished cannot.
+   *
+   * @param id the item
+   * @param itemTypeId the type it is to be written against
+   * @param expectedVersion the version the caller acted on; empty skips the check (REQ-API-004)
+   * @param actor the authenticated user
+   * @return the item, on its new type version
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant has no such live item, or
+   *     no such type
+   * @throws de.greluc.homeinv.catalog.api.InvalidAttributesException when what is carried over does
+   *     not satisfy the new version
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
+   */
+  ItemView changeType(UUID id, UUID itemTypeId, OptionalLong expectedVersion, UUID actor);
+
+  /**
    * Deletes an item, leaving a tombstone.
    *
    * <p>Idempotent: deleting an already deleted item succeeds quietly, because a client retrying a

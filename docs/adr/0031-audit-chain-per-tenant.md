@@ -11,6 +11,16 @@
 > the anchor chain is still unbroken; what changes is that a *recorded* truncation is
 > distinguishable from an unexplained gap.
 
+> **Amended by [ADR-0063](0063-bulk-is-a-transaction-per-entry.md):** the *Batching* row no
+> longer covers a bulk operation. `REQ-CORE-011` requires partial success, which on JPA is
+> only a transaction per entry — savepoints are not available to a Hibernate-backed
+> transaction manager, and a participating rollback sets `EntityTransaction.setRollbackOnly()`
+> irreversibly. So a bulk call of 500 entries takes 500 chained runs and 500 acquisitions of
+> that tenant's lock, and the consequence below claiming "one lock instead of 500" no longer
+> describes it. The rule still holds for a transaction that genuinely produces several
+> entries, and what this ADR was chosen to avoid — serialising tenants against one another
+> — is untouched.
+
 ## Context
 
 `REQ-SEC-070` and [07 §7.8](../architecture/07-data-model.md) require that every

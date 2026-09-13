@@ -53,22 +53,45 @@ public final class IdempotencyKeys {
     if (header == null || header.isBlank()) {
       return Optional.empty();
     }
-    String key = header.trim();
-    if (key.length() > MAX_LENGTH) {
+    return Optional.of(of(header, body, json));
+  }
+
+  /**
+   * A key that did not arrive in a header, with the hash of what it is spent on.
+   *
+   * <p>For {@code POST /api/v1/items/bulk}, where each entry carries its own key (08 §8.2). A
+   * header cannot express 500 of them, so they travel in the body — and they are checked exactly
+   * as a header would be, because what is stored, compared and logged is the same column either
+   * way.
+   *
+   * @param key the key the entry carried
+   * @param fingerprint what this key is spent on — for an entry, the operation, its target and
+   *     the item, so the same key sent later for a different change is a conflict rather than a
+   *     second change
+   * @param json the mapper, for the canonical form that is hashed
+   * @return the key and the hash
+   * @throws IllegalArgumentException when the key is not usable as one
+   */
+  public static RequestKey of(String key, Object fingerprint, ObjectMapper json) {
+    String trimmed = key.trim();
+    if (trimmed.isEmpty()) {
+      throw new IllegalArgumentException("An idempotency key must not be blank.");
+    }
+    if (trimmed.length() > MAX_LENGTH) {
       throw new IllegalArgumentException(
           "Idempotency-Key is longer than " + MAX_LENGTH + " characters.");
     }
-    for (int index = 0; index < key.length(); index++) {
+    for (int index = 0; index < trimmed.length(); index++) {
       // Printable ASCII only. Not fussiness: the value is stored, compared and
       // logged, and a control character in any of those is somebody else's bug
       // report. A UUID — what a client should send — is well inside this.
-      char character = key.charAt(index);
+      char character = trimmed.charAt(index);
       if (character < 0x21 || character > 0x7e) {
         throw new IllegalArgumentException(
             "Idempotency-Key may only contain printable ASCII without spaces.");
       }
     }
-    return Optional.of(new RequestKey(key, sha256(json.writeValueAsString(body))));
+    return new RequestKey(trimmed, sha256(json.writeValueAsString(fingerprint)));
   }
 
   /**

@@ -121,6 +121,93 @@ components:
           format: int64
           type: integer
       type: object
+    BulkEntryRequest:
+      description: One item in a bulk call.
+      properties:
+        idempotencyKey:
+          description: this entry's own key, or `null`. In the body for the same reason
+          maxLength: 255
+          minLength: 0
+          type: string
+        itemId:
+          description: the item
+          format: uuid
+          type: string
+        version:
+          description: |-
+            the version the caller acted on, from the `ETag` of its last read, or
+            `null` to skip the check for this entry. In the body and not in `If-Match`,
+            because a header cannot carry 500 of them
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+      - itemId
+      type: object
+    BulkEntryStatus:
+      description: What became of one entry.
+      properties:
+        detail:
+          description: what went wrong in prose, or `null` when nothing did
+          type: string
+        itemId:
+          description: the item this line is about
+          format: uuid
+          type: string
+        status:
+          description: the status this entry would have had as a request of its own
+          format: int32
+          type: integer
+        title:
+          description: the stable name of the condition, or `null` when the entry was applied
+          type: string
+        type:
+          description: the problem type URI, or `null` when the entry was applied
+          type: string
+      type: object
+    BulkRequest:
+      description: One change, its target, and the items it applies to.
+      properties:
+        entries:
+          description: the items, at most 500
+          items:
+            $ref: '#/components/schemas/BulkEntryRequest'
+          maxItems: 500
+          minItems: 1
+          type: array
+        itemTypeId:
+          description: the type a change of type writes them against
+          format: uuid
+          type: string
+        locationId:
+          description: where a move puts them
+          format: uuid
+          type: string
+        operation:
+          description: which of the four
+          enum:
+          - MOVE
+          - TAG
+          - CHANGE_TYPE
+          - DELETE
+          type: string
+        tagId:
+          description: what a tag assignment assigns
+          format: uuid
+          type: string
+      required:
+      - entries
+      - operation
+      type: object
+    BulkResponse:
+      description: What became of every entry.
+      properties:
+        entries:
+          description: one line per entry, in the order they were sent
+          items:
+            $ref: '#/components/schemas/BulkEntryStatus'
+          type: array
+      type: object
     BundleMemberPage:
       description: One page of memberships.
       properties:
@@ -5790,6 +5877,98 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Creates an item, or returns the one that is already there
+  /api/v1/items/bulk:
+    post:
+      description: |-
+        Applies one change to many items (REQ-CORE-011).
+
+        Up to 500 entries, each with an outcome of its own. The status code says whether anything
+        failed and the body says what: `200` when every entry was applied, `207` when at
+        least one was not (08 §8.2, decided with the owner 2026-09-13). A client that only wants to
+        know whether to re-read its list reads the code; one that wants to tell a person what happened
+        reads the body.
+
+        The permission on this handler is deliberately the weakest one: the path serves four
+        operations and an annotation is a constant, so what actually gates the change is the
+        application layer, which requires `inventory:item:update`,
+        `tagging:tag:assign` or `inventory:item:delete` depending on the operation
+        (ADR-0010).
+      operationId: bulkChangeItems
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRequest'
+        description: the operation, its target and the items
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResponse'
+          description: Every entry was applied.
+        '207':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResponse'
+          description: At least one entry was not applied; each entry says what became of it.
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Applies one change to many items (REQ-CORE-011)
   /api/v1/items/trash:
     get:
       description: One page of the tenant's trashed items (REQ-CORE-009).

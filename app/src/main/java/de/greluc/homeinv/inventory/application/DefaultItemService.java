@@ -326,14 +326,14 @@ public class DefaultItemService implements ItemService {
   /**
    * Changes an item.
    *
-   * <p>Stage 0 has no concurrency control on the wire: {@code ETag}/{@code If-Match} is
-   * {@code REQ-API-004} and reads stage 1, so there is no header in which a client could tell the
-   * server which version it was editing. The {@code version} column is nevertheless maintained —
-   * {@code 07 §7.1} requires it on every domain table, and stage 1 turns it into the entity tag
-   * without a migration.
+   * <p>{@code expectedVersion} is what the caller's {@code If-Match} carried, and the check is
+   * {@link Versions#requireCurrent}: the {@code version} column 07 §7.1 requires on every domain
+   * table is the entity tag (REQ-API-004). Empty skips it, which is what an internal caller with no
+   * screen to go stale passes.
    *
    * @param id the item
    * @param command the new values
+   * @param expectedVersion the version the caller acted on, or empty
    * @param actor the authenticated user
    * @return the changed item
    * @throws NotFoundException when the tenant has no such live item
@@ -394,6 +394,156 @@ public class DefaultItemService implements ItemService {
               tenantId, id, item.getQuantity(), item.getMinimumStock()));
     }
     return toView(item);
+  }
+
+  /**
+   * Puts an item in another place.
+   *
+   * @param id the item
+   * @param locationId where it goes
+   * @param expectedVersion the version the caller acted on, or empty
+   * @param actor the authenticated user
+   * @return the item, in its new place
+   * @throws NotFoundException when the tenant has no such live item, or when the place lies outside
+   *     the subtree this session is confined to
+   */
+  @Transactional
+  @Override
+  public ItemView move(UUID id, UUID locationId, OptionalLong expectedVersion, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+    requireInScope(locationId);
+
+    item.movedTo(locationId, actor, Instant.now(clock));
+    items.flush();
+    // No projection: the side table mirrors attribute values, and a move changes
+    // none of them. The revision is written because 04 §4.2 says every change is
+    // one -- a move that left no trace would be the one edit nobody could undo.
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
+    log.debug("Item {} moved to location {} in tenant {}", id, locationId, tenantId);
+    return toView(item);
+  }
+
+  /**
+   * Writes an item against another type (REQ-CORE-011).
+   *
+   * @param id the item
+   * @param itemTypeId the type it is to be written against
+   * @param expectedVersion the version the caller acted on, or empty
+   * @param actor the authenticated user
+   * @return the item, on its new type version
+   * @throws NotFoundException when the tenant has no such live item, or no such type
+   */
+  @Transactional
+  @Override
+  public ItemView changeType(UUID id, UUID itemTypeId, OptionalLong expectedVersion, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+
+    UUID target = types.publishedItemTypeVersion(itemTypeId);
+    if (target.equals(item.getItemTypeVersionId())) {
+      // Already there. Not an error: a selection spanning three types is given one
+      // type in a single pass, and the entries that were already on it are the
+      // reason a person pressed the button rather than a reason to refuse.
+      return toView(item);
+    }
+
+    // Merge, validate, seal -- the order AttributeSealing lays down, and the same
+    // three calls the ordinary edit makes. What differs is the document going in:
+    // not what a caller sent, but what survives the change of type.
+    String attributes =
+        sealing.sealed(
+            target,
+            id,
+            validated(
+                target,
+                sealing.merged(
+                    target,
+                    id,
+                    carriedOver(item.getItemTypeVersionId(), target, item.getAttributes()),
+                    item.getAttributes())));
+
+    item.changedType(target, attributes, actor, Instant.now(clock));
+    items.flush();
+    projector.project(id, target, attributes);
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
+    log.debug("Item {} written against type version {} in tenant {}", id, target, tenantId);
+    return toView(item);
+  }
+
+  /**
+   * The attributes that survive a change of type.
+   *
+   * <p>A value is carried over when the new version declares the same key with the same data type,
+   * and dropped otherwise (decided with the owner, 2026-09-13). Same key alone is not enough: a
+   * {@code quantity} that became a {@code text} would carry a number into a field that reads
+   * strings, and the validation would refuse the whole item for a reason nobody could act on.
+   *
+   * <p>One further case is dropped rather than carried: a field the old version marked
+   * {@code sensitive} and the new one does not. What is stored for such a field is ciphertext
+   * (ADR-0019), and leaving it in a field that is no longer sealed would write the ciphertext into
+   * the database as though it were the value -- unreadable, and indistinguishable from a value.
+   *
+   * @param fromVersionId the version the item is written against now
+   * @param toVersionId the version it is to be written against
+   * @param attributes what is stored, sealed values included
+   * @return the subset to validate against the new version, as JSON text
+   */
+  private String carriedOver(UUID fromVersionId, UUID toVersionId, String attributes) {
+    if (attributes == null || attributes.isBlank()) {
+      return "{}";
+    }
+    if (!(json.readTree(attributes)
+        instanceof tools.jackson.databind.node.ObjectNode stored)) {
+      return "{}";
+    }
+    java.util.Map<String, de.greluc.homeinv.catalog.api.FieldDefinitionView> before =
+        fieldsByKey(fromVersionId);
+    java.util.Map<String, de.greluc.homeinv.catalog.api.FieldDefinitionView> after =
+        fieldsByKey(toVersionId);
+
+    tools.jackson.databind.node.ObjectNode carried = json.createObjectNode();
+    stored
+        .properties()
+        .forEach(
+            entry -> {
+              de.greluc.homeinv.catalog.api.FieldDefinitionView was = before.get(entry.getKey());
+              de.greluc.homeinv.catalog.api.FieldDefinitionView is = after.get(entry.getKey());
+              if (was == null || is == null || was.dataType() != is.dataType()) {
+                return;
+              }
+              if (was.sensitive() && !is.sensitive()) {
+                return;
+              }
+              carried.set(entry.getKey(), entry.getValue());
+            });
+    return json.writeValueAsString(carried);
+  }
+
+  /**
+   * A version's field definitions, by key.
+   *
+   * @param typeVersionId the version
+   * @return the definitions, keyed by the attribute key they describe
+   */
+  private java.util.Map<String, de.greluc.homeinv.catalog.api.FieldDefinitionView> fieldsByKey(
+      UUID typeVersionId) {
+    return types.fields(typeVersionId).stream()
+        .collect(
+            java.util.stream.Collectors.toMap(
+                de.greluc.homeinv.catalog.api.FieldDefinitionView::key, field -> field));
   }
 
   /**
