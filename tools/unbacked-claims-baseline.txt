@@ -57,8 +57,8 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:465:enforced
-docs/architecture/04-building-blocks.md:470:enforced
+docs/architecture/04-building-blocks.md:466:enforced
+docs/architecture/04-building-blocks.md:471:enforced
 docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot

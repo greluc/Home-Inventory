@@ -229,12 +229,13 @@ carry. Configurable while running.
 |---|---|
 | Schema | `catalog` |
 | Key notions | `ItemType`, `LocationCategory`, `FieldDefinition`, `FieldGroup`, `TypeVersion`, `ValueList` |
-| Publishes | `TypeRegistry`, `AttributeValidator.validate(typeId, attributes) → ValidationResult`, `FieldDefinitionView` |
+| Publishes | `TypeRegistry`, `AttributeValidator.validate(typeId, attributes) → ValidationResult`, `FieldDefinitionView`, `TypeAdministration` (the editor of REQ-CORE-020) |
+| Outbound ports | `AttributeUsage` — how many rows carry a value under one field key, and the removal of those values. Declared here and implemented by `inventory` and `locations`, because both already depend on this block and a call in the other direction would close a cycle (REQ-CORE-026) |
 | Events | `TypeCreated`, `TypeVersionPublished`, `FieldAdded`, `FieldDeprecated`, `FieldSearchabilityChanged` |
 | Field data types | `text`, `multiline`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `enum`, `multi-enum`, `url`, `email`, `quantity` (value + unit), `reference` (to item/location/value list), `secret` (encrypted, see [ADR-0019](../adr/0019-sensitive-field-encryption.md)), `file` |
 | Field properties | Key, label (multilingual), required, default, unit, range/regex, help text, visibility rule, `searchable`, `sortable`, `facetable`, `sensitive`, order, group |
-| Inheritance | Types form a tree. `Book` inherits from `Medium` inherits from `Item`. An inherited field may be tightened (required, narrower range) but not loosened. |
-| Versioning | Types are versioned. Removing a field marks it `deprecated` and hides it; the data stays. Actual deletion is a separate, logged administrative operation with a preview of the affected set. |
+| Inheritance | Types form a tree. `Book` inherits from `Medium` inherits from `Item`. An inherited field may be tightened (required, narrower range) but not loosened. The parent's fields are **copied into the child at publication**, so a published version is a complete snapshot and a later change to the parent reaches nothing already written (decided 2026-09-13). |
+| Versioning | Types are versioned, and a version is a **draft until it is published**. Fields are added and changed on the draft; publishing materialises what the type inherits, generates the schema and freezes it, and anything already written keeps the version it named. Removing a field marks it `deprecated` and hides it; the data stays. Actual deletion is a separate, logged administrative operation with a preview of the affected set. |
 | Notable | Generates a **JSON Schema (draft 2020-12)** per type version, validated at the API boundary and additionally shipped to clients — the same check offline as online. |
 
 ---

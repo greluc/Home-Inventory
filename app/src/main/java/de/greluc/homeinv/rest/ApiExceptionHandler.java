@@ -9,6 +9,7 @@ import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
@@ -106,6 +107,58 @@ public class ApiExceptionHandler {
         problem(ProblemType.RESOURCE_EXISTS, "An item with this id already exists in this tenant with different content.",
             request);
     problem.setProperty("id", exception.getId().toString());
+    return problem;
+  }
+
+  /**
+   * Answers a key a tenant has already used for the same kind of definition.
+   *
+   * @param exception the conflict, carrying the key
+   * @param request the request
+   * @return a {@code 409} problem detail naming the key
+   */
+  @ExceptionHandler(TypeAdministration.TypeKeyTakenException.class)
+  public ProblemDetail handleTypeKeyTaken(
+      TypeAdministration.TypeKeyTakenException exception, HttpServletRequest request) {
+    ProblemDetail problem = problem(ProblemType.TYPE_KEY_TAKEN, exception.getMessage(), request);
+    problem.setProperty("key", exception.getKey());
+    return problem;
+  }
+
+  /**
+   * Answers an edit to a published type version.
+   *
+   * <p>The version id travels back because there is exactly one useful next move — start a draft
+   * from it — and a client that was not told which version cannot offer it.
+   *
+   * @param exception the refusal, carrying the version
+   * @param request the request
+   * @return a {@code 409} problem detail naming the version
+   */
+  @ExceptionHandler(TypeAdministration.VersionFrozenException.class)
+  public ProblemDetail handleVersionFrozen(
+      TypeAdministration.VersionFrozenException exception, HttpServletRequest request) {
+    ProblemDetail problem = problem(ProblemType.VERSION_FROZEN, exception.getMessage(), request);
+    problem.setProperty("versionId", exception.getVersionId().toString());
+    return problem;
+  }
+
+  /**
+   * Answers a type that widens a field it inherits.
+   *
+   * <p>The field key is echoed back; the property that was widened is in the message, because a
+   * person reading "required" out of context learns nothing and the sentence says it plainly.
+   *
+   * @param exception the refusal, carrying the field
+   * @param request the request
+   * @return a {@code 422} problem detail naming the field
+   */
+  @ExceptionHandler(TypeAdministration.ConstraintLoosenedException.class)
+  public ProblemDetail handleConstraintLoosened(
+      TypeAdministration.ConstraintLoosenedException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(ProblemType.CONSTRAINT_LOOSENED, exception.getMessage(), request);
+    problem.setProperty("fieldKey", exception.getFieldKey());
     return problem;
   }
 

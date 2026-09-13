@@ -20,7 +20,7 @@
 # the application does, which is the line ADR-0020 draws.
 
 schemaVersion: 1
-updated: 2026-09-12
+updated: 2026-09-13
 
 # ---------------------------------------------------------------------------
 # PERMISSIONS
@@ -78,6 +78,43 @@ permissions:
     since: 0
     description: Detach or delete a media object.
 
+  - id: catalog:type:read
+    since: 1
+    description: >
+      Read the tenant's type system — types, location categories, their fields
+      and the JSON Schema of a version. Held by every role including the share
+      link: a client that cannot read the definitions cannot label the values it
+      is already showing, so withholding this hides nothing and breaks the form.
+  - id: catalog:type:create
+    since: 1
+    description: Create an item type or a location category.
+  - id: catalog:type:update
+    since: 1
+    description: >
+      Change a type, add a field, tighten an inherited one, publish a version.
+      The editing capability of REQ-CORE-020 — "without a release and without a
+      restart" — and therefore the one a tenant administrator is given and a
+      member is not.
+  - id: catalog:type:delete
+    since: 1
+    description: >
+      Archive a type, or finally remove a deprecated field. The second destroys
+      the values under that field, which is why REQ-CORE-026 makes it show the
+      affected set first and why it is not `catalog:type:update`.
+
+  - id: catalog:value-list:read
+    since: 1
+    description: Read a value list and its entries, which an enumeration field draws on.
+  - id: catalog:value-list:create
+    since: 1
+    description: Create a value list.
+  - id: catalog:value-list:update
+    since: 1
+    description: >
+      Add an entry, relabel one, or archive one. There is no delete: an entry an
+      item already carries may not be removed, for the reason ADR-0020 gives for
+      never dropping a field.
+
 # ---------------------------------------------------------------------------
 # BUILT-IN ROLES
 #
@@ -93,6 +130,8 @@ roles:
       - inventory:item:read
       - locations:location:read
       - media:object:read
+      - catalog:type:read
+      - catalog:value-list:read
 
   - name: VIEWER
     rationale: >
@@ -103,6 +142,8 @@ roles:
       - locations:location:read
       - media:object:read
       - search:index:query
+      - catalog:type:read
+      - catalog:value-list:read
 
   - name: CONTRIBUTOR
     rationale: >
@@ -118,6 +159,8 @@ roles:
       - media:object:read
       - media:object:create
       - search:index:query
+      - catalog:type:read
+      - catalog:value-list:read
 
   - name: MEMBER
     rationale: Everything a person working with the inventory needs.

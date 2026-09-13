@@ -45,7 +45,29 @@ public enum Permission {
   /** Upload a media object and attach it. */
   MEDIA_CREATE("media:object:create"),
   /** Detach or delete a media object. */
-  MEDIA_DELETE("media:object:delete");
+  MEDIA_DELETE("media:object:delete"),
+
+  /**
+   * Read the tenant's type system: types, categories, their fields and their schemas.
+   *
+   * <p>Held by every role, the share link included. A client cannot render an item's attributes
+   * without the definitions behind them, so withholding this would not hide the values — it would
+   * show them as unlabelled keys.
+   */
+  TYPE_READ("catalog:type:read"),
+  /** Create an item type or a location category. */
+  TYPE_CREATE("catalog:type:create"),
+  /** Change a type, add or tighten a field, publish a version. */
+  TYPE_UPDATE("catalog:type:update"),
+  /** Archive a type, or finally remove a deprecated field and the values under it. */
+  TYPE_DELETE("catalog:type:delete"),
+
+  /** Read the tenant's value lists, which an enumeration field draws on. */
+  VALUE_LIST_READ("catalog:value-list:read"),
+  /** Create a value list. */
+  VALUE_LIST_CREATE("catalog:value-list:create"),
+  /** Add an entry to a value list, relabel one, or archive one. */
+  VALUE_LIST_UPDATE("catalog:value-list:update");
 
   private final String id;
 

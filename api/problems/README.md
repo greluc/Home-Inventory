@@ -25,6 +25,9 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`not-found`](not-found.md) | `404` | assigned | The resource does not exist, **or** exists and is not visible to this caller. One token, deliberately, for both. |
 | [`idempotency-key-conflict`](idempotency-key-conflict.md) | `409` | assigned | The `Idempotency-Key` was already used with a **different** payload. The same key with the same payload returns the original response instead. |
 | [`resource-exists`](resource-exists.md) | `409` | assigned | A creating `POST` supplied an `id` that already exists in this tenant with **different** content. The same id with the same content returns `200` instead, which is what makes a retried creation safe. |
+| [`type-key-taken`](type-key-taken.md) | `409` | assigned | A key the tenant chose for a type, a location category, a field or a value is already in use for the same kind of thing. |
+| [`version-frozen`](version-frozen.md) | `409` | assigned | A published type version was edited. A published version is a snapshot: the items written against it carry its schema, and changing it would change what they mean. |
+| [`constraint-loosened`](constraint-loosened.md) | `422` | assigned | An inheriting type widened a field it inherits. An inheriting type may tighten a field and may not loosen one. |
 | [`name-taken`](name-taken.md) | `409` | assigned | A location's name is already carried by a live sibling. Names are unique among siblings, case-insensitively, so that the tree a person reads matches the tree the database holds. |
 | [`precondition-failed`](precondition-failed.md) | `412` | assigned | The `If-Match` entity tag does not match the resource's current version. |
 | [`precondition-required`](precondition-required.md) | `428` | assigned | A mutating request on a single resource arrived without `If-Match`. There is no blind overwrite. |

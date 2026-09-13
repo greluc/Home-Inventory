@@ -37,14 +37,24 @@ import java.util.Set;
 public enum Role {
 
   /** Read-only, for a share link. */
-  GUEST(EnumSet.of(Permission.ITEM_READ, Permission.LOCATION_READ, Permission.MEDIA_READ)),
+  GUEST(EnumSet.of(
+      Permission.ITEM_READ,
+      Permission.LOCATION_READ,
+      Permission.MEDIA_READ,
+      // Even a share link needs these: without the definitions behind an item's
+      // attributes a client shows unlabelled keys, so withholding them hides
+      // nothing and breaks the page.
+      Permission.TYPE_READ,
+      Permission.VALUE_LIST_READ)),
 
   /** Read and search. */
   VIEWER(EnumSet.of(
       Permission.ITEM_READ,
       Permission.LOCATION_READ,
       Permission.MEDIA_READ,
-      Permission.SEARCH_QUERY)),
+      Permission.SEARCH_QUERY,
+      Permission.TYPE_READ,
+      Permission.VALUE_LIST_READ)),
 
   /** Adds and changes, deletes nothing. */
   CONTRIBUTOR(EnumSet.of(
@@ -56,7 +66,9 @@ public enum Role {
       Permission.LOCATION_UPDATE,
       Permission.MEDIA_READ,
       Permission.MEDIA_CREATE,
-      Permission.SEARCH_QUERY)),
+      Permission.SEARCH_QUERY,
+      Permission.TYPE_READ,
+      Permission.VALUE_LIST_READ)),
 
   /** Everything a person working with the inventory needs, deletion included. */
   MEMBER(EnumSet.allOf(Permission.class)),

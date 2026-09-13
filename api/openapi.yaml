@@ -5,6 +5,125 @@
 # (ADR-0049).
 components:
   schemas:
+    AddEntryRequest:
+      description: A value to add to a list.
+      properties:
+        displayOrder:
+          description: its position
+          format: int32
+          type: integer
+        labels:
+          additionalProperties:
+            type: string
+          description: its readable form per language tag
+          type: object
+        value:
+          description: what lands in an item's attributes
+          maxLength: 128
+          minLength: 0
+          type: string
+      required:
+      - value
+      type: object
+    CategoryPage:
+      description: One page of location categories.
+      properties:
+        items:
+          description: the categories on this page
+          items:
+            $ref: '#/components/schemas/CategoryView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    CategoryView:
+      description: A location category as an administrator sees it.
+      properties:
+        archived:
+          description: whether it is offered for nothing new
+          type: boolean
+        builtin:
+          description: whether it was provisioned with the tenant
+          type: boolean
+        draftVersionId:
+          description: the version being edited, or `null`
+          format: uuid
+          type: string
+        id:
+          description: the category
+          format: uuid
+          type: string
+        key:
+          description: its stable key
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: its name per language tag
+          type: object
+        mobile:
+          description: whether its locations travel with their contents
+          type: boolean
+        publishedVersionId:
+          description: the newest published version, or `null`
+          format: uuid
+          type: string
+      type: object
+    ConstraintsRequest:
+      description: The declarative limits on a field.
+      properties:
+        max:
+          description: the largest permitted number
+          type: number
+        maxLength:
+          description: the most characters
+          format: int32
+          type: integer
+        min:
+          description: the smallest permitted number
+          type: number
+        minLength:
+          description: the fewest characters
+          format: int32
+          type: integer
+        pattern:
+          description: a regular expression the whole value must match
+          maxLength: 256
+          minLength: 0
+          type: string
+        referenceKind:
+          description: |-
+            what a `reference` may point at: `ITEM`, `LOCATION` or
+            `VALUE_LIST`
+          maxLength: 16
+          minLength: 0
+          type: string
+        unit:
+          description: the one unit or ISO 4217 code accepted
+          maxLength: 16
+          minLength: 0
+          type: string
+      type: object
+    CreateCategoryRequest:
+      description: What to call a new location category.
+      properties:
+        key:
+          description: the stable key
+          maxLength: 64
+          minLength: 0
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: the name per language tag
+          type: object
+        mobile:
+          description: whether its places travel with their contents
+          type: boolean
+      required:
+      - key
+      type: object
     CreateItemRequest:
       description: |-
         The body of a creation.
@@ -57,6 +176,32 @@ components:
       - kind
       - name
       type: object
+    CreateItemTypeRequest:
+      description: What to call a new item type.
+      properties:
+        icon:
+          description: an icon name for clients, or omitted
+          maxLength: 64
+          minLength: 0
+          type: string
+        key:
+          description: the stable key, lower-case and unique per tenant
+          maxLength: 64
+          minLength: 0
+          type: string
+        kind:
+          description: '`PHYSICAL` or `DIGITAL`'
+          maxLength: 16
+          minLength: 0
+          type: string
+        parentId:
+          description: the type it inherits from, or omitted
+          format: uuid
+          type: string
+      required:
+      - key
+      - kind
+      type: object
     CreateLocationRequest:
       description: The body of a creation.
       properties:
@@ -80,6 +225,303 @@ components:
       required:
       - categoryId
       - name
+      type: object
+    CreateValueListRequest:
+      description: What to call a new value list.
+      properties:
+        key:
+          description: the stable key
+          maxLength: 64
+          minLength: 0
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: the list's name per language tag
+          type: object
+      required:
+      - key
+      type: object
+    FieldConstraints:
+      description: |-
+        The declarative limits a field puts on its values — the whole of them (ADR-0020).
+
+        Every member is expressible in JSON Schema and evaluable with the value in hand, which is what
+        lets a client offline reach the same verdict as the server (REQ-CORE-027). There is deliberately
+        nothing here that reads another item, calls out, or evaluates an expression: those are the three
+        things ADR-0020 excludes, and the place they belong is a plugin.
+
+        A `null` member is no constraint at all. A record rather than a map, so that a typo in a
+        constraint name is a refused field definition rather than a limit that silently does nothing.
+      properties:
+        empty:
+          description: Whether this declares no limit whatsoever.
+          type: boolean
+        max:
+          description: the largest permitted number, by the same rule
+          type: number
+        maxLength:
+          description: |-
+            the most characters. Absent, the 64 KiB ceiling on the whole attribute set is the
+            only limit, which is a limit on the wrong thing
+          format: int32
+          type: integer
+        min:
+          description: |-
+            the smallest permitted number, for `integer`, `decimal`, `money` and
+            `quantity` — compared against the amount, never against the unit
+          type: number
+        minLength:
+          description: the fewest characters, for the text-shaped kinds
+          format: int32
+          type: integer
+        pattern:
+          description: |-
+            a regular expression the whole value must match, for `text`, `
+            multiline`, `url`, `email` and `secret`. Anchored by the validator, so
+            `[0-9]+` means the entire value and not a digit somewhere in it
+          type: string
+        referenceKind:
+          description: what a `reference` field may point at
+          enum:
+          - ITEM
+          - LOCATION
+          - VALUE_LIST
+          type: string
+        unit:
+          description: |-
+            the one unit a `quantity` field accepts, or the one ISO 4217 code a `
+            money` field accepts. Declaring it is what makes a total over the field meaningful:
+            REQ-CORE-032 forbids a mixed-unit sum, and a field that accepts any unit can only be summed
+            per unit
+          type: string
+      type: object
+    FieldDefinitionView:
+      description: |-
+        One field of one type version, as everything outside `catalog` sees it.
+
+        A view and not the entity (REQ-NFR-022): `inventory` needs to know that `
+        purchasePrice` is money and is searchable; it has no business holding a row it could write back.
+      properties:
+        constraints:
+          $ref: '#/components/schemas/FieldConstraints'
+          description: |-
+            the declarative limits, never `null` — {@link FieldConstraints#NONE FieldConstraints#NONE} when
+            the definition carries none
+        dataType:
+          description: what kind of value it holds
+          enum:
+          - TEXT
+          - MULTILINE
+          - INTEGER
+          - DECIMAL
+          - MONEY
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - ENUM
+          - MULTI_ENUM
+          - URL
+          - EMAIL
+          - QUANTITY
+          - REFERENCE
+          - SECRET
+          - FILE
+          type: string
+        defaultValue:
+          description: the JSON text of the value a new item starts with, or `null`
+          type: string
+        deprecated:
+          description: whether it is hidden from new input while its values remain (REQ-CORE-026)
+          type: boolean
+        displayOrder:
+          description: the position within that group; ties are broken by key, so the order is total
+          format: int32
+          type: integer
+        facetable:
+          description: whether it is mirrored for counting
+          type: boolean
+        group:
+          description: the form section the tenant put it in, or `null`
+          type: string
+        helpTexts:
+          additionalProperties:
+            type: string
+          description: the explanatory line per language tag, empty when the tenant wrote none
+          type: object
+        id:
+          description: the definition, stable across the life of the version it belongs to
+          format: uuid
+          type: string
+        key:
+          description: |-
+            the attribute key — `isbn`, `purchasePrice` — which is what appears in
+            `item.attributes` and in `item_attr_index.field_key`
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: |-
+            the field's name per language tag, as the tenant wrote it. Multilingual data rather
+            than interface text: the server cannot translate a word a tenant invented (REQ-NFR-032)
+          type: object
+        required:
+          description: |-
+            whether a value must be present. A deprecated field is never required, whatever
+            this says — see {@link de.greluc.homeinv.catalog.api.FieldDefinitionView#effectivelyRequired #effectivelyRequired()}
+          type: boolean
+        searchable:
+          description: whether it is mirrored into the side table for filtering
+          type: boolean
+        sensitive:
+          description: |-
+            whether reading it needs a permission of its own and it is encrypted at rest
+            (ADR-0019)
+          type: boolean
+        sortable:
+          description: whether it is mirrored for ordering
+          type: boolean
+        valueListId:
+          description: |-
+            the list an `enum` or `multi-enum` draws from, `null`
+            otherwise
+          format: uuid
+          type: string
+        visibility:
+          $ref: '#/components/schemas/VisibilityRule'
+          description: |-
+            the one condition that decides whether a client shows this field, or `
+            null` when it is always shown
+      type: object
+    FieldRemovalPreview:
+      description: What a field removal would destroy (REQ-CORE-026).
+      properties:
+        affected:
+          description: how many items or locations carry a value under that key today
+          format: int64
+          type: integer
+        fieldId:
+          description: the field
+          format: uuid
+          type: string
+        key:
+          description: its attribute key
+          type: string
+      type: object
+    FieldRequest:
+      description: A field, as it is added or changed.
+      properties:
+        constraints:
+          $ref: '#/components/schemas/ConstraintsRequest'
+          description: the declarative limits
+        dataType:
+          description: the token of one of the sixteen kinds, for example `multi-enum`
+          maxLength: 16
+          minLength: 0
+          type: string
+        defaultValue:
+          description: the JSON text of the starting value
+          maxLength: 4096
+          minLength: 0
+          type: string
+        displayOrder:
+          description: the position within the group
+          format: int32
+          type: integer
+        facetable:
+          description: whether it is mirrored for counting
+          type: boolean
+        group:
+          description: the form section
+          maxLength: 64
+          minLength: 0
+          type: string
+        helpTexts:
+          additionalProperties:
+            type: string
+          description: the explanatory line per language tag
+          type: object
+        key:
+          description: the attribute key; ignored when changing
+          maxLength: 64
+          minLength: 0
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: the field's name per language tag; at least one
+          type: object
+        required:
+          description: whether a value must be present
+          type: boolean
+        searchable:
+          description: whether it is mirrored for filtering
+          type: boolean
+        sensitive:
+          description: whether reading it needs a permission of its own
+          type: boolean
+        sortable:
+          description: whether it is mirrored for ordering
+          type: boolean
+        valueListId:
+          description: the list an enumeration draws from
+          format: uuid
+          type: string
+        visibility:
+          $ref: '#/components/schemas/VisibilityRequest'
+          description: the one condition deciding whether a client shows it
+      required:
+      - dataType
+      type: object
+    ItemTypePage:
+      description: One page of item types.
+      properties:
+        items:
+          description: the types on this page
+          items:
+            $ref: '#/components/schemas/ItemTypeView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    ItemTypeView:
+      description: An item type as an administrator sees it.
+      properties:
+        archived:
+          description: whether it is offered for nothing new
+          type: boolean
+        builtin:
+          description: whether it is the one every tenant is provisioned with
+          type: boolean
+        draftVersionId:
+          description: the version being edited, or `null` when none is
+          format: uuid
+          type: string
+        icon:
+          description: the icon name, or `null`
+          type: string
+        id:
+          description: the type
+          format: uuid
+          type: string
+        key:
+          description: its stable key
+          type: string
+        kind:
+          description: whether its items exist physically
+          enum:
+          - PHYSICAL
+          - DIGITAL
+          type: string
+        parentId:
+          description: the type it inherits from, or `null`
+          format: uuid
+          type: string
+        publishedVersionId:
+          description: the newest published version, or `null` when none is published
+          format: uuid
+          type: string
       type: object
     ItemView:
       description: |-
@@ -404,6 +846,143 @@ components:
       required:
       - name
       type: object
+    ValueListEntryView:
+      description: One permitted value.
+      properties:
+        archived:
+          description: whether it is still offered for new input
+          type: boolean
+        displayOrder:
+          description: its position
+          format: int32
+          type: integer
+        id:
+          description: the entry
+          format: uuid
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: its readable form per language tag
+          type: object
+        value:
+          description: what is stored in an item's attributes
+          type: string
+      type: object
+    ValueListPage:
+      description: One page of value lists.
+      properties:
+        items:
+          description: the lists on this page, each with its entries
+          items:
+            $ref: '#/components/schemas/ValueListView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    ValueListView:
+      description: A value list with its entries.
+      properties:
+        entries:
+          description: its entries in display order, archived ones included
+          items:
+            $ref: '#/components/schemas/ValueListEntryView'
+          type: array
+        id:
+          description: the list
+          format: uuid
+          type: string
+        key:
+          description: its stable key
+          type: string
+        labels:
+          additionalProperties:
+            type: string
+          description: its name per language tag
+          type: object
+      type: object
+    VersionView:
+      description: One version and the fields it declares.
+      properties:
+        fields:
+          description: every field, in display order, inherited ones included once published
+          items:
+            $ref: '#/components/schemas/FieldDefinitionView'
+          type: array
+        id:
+          description: the version
+          format: uuid
+          type: string
+        ownerId:
+          description: the item type or location category it belongs to
+          format: uuid
+          type: string
+        published:
+          description: whether it is frozen and referenceable
+          type: boolean
+        versionNumber:
+          description: its position in that owner's series, starting at one
+          format: int32
+          type: integer
+      type: object
+    VisibilityRequest:
+      description: The one condition that decides whether a client shows a field.
+      properties:
+        field:
+          description: the key of the field watched
+          maxLength: 64
+          minLength: 0
+          type: string
+        operator:
+          description: '`equals`, `notEquals`, `present` or `absent`'
+          maxLength: 16
+          minLength: 0
+          type: string
+        value:
+          description: the JSON text compared against, for the two operators that compare
+          maxLength: 256
+          minLength: 0
+          type: string
+      required:
+      - field
+      - operator
+      type: object
+    VisibilityRule:
+      description: |-
+        When a field is shown: one condition, over one other field of the same item (REQ-CORE-028).
+
+        ## Why it is this small
+
+        ADR-0020 permits "a simple condition over another field of the same item" and gives the example
+        that decides the shape: show `warrantyUntil` when `hasWarranty` is true. It permits no
+        conjunction, no nesting and no reference to a second item — because each of those is a step toward
+        an expression language that would have to evaluate identically in Java, TypeScript and Kotlin, and
+        the line against that is the core of that decision.
+
+        A rule is presentation only. A hidden field is not cleared, not exempted from `required`
+        and not removed from the generated schema: hiding a value is not the same as not having one, and a
+        schema that changed shape with the data would be a schema a client could not cache.
+      properties:
+        field:
+          description: |-
+            the key of the field this one watches, which must be another field of the same type
+            version — a rule pointing at itself is a refused definition
+          type: string
+        operator:
+          description: how the watched value is compared
+          enum:
+          - EQUALS
+          - NOT_EQUALS
+          - PRESENT
+          - ABSENT
+          type: string
+        value:
+          description: |-
+            what it is compared against, as the JSON text of a scalar (`true`, `3`,
+            `"new"`). Ignored by {@link Operator#PRESENT Operator#PRESENT} and {@link Operator#ABSENT Operator#ABSENT}
+          type: string
+      type: object
 info:
   contact:
     email: lucas.greuloch@gmail.com
@@ -566,6 +1145,1337 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Who the caller is.
+  /api/v1/catalog/fields/{id}:
+    delete:
+      description: Removes a deprecated field and every value stored under it.
+      operationId: removeField
+      parameters:
+      - description: the field
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes a deprecated field and every value stored under it.
+    put:
+      description: Changes a field of a draft. The key is not changed, because items already carry it.
+      operationId: updateField
+      parameters:
+      - description: the field
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FieldRequest'
+        description: the new state
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldDefinitionView'
+          description: the changed field
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Version frozen (`version-frozen`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Changes a field of a draft.
+  /api/v1/catalog/fields/{id}/deprecate:
+    post:
+      description: Hides a field from input and keeps every value under it (REQ-CORE-026).
+      operationId: deprecateField
+      parameters:
+      - description: the field
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Version frozen (`version-frozen`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Hides a field from input and keeps every value under it (REQ-CORE-026).
+  /api/v1/catalog/fields/{id}/removal-preview:
+    get:
+      description: What removing a field would destroy — the affected set REQ-CORE-026 shows first.
+      operationId: previewFieldRemoval
+      parameters:
+      - description: the field
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldRemovalPreview'
+          description: the field's key and how many rows carry a value for it
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What removing a field would destroy — the affected set REQ-CORE-026 shows first.
+  /api/v1/catalog/item-types:
+    get:
+      description: One page of the tenant's item types.
+      operationId: itemTypes
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemTypePage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's item types.
+    post:
+      description: Creates an item type, with an empty draft version to fill in.
+      operationId: createItemType
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemTypeRequest'
+        description: the key, kind and optional parent
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemTypeView'
+          description: the new type
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Type key taken (`type-key-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates an item type, with an empty draft version to fill in.
+  /api/v1/catalog/item-types/{id}/archive:
+    post:
+      description: 'Archives an item type: offered for nothing new, still referenced by what exists.'
+      operationId: archiveItemType
+      parameters:
+      - description: the type
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemTypeView'
+          description: the archived type
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: 'Archives an item type: offered for nothing new, still referenced by what exists.'
+  /api/v1/catalog/location-categories:
+    get:
+      description: |-
+        Every location category of the tenant, with its versions.
+
+        Beside `GET /api/v1/locations/categories`, which answers the picker a person uses when
+        creating a place and carries nothing about versions or drafts. This one is the administrative
+        view, and they are different questions rather than one answered twice.
+      operationId: categories
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Every location category of the tenant, with its versions
+    post:
+      description: Creates a location category, with an empty draft version.
+      operationId: createCategory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+        description: the key, labels and whether its places travel with their contents
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryView'
+          description: the new category
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Type key taken (`type-key-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a location category, with an empty draft version.
+  /api/v1/catalog/location-categories/{id}/archive:
+    post:
+      description: Archives a location category.
+      operationId: archiveCategory
+      parameters:
+      - description: the category
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryView'
+          description: the archived category
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Archives a location category.
+  /api/v1/catalog/types/{ownerId}/versions:
+    post:
+      description: Starts a draft of a type or a category, copying what is published now.
+      operationId: draftVersion
+      parameters:
+      - description: the item type or location category
+        in: path
+        name: ownerId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionView'
+          description: the draft with its fields
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Starts a draft of a type or a category, copying what is published now.
+  /api/v1/catalog/value-list-entries/{id}/archive:
+    post:
+      description: Stops offering a value for new input, leaving it valid wherever it is stored.
+      operationId: archiveEntry
+      parameters:
+      - description: the entry
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Stops offering a value for new input, leaving it valid wherever it is stored.
+  /api/v1/catalog/value-lists:
+    get:
+      description: One page of the tenant's value lists, each with its entries.
+      operationId: valueLists
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueListPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's value lists, each with its entries.
+    post:
+      description: Creates an empty value list.
+      operationId: createValueList
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValueListRequest'
+        description: the key and labels
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueListView'
+          description: the new list
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Type key taken (`type-key-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates an empty value list.
+  /api/v1/catalog/value-lists/{id}/entries:
+    post:
+      description: Adds a value to a list.
+      operationId: addEntry
+      parameters:
+      - description: the list
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddEntryRequest'
+        description: the value and its labels
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueListEntryView'
+          description: the entry
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Type key taken (`type-key-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Adds a value to a list.
+  /api/v1/catalog/versions/{id}:
+    get:
+      description: One version with every field it declares.
+      operationId: version
+      parameters:
+      - description: the version
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionView'
+          description: the version and its fields, in display order
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One version with every field it declares.
+  /api/v1/catalog/versions/{id}/publish:
+    post:
+      description: Publishes a draft.
+      operationId: publish
+      parameters:
+      - description: the draft
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionView'
+          description: the published version with its materialised field set
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Version frozen (`version-frozen`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Constraint loosened (`constraint-loosened`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Publishes a draft.
+  /api/v1/catalog/versions/{id}/schema:
+    get:
+      description: |-
+        The generated JSON Schema of a version (REQ-CORE-027).
+
+        Served as `application/schema+json` and as the stored text rather than as a re-rendered
+        tree: this is the document the server validates with (ADR-0056), and a client that receives
+        different bytes would be checking something else.
+      operationId: schema
+      parameters:
+      - description: the version
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/schema+json:
+              schema:
+                type: string
+          description: the schema document
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The generated JSON Schema of a version (REQ-CORE-027)
+  /api/v1/catalog/versions/{versionId}/fields:
+    post:
+      description: Adds a field to a draft.
+      operationId: addField
+      parameters:
+      - description: the draft
+        in: path
+        name: versionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FieldRequest'
+        description: the field
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldDefinitionView'
+          description: the new field
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Type key taken (`type-key-taken`), or Version frozen (`version-frozen`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Adds a field to a draft.
   /api/v1/items:
     post:
       description: |-

@@ -125,6 +125,17 @@ commit".
 
 ### Added
 
+- **A tenant defines its own item types and location categories, while the system
+  runs.** Fields with sixteen data types, multilingual labels and help texts,
+  required flags, ranges, patterns, units, value lists that several types share,
+  and a visibility rule over one other field. A type is versioned: fields are
+  edited on a draft, publishing freezes it and generates the JSON Schema the API
+  serves and the server validates against, and anything already created keeps the
+  version it was written against. A type may inherit from another and may only
+  tighten what it inherits. A field that is no longer wanted is hidden and keeps
+  its values; destroying them is a separate operation that first says how many
+  there are. *REST API: additive.*
+
 - **The test suite runs the images the deployment runs**, pinned to their digests
   and read from the one file that describes the deployment. They had drifted: the
   tests exercised a RabbitMQ the deployment does not use.

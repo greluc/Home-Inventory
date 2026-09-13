@@ -74,6 +74,28 @@ public enum ProblemType {
    */
   NAME_TAKEN("name-taken", HttpStatus.CONFLICT, "Name taken"),
 
+  /**
+   * A key a tenant chose for a definition is already in use for the same kind of thing.
+   *
+   * <p>Separate from both neighbours above: a key is not an id a client chose and not a name among
+   * siblings. It is the stable identifier of a definition, it appears inside every item that uses
+   * the field, and it is unique per tenant.
+   */
+  TYPE_KEY_TAKEN("type-key-taken", HttpStatus.CONFLICT, "Type key taken"),
+
+  /**
+   * A published type version was edited.
+   *
+   * <p>{@code 409} and not {@code 422}: nothing about the request is malformed, and the same body
+   * against a draft succeeds. The answer carries the version id so a client can offer to start a
+   * draft from it.
+   */
+  VERSION_FROZEN("version-frozen", HttpStatus.CONFLICT, "Version frozen"),
+
+  /** An inheriting type widened a field it inherits, which REQ-CORE-024 permits one way only. */
+  CONSTRAINT_LOOSENED(
+      "constraint-loosened", HttpStatus.UNPROCESSABLE_CONTENT, "Constraint loosened"),
+
   /** The body exceeds the JSON limit, or an upload exceeds its size or pixel limit. */
   PAYLOAD_TOO_LARGE("payload-too-large", HttpStatus.CONTENT_TOO_LARGE, "Payload too large"),
 
