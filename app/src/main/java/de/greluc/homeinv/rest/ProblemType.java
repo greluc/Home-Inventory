@@ -77,6 +77,14 @@ public enum ProblemType {
    */
   SECOND_FACTOR_MISSING("second-factor-missing", HttpStatus.FORBIDDEN, "Second factor missing"),
 
+  /**
+   * The operation needs the second factor proved again (REQ-AUTH-011).
+   *
+   * <p>Its own token beside {@link #SECOND_FACTOR_MISSING}, because the two ask for different
+   * things: one to set an authenticator up, the other to enter a code from the one that is there.
+   */
+  SECOND_FACTOR_STALE("second-factor-stale", HttpStatus.FORBIDDEN, "Second factor stale"),
+
   /** Authenticated, and not permitted on a resource they may know exists. */
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 

@@ -16,6 +16,7 @@ import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.authorization.api.RoleNameTakenException;
 import de.greluc.homeinv.authorization.api.SecondFactorMissingException;
+import de.greluc.homeinv.authorization.api.SecondFactorStaleException;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.tagging.api.TagService;
 import de.greluc.homeinv.tenancy.api.InvitationAlreadyOpenException;
@@ -480,6 +481,19 @@ public class ApiExceptionHandler {
   public ProblemDetail handleSecondFactorMissing(
       SecondFactorMissingException exception, HttpServletRequest request) {
     return problem(ProblemType.SECOND_FACTOR_MISSING, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers an operation whose re-confirmation has run out (REQ-AUTH-011).
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return the problem
+   */
+  @ExceptionHandler(SecondFactorStaleException.class)
+  public ProblemDetail handleSecondFactorStale(
+      SecondFactorStaleException exception, HttpServletRequest request) {
+    return problem(ProblemType.SECOND_FACTOR_STALE, exception.getMessage(), request);
   }
 
   /**

@@ -125,6 +125,12 @@ commit".
 
 ### Added
 
+- **Handing out permissions asks for the code again.** Granting a role, inviting
+  somebody, defining a role, opening a sensitive field and asking for the tenant
+  to be erased all need the second factor proved within the last fifteen minutes;
+  one code covers a stretch of work. A sensitive field read after that is simply
+  absent again rather than failing the whole request. *REST API: additive.*
+
 - **Owners and administrators must have a second factor.** The role is granted
   as before — creating a tenant still makes you its owner — but it cannot be used
   until an authenticator exists: every request in that tenant says so and points

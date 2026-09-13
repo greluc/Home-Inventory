@@ -52,7 +52,35 @@ public final class CallerContext {
    *     of something that moves — see {@code LocationScope}
    */
   public record Caller(
-      UUID userId, UUID tenantId, String role, UUID roleDefinitionId, UUID scopeLocationId) {
+      UUID userId,
+      UUID tenantId,
+      String role,
+      UUID roleDefinitionId,
+      UUID scopeLocationId,
+      java.time.Instant secondFactorAt) {
+
+    /**
+     * A caller whose second factor was proved at a known moment.
+     *
+     * <p>{@code secondFactorAt} is null for a session that never proved one — an account with no
+     * authenticator, which {@code REQ-AUTH-003} allows only for roles that do not require one — and
+     * for a caller built outside a web request. Both mean the same thing to the one rule that reads
+     * it: a sensitive field is not shown (REQ-AUTH-011).
+     *
+     * @param userId the person
+     * @param tenantId the tenant they are acting for
+     * @param role the built-in role
+     * @param roleDefinitionId the tenant-owned role extending it, or null
+     * @param scopeLocationId the part of the tree they are confined to, or null
+     */
+    public Caller(
+        UUID userId,
+        UUID tenantId,
+        String role,
+        UUID roleDefinitionId,
+        UUID scopeLocationId) {
+      this(userId, tenantId, role, roleDefinitionId, scopeLocationId, null);
+    }
 
     /**
      * A caller holding a plain built-in role over the whole tenant.

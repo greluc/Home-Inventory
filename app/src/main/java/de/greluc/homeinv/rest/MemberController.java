@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -89,6 +90,7 @@ public class MemberController {
    * @param user the authenticated caller
    * @return the member as they now stand
    */
+  @RequiresRecentSecondFactor
   @PutMapping(path = "/members/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_UPDATE)
   @CanFail({
@@ -151,6 +153,7 @@ public class MemberController {
    * @param user the authenticated caller
    * @return the invitation and its one token
    */
+  @RequiresRecentSecondFactor
   @PostMapping(path = "/invitations", produces = MediaType.APPLICATION_JSON_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   @RequiresPermission(Permission.MEMBER_INVITE)
@@ -267,6 +270,7 @@ public class MemberController {
    * @param user the owner asking
    * @return the revocation token and when the erasure begins
    */
+  @RequiresRecentSecondFactor
   @DeleteMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @ResponseStatus(HttpStatus.ACCEPTED)
   @RequiresPermission(Permission.TENANT_DELETE)

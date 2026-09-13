@@ -35,13 +35,44 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SessionEstablisher {
 
-  /** When the second factor was last proved in this session, as an epoch-second {@code Long}. */
-  static final String SECOND_FACTOR_AT = "homeinv.second-factor-at";
+  /**
+   * When the second factor was last proved in this session, as an epoch-second {@code Long}.
+   *
+   * <p>Public because {@code SecondFactorStepUpIT} moves it: the window of REQ-AUTH-011 is fifteen
+   * minutes and a test that waited them out would add a quarter of an hour to the build. A second
+   * copy of the name in the test would be the thing that drifts.
+   */
+  public static final String SECOND_FACTOR_AT = "homeinv.second-factor-at";
 
   private final Clock clock;
 
   private final SecurityContextRepository securityContextRepository =
       new HttpSessionSecurityContextRepository();
+
+  /**
+   * When the second factor was last proved in this session.
+   *
+   * <p>Static, and reading the session directly, because two unrelated places need it: the filter
+   * that publishes the caller context, and the interceptor that guards the operations of
+   * REQ-AUTH-011. A second copy of the attribute name is how the two would come to disagree.
+   *
+   * @param request the servlet request
+   * @return the instant, or null when no factor has been proved in this session
+   */
+  static Instant secondFactorProvedAt(jakarta.servlet.http.HttpServletRequest request) {
+    jakarta.servlet.http.HttpSession session = request.getSession(false);
+    Object stored = session == null ? null : session.getAttribute(SECOND_FACTOR_AT);
+    return stored instanceof Long epochSecond ? Instant.ofEpochSecond(epochSecond) : null;
+  }
+
+  /**
+   * Records that the second factor has just been proved again (REQ-AUTH-011).
+   *
+   * @param request the servlet request, whose session carries it
+   */
+  void secondFactorProved(jakarta.servlet.http.HttpServletRequest request) {
+    request.getSession().setAttribute(SECOND_FACTOR_AT, Instant.now(clock).getEpochSecond());
+  }
 
   /**
    * Establishes the session and returns what the client is told about it.

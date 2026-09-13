@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.Role;
@@ -105,6 +106,7 @@ public class RoleController {
    * @param user the authenticated caller
    * @return the new definition
    */
+  @RequiresRecentSecondFactor
   @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_UPDATE)
   @ResponseStatus(HttpStatus.CREATED)
@@ -135,6 +137,7 @@ public class RoleController {
    * @param user the authenticated caller
    * @return the definition as it now stands
    */
+  @RequiresRecentSecondFactor
   @PutMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_UPDATE)
   @CanFail({
@@ -167,6 +170,7 @@ public class RoleController {
    * @param id the definition
    * @param user the authenticated caller
    */
+  @RequiresRecentSecondFactor
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.MEMBER_UPDATE)

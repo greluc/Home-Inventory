@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.FieldVisibility;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -79,6 +80,7 @@ public class FieldVisibilityController {
    * @param request the field and the role
    * @param user the authenticated caller
    */
+  @RequiresRecentSecondFactor
   @PostMapping
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.MEMBER_UPDATE)
@@ -102,6 +104,7 @@ public class FieldVisibilityController {
    * @param roleDefinitionId the tenant-owned role to withdraw it from, or omitted
    * @param user the authenticated caller
    */
+  @RequiresRecentSecondFactor
   @DeleteMapping("/{fieldKey}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.MEMBER_UPDATE)

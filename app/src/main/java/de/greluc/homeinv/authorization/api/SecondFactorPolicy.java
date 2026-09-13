@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.authorization.api;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -26,6 +28,16 @@ import java.util.UUID;
 public interface SecondFactorPolicy {
 
   /**
+   * How long proving the second factor counts for (REQ-AUTH-011).
+   *
+   * <p>Fifteen minutes: one stretch of work — granting a few roles, reading a purchase price,
+   * starting an export — on one code. Shorter asks again in the middle of what somebody is doing,
+   * which teaches them to keep the app open beside the keyboard; longer stops being a
+   * re-confirmation.
+   */
+  Duration RECONFIRMATION_WINDOW = Duration.ofMinutes(15);
+
+  /**
    * Whether a role may be used only by an account with a second factor.
    *
    * @param role the built-in role and, where there is one, the definition extending it
@@ -42,5 +54,13 @@ public interface SecondFactorPolicy {
    * @throws SecondFactorMissingException when the role requires one and the account has none
    */
   void requireEnrolled(RoleRef role, UUID userId);
+
+  /**
+   * Whether a proof of the second factor is recent enough for a critical operation.
+   *
+   * @param provedAt when the factor was last proved in this session, or null when it never was
+   * @return true when it was proved within {@link #RECONFIRMATION_WINDOW}
+   */
+  boolean provedRecently(Instant provedAt);
 
 }

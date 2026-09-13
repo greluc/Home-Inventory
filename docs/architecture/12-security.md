@@ -160,7 +160,7 @@ catalogue.
 | OIDC `state` and PKCE verifier | **Server-side, never in a cookie.** A single-use, high-entropy handle travels in the `state` parameter; the callback looks the verifier up and consumes it. Stricter than a state cookie in two ways — the verifier never reaches the browser, and a replayed callback fails |
 | App / third party | OAuth 2.1: Authorization Code + PKCE through the system browser. **No** password in the app. Access token 10 min, refresh token rotating with reuse detection. |
 | Machine access | Service accounts with tokens, scoped to a tenant and permissions, with an expiry date, shown in clear exactly once |
-| Re-confirmation | Critical operations require the second factor again (granting permissions, deleting a tenant, exporting, plugin capabilities, viewing `sensitive` fields) |
+| Re-confirmation | Critical operations require the second factor again (granting permissions, deleting a tenant, exporting, plugin capabilities, viewing `sensitive` fields). **Fifteen minutes** from the last accepted code, whether at the login or at `POST /api/v1/auth/mfa/step-up`, recorded in the session and never in the client (`REQ-AUTH-011`). An endpoint says it needs one with `@RequiresRecentSecondFactor` and is refused with `second-factor-stale`; a **sensitive field is removed instead**, and the answer stays `200` — a list with one sensitive column in it would otherwise become unreadable, and a refusal somebody meets while scrolling is one they learn to click past |
 
 ## 12.5 Authorization
 

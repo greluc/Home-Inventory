@@ -248,7 +248,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-AUTH-008 | Access tokens valid 10 min; refresh tokens rotating with reuse detection. | M | 1 | Reuse terminates all of the user's sessions |
 | REQ-AUTH-009 | The user sees their active sessions and devices and can terminate them individually. | M | 1 | Remote sign-out takes effect within 10 min |
 | REQ-AUTH-010 | Service accounts with limited permissions, tenant binding and an expiry date. | S | 1 | The token is shown in clear exactly once |
-| REQ-AUTH-011 | Critical operations require **re-confirmation** of the second factor. | M | 1 | Granting permissions, exporting, deleting a tenant, viewing `sensitive` fields |
+| REQ-AUTH-011 | Critical operations require **re-confirmation** of the second factor. The proof counts for **fifteen minutes**, recorded in the session; a code goes to `POST /api/v1/auth/mfa/step-up`. An operation past the window is refused with `second-factor-stale`; a `sensitive` field is **removed** instead and the answer stays `200`, because a list with one sensitive column in it would otherwise become unreadable. | M | 1 | Granting permissions, exporting, deleting a tenant, viewing `sensitive` fields — each refused or redacted once the window has passed, and permitted again after a code, which `SecondFactorStepUpIT` drives end to end |
 
 ---
 

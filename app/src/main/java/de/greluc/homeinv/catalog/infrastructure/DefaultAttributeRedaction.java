@@ -6,6 +6,7 @@ package de.greluc.homeinv.catalog.infrastructure;
 
 import de.greluc.homeinv.authorization.api.FieldVisibility;
 import de.greluc.homeinv.authorization.api.RoleRef;
+import de.greluc.homeinv.authorization.api.SecondFactorPolicy;
 import de.greluc.homeinv.catalog.api.AttributeRedaction;
 import de.greluc.homeinv.catalog.api.FieldDefinitionView;
 import de.greluc.homeinv.catalog.api.TypeRegistry;
@@ -38,6 +39,7 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
 
   private final TypeRegistry types;
   private final FieldVisibility visibility;
+  private final SecondFactorPolicy secondFactor;
   private final ObjectMapper json;
 
   @Override
@@ -53,11 +55,22 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
       return attributesJson;
     }
 
-    FieldVisibility.SensitiveAccess access =
+    // REQ-AUTH-011: reading a sensitive field is one of the operations that asks
+    // for the second factor again. A proof older than the window removes the
+    // field rather than refusing the request — a list with one sensitive column
+    // in it would otherwise become unreadable, and a 403 somebody meets while
+    // scrolling is a 403 they learn to click past (12 §12.4).
+    boolean recentlyProved =
+        CallerContext.current()
+            .map(caller -> secondFactor.provedRecently(caller.secondFactorAt()))
+            .orElse(false);
+
+    FieldVisibility.SensitiveAccess granted =
         visibility.sensitiveAccessFor(
             CallerContext.current()
                 .map(caller -> new RoleRef(caller.role(), caller.roleDefinitionId()))
                 .orElse(null));
+    FieldVisibility.SensitiveAccess access = key -> recentlyProved && granted.allows(key);
 
     JsonNode parsed = json.readTree(attributesJson);
     if (!(parsed instanceof ObjectNode attributes)) {

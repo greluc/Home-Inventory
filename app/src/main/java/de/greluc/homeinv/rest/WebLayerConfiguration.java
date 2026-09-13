@@ -30,6 +30,7 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
   private final ApiCallQuotaInterceptor apiCallQuotaInterceptor;
   private final TenantAccessInterceptor tenantAccessInterceptor;
   private final SecondFactorLockInterceptor secondFactorLockInterceptor;
+  private final SecondFactorFreshnessInterceptor secondFactorFreshnessInterceptor;
 
   /**
    * Puts the permission check in front of every handler.
@@ -53,6 +54,10 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
     // be erased should say so rather than asking somebody to set up an
     // authenticator for a tenant that is about to go.
     registry.addInterceptor(secondFactorLockInterceptor);
+    // And then the operations that ask for the factor again (REQ-AUTH-011).
+    // After the lock, so somebody with no authenticator is told to set one up
+    // rather than to enter a code they cannot produce.
+    registry.addInterceptor(secondFactorFreshnessInterceptor);
     // After the permission check, deliberately. A call the caller was never
     // allowed to make should not come out of their monthly allowance, and the
     // order here is what decides that (REQ-TEN-009).

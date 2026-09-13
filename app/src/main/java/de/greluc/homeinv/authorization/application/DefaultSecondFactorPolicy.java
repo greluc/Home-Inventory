@@ -44,6 +44,7 @@ public class DefaultSecondFactorPolicy implements SecondFactorPolicy {
 
   private final FieldVisibility fieldVisibility;
   private final SecondFactorStatus secondFactors;
+  private final java.time.Clock clock;
 
   @Override
   public boolean requiresSecondFactor(RoleRef role) {
@@ -54,6 +55,12 @@ public class DefaultSecondFactorPolicy implements SecondFactorPolicy {
       return false;
     }
     return ALWAYS.contains(role.builtIn()) || fieldVisibility.readsSensitiveFields(role);
+  }
+
+  @Override
+  public boolean provedRecently(java.time.Instant provedAt) {
+    return provedAt != null
+        && !provedAt.plus(RECONFIRMATION_WINDOW).isBefore(java.time.Instant.now(clock));
   }
 
   @Override

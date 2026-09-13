@@ -41,6 +41,34 @@ import org.springframework.web.bind.annotation.RestController;
 public class SecondFactorController {
 
   private final SecondFactor secondFactor;
+  private final SessionEstablisher sessions;
+
+  /**
+   * Proves the second factor again, for an operation that asks (REQ-AUTH-011).
+   *
+   * <p>The same code the login takes, against a session that already exists. What it changes is one
+   * instant in that session: for the next fifteen minutes the operations of 12 §12.4 are permitted
+   * and sensitive fields are shown.
+   *
+   * @param request the code
+   * @param user the authenticated principal
+   * @param httpRequest the servlet request, whose session records the proof
+   */
+  @PostMapping(value = "/step-up")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.SECOND_FACTOR_INVALID})
+  @PublicEndpoint(
+      reason =
+          "It proves the caller's own second factor and grants nothing else. A "
+              + "permission would be a way for a role to decide whether somebody may "
+              + "confirm who they are.")
+  public void stepUp(
+      @Valid @RequestBody AuthController.SecondFactorRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user,
+      jakarta.servlet.http.HttpServletRequest httpRequest) {
+    secondFactor.verify(user.userId(), request.code());
+    sessions.secondFactorProved(httpRequest);
+  }
 
   /**
    * What the caller's account holds.

@@ -336,6 +336,24 @@ assigned:
     sources:
       - "REQ-TEN-010: nobody can grant permissions they do not hold themselves"
 
+  - token: second-factor-stale
+    status: 403
+    since: 1
+    summary: >
+      The operation needs the second factor proved again; the code goes to
+      `POST /api/v1/auth/mfa/step-up`.
+    notes: >
+      REQ-AUTH-011 asks for the factor again before granting permissions,
+      deleting a tenant and exporting; fifteen minutes from the last accepted
+      code, whether at the login or at the step-up. Its own token beside
+      `second-factor-missing` because the two ask for different things: setting an
+      authenticator up, and entering a code from the one that is there. Reading a
+      sensitive field is on the same list and is NOT answered with this: the field
+      is removed and the answer stays 200, because a list with one sensitive
+      column would otherwise become unreadable.
+    sources:
+      - "REQ-AUTH-011, 12 §12.4"
+
   - token: second-factor-missing
     status: 403
     since: 1

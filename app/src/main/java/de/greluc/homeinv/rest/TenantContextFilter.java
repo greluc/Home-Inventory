@@ -74,7 +74,14 @@ public class TenantContextFilter extends OncePerRequestFilter {
                 user.tenantId(),
                 user.role(),
                 user.roleDefinitionId(),
-                user.scopeLocationId()),
+                user.scopeLocationId(),
+                // When the second factor was last proved, for the re-confirmation
+                // of REQ-AUTH-011. It travels on the caller rather than being
+                // read from the session where it is needed: the redaction that
+                // reads it runs deep in the application layer, and a servlet
+                // session reaching that far would be the web layer leaking into
+                // it.
+                SessionEstablisher.secondFactorProvedAt(request)),
             () -> {
               if (user.tenantId() == null) {
                 proceed(request, response, chain);
