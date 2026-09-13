@@ -53,6 +53,17 @@ jobs:
           # the test container is given because production reads its own from
           # mounted secrets, and the illustrative value in a design-system prompt.
           GITLEAKS_CONFIG: .gitleaks.toml
+          # Pinned, and not to the action's default. The action installs 8.24.3,
+          # which does not understand the top-level `[[allowlists]]` array this
+          # config is written in: it ignores every one of them, and the ten
+          # deliberate literals — the xkcd passphrase in nine test classes and the
+          # illustrative value in a design-system prompt — come back as findings.
+          #
+          # It surfaced on a SCHEDULED run rather than a push, because a push scans
+          # only the commits it carries and those lines were written months ago.
+          # Reproduced both ways before changing anything: 8.24.3 reports ten,
+          # 8.30.1 reports none, over the same history and the same config.
+          GITLEAKS_VERSION: 8.30.1
 
   # -------------------------------------------------------------------------
   # REQ-SEC-076 — CodeQL. It is the only one of the SAST tools here that follows
