@@ -78,6 +78,9 @@ public class DefaultLocationService implements LocationService {
   // them.
   private final TypeRegistry types;
 
+  /** Seals what the category marks sensitive, and keeps what this caller was never shown. */
+  private final de.greluc.homeinv.catalog.api.AttributeSealing sealing;
+
   /** The binding check of REQ-CORE-005, applied to a category's fields (REQ-CORE-041). */
   private final de.greluc.homeinv.catalog.api.AttributeValidator validator;
   /** Removes the sensitive attributes this caller may not read (REQ-TEN-008). */
@@ -146,7 +149,14 @@ public class DefaultLocationService implements LocationService {
     // Resolved once, here, and stored: the location keeps the fields the category
     // declared at this moment even after the category moves on (REQ-CORE-025).
     UUID categoryVersionId = types.publishedCategoryVersion(command.categoryId());
-    String attributes = validated(categoryVersionId, command.attributes());
+    // Merge, validate, seal (ADR-0019). A place carries attributes like an item
+    // does, and a category may mark one sensitive like a type may.
+    String attributes =
+        sealing.sealed(
+            categoryVersionId,
+            id,
+            validated(
+                categoryVersionId, sealing.merged(categoryVersionId, id, command.attributes(), null)));
 
     Location created;
     if (command.parentId() == null) {
@@ -459,7 +469,8 @@ public class DefaultLocationService implements LocationService {
         // On the way out, for the reason the item path gives: what is stored is
         // complete, and what a particular person is shown is a projection of it
         // (REQ-TEN-008).
-        redaction.forCaller(location.getCategoryVersionId(), location.getAttributes()),
+        redaction.forCaller(
+            location.getCategoryVersionId(), location.getId(), location.getAttributes()),
         tree.ancestorNames(location.getTenantId(), location.getId()),
         // The concurrency token, which is what a client sends back as `If-Match`.
         // In the view rather than derived from a hash of it: a hash changes when

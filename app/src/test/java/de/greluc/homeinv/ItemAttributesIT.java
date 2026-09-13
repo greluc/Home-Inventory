@@ -240,7 +240,10 @@ class ItemAttributesIT extends AbstractIntegrationTest {
     // Every flag set and never projected, because the kind has the veto.
     types.addField(
         type.draftVersionId(),
-        field("licenceKey", FieldDataType.SECRET, true, true),
+        // Sensitive and therefore NOT searchable: the type editor refuses the
+        // combination, because the value is stored sealed and an index over it
+        // would hold ciphertext (ADR-0019).
+        field("licenceKey", FieldDataType.SECRET, false, true),
         tenant.userId());
     types.publish(type.draftVersionId(), tenant.userId());
     return type.id();

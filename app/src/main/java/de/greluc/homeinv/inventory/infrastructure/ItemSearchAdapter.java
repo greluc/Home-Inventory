@@ -142,6 +142,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
                         // once, so it is the one that must not be forgotten.
                         redaction.forCaller(
                             rs.getObject("item_type_version_id", UUID.class),
+                            rs.getObject("id", UUID.class),
                             rs.getString("attributes")),
                         rs.getString("notes"),
                         rs.getBigDecimal("minimum_stock"),

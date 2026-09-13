@@ -133,6 +133,14 @@ commit".
 
 ### Added
 
+- **A licence key is no longer readable in the database.** Any field a type marks
+  sensitive is stored encrypted, and a database dump yields nothing without the
+  master key the deployment mounts. Somebody who may not read such a field still
+  sees the record and can edit it — and their save no longer deletes the value
+  they were never shown. A sensitive field can no longer also be marked
+  searchable, sortable or facetable: the index would hold ciphertext and match
+  nothing, and the type editor now says so instead of accepting it.
+
 - **Sensitive fields have a lock on them.** Each tenant gets a data key of its
   own, wrapped with the master key the deployment mounts, and a value sealed with
   it is bound to the tenant, the record and the field it belongs to — copied

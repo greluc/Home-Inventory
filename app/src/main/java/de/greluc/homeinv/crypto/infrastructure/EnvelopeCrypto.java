@@ -172,10 +172,14 @@ public class EnvelopeCrypto implements SensitiveValues {
    * @param dekId the data key version
    * @param tenantId the tenant
    * @param entityId the item or location
+   * <p>Package-private rather than private so that the injectivity test REQ-SEC-047 asks for can
+   * reach it. That property cannot be shown through the cipher: two colliding tuples would produce
+   * one ciphertext that opens under both, which is precisely what a test could not observe.
+   *
    * @param fieldKey the attribute key
    * @return the additional authenticated data
    */
-  private static byte[] aad(int dekId, UUID tenantId, UUID entityId, String fieldKey) {
+  static byte[] aad(int dekId, UUID tenantId, UUID entityId, String fieldKey) {
     byte[] field = fieldKey.getBytes(StandardCharsets.UTF_8);
     if (field.length > 0xffff) {
       throw new IllegalArgumentException("A field key of " + field.length + " bytes is not one.");

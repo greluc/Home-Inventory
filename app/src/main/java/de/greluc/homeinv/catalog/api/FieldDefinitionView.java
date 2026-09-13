@@ -74,13 +74,18 @@ public record FieldDefinitionView(
   /**
    * Whether this field is mirrored into {@code inventory.item_attr_index} at all.
    *
-   * <p>Three flags decide it and the data type has a veto: a {@code secret} is never projected,
-   * because the side table answers filters and a value gated by a permission must not be filterable
-   * by somebody without it.
+   * <p>Three flags decide it and two things have a veto. A {@code secret} data type is never
+   * projected, because the side table answers filters and a value gated by a permission must not be
+   * filterable by somebody without it. Neither is anything marked {@code sensitive}: it is stored
+   * sealed (ADR-0019), so the only thing that could be mirrored is ciphertext, and a filter over
+   * ciphertext matches nothing while looking as though it works.
+   *
+   * <p>The type editor refuses the combination outright, so this is belt and braces — and it is the
+   * half that also covers a field that was marked sensitive after it was already searchable.
    *
    * @return true when a write must project this field
    */
   public boolean projected() {
-    return (searchable || sortable || facetable) && dataType.projectable();
+    return (searchable || sortable || facetable) && dataType.projectable() && !sensitive;
   }
 }

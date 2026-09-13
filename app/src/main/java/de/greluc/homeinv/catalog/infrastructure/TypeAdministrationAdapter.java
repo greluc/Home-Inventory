@@ -1336,6 +1336,18 @@ public class TypeAdministrationAdapter implements TypeAdministration {
               : "Only 'enum' and 'multi-enum' draw on a value list; a list on any other kind would "
                   + "read as meaning something and mean nothing.");
     }
+    // Decided 2026-09-13: refuse the combination rather than accept it and skip
+    // the indexing. A sensitive field is stored sealed (ADR-0019), so the only
+    // thing an index could hold is ciphertext -- a filter over it matches nothing
+    // while appearing to work, and the tenant who set both flags would meet that
+    // as "the search does not find my field" weeks later. The contradiction is
+    // refused where it is made.
+    if (command.sensitive() && (command.searchable() || command.sortable() || command.facetable())) {
+      throw new IllegalArgumentException(
+          "A sensitive field cannot also be searchable, sortable or facetable: it is stored "
+              + "encrypted, so an index over it would hold ciphertext and match nothing. Choose "
+              + "one.");
+    }
   }
 
   /**

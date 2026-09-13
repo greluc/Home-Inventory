@@ -40,10 +40,14 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
   private final TypeRegistry types;
   private final FieldVisibility visibility;
   private final SecondFactorPolicy secondFactor;
+
+  /** Opens a value the caller may read; it is stored sealed (ADR-0019). */
+  private final de.greluc.homeinv.crypto.api.SensitiveValues crypto;
+
   private final ObjectMapper json;
 
   @Override
-  public String forCaller(UUID typeVersionId, String attributesJson) {
+  public String forCaller(UUID typeVersionId, UUID entityId, String attributesJson) {
     if (attributesJson == null || attributesJson.isBlank() || typeVersionId == null) {
       return attributesJson;
     }
@@ -84,10 +88,28 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
 
     boolean changed = false;
     for (FieldDefinitionView field : fields) {
-      if (field.sensitive() && attributes.has(field.key()) && !access.allows(field.key())) {
-        attributes.remove(field.key());
-        changed = true;
+      String key = field.key();
+      if (!field.sensitive() || !attributes.has(key)) {
+        continue;
       }
+      if (!access.allows(key)) {
+        attributes.remove(key);
+        changed = true;
+        continue;
+      }
+      // The caller may read it, so it is opened: the value is stored sealed
+      // (ADR-0019), and handing back ciphertext would be showing the field
+      // without showing the value.
+      JsonNode value = attributes.get(key);
+      String text = value.isTextual() ? value.asString() : value.toString();
+      if (!crypto.isSealed(text)) {
+        // Written before the field was marked sensitive, or before this code
+        // existed. Shown as it stands rather than refused: it is the value, and
+        // the next write seals it.
+        continue;
+      }
+      attributes.put(key, crypto.open(entityId, key, text));
+      changed = true;
     }
     return changed ? json.writeValueAsString(attributes) : attributesJson;
   }

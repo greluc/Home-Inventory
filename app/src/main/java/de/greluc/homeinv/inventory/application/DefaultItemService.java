@@ -76,6 +76,9 @@ public class DefaultItemService implements ItemService {
    */
   private final de.greluc.homeinv.catalog.api.TypeRegistry types;
 
+  /** Seals what the type marks sensitive, and keeps what this caller was never shown. */
+  private final de.greluc.homeinv.catalog.api.AttributeSealing sealing;
+
   /** The binding check of REQ-CORE-005, against the document the version generated. */
   private final de.greluc.homeinv.catalog.api.AttributeValidator validator;
 
@@ -175,7 +178,14 @@ public class DefaultItemService implements ItemService {
         command.itemTypeId() != null
             ? types.publishedItemTypeVersion(command.itemTypeId())
             : catalog.builtinItemTypeVersion(tenantId);
-    String attributes = validated(typeVersionId, command.attributes());
+    // Merge, validate, seal — in that order (ADR-0019). Nothing is stored here
+            // yet, so there is nothing to merge from; the call is made anyway so
+    // that the one path through this is the path every write takes.
+    String attributes =
+        sealing.sealed(
+            typeVersionId,
+            id,
+            validated(typeVersionId, sealing.merged(typeVersionId, id, command.attributes(), null)));
 
     Instant now = Instant.now(clock);
     Item item =
@@ -338,7 +348,17 @@ public class DefaultItemService implements ItemService {
     // Against the version the item was written against, not against whatever the
     // type says today: an edit to an old item must not start failing because the
     // type moved on (REQ-CORE-025).
-    String attributes = validated(item.getItemTypeVersionId(), command.attributes());
+    // Merge, validate, seal. The merge is what stops an edit by somebody who
+    // cannot read a sensitive field from deleting it: they were shown the record
+    // without it, and what they send back says nothing about it.
+    String attributes =
+        sealing.sealed(
+            item.getItemTypeVersionId(),
+            id,
+            validated(
+                item.getItemTypeVersionId(),
+                sealing.merged(
+                    item.getItemTypeVersionId(), id, command.attributes(), item.getAttributes())));
     // Read before the change, so the event below reports a CROSSING rather than a
     // state: an edit to something already known to be low is not news.
     boolean wasBelow = item.isBelowMinimum();
@@ -514,7 +534,8 @@ public class DefaultItemService implements ItemService {
     // be the way round REQ-TEN-008: a purchase price nobody may read today, read
     // out of yesterday.
     return new de.greluc.homeinv.audit.api.RevisionLog.RevisionPage(
-        page.items().stream().map(this::redacted).toList(), page.nextCursor());
+        page.items().stream().map(revision -> redacted(id, revision)).toList(),
+        page.nextCursor());
   }
 
   /**
@@ -525,17 +546,19 @@ public class DefaultItemService implements ItemService {
    * being stored separately: the record is what it is, and a second copy of the version id beside it
    * would be one more thing that can disagree.
    *
+   * @param itemId the item the history belongs to, which each seal is bound to
    * @param revision the stored revision
    * @return the same revision with its snapshot redacted, or unchanged when there was nothing to do
    */
   private de.greluc.homeinv.audit.api.RevisionLog.RevisionView redacted(
-      de.greluc.homeinv.audit.api.RevisionLog.RevisionView revision) {
+      UUID itemId, de.greluc.homeinv.audit.api.RevisionLog.RevisionView revision) {
 
     if (revision.snapshot() == null || revision.snapshot().isBlank()) {
       return revision;
     }
     Snapshot stored = json.readValue(revision.snapshot(), Snapshot.class);
-    String visible = redaction.forCaller(stored.itemTypeVersionId(), stored.attributes());
+    String visible =
+        redaction.forCaller(stored.itemTypeVersionId(), itemId, stored.attributes());
     if (java.util.Objects.equals(visible, stored.attributes())) {
       return revision;
     }
@@ -575,7 +598,16 @@ public class DefaultItemService implements ItemService {
     // written with: an item does not travel between versions, and a set that was
     // valid then may not be now — which is a refusal a person can act on rather
     // than a write that quietly stores something the type forbids.
-    String attributes = validated(item.getItemTypeVersionId(), earlier.attributes());
+    // A snapshot is stored whole, so a sensitive value in it is already sealed:
+    // `merged` opens it for the validation and `sealed` leaves it as it is.
+    String attributes =
+        sealing.sealed(
+            item.getItemTypeVersionId(),
+            id,
+            validated(
+                item.getItemTypeVersionId(),
+                sealing.merged(
+                    item.getItemTypeVersionId(), id, earlier.attributes(), item.getAttributes())));
 
     item.update(
         earlier.name(),
@@ -692,7 +724,7 @@ public class DefaultItemService implements ItemService {
         item.getLocationId(),
         item.getQuantity(),
         item.getQuantityUnit(),
-        redaction.forCaller(item.getItemTypeVersionId(), item.getAttributes()),
+        redaction.forCaller(item.getItemTypeVersionId(), item.getId(), item.getAttributes()),
         item.getNotes(),
         item.getMinimumStock(),
         item.getLifecycleState(),
