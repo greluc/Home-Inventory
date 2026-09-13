@@ -48,6 +48,14 @@ public class LocationController {
   private final SearchService search;
 
   /**
+   * The mapper the request body is re-serialised with, for an {@code Idempotency-Key}'s hash.
+   *
+   * <p>The application's own, so what is hashed is what this service would have written: a second
+   * mapper configured differently would make the same request hash two ways.
+   */
+  private final tools.jackson.databind.ObjectMapper json;
+
+  /**
    * Creates a location.
    *
    * @param request what to create
@@ -63,6 +71,7 @@ public class LocationController {
   @ResponseStatus(HttpStatus.CREATED)
   public ResponseEntity<LocationView> createLocation(
       @Valid @RequestBody CreateLocationRequest request,
+      HttpServletRequest http,
       @AuthenticationPrincipal AuthenticatedUser user) {
     LocationView view =
         locations.create(
@@ -72,8 +81,11 @@ public class LocationController {
                 request.parentId(),
                 request.name(),
                 request.attributes()),
+            IdempotencyKeys.from(http, request, json),
             user.userId());
-    return ResponseEntity.created(URI.create("/api/v1/locations/" + view.id())).body(view);
+    return ResponseEntity.created(URI.create("/api/v1/locations/" + view.id()))
+        .eTag(EntityTags.of(view.version()))
+        .body(view);
   }
 
   /**

@@ -4,7 +4,9 @@
  */
 package de.greluc.homeinv.locations.api;
 
+import de.greluc.homeinv.idempotency.api.RequestKey;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 
@@ -21,11 +23,16 @@ public interface LocationService {
    * Creates a location, as a root or below an existing one.
    *
    * @param command what to create
+   * @param idempotency the {@code Idempotency-Key} the caller sent and the hash of what it
+   *     sent with it, or empty when it sent none. A repeat carrying a spent key answers what
+   *     that key answered before and creates nothing (REQ-API-005)
+
    * @param actor the authenticated user
    * @return the new location
    * @throws TooDeepException when the tree would exceed its depth limit
    */
-  LocationView create(CreateLocationCommand command, UUID actor);
+  LocationView create(
+      CreateLocationCommand command, Optional<RequestKey> idempotency, UUID actor);
 
   /**
    * Reads one location, with the names from the root down to it (REQ-CORE-044).

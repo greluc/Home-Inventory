@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -316,6 +317,7 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         .create(
             new LocationService.CreateLocationCommand(
                 null, categoryNamed(tenant.tenantId(), "room"), null, name, null),
+            Optional.empty(),
             tenant.userId())
         .id();
   }
@@ -335,6 +337,7 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
                 "{}",
                 null,
                 null),
+            Optional.empty(),
             tenant.userId())
         .item()
         .id();

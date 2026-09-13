@@ -20,6 +20,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -192,7 +193,7 @@ class TagsIT extends AbstractIntegrationTest {
   private UUID anItem(Tenant tenant, String name) {
     return items.create(
             new ItemService.CreateItemCommand(
-                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null),
+                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null), Optional.empty(),
             tenant.userId())
         .item()
         .id();
@@ -209,7 +210,7 @@ class TagsIT extends AbstractIntegrationTest {
     UUID category = categories.list(null, 1).items().getFirst().id();
     return locations
         .create(
-            new LocationService.CreateLocationCommand(null, category, null, name, null),
+            new LocationService.CreateLocationCommand(null, category, null, name, null), Optional.empty(),
             tenant.userId())
         .id();
   }

@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.util.List;
 import java.time.Instant;
 import java.util.Objects;
+import de.greluc.homeinv.idempotency.api.RequestKey;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -49,6 +50,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultItemService implements ItemService {
 
   private final ItemRepository items;
+
+  /** Where a spent {@code Idempotency-Key} is looked up and recorded (REQ-API-005). */
+  private final de.greluc.homeinv.idempotency.api.IdempotentRequests requests;
+
+  /** What a key is spent on, so one key cannot create an item and a place. */
+  private static final String CREATE_ITEM = "POST /api/v1/items";
 
   /** What a trash cursor is bound to, so it cannot resume the live listing. */
   private static final String TRASH_CURSOR = "items-trashed";
@@ -129,9 +136,20 @@ public class DefaultItemService implements ItemService {
    */
   @Transactional
   @Override
-  public CreateResult create(CreateItemCommand command, UUID actor) {
+  public CreateResult create(
+      CreateItemCommand command, Optional<RequestKey> idempotency, UUID actor) {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
+
+    // Before anything else, and inside this transaction: a key that has already
+    // been spent answers with what it answered then, and nothing here runs
+    // (REQ-API-005). The record and the item it protects share one COMMIT, which
+    // is the whole of ADR-0009's decision and the reason this is not a filter.
+    Optional<String> answered =
+        idempotency.flatMap(key -> requests.replay(CREATE_ITEM, key.key(), key.requestHash()));
+    if (answered.isPresent()) {
+      return json.readValue(answered.get(), CreateResult.class);
+    }
 
     Optional<Item> existing = items.findAny(tenantId, id);
     if (existing.isPresent()) {
@@ -139,7 +157,7 @@ public class DefaultItemService implements ItemService {
       if (!sameContent(found, command)) {
         throw new ItemAlreadyExistsException(id);
       }
-      return new CreateResult(toView(found), false);
+      return remembered(idempotency, new CreateResult(toView(found), false), actor);
     }
 
     requireInScope(command.locationId());
@@ -199,7 +217,36 @@ public class DefaultItemService implements ItemService {
               tenantId, id, item.getQuantity(), item.getMinimumStock()));
     }
     log.debug("Item {} created in tenant {}", id, tenantId);
-    return new CreateResult(toView(item), true);
+    return remembered(idempotency, new CreateResult(toView(item), true), actor);
+  }
+
+  /**
+   * Records what a key answered, if a key was sent, and hands the answer back.
+   *
+   * <p>After the work and before the commit, which is the ordering REQ-API-005 turns on: a record
+   * written first could outlive work that failed, and one written after the commit could be lost
+   * while the item stayed -- the duplicate this exists to prevent.
+   *
+   * <p>Also called on the path where the item was already there. That looks redundant and is not:
+   * a client whose id-based retry succeeded has spent its key, and a THIRD attempt with the same
+   * key and a body it has since edited must be refused rather than quietly answered.
+   *
+   * @param idempotency the key and hash, if any
+   * @param result what to answer
+   * @param actor the authenticated user
+   * @return the result, unchanged
+   */
+  private CreateResult remembered(
+      Optional<RequestKey> idempotency, CreateResult result, UUID actor) {
+    idempotency.ifPresent(
+        key ->
+            requests.remember(
+                CREATE_ITEM,
+                key.key(),
+                key.requestHash(),
+                json.writeValueAsString(result),
+                actor));
+    return result;
   }
 
   /**

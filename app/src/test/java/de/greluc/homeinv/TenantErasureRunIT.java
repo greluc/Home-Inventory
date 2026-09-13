@@ -25,6 +25,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
@@ -102,8 +103,8 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
     assertThat(certificate.report())
         .extracting(TenantErasure.BlockReport::block)
         .containsExactly(
-            "media", "tagging", "inventory", "tenancy", "locations", "catalog", "authorization",
-            "audit");
+            "idempotency", "media", "tagging", "inventory", "tenancy", "locations", "catalog",
+            "authorization", "audit");
 
     // And the blocks that held something say how much.
     assertThat(reportOf(certificate, "inventory").rowsRemoved()).isPositive();
@@ -152,12 +153,12 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
           UUID category = aCategory(tenant);
           UUID cellar = locations
               .create(
-                  new LocationService.CreateLocationCommand(null, category, null, "Cellar", null),
+                  new LocationService.CreateLocationCommand(null, category, null, "Cellar", null), Optional.empty(),
                   tenant.userId())
               .id();
           UUID shelf = locations
               .create(
-                  new LocationService.CreateLocationCommand(null, category, cellar, "Shelf", null),
+                  new LocationService.CreateLocationCommand(null, category, cellar, "Shelf", null), Optional.empty(),
                   tenant.userId())
               .id();
 
@@ -166,7 +167,7 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
                   .create(
                       new ItemService.CreateItemCommand(
                           null, null, "A thing", null, ItemKind.PHYSICAL, shelf, BigDecimal.ONE,
-                          null, null, null, null),
+                          null, null, null, null), Optional.empty(),
                       tenant.userId())
                   .item()
                   .id();

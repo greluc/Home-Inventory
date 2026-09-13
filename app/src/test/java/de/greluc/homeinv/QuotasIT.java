@@ -20,6 +20,7 @@ import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -203,7 +204,7 @@ class QuotasIT extends AbstractIntegrationTest {
         .create(
             new ItemService.CreateItemCommand(
                 null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null,
-                null),
+                null), Optional.empty(),
             tenant.userId())
         .item()
         .id();

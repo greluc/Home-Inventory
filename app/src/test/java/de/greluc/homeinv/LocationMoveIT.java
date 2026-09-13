@@ -24,6 +24,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -352,7 +353,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
 
   private LocationView create(UUID categoryId, UUID parentId, String name) {
     return locations.create(
-        new LocationService.CreateLocationCommand(null, categoryId, parentId, name, null),
+        new LocationService.CreateLocationCommand(null, categoryId, parentId, name, null), Optional.empty(),
         currentActor);
   }
 
@@ -370,7 +371,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
                 null,
                 "{}",
                 null,
-                null),
+                null), Optional.empty(),
             currentActor)
         .item()
         .id();

@@ -21,6 +21,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -358,7 +359,7 @@ class LocationTreeIT extends AbstractIntegrationTest {
 
   private LocationView create(UUID categoryId, UUID parentId, String name, UUID actor) {
     return locationService.create(
-        new LocationService.CreateLocationCommand(null, categoryId, parentId, name, null), actor);
+        new LocationService.CreateLocationCommand(null, categoryId, parentId, name, null), Optional.empty(), actor);
   }
 
   private String rawPath(UUID locationId) {

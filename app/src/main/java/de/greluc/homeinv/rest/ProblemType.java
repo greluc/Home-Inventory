@@ -184,6 +184,16 @@ public enum ProblemType {
   DELETION_PENDING("deletion-pending", HttpStatus.CONFLICT, "Deletion pending"),
 
   /**
+   * One {@code Idempotency-Key} was spent on two different requests (REQ-API-005).
+   *
+   * <p>A {@code 409}: the key says "the same request as before" and the body says otherwise, and
+   * only the client knows which it meant. Answering with the earlier result would make a request
+   * that changed nothing look like one that worked.
+   */
+  IDEMPOTENCY_KEY_CONFLICT("idempotency-key-conflict", HttpStatus.CONFLICT,
+      "Idempotency-Key already used"),
+
+  /**
    * A write on a single resource arrived without {@code If-Match} (REQ-API-004).
    *
    * <p>{@code 428}, the status invented for exactly this: the server could perform the request and

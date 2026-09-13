@@ -18,6 +18,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -171,7 +172,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
   private UUID anItem(Tenant tenant, String name) {
     return items.create(
             new ItemService.CreateItemCommand(
-                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null),
+                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null), Optional.empty(),
             tenant.userId())
         .item()
         .id();

@@ -65,6 +65,14 @@ public class ItemController {
   private final ItemBundles bundles;
 
   /**
+   * The mapper the request body is re-serialised with, for an {@code Idempotency-Key}'s hash.
+   *
+   * <p>The application's own, so what is hashed is what this service would have written: a second
+   * mapper configured differently would make the same request hash two ways.
+   */
+  private final tools.jackson.databind.ObjectMapper json;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>{@code 201} when this request created it, {@code 200} when an identical creation had already
@@ -90,7 +98,9 @@ public class ItemController {
       description = "An identical item already existed under this id; this is that item.",
       content = @Content(schema = @Schema(implementation = ItemView.class)))
   public ResponseEntity<ItemView> createItem(
-      @Valid @RequestBody CreateItemRequest request, @AuthenticationPrincipal AuthenticatedUser user) {
+      @Valid @RequestBody CreateItemRequest request,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
     ItemService.CreateResult result =
         items.create(
             new ItemService.CreateItemCommand(
@@ -105,6 +115,7 @@ public class ItemController {
                 request.attributes(),
                 request.notes(),
                 request.minimumStock()),
+            IdempotencyKeys.from(http, request, json),
             user.userId());
 
     ItemView view = result.item();

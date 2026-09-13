@@ -150,6 +150,19 @@
   </Match>
 
 <!--
+    SERVLET_HEADER on `IdempotencyKeys`. Reading `Idempotency-Key` is what the class
+    is for, and the value is treated as untrusted before anything is done with it:
+    trimmed, bounded at 255 characters, and refused unless every character is
+    printable ASCII without spaces. What survives is stored as data in a parameterised
+    statement and compared; it reaches no response — the conflict deliberately does
+    not name the key — and no log line (REQ-API-005).
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.IdempotencyKeys"/>
+  </Match>
+
+  <!--
     SERVLET_HEADER on `EntityTags`. Reading `If-Match` is what the class is for, and
     the value is treated as untrusted from the first line: it is trimmed, required to
     be a quoted number, parsed with `Long.parseLong`, and otherwise refused. What

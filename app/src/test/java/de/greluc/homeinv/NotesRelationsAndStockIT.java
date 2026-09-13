@@ -18,6 +18,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -59,7 +60,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                         command(
                             "Toolbox",
                             "Bought at the <b>market</b>. <script>alert('x')</script> Second shelf.",
-                            null),
+                            null), Optional.empty(),
                         tenant.userId())
                     .item();
             assertThat(stored.notes())
@@ -152,7 +153,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                             "packs",
                             null,
                             null,
-                            BigDecimal.valueOf(2)),
+                            BigDecimal.valueOf(2)), Optional.empty(),
                         tenant.userId())
                     .item();
             assertThat(stored.minimumStock()).isEqualByComparingTo("2");
@@ -197,7 +198,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
    * @return the item's id
    */
   private UUID anItem(Tenant tenant, String name) {
-    return items.create(command(name, null, null), tenant.userId()).item().id();
+    return items.create(command(name, null, null), Optional.empty(), tenant.userId()).item().id();
   }
 
   /**

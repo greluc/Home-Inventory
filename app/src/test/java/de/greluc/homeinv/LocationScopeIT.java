@@ -19,6 +19,7 @@ import de.greluc.homeinv.search.api.SearchService;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -105,7 +106,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                   () ->
                       locations.create(
                           new LocationService.CreateLocationCommand(
-                              null, categoryOf(tenant), places.bedroom(), "Sneaky", null),
+                              null, categoryOf(tenant), places.bedroom(), "Sneaky", null), Optional.empty(),
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
@@ -114,7 +115,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                   () ->
                       locations.create(
                           new LocationService.CreateLocationCommand(
-                              null, categoryOf(tenant), null, "A second house", null),
+                              null, categoryOf(tenant), null, "A second house", null), Optional.empty(),
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
@@ -133,7 +134,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                               null,
                               null,
                               null,
-                              null),
+                              null), Optional.empty(),
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
@@ -142,7 +143,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                   locations
                       .create(
                           new LocationService.CreateLocationCommand(
-                              null, categoryOf(tenant), places.garage(), "A shelf", null),
+                              null, categoryOf(tenant), places.garage(), "A shelf", null), Optional.empty(),
                           tenant.userId())
                       .id())
               .isNotNull();
@@ -195,19 +196,19 @@ class LocationScopeIT extends AbstractIntegrationTest {
           UUID house =
               locations
                   .create(
-                      new LocationService.CreateLocationCommand(null, category, null, "House", null),
+                      new LocationService.CreateLocationCommand(null, category, null, "House", null), Optional.empty(),
                       tenant.userId())
                   .id();
           UUID garage =
               locations
                   .create(
-                      new LocationService.CreateLocationCommand(null, category, house, "Garage", null),
+                      new LocationService.CreateLocationCommand(null, category, house, "Garage", null), Optional.empty(),
                       tenant.userId())
                   .id();
           UUID bedroom =
               locations
                   .create(
-                      new LocationService.CreateLocationCommand(null, category, house, "Bedroom", null),
+                      new LocationService.CreateLocationCommand(null, category, house, "Bedroom", null), Optional.empty(),
                       tenant.userId())
                   .id();
           built.set(
@@ -265,7 +266,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                 null,
                 null,
                 null,
-                null),
+                null), Optional.empty(),
             tenant.userId())
         .item()
         .id();

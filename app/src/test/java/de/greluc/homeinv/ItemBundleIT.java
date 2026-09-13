@@ -21,6 +21,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -256,6 +257,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
         .create(
             new LocationService.CreateLocationCommand(
                 null, anyCategory(tenant.tenantId()), null, name, null),
+            Optional.empty(),
             tenant.userId())
         .id();
   }
@@ -275,6 +277,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
                 "{}",
                 null,
                 null),
+            Optional.empty(),
             tenant.userId())
         .item()
         .id();

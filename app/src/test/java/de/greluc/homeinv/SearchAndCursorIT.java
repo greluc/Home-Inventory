@@ -18,6 +18,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
@@ -156,7 +157,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
         () ->
             items.create(
                 new ItemService.CreateItemCommand(
-                    null, null, name, description, ItemKind.DIGITAL, null, null, null, null, null, null),
+                    null, null, name, description, ItemKind.DIGITAL, null, null, null, null, null, null), Optional.empty(),
                 tenant.userId()));
   }
 

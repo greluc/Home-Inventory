@@ -5,6 +5,7 @@
 package de.greluc.homeinv.locations.application;
 
 import de.greluc.homeinv.catalog.api.TypeRegistry;
+import de.greluc.homeinv.idempotency.api.RequestKey;
 import de.greluc.homeinv.inventory.api.ItemLocationUsage;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationMoved;
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +59,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultLocationService implements LocationService {
 
   private final LocationRepository locations;
+
+  /** Where a spent {@code Idempotency-Key} is looked up and recorded (REQ-API-005). */
+  private final de.greluc.homeinv.idempotency.api.IdempotentRequests requests;
+
+  /** Serialises what a key answered, so the repeat gets the same thing back. */
+  private final tools.jackson.databind.ObjectMapper json;
+
+  /** What a key is spent on, so one key cannot create a place and an item. */
+  private static final String CREATE_LOCATION = "POST /api/v1/locations";
   private final LocationTreeQueries tree;
   /** Where {@code LocationMoved} goes (REQ-CORE-043). */
   private final ApplicationEventPublisher events;
@@ -109,10 +120,20 @@ public class DefaultLocationService implements LocationService {
    */
   @Transactional
   @Override
-  public LocationView create(CreateLocationCommand command, UUID actor) {
+  public LocationView create(
+      CreateLocationCommand command, Optional<RequestKey> idempotency, UUID actor) {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
     Instant now = Instant.now(clock);
+
+    // Inside this transaction, before anything is written: a spent key answers
+    // what it answered before and creates nothing (REQ-API-005). The record and
+    // the place it protects share one COMMIT (ADR-0009).
+    Optional<String> answered =
+        idempotency.flatMap(key -> requests.replay(CREATE_LOCATION, key.key(), key.requestHash()));
+    if (answered.isPresent()) {
+      return json.readValue(answered.get(), LocationView.class);
+    }
 
     requireInScope(command.parentId());
 
@@ -144,7 +165,20 @@ public class DefaultLocationService implements LocationService {
 
     locations.save(created);
     log.debug("Location {} created in tenant {}", id, tenantId);
-    return toView(created, Map.of(categoryVersionId, command.categoryId()));
+
+    LocationView view = toView(created, Map.of(categoryVersionId, command.categoryId()));
+    // After the work and before the commit, which is the ordering the decision
+    // turns on: written first it could outlive work that failed, written after
+    // the commit it could be lost while the place stayed.
+    idempotency.ifPresent(
+        key ->
+            requests.remember(
+                CREATE_LOCATION,
+                key.key(),
+                key.requestHash(),
+                json.writeValueAsString(view),
+                actor));
+    return view;
   }
 
   /**

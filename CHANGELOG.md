@@ -133,6 +133,13 @@ commit".
 
 ### Added
 
+- **A retry no longer creates a second thing.** Creating an item or a place
+  accepts `Idempotency-Key`: send the same key twice and the second request
+  answers what the first one answered and creates nothing, however long the gap
+  and whatever the network did in between. The same key with a different body, or
+  at a different endpoint, is refused rather than quietly answered with the
+  earlier result. Keys are forgotten after a day. *REST API: additive.*
+
 - **Two people can no longer overwrite each other's edits.** Reading a single
   item or place now returns an `ETag`, and changing, moving or deleting one
   requires it back as `If-Match`: without the header the request is refused and

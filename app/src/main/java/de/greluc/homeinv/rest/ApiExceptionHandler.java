@@ -9,6 +9,7 @@ import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.InvalidSecondFactorException;
 import de.greluc.homeinv.identity.api.RegistrationClosedException;
 import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
+import de.greluc.homeinv.idempotency.api.IdempotencyKeyConflictException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
@@ -575,6 +576,19 @@ public class ApiExceptionHandler {
    * @param exception the refusal, carrying which
    * @param request the request, for the instance URI
    * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(IdempotencyKeyConflictException.class)
+  public ProblemDetail handleIdempotencyConflict(
+      IdempotencyKeyConflictException exception, HttpServletRequest request) {
+    return problem(ProblemType.IDEMPOTENCY_KEY_CONFLICT, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a write on a single resource that arrived without {@code If-Match} (REQ-API-004).
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 428} problem detail
    */
   @ExceptionHandler(PreconditionRequiredException.class)
   public ProblemDetail handlePreconditionRequired(
