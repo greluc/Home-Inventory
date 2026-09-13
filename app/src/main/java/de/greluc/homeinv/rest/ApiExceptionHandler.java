@@ -17,6 +17,7 @@ import de.greluc.homeinv.tenancy.api.InvitationAlreadyOpenException;
 import de.greluc.homeinv.tenancy.api.InvitationNotYoursException;
 import de.greluc.homeinv.tenancy.api.InvitationUnusableException;
 import de.greluc.homeinv.tenancy.api.LastOwnerException;
+import de.greluc.homeinv.tenancy.api.QuotaExceededException;
 import de.greluc.homeinv.tenancy.api.RoleEscalationException;
 import de.greluc.homeinv.tenancy.api.TenantLimitReachedException;
 import de.greluc.homeinv.locations.api.TooDeepException;
@@ -120,6 +121,31 @@ public class ApiExceptionHandler {
     problem.setProperty("current", exception.getCurrent());
     problem.setProperty("permitted", exception.getPermitted());
     problem.setProperty("quota", "tenants-per-user");
+    return problem;
+  }
+
+  /**
+   * Answers an operation that would take the tenant past a quota (REQ-TEN-009).
+   *
+   * <p>Both numbers and the quota's name travel as members, because 05 §5.1 says a quota refusal
+   * carries "the current and permitted amount" and a client showing that pair should not have to
+   * parse English to find it.
+   *
+   * @param exception the refusal, carrying the quota and both numbers
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 403} with {@code quota-exceeded}
+   */
+  @ExceptionHandler(QuotaExceededException.class)
+  public ProblemDetail handleQuotaExceeded(
+      QuotaExceededException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.QUOTA_EXCEEDED,
+            "This tenant has reached its quota. Ask the operator to raise it.",
+            request);
+    problem.setProperty("quota", exception.getQuota().name());
+    problem.setProperty("current", exception.getCurrent());
+    problem.setProperty("permitted", exception.getPermitted());
     return problem;
   }
 

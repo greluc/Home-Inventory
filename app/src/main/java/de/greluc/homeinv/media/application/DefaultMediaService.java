@@ -76,6 +76,16 @@ public class DefaultMediaService implements MediaService {
   private final MediaHostCheck mediaHost;
   private final CursorCodec cursors;
   private final ApplicationEventPublisher events;
+
+  /**
+   * What the tenant may store (REQ-TEN-009).
+   *
+   * <p>Claimed on the bytes of a NEW object and not on every attachment: deduplication within the
+   * tenant means the same photograph attached to five items costs its size once (ADR-0032), and a
+   * quota that charged five times would be counting references rather than storage.
+   */
+  private final de.greluc.homeinv.tenancy.api.QuotaGuard quotas;
+
   private final Clock clock;
 
   @Override
@@ -113,6 +123,14 @@ public class DefaultMediaService implements MediaService {
                   // `MediaObject.pending` sets that state; recording CLEAN here
                   // was what made the scan look synchronous to everything
                   // downstream, including the tests.
+                  //
+                  // The quota is claimed here, inside the `orElseGet`, so that it
+                  // is charged for a new object and not for the second upload of
+                  // one the tenant already has. In this transaction, so a failure
+                  // below returns the claim with the rollback.
+                  quotas.require(
+                      de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.STORAGE_BYTES,
+                      stored.byteSize());
                   return objects.save(fresh);
                 });
 
@@ -293,6 +311,11 @@ public class DefaultMediaService implements MediaService {
       // The tenant's last reference. Another tenant holding the same bytes holds
       // its own copy and is untouched - which is the property per-tenant content
       // addressing exists to give (ADR-0032).
+      // The bytes are the tenant's again whether or not the blob store agrees
+      // below: the reference is gone, and a blob that outlives it is wasted space
+      // the reconciliation of REQ-NFR-073 finds, not storage the tenant still owes.
+      quotas.release(
+          de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.STORAGE_BYTES, object.getByteSize());
       try {
         blobs.delete(tenantId, object.getSha256());
       } catch (IOException failed) {

@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **A tenant is bounded in what it may hold.** Items, stored bytes, plugins and
+  API calls each have a limit; reaching one is refused with both numbers, so a
+  client can say "48 000 of 50 000" rather than "something went wrong". The
+  instance operator sets a tenant's limits without being a member of it and
+  without being able to see inside it, and where nothing has been set the
+  instance-wide default applies — 100 000 items, 50 GiB, 10 plugins and 100 000
+  API calls a month. Signing in, switching tenant and asking how much is left
+  keep working when the allowance is spent. *REST API: additive.*
+
 - **People can be invited into a tenant, and the roles now mean different
   things.** An invitation is bound to an e-mail address, works once, runs out
   after a week, and can be withdrawn; accepting one is also how an account comes

@@ -1048,6 +1048,29 @@ components:
       - status
       - title
       - type
+    QuotaRequest:
+      description: The body of a quota change.
+      properties:
+        permitted:
+          description: |-
+            how much the tenant may use. Zero is legal and means "none for now"; there is
+            no way to say "unlimited", because an unbounded quota is not a quota
+          format: int64
+          minimum: 0
+          type: integer
+      type: object
+    QuotaState:
+      description: Where a tenant stands in one quota.
+      properties:
+        permitted:
+          description: how much is allowed
+          format: int64
+          type: integer
+        used:
+          description: how much is in use now
+          format: int64
+          type: integer
+      type: object
     RelationPage:
       description: One page of relations.
       properties:
@@ -3347,6 +3370,165 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: One page of the accounts that administer the instance
+  /api/v1/instance/tenants/{tenantId}/quotas:
+    get:
+      description: |-
+        What has been decided about one tenant's quotas (REQ-TEN-009, 13 §13.9).
+
+        Limits only, and an empty answer means nothing has been decided rather than that the tenant
+        may do nothing — a quota with no entry falls back to the instance-wide default. What the tenant
+        has **used** is its own data and is not readable here: an operator who needs to see inside a
+        tenant impersonates (REQ-SEC-072), which is audited and which the affected user can see.
+      operationId: quotasOf
+      parameters:
+      - description: the tenant
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  format: int64
+                  type: integer
+                type: object
+          description: the limits set for it
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What has been decided about one tenant's quotas (REQ-TEN-009, 13 §13
+  /api/v1/instance/tenants/{tenantId}/quotas/{quota}:
+    put:
+      description: |-
+        Sets what a tenant may use.
+
+        The write goes through the `SECURITY DEFINER` function of migration `V24`,
+        which is what 07 §7.5 names for cross-tenant administration. The operator establishes no tenant
+        context and gains no other reach into the tenant by doing this.
+      operationId: setQuota
+      parameters:
+      - description: the tenant
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: which bound
+        in: path
+        name: quota
+        required: true
+        schema:
+          enum:
+          - ITEM_COUNT
+          - STORAGE_BYTES
+          - PLUGIN_COUNT
+          - API_CALLS
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuotaRequest'
+        description: the new limit
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  format: int64
+                  type: integer
+                type: object
+          description: the limits as they now stand
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Sets what a tenant may use
   /api/v1/invitations/{token}/accept:
     post:
       description: |-
@@ -6879,6 +7061,73 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Changes what a member may do.
+  /api/v1/tenants/{tenantId}/quotas:
+    get:
+      description: |-
+        Where this tenant stands in each of its four quotas (REQ-TEN-009).
+
+        Readable by anybody who may read the tenant, so a client can warn before a limit is reached
+        rather than after. Deliberately exempt from the API-call quota itself: "how much have I used"
+        has to be answerable when the answer is "all of it".
+
+        Keyed by quota rather than a list, and not to dodge the page cap of REQ-NFR-010: there are
+        exactly four quotas and there will be exactly four tomorrow, so a cursor would page a set that
+        cannot grow. A key is also what a client wants — it reads one quota, not the third element.
+      operationId: quotas
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  $ref: '#/components/schemas/QuotaState'
+                type: object
+          description: one entry per quota, with what is used and what is permitted
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Where this tenant stands in each of its four quotas (REQ-TEN-009)
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

@@ -83,6 +83,15 @@ public class DefaultItemService implements ItemService {
   private final org.springframework.context.ApplicationEventPublisher events;
 
   /**
+   * What the tenant may hold (REQ-TEN-009).
+   *
+   * <p>Called before the row is written and never after: 04 §4.3 says the guard runs "before every
+   * creating operation … that way abuse limitation is not something to bolt on later". The claim is
+   * in this transaction, so an item that fails to be created returns its claim with the rollback.
+   */
+  private final de.greluc.homeinv.tenancy.api.QuotaGuard quotas;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -111,6 +120,10 @@ public class DefaultItemService implements ItemService {
       }
       return new CreateResult(toView(found), false);
     }
+
+    // Before anything is written, and after the idempotent short circuit above:
+    // a repeat of a creation that already happened must not claim a second item.
+    quotas.require(de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.ITEM_COUNT, 1);
 
     // A client names the TYPE; the version is resolved here, once, and stored.
     // The item then keeps the shape the type had at this moment however often the
@@ -370,6 +383,10 @@ public class DefaultItemService implements ItemService {
 
     items.delete(item);
     items.flush();
+    // Given back here and not when the item was trashed: a trashed item is still
+    // a row and still carries its attachments, and this is the operation that
+    // actually gives the space back (REQ-CORE-009).
+    quotas.release(de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.ITEM_COUNT, 1);
     log.info("Item {} purged in tenant {} by {}", id, tenantId, actor);
   }
 

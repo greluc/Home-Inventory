@@ -42,6 +42,22 @@ CREATE ROLE homeinv_bootstrap WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE N
 -- The migrator has to be able to hand ownership of that function over.
 GRANT homeinv_bootstrap TO homeinv_migrator;
 
+-- Owns exactly one thing too: the function through which the instance operator
+-- sets a tenant's quota. 07 §7.5 names this as the only sanctioned shape for
+-- cross-tenant administration — "an explicit, logged SECURITY DEFINER function
+-- with its own permission check, never BYPASSRLS" — and it is separate from
+-- `homeinv_bootstrap` because that role reads and this one writes. A read-only
+-- role that grew a write would be a role nobody could describe in one sentence
+-- any more.
+--
+-- What it can reach is one column of one table that holds no domain data: how
+-- much the INSTANCE allocates to a tenant. It cannot read an item, a location or
+-- a membership, and the application gates the function on the instance-operator
+-- entitlement before calling it (ADR-0057).
+CREATE ROLE homeinv_quota WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE NOSUPERUSER;
+
+GRANT homeinv_quota TO homeinv_migrator;
+
 -- The 30-second ceiling of `REQ-SEC-065`, set on the roles rather than in the
 -- application's configuration, so that it holds for every connection including
 -- the ones a psql session opens. A client can raise its own `statement_timeout`

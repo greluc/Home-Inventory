@@ -10,12 +10,15 @@ import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.tenancy.api.InvitationService;
 import de.greluc.homeinv.tenancy.api.MembershipAdministration;
+import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -51,6 +54,7 @@ public class MemberController {
 
   private final MembershipAdministration members;
   private final InvitationService invitations;
+  private final QuotaGuard quotaGuard;
 
   /**
    * One page of the tenant's members.
@@ -200,6 +204,42 @@ public class MemberController {
     requireOwnTenant(tenantId, user);
     invitations.revoke(invitationId, user.userId());
   }
+
+  /**
+   * Where this tenant stands in each of its four quotas (REQ-TEN-009).
+   *
+   * <p>Readable by anybody who may read the tenant, so a client can warn before a limit is reached
+   * rather than after. Deliberately exempt from the API-call quota itself: "how much have I used"
+   * has to be answerable when the answer is "all of it".
+   *
+   * <p>Keyed by quota rather than a list, and not to dodge the page cap of REQ-NFR-010: there are
+   * exactly four quotas and there will be exactly four tomorrow, so a cursor would page a set that
+   * cannot grow. A key is also what a client wants — it reads one quota, not the third element.
+   *
+   * @param tenantId the tenant, which must be the session's
+   * @param user the authenticated caller
+   * @return one entry per quota, with what is used and what is permitted
+   */
+  @GetMapping(path = "/quotas", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TENANT_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.FORBIDDEN})
+  public Map<QuotaGuard.Quota, QuotaState> quotas(
+      @PathVariable UUID tenantId, @AuthenticationPrincipal AuthenticatedUser user) {
+    requireOwnTenant(tenantId, user);
+    Map<QuotaGuard.Quota, QuotaState> answer = new EnumMap<>(QuotaGuard.Quota.class);
+    for (QuotaGuard.QuotaView view : quotaGuard.usage()) {
+      answer.put(view.quota(), new QuotaState(view.used(), view.permitted()));
+    }
+    return answer;
+  }
+
+  /**
+   * Where a tenant stands in one quota.
+   *
+   * @param used how much is in use now
+   * @param permitted how much is allowed
+   */
+  public record QuotaState(long used, long permitted) {}
 
   /**
    * Refuses a path that names a tenant other than the session's.

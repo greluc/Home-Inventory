@@ -9,6 +9,8 @@ import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.OperatorDirectory;
+import de.greluc.homeinv.tenancy.api.QuotaAdministration;
+import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import de.greluc.homeinv.platform.NotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -16,7 +18,9 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -50,6 +54,7 @@ public class InstanceController {
 
   private final AccountAdministration accounts;
   private final OperatorDirectory operators;
+  private final QuotaAdministration quotas;
 
   /**
    * Finds an account by its login address.
@@ -140,6 +145,77 @@ public class InstanceController {
             request.tenantLimit(),
             user.userId()));
   }
+
+  /**
+   * What has been decided about one tenant's quotas (REQ-TEN-009, 13 §13.9).
+   *
+   * <p>Limits only, and an empty answer means nothing has been decided rather than that the tenant
+   * may do nothing — a quota with no entry falls back to the instance-wide default. What the tenant
+   * has <b>used</b> is its own data and is not readable here: an operator who needs to see inside a
+   * tenant impersonates (REQ-SEC-072), which is audited and which the affected user can see.
+   *
+   * @param tenantId the tenant
+   * @return the limits set for it
+   */
+  @GetMapping(path = "/tenants/{tenantId}/quotas", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail(ProblemType.FORBIDDEN)
+  public Map<QuotaGuard.Quota, Long> quotasOf(@PathVariable UUID tenantId) {
+    return limitsOf(tenantId);
+  }
+
+  /**
+   * Sets what a tenant may use.
+   *
+   * <p>The write goes through the {@code SECURITY DEFINER} function of migration {@code V24},
+   * which is what 07 §7.5 names for cross-tenant administration. The operator establishes no tenant
+   * context and gains no other reach into the tenant by doing this.
+   *
+   * @param tenantId the tenant
+   * @param quota which bound
+   * @param request the new limit
+   * @param user the operator making the change
+   * @return the limits as they now stand
+   */
+  @PutMapping(
+      path = "/tenants/{tenantId}/quotas/{quota}",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.VALIDATION_FAILED})
+  public Map<QuotaGuard.Quota, Long> setQuota(
+      @PathVariable UUID tenantId,
+      @PathVariable QuotaGuard.Quota quota,
+      @Valid @RequestBody QuotaRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+
+    quotas.setLimit(tenantId, quota, request.permitted(), user.userId());
+    return limitsOf(tenantId);
+  }
+
+  /**
+   * The limits set for a tenant, keyed by quota.
+   *
+   * <p>A map and not a list, and not to dodge the page cap of REQ-NFR-010: there are exactly four
+   * quotas and there will be exactly four tomorrow, so a cursor would page a set that cannot grow.
+   *
+   * @param tenantId the tenant
+   * @return what has been decided about it, which may be nothing
+   */
+  private Map<QuotaGuard.Quota, Long> limitsOf(UUID tenantId) {
+    Map<QuotaGuard.Quota, Long> limits = new EnumMap<>(QuotaGuard.Quota.class);
+    for (QuotaAdministration.QuotaLimit limit : quotas.limitsOf(tenantId)) {
+      limits.put(limit.quota(), limit.permitted());
+    }
+    return limits;
+  }
+
+  /**
+   * The body of a quota change.
+   *
+   * @param permitted how much the tenant may use. Zero is legal and means "none for now"; there is
+   *     no way to say "unlimited", because an unbounded quota is not a quota
+   */
+  public record QuotaRequest(@PositiveOrZero long permitted) {}
 
   /**
    * Maps the port's view onto the wire.

@@ -27,19 +27,25 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebLayerConfiguration implements WebMvcConfigurer {
 
   private final PermissionInterceptor permissionInterceptor;
+  private final ApiCallQuotaInterceptor apiCallQuotaInterceptor;
 
   /**
    * Puts the permission check in front of every handler.
    *
-   * <p>No path exclusions. An endpoint that needs none says so with
+   * <p>No path exclusions on the permission check. An endpoint that needs none says so with
    * {@code @PublicEndpoint} and a written reason; a list of excluded paths here would be a second
-   * place to say it, and the second place is the one that drifts (REQ-SEC-023).
+   * place to say it, and the second place is the one that drifts (REQ-SEC-023). The quota
+   * interceptor does have exemptions, and they are in the class that applies them.
    *
    * @param registry the registry Spring MVC offers
    */
   @Override
   public void addInterceptors(@NonNull InterceptorRegistry registry) {
     registry.addInterceptor(permissionInterceptor);
+    // After the permission check, deliberately. A call the caller was never
+    // allowed to make should not come out of their monthly allowance, and the
+    // order here is what decides that (REQ-TEN-009).
+    registry.addInterceptor(apiCallQuotaInterceptor);
   }
 
   /**
