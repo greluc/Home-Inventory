@@ -125,6 +125,17 @@ commit".
 
 ### Added
 
+- **People can be invited into a tenant, and the roles now mean different
+  things.** An invitation is bound to an e-mail address, works once, runs out
+  after a week, and can be withdrawn; accepting one is also how an account comes
+  into being, which is the only way onto an instance. Members can be listed,
+  promoted and removed — and nobody can hand out a role carrying permissions they
+  do not hold themselves, nor take one away, nor leave the tenant without an
+  owner. The ladder itself has been sharpened: a member now holds everything about
+  the inventory's *content*, and configuring the type system or the membership is
+  an administrator's. Somebody who belongs to no tenant can also sign in now,
+  which is what lets a removed person be invited back. *REST API: additive.*
+
 - **A person can have more than one tenant, and move between them without
   signing in again.** An account the operator has entitled creates tenants of its
   own — a household, a club, a workshop — up to a limit the operator sets per

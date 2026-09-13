@@ -85,4 +85,36 @@ public class Membership {
   public static Membership create(UUID id, UUID tenantId, UUID userId, String role, Instant now) {
     return new Membership(id, tenantId, userId, role, now);
   }
+
+  /**
+   * Puts this person in a different role (REQ-TEN-005).
+   *
+   * <p>Whether the actor may is decided before this is called, in the application layer, against
+   * the ladder — the entity knows what a role is called and nothing about what one is worth.
+   *
+   * @param newRole one of the six built-in role names
+   * @param actor who is making the change
+   * @param now the instant of the change
+   */
+  public void changeRole(String newRole, UUID actor, Instant now) {
+    this.role = newRole;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Removes this person from the tenant.
+   *
+   * <p>A tombstone rather than a deletion (07 §7.1, rule 5): audit entries name the person, and a
+   * row that vanished would leave them pointing at nothing. The partial unique index on
+   * {@code (tenant_id, user_id)} excludes tombstones, so the same person can be invited back.
+   *
+   * @param actor who is removing them
+   * @param now the instant of the removal
+   */
+  public void remove(UUID actor, Instant now) {
+    this.deletedAt = now;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
 }

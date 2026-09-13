@@ -35,9 +35,13 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h2>The tenant comes from the membership</h2>
  *
- * <p>Not from the request, not from a header, not from a subdomain. Stage 0 has one tenant per
- * user; stage 1 lets a user switch between several without re-authenticating (REQ-TEN-003), which
- * changes which membership is chosen here and nothing else in the system.
+ * <p>Not from the request, not from a header, not from a subdomain. Stage 1 lets a user switch
+ * between several without re-authenticating (REQ-TEN-003), which changes which membership is chosen
+ * here and nothing else in the system.
+ *
+ * <p>Somebody with no membership signs in all the same, with a null tenant. See
+ * {@link AuthenticatedUser} for why that is a state rather than a fault, and for what such a session
+ * can and cannot reach.
  */
 @Service
 @Slf4j
@@ -122,28 +126,35 @@ public class DefaultAuthenticationService implements AuthenticationService {
     }
 
     AppUser user = found.get();
-    MembershipLookup.Membership membership =
-        memberships
-            .primaryMembershipOf(user.getId())
-            .orElseThrow(
-                () -> {
-                  // A user with no membership cannot act, and saying so precisely
-                  // would confirm the account exists. It is an invalid credential
-                  // from outside and a data problem from inside.
-                  log.warn("User {} authenticated but belongs to no tenant", user.getId());
-                  return new InvalidCredentialsException();
-                });
+    // Belonging to no tenant is a state, not a failure. An instance operator may
+    // be a member of nothing (ADR-0057); somebody entitled to create their first
+    // tenant has not yet; somebody removed from their only one must still be able
+    // to sign in, or they could never accept an invitation back. The session they
+    // get reads nothing: no tenant context is published, so every policy yields
+    // zero rows, and the null role holds no permission.
+    Optional<MembershipLookup.Membership> membership =
+        memberships.primaryMembershipOf(user.getId());
 
     rehashIfCostRaised(user, password);
     rateLimiter.recordSuccess(email, clientIp);
 
+    if (membership.isEmpty()) {
+      log.info("User {} logged in and belongs to no tenant", user.getId());
+      return new AuthenticatedUser(
+          user.getId(), null, user.getEmail(), user.getLocale(), null);
+    }
+
     log.info(
         "User {} logged in for tenant {} as {}",
         user.getId(),
-        membership.tenantId(),
-        membership.role());
+        membership.get().tenantId(),
+        membership.get().role());
     return new AuthenticatedUser(
-        user.getId(), membership.tenantId(), user.getEmail(), user.getLocale(), membership.role());
+        user.getId(),
+        membership.get().tenantId(),
+        user.getEmail(),
+        user.getLocale(),
+        membership.get().role());
   }
 
   /**

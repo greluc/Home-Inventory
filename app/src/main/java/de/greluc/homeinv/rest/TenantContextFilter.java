@@ -49,7 +49,9 @@ public class TenantContextFilter extends OncePerRequestFilter {
 
     if (principal instanceof AuthenticatedUser user) {
       try {
-        MDC.put("tenantId", user.tenantId().toString());
+        if (user.tenantId() != null) {
+          MDC.put("tenantId", user.tenantId().toString());
+        }
         MDC.put("actorId", user.userId().toString());
         // Two contexts, and they answer different questions. TenantContext is the
         // value the transaction manager pushes into `app.tenant_id` so every RLS
@@ -58,9 +60,23 @@ public class TenantContextFilter extends OncePerRequestFilter {
         // are facts about this one request, and both are cleared in the same
         // `finally` because either one left behind would be inherited by whoever
         // runs on this thread next.
+        //
+        // A session with no tenant publishes a caller and NO tenant context. Both
+        // halves matter. The caller is published because the application layer
+        // still has to answer "may they": with a null role it holds no permission,
+        // so every endpoint that needs one answers 403 rather than failing with a
+        // missing context. The tenant context is not published because there is
+        // none, and a missing one yields zero rows rather than foreign data —
+        // which is exactly the behaviour such a session should have (ADR-0003).
         CallerContext.runAs(
             new CallerContext.Caller(user.userId(), user.tenantId(), user.role()),
-            () -> TenantContext.runAs(user.tenantId(), () -> proceed(request, response, chain)));
+            () -> {
+              if (user.tenantId() == null) {
+                proceed(request, response, chain);
+              } else {
+                TenantContext.runAs(user.tenantId(), () -> proceed(request, response, chain));
+              }
+            });
       } finally {
         TenantContext.clear();
         CallerContext.clear();

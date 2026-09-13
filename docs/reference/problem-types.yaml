@@ -261,6 +261,81 @@ assigned:
       - "REQ-CORE-064: names are unique among siblings"
       - "07 §7.1: `location_sibling_name`, partial so a tombstone does not block re-use"
 
+  - token: invitation-already-open
+    status: 409
+    since: 1
+    summary: >
+      This tenant already has an unused invitation for the address, or the person
+      at that address is already a member of it.
+    carries:
+      - "`invitationId`, when the conflict is an open invitation, so a client can offer to withdraw it"
+    notes: >
+      Two live invitations to one address would be two working tokens, and
+      withdrawing the one an administrator remembers would leave the other one
+      open. Registered with REQ-TEN-004's implementation.
+    sources:
+      - "REQ-TEN-004: invitations are single-use, time-limited and bound to an address"
+
+  - token: last-owner
+    status: 409
+    since: 1
+    summary: >
+      The change would leave the tenant without an owner — the last one cannot be
+      demoted or removed.
+    notes: >
+      A tenant with no owner is stranded rather than degraded: nobody can invite
+      into it, promote anybody or delete it, and the instance operator cannot
+      either, because operating the instance grants nothing inside a tenant
+      (ADR-0057). The way out is to make somebody else an owner first.
+    sources:
+      - "REQ-TEN-005, REQ-TEN-011, ADR-0057"
+
+  - token: invitation-unusable
+    status: 410
+    since: 1
+    summary: >
+      The invitation cannot be used: no such token, or it has been used, withdrawn
+      or has run out.
+    notes: >
+      ONE token for all four conditions, deliberately. Distinguishing them would
+      let whoever holds a link learn that somebody was invited to this instance,
+      which is exactly what the single use is meant to end rather than advertise.
+      `410` rather than `404` because the caller followed a link meant for them and
+      "this no longer works" is true of every one of the four.
+    sources:
+      - "REQ-TEN-004: reuse is rejected"
+
+  - token: invitation-not-yours
+    status: 403
+    since: 1
+    summary: >
+      The invited address already has an account, and the caller is not signed in
+      as it.
+    notes: >
+      Holding the token proves the mailbox, which is enough to create the account
+      the invitation names — nobody else exists to be harmed. It is not enough to
+      attach a membership to an account that already belongs to somebody: a
+      forwarded or intercepted link would otherwise put a stranger into a tenant
+      they never joined. The way through is to sign in as the invited address.
+    sources:
+      - "REQ-TEN-004, REQ-SEC-020 (no linking by address alone)"
+
+  - token: role-escalation
+    status: 403
+    since: 1
+    summary: >
+      Somebody tried to grant, or withdraw, a role carrying permissions they do not
+      hold themselves.
+    carries:
+      - "`actorRole` and `targetRole`, so a client can say which grant was refused"
+    notes: >
+      Distinct from `forbidden`, which says the caller's role does not permit the
+      operation at all. Here the caller may administer members and reached past
+      their own ladder rung, which is a different thing to tell somebody and a
+      different thing to see in a log.
+    sources:
+      - "REQ-TEN-010: nobody can grant permissions they do not hold themselves"
+
   - token: precondition-failed
     status: 412
     since: 1

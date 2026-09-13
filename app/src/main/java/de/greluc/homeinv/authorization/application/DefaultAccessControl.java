@@ -85,6 +85,29 @@ public class DefaultAccessControl implements AccessControl {
   }
 
   @Override
+  public boolean mayGrant(String actorRole, String targetRole) {
+    Optional<Role> actor = Role.named(actorRole);
+    Optional<Role> target = Role.named(targetRole);
+    if (actor.isEmpty() || target.isEmpty()) {
+      // An unknown role on either side grants nothing and receives nothing. A
+      // downgraded build or a hand-edited membership row must not be an argument
+      // for allowing something.
+      log.warn(
+          "Refused a grant involving a role this build does not know: {} -> {}",
+          actorRole,
+          targetRole);
+      return false;
+    }
+    if (!actor.get().permissions().containsAll(target.get().permissions())) {
+      return false;
+    }
+    // OWNER and ADMIN hold the same permissions today, so the set test alone
+    // would let an administrator hand out ownership. Ownership decides who may
+    // delete the tenant and who may step down, and neither follows from a set.
+    return target.get() != Role.OWNER || actor.get() == Role.OWNER;
+  }
+
+  @Override
   public boolean holds(Permission permission) {
     return roleOf(CallerContext.require()).map(role -> role.holds(permission)).orElse(false);
   }

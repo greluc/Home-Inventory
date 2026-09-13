@@ -20,10 +20,27 @@ import java.util.UUID;
  * {@code api} role scales horizontally, and a session that only worked on the instance that created
  * it would log the user out at every deployment.
  *
+ * <h2>It can be null, and that is a state rather than a fault</h2>
+ *
+ * <p>{@code tenantId} and {@code role} are null for somebody who belongs to no tenant. Three people
+ * are in that position and none of them is broken: an instance operator who administers the
+ * instance without being a member of anything (ADR-0057), somebody entitled to create their first
+ * tenant, and somebody who was removed from the only one they were in. Refusing them a session
+ * would mean the last of those could never be invited back, because accepting an invitation for an
+ * existing account requires being signed in as it.
+ *
+ * <p>Such a session reads nothing. {@code TenantContextFilter} sets no {@code app.tenant_id}, so
+ * every row-level-security policy yields zero rows — "a missing context yields zero rows, not
+ * foreign data" (ADR-0003) — and the null role holds no permission, so every endpoint that needs
+ * one answers {@code 403}. What remains reachable is what is about the person rather than about a
+ * tenant: their own memberships, the switch, creating a tenant, and the instance surface.
+ *
  * @param userId the person, stable across tenants
- * @param tenantId the tenant this session is acting for. Stage 0 has one; stage 1 lets a user
- *     switch without re-authenticating (REQ-TEN-003), which changes this value and nothing else
+ * @param tenantId the tenant this session acts for, or null when they are in none. Stage 1 lets a
+ *     user switch without re-authenticating (REQ-TEN-003), which changes this value and nothing else
  * @param email the address the user logged in with, kept for logging and for the UI to show
+ * @param locale the interface language, from the account
+ * @param role the role held in {@code tenantId}, or null when there is no tenant
  */
 public record AuthenticatedUser(
     UUID userId, UUID tenantId, String email, String locale, String role)

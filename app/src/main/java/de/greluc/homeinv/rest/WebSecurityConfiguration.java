@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -65,12 +66,16 @@ public class WebSecurityConfiguration {
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(csrfHandler)
-                    // The login endpoint establishes the session that the token belongs to;
-                    // requiring a token to obtain one is circular.
                     // Login establishes the session the token belongs to;
-                    // requiring a token to obtain one is circular. The media path
-                    // is read-only and carries its own authorisation.
-                    .ignoringRequestMatchers("/api/v1/auth/login"))
+                    // requiring a token to obtain one is circular. Accepting an
+                    // invitation is the same case one step earlier: the caller has
+                    // no session and is about to become somebody who can have one.
+                    // Its own credential is the invitation token — 256 bits from a
+                    // secure source, single-use and time-limited — which is what a
+                    // CSRF token would be protecting, and a page that could forge
+                    // this request would need that token to begin with.
+                    .ignoringRequestMatchers(
+                        "/api/v1/auth/login", "/api/v1/invitations/*/accept"))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(
             authorize ->
@@ -88,6 +93,13 @@ public class WebSecurityConfiguration {
                     // unreachable from here (REQ-SEC-099).
                     .requestMatchers(
                         "/api/v1/auth/login", "/actuator/health/**", "/livez", "/readyz")
+                    .permitAll()
+                    // Accepting an invitation is how somebody becomes a person on
+                    // this instance (REQ-AUTH-004), so it cannot require being one.
+                    // Only the accept: the endpoints that ISSUE and withdraw
+                    // invitations sit under /api/v1/tenants and need a permission
+                    // like everything else.
+                    .requestMatchers(HttpMethod.POST, "/api/v1/invitations/*/accept")
                     .permitAll()
                     // The generated OpenAPI document. `springdoc.api-docs.enabled`
                     // is false in every deployment, so this path answers 404

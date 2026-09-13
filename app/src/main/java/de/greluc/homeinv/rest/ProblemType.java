@@ -53,6 +53,23 @@ public enum ProblemType {
   QUOTA_EXCEEDED("quota-exceeded", HttpStatus.FORBIDDEN, "Quota exceeded"),
 
   /**
+   * Somebody tried to grant or withdraw a role carrying permissions they do not hold (REQ-TEN-010).
+   *
+   * <p>Distinct from {@link #FORBIDDEN}, which says the caller may not do this at all. Here they may
+   * administer members and reached past their own rung of the ladder, which is a different thing to
+   * tell somebody and a different thing to find in a log.
+   */
+  ROLE_ESCALATION("role-escalation", HttpStatus.FORBIDDEN, "Role escalation"),
+
+  /**
+   * The invited address has an account and the caller is not signed in as it (REQ-TEN-004).
+   *
+   * <p>Holding the token proves the mailbox, which is enough to create the account the invitation
+   * names. It is not enough to attach a membership to an account that already belongs to somebody.
+   */
+  INVITATION_NOT_YOURS("invitation-not-yours", HttpStatus.FORBIDDEN, "Invitation not yours"),
+
+  /**
    * The resource does not exist, <em>or</em> exists and is not visible to this caller.
    *
    * <p>The two are deliberately one token. Separating them would let a caller confirm that a foreign
@@ -74,6 +91,23 @@ public enum ProblemType {
    * answer (REQ-CORE-001).
    */
   RESOURCE_EXISTS("resource-exists", HttpStatus.CONFLICT, "Resource exists"),
+
+  /**
+   * This tenant already has an unused invitation for the address, or the person is already a member.
+   *
+   * <p>Two live invitations to one address would be two working tokens, and withdrawing the one an
+   * administrator remembers would leave the other one open.
+   */
+  INVITATION_ALREADY_OPEN("invitation-already-open", HttpStatus.CONFLICT, "Invitation already open"),
+
+  /**
+   * The change would leave the tenant without an owner.
+   *
+   * <p>A tenant with no owner is stranded rather than degraded: nobody can invite into it, promote
+   * anybody or delete it, and the instance operator cannot either, because operating the instance
+   * grants nothing inside a tenant (ADR-0057).
+   */
+  LAST_OWNER("last-owner", HttpStatus.CONFLICT, "Last owner"),
 
   /**
    * A sibling already carries the name a location was to be given.
@@ -130,6 +164,16 @@ public enum ProblemType {
 
   /** A per-user, per-tenant or per-IP rate limit was reached. */
   RATE_LIMITED("rate-limited", HttpStatus.TOO_MANY_REQUESTS, "Rate limited"),
+
+  /**
+   * The invitation cannot be used: unknown, used, withdrawn or expired (REQ-TEN-004).
+   *
+   * <p>One token for all four, deliberately. Telling them apart would let whoever holds a link learn
+   * that somebody was invited to this instance, which is what the single use is meant to end rather
+   * than advertise. A {@code 410} and not a {@code 404}, because the caller followed a link meant
+   * for them and "this no longer works" is true of every one of the four.
+   */
+  INVITATION_UNUSABLE("invitation-unusable", HttpStatus.GONE, "Invitation unusable"),
 
   /**
    * Something failed that this application has no specific answer for.

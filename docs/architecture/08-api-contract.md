@@ -43,6 +43,7 @@ forbids database and repository access from the access blocks.
 ├── /me          profile, devices, sessions, settings · /tenants (memberships) · /tenant (switch)
 ├── /tenants     {id}/members {id}/invitations {id}/quotas {id}/settings {id}/export
 ├── /instance    /accounts {id}/entitlements · /operators   (the instance operator only)
+├── /invitations {token}/accept          (no session: this is how an account is made)
 ├── /roles       tenant-owned roles and permissions
 ├── /item-types  {id}/versions {id}/fields   (the type system)
 ├── /location-categories

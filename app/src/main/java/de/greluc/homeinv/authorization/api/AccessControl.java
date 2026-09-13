@@ -62,6 +62,28 @@ public interface AccessControl {
   void require(Entitlement entitlement);
 
   /**
+   * Whether somebody in one role may grant, or withdraw, another (REQ-TEN-010).
+   *
+   * <p>Here rather than in {@code tenancy}, because it is a question about what a role is worth and
+   * this block is the only one allowed to answer that (04 §4.3). {@code tenancy} asks it and turns a
+   * {@code false} into its own refusal; reading the grant sets there would be a second place that
+   * decides what a role means, and the second place is always the one that is wrong.
+   *
+   * <p>Two rules, and they are not the same rule twice. The role being granted must carry no
+   * permission the granter lacks — otherwise anybody who may administer members could hand somebody
+   * else a capability they do not have and then use that person to exercise it. And {@code OWNER} is
+   * grantable only by an {@code OWNER}: it holds the same permissions as {@code ADMIN} today, so the
+   * first rule alone would let an administrator hand out ownership, and ownership is a relationship
+   * rather than a permission set.
+   *
+   * @param actorRole the role the actor holds, as stored
+   * @param targetRole the role being granted or withdrawn, as stored
+   * @return {@code true} when the grant is within the actor's own reach. A role name this build does
+   *     not know is {@code false} on either side, for the reason an unknown role grants nothing
+   */
+  boolean mayGrant(String actorRole, String targetRole);
+
+  /**
    * Whether the caller holds a permission, without throwing.
    *
    * <p>For deciding what to offer rather than what to allow — a UI that shows a delete button

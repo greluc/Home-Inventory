@@ -13,6 +13,11 @@ import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.tagging.api.TagService;
+import de.greluc.homeinv.tenancy.api.InvitationAlreadyOpenException;
+import de.greluc.homeinv.tenancy.api.InvitationNotYoursException;
+import de.greluc.homeinv.tenancy.api.InvitationUnusableException;
+import de.greluc.homeinv.tenancy.api.LastOwnerException;
+import de.greluc.homeinv.tenancy.api.RoleEscalationException;
 import de.greluc.homeinv.tenancy.api.TenantLimitReachedException;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
@@ -116,6 +121,95 @@ public class ApiExceptionHandler {
     problem.setProperty("permitted", exception.getPermitted());
     problem.setProperty("quota", "tenants-per-user");
     return problem;
+  }
+
+  /**
+   * Answers an attempt to grant or withdraw more than the caller holds (REQ-TEN-010).
+   *
+   * <p>Both roles travel as members. A client showing "you cannot make somebody an OWNER" needs to
+   * know which two rungs were involved, and reading that out of an English sentence is how a
+   * translated interface ends up guessing.
+   *
+   * @param exception the refusal, carrying both roles
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 403} with {@code role-escalation}
+   */
+  @ExceptionHandler(RoleEscalationException.class)
+  public ProblemDetail handleRoleEscalation(
+      RoleEscalationException exception, HttpServletRequest request) {
+    // REQ-TEN-010 asks for the attempt to be logged as well as rejected. It is
+    // logged in the application layer too; this line is what an operator reading
+    // the access log sees, with the caller already in the MDC.
+    log.warn("Refused a role grant: {}", exception.getMessage());
+    ProblemDetail problem =
+        problem(
+            ProblemType.ROLE_ESCALATION,
+            "You cannot grant or withdraw a role with permissions you do not hold yourself.",
+            request);
+    problem.setProperty("actorRole", exception.getActorRole());
+    problem.setProperty("targetRole", exception.getTargetRole());
+    return problem;
+  }
+
+  /**
+   * Answers a change that would leave the tenant without an owner.
+   *
+   * @param exception the refusal
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 409} with {@code last-owner}
+   */
+  @ExceptionHandler(LastOwnerException.class)
+  public ProblemDetail handleLastOwner(
+      LastOwnerException exception, HttpServletRequest request) {
+    return problem(ProblemType.LAST_OWNER, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers an invitation for an address that already has one, or is already a member.
+   *
+   * @param exception the refusal, which names the open invitation where there is one
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 409} with {@code invitation-already-open}
+   */
+  @ExceptionHandler(InvitationAlreadyOpenException.class)
+  public ProblemDetail handleInvitationAlreadyOpen(
+      InvitationAlreadyOpenException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(ProblemType.INVITATION_ALREADY_OPEN, exception.getMessage(), request);
+    if (exception.getInvitationId() != null) {
+      problem.setProperty("invitationId", exception.getInvitationId().toString());
+    }
+    return problem;
+  }
+
+  /**
+   * Answers a token that is unknown, used, withdrawn or expired.
+   *
+   * <p>The four are one answer and carry no member saying which. That is the point: a caller able
+   * to tell "this was real and has been used" from "this was never real" learns that somebody was
+   * invited here (REQ-TEN-004).
+   *
+   * @param exception the refusal
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 410} with {@code invitation-unusable}
+   */
+  @ExceptionHandler(InvitationUnusableException.class)
+  public ProblemDetail handleInvitationUnusable(
+      InvitationUnusableException exception, HttpServletRequest request) {
+    return problem(ProblemType.INVITATION_UNUSABLE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers an acceptance for an address whose account the caller is not signed in as.
+   *
+   * @param exception the refusal
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 403} with {@code invitation-not-yours}
+   */
+  @ExceptionHandler(InvitationNotYoursException.class)
+  public ProblemDetail handleInvitationNotYours(
+      InvitationNotYoursException exception, HttpServletRequest request) {
+    return problem(ProblemType.INVITATION_NOT_YOURS, exception.getMessage(), request);
   }
 
   /**

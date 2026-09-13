@@ -5,6 +5,53 @@
 # (ADR-0049).
 components:
   schemas:
+    AcceptRequest:
+      description: The body of an acceptance.
+      properties:
+        displayName:
+          description: |-
+            what the interface should call the new account; ignored when the address
+            already has one
+          maxLength: 200
+          minLength: 0
+          type: string
+        locale:
+          description: the interface language to start in; ignored when the account exists
+          maxLength: 16
+          minLength: 0
+          type: string
+        password:
+          description: |-
+            the new account's password. Length-bounded for the reason the login's is:
+            Argon2id spends 19 MiB per hash, and an unbounded field is an invitation to spend it on a
+            megabyte of nothing
+          maxLength: 200
+          minLength: 0
+          type: string
+      type: object
+    AcceptedInvitation:
+      description: What accepting an invitation produced.
+      properties:
+        accountCreated:
+          description: |-
+            whether this acceptance created the account, which decides whether the
+            client sends the person to a sign-in or straight on
+          type: boolean
+        role:
+          description: the role granted
+          type: string
+        tenantId:
+          description: the tenant joined
+          format: uuid
+          type: string
+        tenantName:
+          description: its display name, so the client can say where the person has landed
+          type: string
+        userId:
+          description: the account, whether it existed or was created by this acceptance
+          format: uuid
+          type: string
+      type: object
     AccountView:
       description: |-
         An account as the operator's view shows it.
@@ -559,6 +606,79 @@ components:
       required:
       - dataType
       type: object
+    InvitationPage:
+      description: One page of invitations.
+      properties:
+        items:
+          description: the invitations
+          items:
+            $ref: '#/components/schemas/InvitationView'
+          type: array
+        nextCursor:
+          description: where the next page starts, or null when this was the last
+          type: string
+      type: object
+    InvitationView:
+      description: |-
+        An invitation, as the tenant that issued it sees it.
+
+        The token is not here. It exists once, in the answer to {@link de.greluc.homeinv.tenancy.api.InvitationService.InvitationView#invite #invite}, and afterwards only
+        as a hash (REQ-SEC-048) — so a list of invitations cannot be read to obtain one, and an
+        administrator who loses a link withdraws it and sends another.
+      properties:
+        email:
+          description: the address it is bound to
+          type: string
+        expiresAt:
+          description: when it stops working
+          format: date-time
+          type: string
+        id:
+          description: the invitation
+          format: uuid
+          type: string
+        invitedAt:
+          description: when it was issued
+          format: date-time
+          type: string
+        role:
+          description: the role it grants on acceptance
+          type: string
+        state:
+          description: '`OPEN`, `ACCEPTED`, `REVOKED` or `EXPIRED`'
+          type: string
+      type: object
+    InviteRequest:
+      description: The body of an invitation.
+      properties:
+        email:
+          description: the address to invite, which the invitation is bound to
+          format: email
+          maxLength: 320
+          minLength: 0
+          type: string
+        role:
+          description: the role to grant on acceptance, bounded by what the inviter holds (REQ-TEN-010)
+          maxLength: 32
+          minLength: 0
+          type: string
+      required:
+      - email
+      - role
+      type: object
+    IssuedInvitation:
+      description: A freshly issued invitation, with the one copy of its token.
+      properties:
+        invitation:
+          $ref: '#/components/schemas/InvitationView'
+          description: the invitation
+        token:
+          description: |-
+            the secret the invited person presents. Returned exactly once. Where
+            `plugin-smtp` is installed it also goes out by mail; where it is not, this is the only
+            way the link reaches anybody, which 04 §4.3 describes as the expected reduced state
+          type: string
+      type: object
     ItemPage:
       description: One page of items.
       properties:
@@ -851,6 +971,39 @@ components:
           format: int32
           type: integer
       type: object
+    MemberPage:
+      description: One page of members.
+      properties:
+        items:
+          description: the members
+          items:
+            $ref: '#/components/schemas/MemberView'
+          type: array
+        nextCursor:
+          description: where the next page starts, or null when this was the last
+          type: string
+      type: object
+    MemberView:
+      description: A member of the tenant.
+      properties:
+        displayName:
+          description: what the interface calls them
+          type: string
+        email:
+          description: the address they sign in with
+          type: string
+        joinedAt:
+          description: when the membership was written
+          format: date-time
+          type: string
+        role:
+          description: the role they hold here
+          type: string
+        userId:
+          description: the account
+          format: uuid
+          type: string
+      type: object
     OperatorPage:
       description: One page of operators.
       properties:
@@ -1002,6 +1155,20 @@ components:
         snapshot:
           description: the state it produced, as JSON text
           type: string
+      type: object
+    RoleRequest:
+      description: The body of a role change.
+      properties:
+        role:
+          description: |-
+            one of `OWNER`, `ADMIN`, `MEMBER`, `CONTRIBUTOR`,
+            `VIEWER`, `GUEST`. A name this build does not know grants nothing and is
+            refused
+          maxLength: 32
+          minLength: 0
+          type: string
+      required:
+      - role
       type: object
     SearchResult:
       description: What was found.
@@ -3180,6 +3347,93 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: One page of the accounts that administer the instance
+  /api/v1/invitations/{token}/accept:
+    post:
+      description: |-
+        Redeems an invitation.
+
+        What the body must carry depends on the address. If it has no account, this creates one and
+        `displayName` and `password` are required; if it has one, the caller must already
+        be signed in as it and the body's account fields are ignored.
+      operationId: accept
+      parameters:
+      - description: the secret from the invitation link
+        in: path
+        name: token
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptRequest'
+        description: the new account's details, where an account is being created
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedInvitation'
+          description: the tenant joined, the account, and whether this created it
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invitation not yours (`invitation-not-yours`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '410':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invitation unusable (`invitation-unusable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Redeems an invitation
   /api/v1/items:
     post:
       description: |-
@@ -6132,6 +6386,499 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Creates a tenant and makes the caller its owner
+  /api/v1/tenants/{tenantId}/invitations:
+    get:
+      description: One page of the tenant's invitations, newest first.
+      operationId: invitations
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPage'
+          description: the page, without any tokens
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's invitations, newest first.
+    post:
+      description: |-
+        Invites somebody into the tenant.
+
+        The answer carries the token, once. Where `plugin-smtp` is installed the invitation
+        also goes out by mail; where it is not — which a `minimal` installation is by design —
+        this is the only way the link reaches anybody, and 04 §4.3 describes that as the expected
+        reduced state rather than a failure.
+      operationId: invite
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+        description: the address and the role
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedInvitation'
+          description: the invitation and its one token
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`), or Role escalation (`role-escalation`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invitation already open (`invitation-already-open`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Invites somebody into the tenant
+  /api/v1/tenants/{tenantId}/invitations/{invitationId}:
+    delete:
+      description: Withdraws an invitation that has not been used.
+      operationId: revokeInvitation
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the invitation
+        in: path
+        name: invitationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Withdraws an invitation that has not been used.
+  /api/v1/tenants/{tenantId}/members:
+    get:
+      description: One page of the tenant's members.
+      operationId: members
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberPage'
+          description: the page
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's members.
+  /api/v1/tenants/{tenantId}/members/{userId}:
+    delete:
+      description: Removes somebody from the tenant.
+      operationId: removeMember
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the member
+        in: path
+        name: userId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`), or Role escalation (`role-escalation`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Last owner (`last-owner`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes somebody from the tenant.
+    put:
+      description: Changes what a member may do.
+      operationId: changeRole
+      parameters:
+      - description: the tenant, which must be the session's
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the member
+        in: path
+        name: userId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+        description: the new role
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberView'
+          description: the member as they now stand
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`), or Role escalation (`role-escalation`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Last owner (`last-owner`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Changes what a member may do.
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

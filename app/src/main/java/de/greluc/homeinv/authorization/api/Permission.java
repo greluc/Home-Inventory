@@ -90,7 +90,28 @@ public enum Permission {
    * inventory does, and editing the tag vocabulary is not. A contributor helping with a stocktake
    * holds this and not that.
    */
-  TAG_ASSIGN("tagging:tag:assign");
+  TAG_ASSIGN("tagging:tag:assign"),
+
+  /** Read the tenant's own record: its name and its settings. */
+  TENANT_READ("tenancy:tenant:read"),
+  /** Rename the tenant, or change its settings. */
+  TENANT_UPDATE("tenancy:tenant:update"),
+
+  /** See who else is in this tenant, and in what role. */
+  MEMBER_READ("tenancy:member:read"),
+  /** Invite somebody into the tenant (REQ-TEN-004). */
+  MEMBER_INVITE("tenancy:member:invite"),
+  /**
+   * Change a member's role.
+   *
+   * <p>Bounded by REQ-TEN-010 on top of this permission: holding it does not let somebody grant a
+   * role whose permissions they do not hold themselves, and {@code OWNER} is grantable only by an
+   * {@code OWNER}. A permission is what may be attempted; that rule is what the attempt is measured
+   * against.
+   */
+  MEMBER_UPDATE("tenancy:member:update"),
+  /** Remove somebody from the tenant, and withdraw an invitation that has not been used. */
+  MEMBER_REMOVE("tenancy:member:remove");
 
   private final String id;
 

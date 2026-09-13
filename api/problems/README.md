@@ -29,6 +29,11 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`version-frozen`](version-frozen.md) | `409` | assigned | A published type version was edited. A published version is a snapshot: the items written against it carry its schema, and changing it would change what they mean. |
 | [`constraint-loosened`](constraint-loosened.md) | `422` | assigned | An inheriting type widened a field it inherits. An inheriting type may tighten a field and may not loosen one. |
 | [`name-taken`](name-taken.md) | `409` | assigned | A location's name is already carried by a live sibling. Names are unique among siblings, case-insensitively, so that the tree a person reads matches the tree the database holds. |
+| [`invitation-already-open`](invitation-already-open.md) | `409` | assigned | This tenant already has an unused invitation for the address, or the person at that address is already a member of it. |
+| [`last-owner`](last-owner.md) | `409` | assigned | The change would leave the tenant without an owner — the last one cannot be demoted or removed. |
+| [`invitation-unusable`](invitation-unusable.md) | `410` | assigned | The invitation cannot be used: no such token, or it has been used, withdrawn or has run out. |
+| [`invitation-not-yours`](invitation-not-yours.md) | `403` | assigned | The invited address already has an account, and the caller is not signed in as it. |
+| [`role-escalation`](role-escalation.md) | `403` | assigned | Somebody tried to grant, or withdraw, a role carrying permissions they do not hold themselves. |
 | [`precondition-failed`](precondition-failed.md) | `412` | assigned | The `If-Match` entity tag does not match the resource's current version. |
 | [`precondition-required`](precondition-required.md) | `428` | assigned | A mutating request on a single resource arrived without `If-Match`. There is no blind overwrite. |
 | [`rate-limited`](rate-limited.md) | `429` | assigned | A per-user, per-tenant or per-IP rate limit was reached. |

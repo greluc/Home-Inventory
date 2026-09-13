@@ -215,13 +215,19 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 24
-    pattern: '(?:(\d+)|twenty-four)\s+(?:named\s+)?permissions?\b'
+    value: 30
+    pattern: '(?:(\d+)|thirty)\s+(?:named\s+)?permissions?\b'
     notes: >
-      Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on 2026-09-13. `AuthorizationRegistryTest` already proves the registry and the
-      `Permission` enum name the same set on every build; this is the third copy — the number as it
-      appears in prose — and it is tracked on the same principle as the rest: a fact stated twice is
-      checked, not trusted.
+      Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on
+      2026-09-13, and the tenancy block's six with the member administration the same day.
+      `AuthorizationRegistryTest` already proves the registry and the `Permission` enum name the same
+      set on every build; this is the third copy — the number as it appears in prose — and it is
+      tracked on the same principle as the rest: a fact stated twice is checked, not trusted.
+
+
+      Entitlements are NOT counted here. They are a second mechanism with its own list in the same
+      file (ADR-0057), and folding them into this number would make "how many permissions are there"
+      a question with two answers.
 
   - id: pluginHealthStates
     compute: "length of `states` in docs/reference/plugin-health-states.yaml"

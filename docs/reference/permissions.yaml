@@ -141,13 +141,52 @@ permissions:
       item already carries may not be removed, for the reason ADR-0020 gives for
       never dropping a field.
 
+  - id: tenancy:tenant:read
+    since: 1
+    description: Read the tenant's own record — its name and its settings.
+  - id: tenancy:tenant:update
+    since: 1
+    description: Rename the tenant, or change its settings.
+
+  - id: tenancy:member:read
+    since: 1
+    description: See who else is in this tenant, and in what role.
+  - id: tenancy:member:invite
+    since: 1
+    description: Invite somebody into the tenant, and list the invitations that are open.
+  - id: tenancy:member:update
+    since: 1
+    description: >
+      Change a member's role. Bounded by REQ-TEN-010 on top of the permission: it
+      does not let somebody grant a role whose permissions they do not hold, and
+      OWNER is grantable only by an OWNER.
+  - id: tenancy:member:remove
+    since: 1
+    description: Remove somebody from the tenant, and withdraw an unused invitation.
+
 # ---------------------------------------------------------------------------
 # BUILT-IN ROLES
 #
 # The same six the `tenancy.membership` check constraint allows. Stage 0 only
-# ever WRITES `OWNER` — the person who created the instance — but the whole
-# ladder is defined at once, because a permission set that arrives one role at a
-# time is one nobody ever reviews as a whole.
+# ever WROTE `OWNER` — the person who created the instance — but the whole ladder
+# was defined at once, because a permission set that arrives one role at a time is
+# one nobody ever reviews as a whole.
+#
+# THREE BANDS, and the line between them is what somebody is trusted with rather
+# than how senior they are:
+#
+#   * CONTENT — the things in the inventory. Items, places, photos, tags. MEMBER
+#     holds all of it, deletion and final removal included.
+#   * CONFIGURATION — the shape those things have, and who may touch them. The
+#     type system, the value lists, the members. ADMIN's.
+#   * OWNERSHIP — the tenant itself. OWNER's.
+#
+# MEMBER held every permission there was until 2026-09-13, because stage 0 had no
+# type system and no member administration to withhold. It now holds the content
+# band; configuring the tenant is ADMIN's. ADMIN and OWNER hold the same
+# permissions until REQ-TEN-011 adds tenant deletion; what already separates them
+# is REQ-TEN-010 — only an OWNER may make somebody an OWNER, because ownership is
+# a relationship rather than a permission set.
 # ---------------------------------------------------------------------------
 roles:
   - name: GUEST
@@ -172,6 +211,7 @@ roles:
       - catalog:type:read
       - catalog:value-list:read
       - tagging:tag:read
+      - tenancy:tenant:read
 
   - name: CONTRIBUTOR
     rationale: >
@@ -191,19 +231,81 @@ roles:
       - catalog:value-list:read
       - tagging:tag:read
       - tagging:tag:assign
+      - tenancy:tenant:read
 
   - name: MEMBER
-    rationale: Everything a person working with the inventory needs.
-    grants: all
+    rationale: >
+      The whole content band: everything in the inventory, deletion and final
+      removal included, and the tag vocabulary — a tag is something people write
+      rather than something the tenant is configured with. Not the type system:
+      deciding what an item may look like is configuration, and that is ADMIN's.
+    grants:
+      - inventory:item:read
+      - inventory:item:create
+      - inventory:item:update
+      - inventory:item:delete
+      - inventory:item:purge
+      - locations:location:read
+      - locations:location:create
+      - locations:location:update
+      - locations:location:delete
+      - media:object:read
+      - media:object:create
+      - media:object:delete
+      - search:index:query
+      - catalog:type:read
+      - catalog:value-list:read
+      - tagging:tag:read
+      - tagging:tag:create
+      - tagging:tag:update
+      - tagging:tag:assign
+      - tenancy:tenant:read
+      - tenancy:member:read
 
   - name: ADMIN
     rationale: >
-      Everything stage 0 defines. Diverges from OWNER in stage 1, where tenant
-      deletion, role granting and the plugin capability model appear.
-    grants: all
+      The content band plus configuration: the type system, the value lists, and
+      the members — inviting, promoting, removing. Equal to OWNER in permissions
+      until REQ-TEN-011 adds tenant deletion; what already separates them is
+      REQ-TEN-010.
+    grants:
+      - inventory:item:read
+      - inventory:item:create
+      - inventory:item:update
+      - inventory:item:delete
+      - inventory:item:purge
+      - locations:location:read
+      - locations:location:create
+      - locations:location:update
+      - locations:location:delete
+      - media:object:read
+      - media:object:create
+      - media:object:delete
+      - search:index:query
+      - catalog:type:read
+      - catalog:type:create
+      - catalog:type:update
+      - catalog:type:delete
+      - catalog:value-list:read
+      - catalog:value-list:create
+      - catalog:value-list:update
+      - tagging:tag:read
+      - tagging:tag:create
+      - tagging:tag:update
+      - tagging:tag:assign
+      - tenancy:tenant:read
+      - tenancy:tenant:update
+      - tenancy:member:read
+      - tenancy:member:invite
+      - tenancy:member:update
+      - tenancy:member:remove
 
   - name: OWNER
-    rationale: The person the tenant belongs to.
+    rationale: >
+      The person the tenant belongs to. Equal to ADMIN in permissions today and
+      not in authority: only an OWNER may make somebody an OWNER (REQ-TEN-010),
+      and tenant deletion (REQ-TEN-011) will be the permission the two sets differ
+      by.
     grants: all
 
 # ---------------------------------------------------------------------------
