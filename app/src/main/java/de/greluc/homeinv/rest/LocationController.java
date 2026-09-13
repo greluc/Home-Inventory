@@ -66,7 +66,11 @@ public class LocationController {
     LocationView view =
         locations.create(
             new LocationService.CreateLocationCommand(
-                request.id(), request.categoryId(), request.parentId(), request.name()),
+                request.id(),
+                request.categoryId(),
+                request.parentId(),
+                request.name(),
+                request.attributes()),
             user.userId());
     return ResponseEntity.created(URI.create("/api/v1/locations/" + view.id())).body(view);
   }
@@ -203,12 +207,16 @@ public class LocationController {
    * @param categoryId the category
    * @param parentId the parent, or omitted to create a root
    * @param name the name
+   * @param attributes the fields the category declares, as a JSON object. Checked against the
+   *     category version's schema, and an offending value is a {@code 422} naming its path
+   *     (REQ-CORE-041, REQ-CORE-005)
    */
   public record CreateLocationRequest(
       UUID id,
       @NotNull UUID categoryId,
       UUID parentId,
-      @NotBlank @Size(max = 300) String name) {}
+      @NotBlank @Size(max = 300) String name,
+      @Size(max = 65_536) String attributes) {}
 
   /**
    * The body of a rename.

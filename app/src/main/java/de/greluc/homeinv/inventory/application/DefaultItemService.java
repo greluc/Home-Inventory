@@ -48,6 +48,20 @@ public class DefaultItemService implements ItemService {
   private final Clock clock;
 
   /**
+   * Resolving a type to the version an item is written against, and reading its fields.
+   *
+   * <p>Separate from {@link de.greluc.homeinv.catalog.api.CatalogProvisioning}, which answers the
+   * one question a tenant's creation asks. This is the running system's.
+   */
+  private final de.greluc.homeinv.catalog.api.TypeRegistry types;
+
+  /** The binding check of REQ-CORE-005, against the document the version generated. */
+  private final de.greluc.homeinv.catalog.api.AttributeValidator validator;
+
+  /** Writes the side table, inside the same transaction as the item. */
+  private final de.greluc.homeinv.inventory.infrastructure.AttributeProjector projector;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -77,13 +91,16 @@ public class DefaultItemService implements ItemService {
       return new CreateResult(toView(found), false);
     }
 
-    // Stage 0 has no configurable type system, so a client has no way to know a
-    // type version id and is not asked for one. The tenant's built-in type fills
-    // the NOT NULL column the schema carries from the start (O27).
+    // A client names the TYPE; the version is resolved here, once, and stored.
+    // The item then keeps the shape the type had at this moment however often the
+    // type moves on afterwards (REQ-CORE-025). A client that names no type gets
+    // the tenant's built-in one, which is what a stage-0 client always did and
+    // what a quick capture still does.
     UUID typeVersionId =
-        command.itemTypeVersionId() != null
-            ? command.itemTypeVersionId()
+        command.itemTypeId() != null
+            ? types.publishedItemTypeVersion(command.itemTypeId())
             : catalog.builtinItemTypeVersion(tenantId);
+    String attributes = validated(typeVersionId, command.attributes());
 
     Instant now = Instant.now(clock);
     Item item =
@@ -97,10 +114,18 @@ public class DefaultItemService implements ItemService {
             command.locationId(),
             command.quantity() != null ? command.quantity() : BigDecimal.ONE,
             command.quantityUnit(),
+            attributes,
             actor,
             now);
 
-    items.save(item);
+    // saveAndFlush, not save: the projection below is plain SQL against a table
+    // whose foreign key points at this row, and JPA would otherwise hold the
+    // insert until the transaction commits — which is after the projection. The
+    // database said so plainly: "Key is not present in table item".
+    items.saveAndFlush(item);
+    // In the same transaction as the write, which is what makes an attribute
+    // filter transactionally exact (REQ-CORE-013).
+    projector.project(id, typeVersionId, attributes);
     log.debug("Item {} created in tenant {}", id, tenantId);
     return new CreateResult(toView(item), true);
   }
@@ -115,6 +140,24 @@ public class DefaultItemService implements ItemService {
    * @param command the creation being attempted again
    * @return {@code true} when the two describe the same item
    */
+  /**
+   * Checks an attribute set and hands back what should be stored.
+   *
+   * @param typeVersionId the version the item is written against
+   * @param attributes the set as JSON text, possibly {@code null}
+   * @return the set to store, {@code {}} where the caller sent nothing
+   * @throws de.greluc.homeinv.catalog.api.InvalidAttributesException when the set does not match
+   *     the version, carrying one violation per offending value
+   */
+  private String validated(UUID typeVersionId, String attributes) {
+    String candidate = attributes == null || attributes.isBlank() ? "{}" : attributes;
+    var result = validator.validate(typeVersionId, candidate);
+    if (!result.valid()) {
+      throw new de.greluc.homeinv.catalog.api.InvalidAttributesException(result.violations());
+    }
+    return candidate;
+  }
+
   private static boolean sameContent(Item item, CreateItemCommand command) {
     BigDecimal wanted = command.quantity() != null ? command.quantity() : BigDecimal.ONE;
     // The type is not compared: at stage 0 the client never sends one, so a repeat
@@ -166,15 +209,26 @@ public class DefaultItemService implements ItemService {
     UUID tenantId = TenantContext.require();
     Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
 
+    // Against the version the item was written against, not against whatever the
+    // type says today: an edit to an old item must not start failing because the
+    // type moved on (REQ-CORE-025).
+    String attributes = validated(item.getItemTypeVersionId(), command.attributes());
+
     item.update(
         command.name(),
         command.description(),
         command.locationId(),
         command.quantity() != null ? command.quantity() : BigDecimal.ONE,
         command.quantityUnit(),
+        attributes,
         actor,
         Instant.now(clock));
 
+    // The dirty aggregate reaches the database here rather than at commit, for
+    // the same reason the creation flushes: the projection is SQL and cannot see
+    // a change that is still in the persistence context.
+    items.flush();
+    projector.project(id, item.getItemTypeVersionId(), attributes);
     return toView(item);
   }
 
@@ -194,6 +248,11 @@ public class DefaultItemService implements ItemService {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
     item.markDeleted(actor, Instant.now(clock));
+    items.flush();
+    // The projection goes with it, in the same transaction: a trashed item that
+    // kept answering attribute filters would be a deleted thing that is still
+    // findable, for the whole retention period (07 §7.3, REQ-CORE-013).
+    projector.clear(id);
   }
 
   /**
@@ -211,6 +270,7 @@ public class DefaultItemService implements ItemService {
         item.getLocationId(),
         item.getQuantity(),
         item.getQuantityUnit(),
+        item.getAttributes(),
         item.getLifecycleState(),
         item.getCreatedAt(),
         item.getUpdatedAt(),

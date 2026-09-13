@@ -105,8 +105,8 @@ computed:
 
   - id: platformTypes
     compute: "count of app/src/main/java/de/greluc/homeinv/platform/*.java"
-    value: 21
-    pattern: '(?:(\d+)|twenty-one)\s+types?\s+in\s+(?:the\s+)?(?:shared\s+kernel|`?platform`?)'
+    value: 22
+    pattern: '(?:(\d+)|twenty-two)\s+types?\s+in\s+(?:the\s+)?(?:shared\s+kernel|`?platform`?)'
     notes: >
       REQ-NFR-024 asks for the shared kernel's size to be monitored, with a figure per
       release in the changelog. This is that figure, and tracking it is what keeps the

@@ -54,6 +54,9 @@ public class DefaultLocationService implements LocationService {
   // that answer it belong to `catalog` and 04 §4.5 does not let this block read
   // them.
   private final TypeRegistry types;
+
+  /** The binding check of REQ-CORE-005, applied to a category's fields (REQ-CORE-041). */
+  private final de.greluc.homeinv.catalog.api.AttributeValidator validator;
   private final CursorCodec cursors;
   private final Clock clock;
 
@@ -96,17 +99,21 @@ public class DefaultLocationService implements LocationService {
     // Resolved once, here, and stored: the location keeps the fields the category
     // declared at this moment even after the category moves on (REQ-CORE-025).
     UUID categoryVersionId = types.publishedCategoryVersion(command.categoryId());
+    String attributes = validated(categoryVersionId, command.attributes());
 
     Location created;
     if (command.parentId() == null) {
-      created = Location.createRoot(id, tenantId, categoryVersionId, command.name(), actor, now);
+      created =
+          Location.createRoot(
+              id, tenantId, categoryVersionId, command.name(), attributes, actor, now);
     } else {
       Location parent =
           locations
               .findLive(tenantId, command.parentId())
               .orElseThrow(() -> new NotFoundException("location", command.parentId()));
       created =
-          Location.createChild(id, tenantId, categoryVersionId, parent, command.name(), actor, now);
+          Location.createChild(
+              id, tenantId, categoryVersionId, parent, command.name(), attributes, actor, now);
     }
 
     locations.save(created);
@@ -278,7 +285,25 @@ public class DefaultLocationService implements LocationService {
         categories.get(location.getCategoryVersionId()),
         location.getParentId(),
         location.getDepth(),
+        location.getAttributes(),
         tree.ancestorNames(location.getTenantId(), location.getId()));
+  }
+
+  /**
+   * Checks an attribute set against a category version and hands back what to store.
+   *
+   * @param categoryVersionId the version the place is written against
+   * @param attributes the set as JSON text, possibly {@code null}
+   * @return the set to store, {@code {}} where the caller sent nothing
+   * @throws de.greluc.homeinv.catalog.api.InvalidAttributesException when the set does not match
+   */
+  private String validated(UUID categoryVersionId, String attributes) {
+    String candidate = attributes == null || attributes.isBlank() ? "{}" : attributes;
+    var result = validator.validate(categoryVersionId, candidate);
+    if (!result.valid()) {
+      throw new de.greluc.homeinv.catalog.api.InvalidAttributesException(result.violations());
+    }
+    return candidate;
   }
 
 }

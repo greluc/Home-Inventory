@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import de.greluc.homeinv.locations.api.TooDeepException;
+import de.greluc.homeinv.platform.JsonbType;
 import de.greluc.homeinv.platform.LtreeType;
 import org.hibernate.annotations.Type;
 import java.time.Instant;
@@ -80,6 +81,21 @@ public class Location {
   private String name;
 
   /**
+   * The fields the category version declares, as JSON text (REQ-CORE-041).
+   *
+   * <p>A "moving box" carries a target room, a packing date and a seal number; a shelf carries
+   * nothing. Which is which belongs to {@code catalog}, and this block stores the answer without
+   * reading it — for the reason {@code JsonbType} gives.
+   *
+   * <p>No side table mirrors these. {@code item_attr_index} exists for the filters REQ-CORE-013
+   * calls transactionally exact, and those are item filters; a tree of a few hundred places is
+   * searched by walking it.
+   */
+  @Column(name = "attributes", nullable = false)
+  @Type(JsonbType.class)
+  private String attributes;
+
+  /**
    * The materialised path, dot-separated ids, ending with this location's own label.
    *
    * <p>A {@code String} in Java and an {@code ltree} in the database, joined by {@link LtreeType}.
@@ -130,6 +146,7 @@ public class Location {
       UUID categoryVersionId,
       UUID parentId,
       String name,
+      String attributes,
       String path,
       int depth,
       UUID actor,
@@ -139,6 +156,7 @@ public class Location {
     this.categoryVersionId = categoryVersionId;
     this.parentId = parentId;
     this.name = name;
+    this.attributes = attributes == null || attributes.isBlank() ? "{}" : attributes;
     this.path = path;
     this.depth = depth;
     this.createdAt = now;
@@ -154,14 +172,22 @@ public class Location {
    * @param tenantId the owning tenant
    * @param categoryVersionId the published version of the category this place is
    * @param name the name; must not be blank
+   * @param attributes the category's fields as JSON text, already validated by the caller
    * @param actor the user creating it
    * @param now the creation instant
    * @return the new root, not yet persisted
    */
   public static Location createRoot(
-      UUID id, UUID tenantId, UUID categoryVersionId, String name, UUID actor, Instant now) {
+      UUID id,
+      UUID tenantId,
+      UUID categoryVersionId,
+      String name,
+      String attributes,
+      UUID actor,
+      Instant now) {
     requireName(name);
-    return new Location(id, tenantId, categoryVersionId, null, name, labelOf(id), 0, actor, now);
+    return new Location(
+        id, tenantId, categoryVersionId, null, name, attributes, labelOf(id), 0, actor, now);
   }
 
   /**
@@ -172,6 +198,7 @@ public class Location {
    * @param categoryVersionId the published version of the category this place is
    * @param parent the parent, which supplies the path this one extends
    * @param name the name; must not be blank
+   * @param attributes the category's fields as JSON text, already validated by the caller
    * @param actor the user creating it
    * @param now the creation instant
    * @return the new child, not yet persisted
@@ -185,6 +212,7 @@ public class Location {
       UUID categoryVersionId,
       Location parent,
       String name,
+      String attributes,
       UUID actor,
       Instant now) {
     requireName(name);
@@ -198,6 +226,7 @@ public class Location {
         categoryVersionId,
         parent.id,
         name,
+        attributes,
         parent.path + "." + labelOf(id),
         depth,
         actor,

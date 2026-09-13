@@ -125,6 +125,17 @@ commit".
 
 ### Added
 
+- **Items and places carry the fields their type declares.** A creation names a
+  type, the server resolves it to the version published at that moment, and the
+  attributes are checked against that version's schema — an offending value is a
+  `422` naming its path. The fields a tenant marked searchable, sortable or
+  facetable are mirrored into an index written in the same transaction, so a
+  filter over them is exact rather than eventually right, and a money or quantity
+  field carries its currency or unit along so no total ever adds euros to
+  dollars. A field marked sensitive is never mirrored, whatever its other flags
+  say. *REST API: additive, except that a creation now names a type rather than
+  one of its versions.*
+
 - **A tenant defines its own item types and location categories, while the system
   runs.** Fields with sixteen data types, multilingual labels and help texts,
   required flags, ranges, patterns, units, value lists that several types share,
@@ -145,7 +156,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 21 types in the shared
+- **The shared kernel is measured.** `platform` holds 22 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

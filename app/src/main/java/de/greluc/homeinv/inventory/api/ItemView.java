@@ -25,6 +25,9 @@ import java.util.UUID;
  * @param locationId where it is; {@code null} for a digital item
  * @param quantity how many
  * @param quantityUnit the unit, may be {@code null}
+ * @param attributes the fields the item's type version declares, as JSON text. The source of
+ *     truth for every attribute (ADR-0004); what a key means is the catalog's business, and a
+ *     client reads the type version's schema to render it
  * @param lifecycleState where the item is in its life; stage 0 always {@code ACTIVE}
  * @param createdAt when it was created
  * @param updatedAt when it last changed
@@ -39,6 +42,7 @@ public record ItemView(
     UUID locationId,
     BigDecimal quantity,
     String quantityUnit,
+    String attributes,
     String lifecycleState,
     Instant createdAt,
     Instant updatedAt,

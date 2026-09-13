@@ -9,6 +9,7 @@ import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
+import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.locations.api.TooDeepException;
@@ -242,6 +243,34 @@ public class ApiExceptionHandler {
         problem(ProblemType.RESOURCE_EXISTS, exception.getMessage(),
             request);
     problem.setProperty("locationId", exception.getLocationId().toString());
+    return problem;
+  }
+
+  /**
+   * Answers an attribute set that does not match its type version (REQ-CORE-005).
+   *
+   * @param exception the violations the validator found
+   * @param request the request
+   * @return a {@code 422} problem detail carrying one entry per offending value
+   */
+  @ExceptionHandler(InvalidAttributesException.class)
+  public ProblemDetail handleInvalidAttributes(
+      InvalidAttributesException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.VALIDATION_FAILED,
+            "One or more attributes do not match the type this was written against.",
+            request);
+    // The paths, because REQ-CORE-005's acceptance is "422 with the field path" —
+    // a client told only that something is invalid has to guess which field to
+    // mark. The message travels with each one and the VALUE never does: a
+    // rejected attribute set may hold a licence key, and a problem document is
+    // logged by proxies.
+    problem.setProperty(
+        "errors",
+        exception.getViolations().stream()
+            .map(violation -> Map.of("path", violation.path(), "message", violation.message()))
+            .toList());
     return problem;
   }
 

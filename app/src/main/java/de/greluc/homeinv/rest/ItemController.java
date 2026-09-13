@@ -86,13 +86,14 @@ public class ItemController {
         items.create(
             new ItemService.CreateItemCommand(
                 request.id(),
-                request.itemTypeVersionId(),
+                request.itemTypeId(),
                 request.name(),
                 request.description(),
                 request.kind(),
                 request.locationId(),
                 request.quantity(),
-                request.quantityUnit()),
+                request.quantityUnit(),
+                request.attributes()),
             user.userId());
 
     ItemView view = result.item();
@@ -137,7 +138,8 @@ public class ItemController {
             request.description(),
             request.locationId(),
             request.quantity(),
-            request.quantityUnit()),
+            request.quantityUnit(),
+            request.attributes()),
         user.userId());
   }
 
@@ -167,24 +169,29 @@ public class ItemController {
    * be one a non-HTTP caller could walk past.
    *
    * @param id the client's chosen UUIDv7, or {@code null} to have one assigned
-   * @param itemTypeVersionId the type version, or omitted — which is what a stage-0 client does,
-   *     because there is no type system to choose from and the server fills in the built-in type
+   * @param itemTypeId the type, or omitted — the server then uses the tenant's built-in type, which
+   *     is what a quick capture does and what every stage-0 client did. The TYPE and not one of its
+   *     versions: a person picks "book", and which version that is today is the server's to know
+   *     (REQ-CORE-025)
    * @param name the name
    * @param description free text
    * @param kind {@code PHYSICAL} or {@code DIGITAL}
    * @param locationId required for a physical item
    * @param quantity how many; {@code null} means one
    * @param quantityUnit the unit
+   * @param attributes the fields the type declares, as a JSON object. Checked against the version's
+   *     schema, and an offending value is a {@code 422} naming its path (REQ-CORE-005)
    */
   public record CreateItemRequest(
       UUID id,
-      UUID itemTypeVersionId,
+      UUID itemTypeId,
       @NotBlank @Size(max = 500) String name,
       @Size(max = 20_000) String description,
       @NotNull ItemKind kind,
       UUID locationId,
       @PositiveOrZero BigDecimal quantity,
-      @Size(max = 30) String quantityUnit) {}
+      @Size(max = 30) String quantityUnit,
+      @Size(max = 65_536) String attributes) {}
 
   /**
    * The body of an update. {@code kind} is absent: a physical item does not become a digital one.
@@ -194,11 +201,14 @@ public class ItemController {
    * @param locationId the new location; required while the item is physical
    * @param quantity the new quantity; {@code null} means one
    * @param quantityUnit the new unit
+   * @param attributes the new attribute set as a JSON object, checked against the version the item
+   *     was written against rather than against whatever the type says today
    */
   public record UpdateItemRequest(
       @NotBlank @Size(max = 500) String name,
       @Size(max = 20_000) String description,
       UUID locationId,
       @PositiveOrZero BigDecimal quantity,
-      @Size(max = 30) String quantityUnit) {}
+      @Size(max = 30) String quantityUnit,
+      @Size(max = 65_536) String attributes) {}
 }

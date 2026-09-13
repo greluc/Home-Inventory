@@ -18,9 +18,16 @@ import java.util.UUID;
  * @param id the location
  * @param name the name
  * @param categoryId the category
+ * @param attributes the fields the category version declares, as JSON text (REQ-CORE-041)
  * @param parentId the parent, or {@code null} for a root
  * @param depth distance from the root
  * @param ancestors the names from the root down to and including this location (REQ-CORE-044)
  */
 public record LocationView(
-    UUID id, String name, UUID categoryId, UUID parentId, int depth, List<String> ancestors) {}
+    UUID id,
+    String name,
+    UUID categoryId,
+    UUID parentId,
+    int depth,
+    String attributes,
+    List<String> ancestors) {}

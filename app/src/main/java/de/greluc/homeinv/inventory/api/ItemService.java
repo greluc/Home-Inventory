@@ -76,24 +76,28 @@ public interface ItemService {
    * What is needed to create an item.
    *
    * @param id the client's chosen id, or {@code null} to have one generated
-   * @param itemTypeVersionId the type version, or {@code null} to use the tenant's built-in type,
-   *     which is what every stage-0 client does because there is no type system to choose from
+   * @param itemTypeId the type, or {@code null} to use the tenant's built-in one. The TYPE and not
+   *     one of its versions: a person picks "book", and the version that is published today is the
+   *     server's to resolve and the item's to keep (REQ-CORE-025)
    * @param name the name; must not be blank
    * @param description free text, may be {@code null}
    * @param kind physical or digital
    * @param locationId required for a physical item
    * @param quantity how many; {@code null} means one
    * @param quantityUnit the unit, may be {@code null}
+   * @param attributes the fields the type declares, as JSON text; {@code null} means none. Checked
+   *     against the version's generated schema before anything is written (REQ-CORE-005)
    */
   record CreateItemCommand(
       UUID id,
-      UUID itemTypeVersionId,
+      UUID itemTypeId,
       String name,
       String description,
       ItemKind kind,
       UUID locationId,
       BigDecimal quantity,
-      String quantityUnit) {}
+      String quantityUnit,
+      String attributes) {}
 
   /**
    * What may be changed about an item. {@code kind} is absent: a physical item does not become a
@@ -107,5 +111,10 @@ public interface ItemService {
    * @param quantityUnit the new unit, may be {@code null}
    */
   record UpdateItemCommand(
-      String name, String description, UUID locationId, BigDecimal quantity, String quantityUnit) {}
+      String name,
+      String description,
+      UUID locationId,
+      BigDecimal quantity,
+      String quantityUnit,
+      String attributes) {}
 }

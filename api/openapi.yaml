@@ -133,6 +133,13 @@ components:
         lets a form mark the field instead of showing a sentence. A rule that existed only here would
         be one a non-HTTP caller could walk past.
       properties:
+        attributes:
+          description: |-
+            the fields the type declares, as a JSON object. Checked against the version's
+            schema, and an offending value is a `422` naming its path (REQ-CORE-005)
+          maxLength: 65536
+          minLength: 0
+          type: string
         description:
           description: free text
           maxLength: 20000
@@ -142,10 +149,12 @@ components:
           description: the client's chosen UUIDv7, or `null` to have one assigned
           format: uuid
           type: string
-        itemTypeVersionId:
+        itemTypeId:
           description: |-
-            the type version, or omitted — which is what a stage-0 client does,
-            because there is no type system to choose from and the server fills in the built-in type
+            the type, or omitted — the server then uses the tenant's built-in type, which
+            is what a quick capture does and what every stage-0 client did. The TYPE and not one of its
+            versions: a person picks "book", and which version that is today is the server's to know
+            (REQ-CORE-025)
           format: uuid
           type: string
         kind:
@@ -205,6 +214,14 @@ components:
     CreateLocationRequest:
       description: The body of a creation.
       properties:
+        attributes:
+          description: |-
+            the fields the category declares, as a JSON object. Checked against the
+            category version's schema, and an offending value is a `422` naming its path
+            (REQ-CORE-041, REQ-CORE-005)
+          maxLength: 65536
+          minLength: 0
+          type: string
         categoryId:
           description: the category
           format: uuid
@@ -534,6 +551,12 @@ components:
 
         A record, so it is immutable without anyone having to remember to make it so.
       properties:
+        attributes:
+          description: |-
+            the fields the item's type version declares, as JSON text. The source of
+            truth for every attribute (ADR-0004); what a key means is the catalog's business, and a
+            client reads the type version's schema to render it
+          type: string
         createdAt:
           description: when it was created
           format: date-time
@@ -641,6 +664,9 @@ components:
           items:
             type: string
           type: array
+        attributes:
+          description: the fields the category version declares, as JSON text (REQ-CORE-041)
+          type: string
         categoryId:
           description: the category
           format: uuid
@@ -820,6 +846,13 @@ components:
       description: 'The body of an update. `kind` is absent: a physical item does not become a digital
         one.'
       properties:
+        attributes:
+          description: |-
+            the new attribute set as a JSON object, checked against the version the item
+            was written against rather than against whatever the type says today
+          maxLength: 65536
+          minLength: 0
+          type: string
         description:
           description: the new description
           maxLength: 20000

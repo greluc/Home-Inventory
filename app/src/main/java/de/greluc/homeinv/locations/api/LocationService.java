@@ -69,7 +69,8 @@ public interface LocationService {
    * @param parentId the parent, or {@code null} to create a root
    * @param name the name; must not be blank
    */
-  record CreateLocationCommand(UUID id, UUID categoryId, UUID parentId, String name) {}
+  record CreateLocationCommand(
+      UUID id, UUID categoryId, UUID parentId, String name, String attributes) {}
 
   /**
    * One page of the tenant's locations, oldest first.

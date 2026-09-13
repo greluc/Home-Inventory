@@ -352,7 +352,7 @@ class LocationTreeIT extends AbstractIntegrationTest {
 
   private LocationView create(UUID categoryId, UUID parentId, String name, UUID actor) {
     return locationService.create(
-        new LocationService.CreateLocationCommand(null, categoryId, parentId, name), actor);
+        new LocationService.CreateLocationCommand(null, categoryId, parentId, name, null), actor);
   }
 
   private String rawPath(UUID locationId) {

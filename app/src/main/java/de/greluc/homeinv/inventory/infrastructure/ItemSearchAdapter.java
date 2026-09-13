@@ -83,7 +83,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     String sql =
         """
         select id, name, description, kind, location_id, quantity, quantity_unit,
-               lifecycle_state, created_at, updated_at, version
+               attributes::text as attributes, lifecycle_state, created_at, updated_at, version
         from inventory.item
         where tenant_id = ?
           and deleted_at is null
@@ -133,6 +133,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
                         rs.getObject("location_id", UUID.class),
                         rs.getBigDecimal("quantity"),
                         rs.getString("quantity_unit"),
+                        rs.getString("attributes"),
                         rs.getString("lifecycle_state"),
                         // OffsetDateTime, not Instant: the PostgreSQL driver
                         // refuses a direct conversion from timestamptz to

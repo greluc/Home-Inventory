@@ -156,7 +156,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
         () ->
             items.create(
                 new ItemService.CreateItemCommand(
-                    null, null, name, description, ItemKind.DIGITAL, null, null, null),
+                    null, null, name, description, ItemKind.DIGITAL, null, null, null, null),
                 tenant.userId()));
   }
 

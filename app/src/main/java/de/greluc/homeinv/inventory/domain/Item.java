@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.domain;
 
 import de.greluc.homeinv.inventory.api.ItemKind;
+import de.greluc.homeinv.platform.JsonbType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Type;
 
 /**
  * An item: something owned, physical or digital, in one place.
@@ -54,6 +56,9 @@ public class Item {
   @Column(name = "id", nullable = false, updatable = false)
   private UUID id;
 
+  /** What an item with no attributes carries, which is what the column's default says too. */
+  private static final String EMPTY_ATTRIBUTES = "{}";
+
   /**
    * The tenant this item belongs to.
    *
@@ -76,6 +81,21 @@ public class Item {
   /** Free text. Indexed for full-text search together with the name (REQ-SRCH-001). */
   @Column(name = "description")
   private String description;
+
+  /**
+   * The fields the type version declares, as JSON text (REQ-CORE-005, ADR-0004).
+   *
+   * <p>The source of truth for every attribute. {@code item_attr_index} mirrors the handful marked
+   * searchable, sortable or facetable and is derived from this in the same transaction; where the
+   * two ever disagree, this one is right.
+   *
+   * <p>Text rather than a parsed structure: this block does not interpret it. What a key means is
+   * the catalog's business, validation happens before the value arrives here, and a column mapped
+   * to a structure would invite this block to reason about fields it does not own.
+   */
+  @Column(name = "attributes", nullable = false)
+  @Type(JsonbType.class)
+  private String attributes;
 
   /** Whether the item exists in the physical world, which decides whether it needs a location. */
   @Enumerated(EnumType.STRING)
@@ -146,11 +166,13 @@ public class Item {
       UUID locationId,
       BigDecimal quantity,
       String quantityUnit,
+      String attributes,
       UUID actor,
       Instant now) {
     this.id = id;
     this.tenantId = tenantId;
     this.itemTypeVersionId = itemTypeVersionId;
+    this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.name = name;
     this.description = description;
     this.kind = kind;
@@ -176,6 +198,8 @@ public class Item {
    * @param locationId where it is; required for a physical item, ignored for a digital one
    * @param quantity how many; must not be negative
    * @param quantityUnit the unit, may be null
+   * @param attributes the type version's fields as JSON text, already validated by the caller;
+   *     {@code null} means an empty set
    * @param actor the user creating it, recorded in the audit columns
    * @param now the creation instant, passed in so tests need no clock trickery
    * @return the new item, not yet persisted
@@ -194,6 +218,7 @@ public class Item {
       UUID locationId,
       BigDecimal quantity,
       String quantityUnit,
+      String attributes,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -215,6 +240,7 @@ public class Item {
         kind == ItemKind.PHYSICAL ? locationId : null,
         quantity,
         quantityUnit,
+        attributes,
         actor,
         now);
   }
@@ -231,6 +257,7 @@ public class Item {
    * @param locationId the new location; required while the item is physical
    * @param quantity the new quantity; must not be negative
    * @param quantityUnit the new unit, may be null
+   * @param attributes the new attribute set as JSON text, already validated by the caller
    * @param actor the user making the change
    * @param now the instant of the change
    * @throws IllegalArgumentException under the same conditions as {@link #create}
@@ -241,6 +268,7 @@ public class Item {
       UUID locationId,
       BigDecimal quantity,
       String quantityUnit,
+      String attributes,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -257,6 +285,7 @@ public class Item {
     this.locationId = this.kind == ItemKind.PHYSICAL ? locationId : null;
     this.quantity = quantity;
     this.quantityUnit = quantityUnit;
+    this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.updatedBy = actor;
     this.updatedAt = now;
   }
