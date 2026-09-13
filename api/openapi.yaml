@@ -1200,6 +1200,17 @@ components:
           description: where the next page starts, or null when this was the last
           type: string
       type: object
+    RoleReference:
+      description: A role a rule is about.
+      properties:
+        role:
+          description: the built-in role's name, or null
+          type: string
+        roleDefinitionId:
+          description: the tenant-owned role, or null
+          format: uuid
+          type: string
+      type: object
     RoleRequest:
       description: The body of a role change.
       properties:
@@ -3129,6 +3140,216 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Adds a field to a draft.
+  /api/v1/field-visibility:
+    get:
+      description: |-
+        Every rule this tenant has made, grouped by field.
+
+        A field that appears with an empty list has a rule for nobody, which is different from a
+        field that does not appear: the second falls back to the default, and `OWNER` and
+        `ADMIN` read it.
+      operationId: rules
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  items:
+                    $ref: '#/components/schemas/RoleReference'
+                  type: array
+                type: object
+          description: the roles permitted per field key
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Every rule this tenant has made, grouped by field
+    post:
+      description: Lets a role read a sensitive field.
+      operationId: allow
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisibilityRequest'
+        description: the field and the role
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Lets a role read a sensitive field.
+  /api/v1/field-visibility/{fieldKey}:
+    delete:
+      description: |-
+        Withdraws such a grant.
+
+        Withdrawing one that was never made is not an error, for the reason deleting twice is not.
+        What it cannot do is take a field from `OWNER`: that grant is the default rather than a
+        row, and a tenant whose owner cannot read its own data is one nobody can administer.
+      operationId: revoke
+      parameters:
+      - description: the field's key
+        in: path
+        name: fieldKey
+        required: true
+        schema:
+          maxLength: 64
+          minLength: 0
+          type: string
+      - description: the built-in role to withdraw it from, or omitted
+        in: query
+        name: role
+        required: false
+        schema:
+          maxLength: 32
+          minLength: 0
+          type: string
+      - description: the tenant-owned role to withdraw it from, or omitted
+        in: query
+        name: roleDefinitionId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Withdraws such a grant
   /api/v1/instance/accounts:
     get:
       description: |-

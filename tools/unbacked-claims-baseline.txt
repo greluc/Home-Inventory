@@ -80,10 +80,10 @@ docs/architecture/07-data-model.md:557:guaranteed
 docs/architecture/07-data-model.md:562:enforces
 docs/architecture/07-data-model.md:581:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:178:enforced
 docs/architecture/08-api-contract.md:179:enforced
-docs/architecture/08-api-contract.md:260:cannot
-docs/architecture/08-api-contract.md:338:fails the build
+docs/architecture/08-api-contract.md:180:enforced
+docs/architecture/08-api-contract.md:261:cannot
+docs/architecture/08-api-contract.md:339:fails the build
 docs/architecture/09-extensibility-and-plugins.md:183:cannot
 docs/architecture/09-extensibility-and-plugins.md:196:cannot
 docs/architecture/09-extensibility-and-plugins.md:219:cannot

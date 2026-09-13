@@ -65,6 +65,9 @@ public class ItemSearchAdapter implements ItemSearchQuery {
 
   private final JdbcClient jdbc;
 
+  /** Removes the sensitive attributes this caller may not read (REQ-TEN-008). */
+  private final de.greluc.homeinv.catalog.api.AttributeRedaction redaction;
+
   @Override
   public Page search(
       String text,
@@ -83,7 +86,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     String sql =
         """
         select id, name, description, kind, location_id, quantity, quantity_unit,
-               attributes::text as attributes, notes, minimum_stock,
+               attributes::text as attributes, item_type_version_id, notes, minimum_stock,
                lifecycle_state, created_at, updated_at, version
         from inventory.item
         where tenant_id = ?
@@ -134,7 +137,12 @@ public class ItemSearchAdapter implements ItemSearchQuery {
                         rs.getObject("location_id", UUID.class),
                         rs.getBigDecimal("quantity"),
                         rs.getString("quantity_unit"),
-                        rs.getString("attributes"),
+                        // Redacted on the way out, per caller (REQ-TEN-008). A
+                        // listing is the path that shows the most attributes at
+                        // once, so it is the one that must not be forgotten.
+                        redaction.forCaller(
+                            rs.getObject("item_type_version_id", UUID.class),
+                            rs.getString("attributes")),
                         rs.getString("notes"),
                         rs.getBigDecimal("minimum_stock"),
                         rs.getString("lifecycle_state"),

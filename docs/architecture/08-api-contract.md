@@ -46,6 +46,7 @@ forbids database and repository access from the access blocks.
 │                                                      (the instance operator only)
 ├── /invitations {token}/accept          (no session: this is how an account is made)
 ├── /roles       {id}   tenant-owned roles and the permissions they add
+├── /field-visibility   which roles read which sensitive fields
 ├── /item-types  {id}/versions {id}/fields   (the type system)
 ├── /location-categories
 ├── /items       {id} {id}/attachments {id}/relations {id}/maintenance

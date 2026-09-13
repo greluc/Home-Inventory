@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **A field marked sensitive is hidden from roles that may not read it.** Hidden
+  rather than starred out: the key is absent from the answer, because a mask says
+  the field exists and how long its value is, which for a purchase price is most
+  of what somebody was after. It holds everywhere the value would otherwise
+  appear — the item, a list of items and the revision history, whose entries keep
+  the real value so that restoring one still works. Owners and administrators read
+  everything unless a rule says otherwise, and a rule can be given to any role,
+  including one the tenant defined itself. *REST API: additive.*
+
 - **A tenant can define roles of its own.** Each one starts from a built-in role
   and adds permissions to it, so nobody has to assemble a role out of thirty
   choices, and a change to a role reaches people who are signed in while it

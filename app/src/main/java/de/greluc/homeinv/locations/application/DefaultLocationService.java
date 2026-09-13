@@ -57,6 +57,9 @@ public class DefaultLocationService implements LocationService {
 
   /** The binding check of REQ-CORE-005, applied to a category's fields (REQ-CORE-041). */
   private final de.greluc.homeinv.catalog.api.AttributeValidator validator;
+  /** Removes the sensitive attributes this caller may not read (REQ-TEN-008). */
+  private final de.greluc.homeinv.catalog.api.AttributeRedaction redaction;
+
   private final CursorCodec cursors;
   private final Clock clock;
 
@@ -285,7 +288,10 @@ public class DefaultLocationService implements LocationService {
         categories.get(location.getCategoryVersionId()),
         location.getParentId(),
         location.getDepth(),
-        location.getAttributes(),
+        // On the way out, for the reason the item path gives: what is stored is
+        // complete, and what a particular person is shown is a projection of it
+        // (REQ-TEN-008).
+        redaction.forCaller(location.getCategoryVersionId(), location.getAttributes()),
         tree.ancestorNames(location.getTenantId(), location.getId()));
   }
 

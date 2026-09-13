@@ -92,6 +92,15 @@ public class DefaultItemService implements ItemService {
   private final de.greluc.homeinv.tenancy.api.QuotaGuard quotas;
 
   /**
+   * Removes the sensitive attributes this caller may not read (REQ-TEN-008).
+   *
+   * <p>On the way out and never on the way in. What is stored is complete — the audit snapshot, the
+   * index, a restore — and what a particular person is shown is a projection of it. Redacting on
+   * write would make the stored row depend on who happened to save it.
+   */
+  private final de.greluc.homeinv.catalog.api.AttributeRedaction redaction;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -239,7 +248,7 @@ public class DefaultItemService implements ItemService {
   @Override
   public ItemView get(UUID id) {
     UUID tenantId = TenantContext.require();
-    return items.findLive(tenantId, id).map(DefaultItemService::toView).orElseThrow(() -> new NotFoundException("item", id));
+    return items.findLive(tenantId, id).map(this::toView).orElseThrow(() -> new NotFoundException("item", id));
   }
 
   /**
@@ -402,7 +411,7 @@ public class DefaultItemService implements ItemService {
       CursorCodec.Position after = cursors.decode(cursor, TRASH_CURSOR);
       rows = items.findTrashedAfter(tenantId, after.createdAt(), after.id(), PageRequest.of(0, size));
     }
-    List<ItemView> views = rows.stream().map(DefaultItemService::toView).toList();
+    List<ItemView> views = rows.stream().map(this::toView).toList();
     String next = null;
     if (rows.size() == size) {
       Item last = rows.get(rows.size() - 1);
@@ -431,8 +440,58 @@ public class DefaultItemService implements ItemService {
     if (!known) {
       throw new NotFoundException("item", id);
     }
-    return revisions.history(
-        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, cursor, limit);
+    var page =
+        revisions.history(
+            de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, cursor, limit);
+    // The snapshots are stored whole — a restore has to put back the real value —
+    // so the redaction happens here, on the way out. Without it the history would
+    // be the way round REQ-TEN-008: a purchase price nobody may read today, read
+    // out of yesterday.
+    return new de.greluc.homeinv.audit.api.RevisionLog.RevisionPage(
+        page.items().stream().map(this::redacted).toList(), page.nextCursor());
+  }
+
+  /**
+   * One revision with the attributes its snapshot carries redacted for this caller.
+   *
+   * <p>The snapshot is JSON text holding, among other things, the type version the item was written
+   * against and its attributes as a nested JSON string. Both are read back out here rather than
+   * being stored separately: the record is what it is, and a second copy of the version id beside it
+   * would be one more thing that can disagree.
+   *
+   * @param revision the stored revision
+   * @return the same revision with its snapshot redacted, or unchanged when there was nothing to do
+   */
+  private de.greluc.homeinv.audit.api.RevisionLog.RevisionView redacted(
+      de.greluc.homeinv.audit.api.RevisionLog.RevisionView revision) {
+
+    if (revision.snapshot() == null || revision.snapshot().isBlank()) {
+      return revision;
+    }
+    Snapshot stored = json.readValue(revision.snapshot(), Snapshot.class);
+    String visible = redaction.forCaller(stored.itemTypeVersionId(), stored.attributes());
+    if (java.util.Objects.equals(visible, stored.attributes())) {
+      return revision;
+    }
+    Snapshot shown =
+        new Snapshot(
+            stored.name(),
+            stored.description(),
+            stored.kind(),
+            stored.locationId(),
+            stored.quantity(),
+            stored.quantityUnit(),
+            visible,
+            stored.notes(),
+            stored.minimumStock(),
+            stored.itemTypeVersionId(),
+            stored.lifecycleState());
+    return new de.greluc.homeinv.audit.api.RevisionLog.RevisionView(
+        revision.revision(),
+        revision.kind(),
+        json.writeValueAsString(shown),
+        revision.changedAt(),
+        revision.changedBy());
   }
 
   @Transactional
@@ -535,7 +594,7 @@ public class DefaultItemService implements ItemService {
    * @param item the aggregate, managed by the current persistence context
    * @return an immutable view carrying no persistence context
    */
-  private static ItemView toView(Item item) {
+  private ItemView toView(Item item) {
     return new ItemView(
         item.getId(),
         item.getName(),
@@ -544,7 +603,7 @@ public class DefaultItemService implements ItemService {
         item.getLocationId(),
         item.getQuantity(),
         item.getQuantityUnit(),
-        item.getAttributes(),
+        redaction.forCaller(item.getItemTypeVersionId(), item.getAttributes()),
         item.getNotes(),
         item.getMinimumStock(),
         item.getLifecycleState(),
