@@ -1104,6 +1104,9 @@ components:
           description: the parent, or `null` for a root
           format: uuid
           type: string
+        version:
+          format: int64
+          type: integer
       type: object
     LoginRequest:
       description: The login body.
@@ -5620,6 +5623,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
@@ -5683,7 +5698,11 @@ paths:
           description: Internal error (`internal-error`)
       summary: Reads one item.
     put:
-      description: Replaces the mutable fields of an item.
+      description: |-
+        Replaces the mutable fields of an item.
+
+        Requires `If-Match` (REQ-API-004). Editing the same thing from two screens is the
+        case the header exists for, and an inventory is edited by a household.
       operationId: updateItem
       parameters:
       - description: the item
@@ -5706,7 +5725,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemView'
-          description: the changed item
+          description: the changed item, with its new entity tag
         '400':
           content:
             application/problem+json:
@@ -5743,6 +5762,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
         '413':
           content:
             application/problem+json:
@@ -5761,13 +5786,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: Replaces the mutable fields of an item.
+      summary: Replaces the mutable fields of an item
   /api/v1/items/{id}/bundle:
     get:
       description: |-
@@ -6158,12 +6189,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
         '422':
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
@@ -6451,12 +6494,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
         '422':
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
@@ -6579,7 +6634,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemView'
-          description: the item in its restored state
+          description: the item in its restored state, with its new entity tag
         '401':
           content:
             application/problem+json:
@@ -6610,12 +6665,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
         '422':
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
@@ -7124,6 +7191,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Resource exists (`resource-exists`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
@@ -7132,7 +7211,10 @@ paths:
           description: Internal error (`internal-error`)
       summary: Deletes a location, if nothing is inside it.
     get:
-      description: Reads one location, with the names from the root down to it.
+      description: |-
+        Reads one location, with the names from the root down to it.
+
+        Carries the `ETag` a write has to send back (REQ-API-004).
       operationId: getLocation
       parameters:
       - description: the location
@@ -7148,7 +7230,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationView'
-          description: the location
+          description: the location and its entity tag
         '401':
           content:
             application/problem+json:
@@ -7185,9 +7267,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: Reads one location, with the names from the root down to it.
+      summary: Reads one location, with the names from the root down to it
     put:
-      description: Renames a location.
+      description: |-
+        Renames a location.
+
+        Requires `If-Match` (REQ-API-004): renaming is exactly the operation two people do
+        to the same place at the same time.
       operationId: renameLocation
       parameters:
       - description: the location
@@ -7210,7 +7296,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationView'
-          description: the renamed location
+          description: the renamed location, with its new entity tag
         '400':
           content:
             application/problem+json:
@@ -7253,6 +7339,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Name taken (`name-taken`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
         '413':
           content:
             application/problem+json:
@@ -7271,13 +7363,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: Renames a location.
+      summary: Renames a location
   /api/v1/locations/{id}/items:
     get:
       description: |-
@@ -7395,6 +7493,9 @@ paths:
         `POST` and still idempotent: moving a place to where it already is answers `200`
         and changes nothing, so a client retrying a request whose answer it never saw is not told it
         failed.
+
+        Requires `If-Match` like the other writes on a place. A `POST` rather than a `PUT`
+        changes nothing about that: what the rule is protecting is the resource, not the verb.
       operationId: moveLocation
       parameters:
       - description: the location to move
@@ -7417,7 +7518,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationView'
-          description: the location as it now stands
+          description: the location as it now stands, with its new entity tag
         '400':
           content:
             application/problem+json:
@@ -7460,6 +7561,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Invalid move (`invalid-move`), or Name taken (`name-taken`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
         '413':
           content:
             application/problem+json:
@@ -7478,6 +7585,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
         '500':
           content:
             application/problem+json:

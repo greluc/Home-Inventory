@@ -18,6 +18,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -167,7 +168,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                         "packs",
                         null,
                         null,
-                        BigDecimal.valueOf(2)),
+                        BigDecimal.valueOf(2)), OptionalLong.empty(),
                     tenant.userId());
             assertThat(low.quantity()).isEqualByComparingTo("1");
             assertThat(low.minimumStock()).isEqualByComparingTo("2");

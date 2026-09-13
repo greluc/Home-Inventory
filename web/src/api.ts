@@ -115,6 +115,8 @@ export interface Location {
   parentId: string | null;
   depth: number;
   ancestors: string[];
+  /** The concurrency token: send it back as `If-Match` to change or delete this place. */
+  version: number;
 }
 
 /** A page of locations. */
@@ -362,9 +364,21 @@ export const api = {
   /** Reads one item. */
   item: (id: string): Promise<Item> => request<Item>(`/api/v1/items/${id}`),
 
-  /** Deletes an item. */
-  deleteItem: (id: string): Promise<void> =>
-    request<void>(`/api/v1/items/${id}`, { method: "DELETE" }),
+  /**
+   * Deletes an item.
+   *
+   * Takes the version it was read at, because every write on a single resource has to say which
+   * state it acted on (REQ-API-004). Without it the server answers 428 and nothing is deleted;
+   * with a stale one it answers 412, which is the lost update that did not happen.
+   *
+   * @param id the item
+   * @param version the item's `version`, as the last read gave it
+   */
+  deleteItem: (id: string, version: number): Promise<void> =>
+    request<void>(`/api/v1/items/${id}`, {
+      method: "DELETE",
+      headers: { "If-Match": `"${version}"` },
+    }),
 
   /** Creates a location. */
   createLocation: (location: {

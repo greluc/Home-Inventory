@@ -14,12 +14,14 @@ import de.greluc.homeinv.inventory.infrastructure.ItemRepository;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
+import de.greluc.homeinv.platform.Versions;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.List;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -280,9 +282,11 @@ public class DefaultItemService implements ItemService {
    */
   @Transactional
   @Override
-  public ItemView update(UUID id, UpdateItemCommand command, UUID actor) {
+  public ItemView update(
+      UUID id, UpdateItemCommand command, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
 
     // Against the version the item was written against, not against whatever the
     // type says today: an edit to an old item must not start failing because the
@@ -335,9 +339,10 @@ public class DefaultItemService implements ItemService {
    */
   @Transactional
   @Override
-  public void delete(UUID id, UUID actor) {
+  public void delete(UUID id, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
     item.markDeleted(actor, Instant.now(clock));
     items.flush();
     revisions.record(
@@ -354,9 +359,10 @@ public class DefaultItemService implements ItemService {
 
   @Transactional
   @Override
-  public ItemView restore(UUID id, UUID actor) {
+  public ItemView restore(UUID id, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
     if (!item.isDeleted()) {
       return toView(item);
     }
@@ -378,9 +384,10 @@ public class DefaultItemService implements ItemService {
 
   @Transactional
   @Override
-  public void purge(UUID id, UUID actor) {
+  public void purge(UUID id, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
     if (!item.isDeleted()) {
       throw new IllegalStateException(
           "This item is not in the trash. Final removal is the second stage of a deletion, not a "
@@ -508,9 +515,11 @@ public class DefaultItemService implements ItemService {
 
   @Transactional
   @Override
-  public ItemView restoreRevision(UUID id, long revision, UUID actor) {
+  public ItemView restoreRevision(
+      UUID id, long revision, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
     var record =
         revisions.revision(de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, revision);
     Snapshot earlier = json.readValue(record.snapshot(), Snapshot.class);

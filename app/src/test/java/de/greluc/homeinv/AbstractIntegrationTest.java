@@ -235,6 +235,35 @@ public abstract class AbstractIntegrationTest {
   }
 
   /**
+   * The entity tag a resource currently carries, for the {@code If-Match} a write needs.
+   *
+   * <p>Every mutating request on a single resource is refused without one (REQ-API-004), so a test
+   * about something else — a permission, a role, a refusal for another reason — still has to read
+   * the tag first. Two lines in a helper rather than in each of them.
+   *
+   * @param session the caller's session
+   * @param path the resource's path, as a GET would take it
+   * @return the quoted tag, ready to be sent back as {@code If-Match}
+   * @throws Exception when the read fails, which is the test failing
+   */
+  protected String eTagOf(MockHttpSession session, String path) throws Exception {
+    String tag =
+        mockMvc
+            .perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                    .session(session))
+            .andExpect(
+                org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andReturn()
+            .getResponse()
+            .getHeader("ETag");
+    if (tag == null) {
+      throw new AssertionError(path + " answered no ETag, so nothing can be written to it");
+    }
+    return tag;
+  }
+
+  /**
    * Forgets which time step this account last spent, so the next code is accepted.
    *
    * @param userId the account

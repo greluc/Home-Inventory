@@ -6,6 +6,7 @@ package de.greluc.homeinv.inventory.api;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 /**
@@ -49,10 +50,15 @@ public interface ItemService {
    *
    * @param id the item
    * @param command the new values
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @return the changed item
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
    */
-  ItemView update(UUID id, UpdateItemCommand command, UUID actor);
+  ItemView update(
+      UUID id, UpdateItemCommand command, OptionalLong expectedVersion, UUID actor);
 
   /**
    * Deletes an item, leaving a tombstone.
@@ -61,9 +67,13 @@ public interface ItemService {
    * request whose answer it never saw must not be told it failed for succeeding twice.
    *
    * @param id the item
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
    */
-  void delete(UUID id, UUID actor);
+  void delete(UUID id, OptionalLong expectedVersion, UUID actor);
 
   /**
    * The outcome of a creation.
@@ -80,12 +90,15 @@ public interface ItemService {
    * client retrying a request it never saw the answer to is not told it failed.
    *
    * @param id the item
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @return the item, active again
    * @throws de.greluc.homeinv.platform.NotFoundException when the tenant never had such an item
    * @throws IllegalStateException when it is physical and the place it was in has since been removed
    */
-  ItemView restore(UUID id, UUID actor);
+  ItemView restore(UUID id, OptionalLong expectedVersion, UUID actor);
 
   /**
    * Removes an item for good — the second stage of REQ-CORE-009.
@@ -98,11 +111,14 @@ public interface ItemService {
    * its own record would leave nobody able to answer that.
    *
    * @param id the item, which must already be in the trash
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @throws de.greluc.homeinv.platform.NotFoundException when the tenant never had such an item
    * @throws IllegalStateException when it is not in the trash
    */
-  void purge(UUID id, UUID actor);
+  void purge(UUID id, OptionalLong expectedVersion, UUID actor);
 
   /**
    * One page of the tenant's trashed items, newest first.
@@ -134,6 +150,9 @@ public interface ItemService {
    *
    * @param id the item
    * @param revision which revision to put back
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @return the item in its restored state
    * @throws de.greluc.homeinv.platform.NotFoundException when the item or the revision is not
@@ -141,7 +160,8 @@ public interface ItemService {
    * @throws de.greluc.homeinv.catalog.api.InvalidAttributesException when the old attribute set no
    *     longer matches the item's type version
    */
-  ItemView restoreRevision(UUID id, long revision, UUID actor);
+  ItemView restoreRevision(
+      UUID id, long revision, OptionalLong expectedVersion, UUID actor);
 
   /**
    * One page of items.

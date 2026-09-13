@@ -27,7 +27,8 @@ HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 . "$HERE/smoke/totp.sh"
 JAR=$(mktemp)
 OUT=$(mktemp)
-trap 'rm -f "$JAR" "$OUT"' EXIT
+HEADERS=$(mktemp)
+trap 'rm -f "$JAR" "$OUT" "$HEADERS"' EXIT
 
 say()  { printf '  %s\n' "$*"; }
 # The `if` is not decoration. Written as `[ -s "$OUT" ] && head -c 800 "$OUT"`,
@@ -71,9 +72,19 @@ api() {
     path="$2"
     shift 2
     curl --silent --show-error --output "$OUT" --write-out '%{http_code}' \
+        --dump-header "$HEADERS" \
         --cookie "$JAR" --cookie-jar "$JAR" \
         --header "X-XSRF-TOKEN: $(csrf)" \
         --request "$method" "$BASE$path" "$@"
+}
+
+# The entity tag of a resource, for the `If-Match` every write on one needs
+# (REQ-API-004). A GET and then one header out of the response: the tag is the
+# version, so this is also what tells a reader that the write below is acting on
+# the state it just read and not on whatever is there by the time it arrives.
+etag() {
+    api GET "$1" > /dev/null
+    sed -n 's/^[Ee][Tt][Aa][Gg]: *//p' "$HEADERS" | tr -d '\r'
 }
 
 field() {
@@ -185,8 +196,16 @@ status=$(api POST /api/v1/locations \
 [ "$status" = "201" ] || die "creating the second location answered $status"
 GARAGE=$(field id)
 
+# Without `If-Match` the write is refused, which is the half of REQ-API-004 an
+# operator never sees until a client forgets it.
 status=$(api POST "/api/v1/locations/$LOCATION/move" \
     --header 'Content-Type: application/json' \
+    --data "{\"parentId\":\"$GARAGE\"}")
+[ "$status" = "428" ] || die "a move without If-Match answered $status, not 428"
+
+status=$(api POST "/api/v1/locations/$LOCATION/move" \
+    --header 'Content-Type: application/json' \
+    --header "If-Match: $(etag "/api/v1/locations/$LOCATION")" \
     --data "{\"parentId\":\"$GARAGE\"}")
 [ "$status" = "200" ] || die "moving a location answered $status"
 [ "$(field parentId)" = "$GARAGE" ] || die "the move did not change the parent"
@@ -202,6 +221,7 @@ status=$(api GET "/api/v1/items/$ITEM")
 # tree now that a parent is no longer fixed at creation (REQ-CORE-045).
 status=$(api POST "/api/v1/locations/$GARAGE/move" \
     --header 'Content-Type: application/json' \
+    --header "If-Match: $(etag "/api/v1/locations/$GARAGE")" \
     --data "{\"parentId\":\"$LOCATION\"}")
 [ "$status" = "409" ] || die "a cycle answered $status and should have answered 409"
 grep -q 'problems/invalid-move' "$OUT" || die "the refusal did not name invalid-move"

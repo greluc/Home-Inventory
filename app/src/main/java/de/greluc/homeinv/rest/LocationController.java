@@ -11,6 +11,7 @@ import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.locations.api.LocationView;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.search.api.SearchService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -121,32 +122,47 @@ public class LocationController {
   /**
    * Reads one location, with the names from the root down to it.
    *
+   * <p>Carries the {@code ETag} a write has to send back (REQ-API-004).
+   *
    * @param id the location
-   * @return the location
+   * @return the location and its entity tag
    */
   @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_READ)
   @CanFail(ProblemType.NOT_FOUND)
-  public LocationView getLocation(@PathVariable UUID id) {
-    return locations.get(id);
+  public ResponseEntity<LocationView> getLocation(@PathVariable UUID id) {
+    LocationView view = locations.get(id);
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
    * Renames a location.
    *
+   * <p>Requires {@code If-Match} (REQ-API-004): renaming is exactly the operation two people do
+   * to the same place at the same time.
+   *
    * @param id the location
    * @param request the new name
+   * @param http the request, for its {@code If-Match}
    * @param user the authenticated caller
-   * @return the renamed location
+   * @return the renamed location, with its new entity tag
    */
   @PutMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_UPDATE)
-  @CanFail({ProblemType.NOT_FOUND, ProblemType.NAME_TAKEN})
-  public LocationView renameLocation(
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.NAME_TAKEN,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public ResponseEntity<LocationView> renameLocation(
       @PathVariable UUID id,
       @Valid @RequestBody RenameLocationRequest request,
+      HttpServletRequest http,
       @AuthenticationPrincipal AuthenticatedUser user) {
-    return locations.rename(id, request.name(), user.userId());
+    LocationView view =
+        locations.rename(id, request.name(), EntityTags.required(http), user.userId());
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
@@ -162,10 +178,14 @@ public class LocationController {
    * and changes nothing, so a client retrying a request whose answer it never saw is not told it
    * failed.
    *
+   * <p>Requires {@code If-Match} like the other writes on a place. A `POST` rather than a `PUT`
+   * changes nothing about that: what the rule is protecting is the resource, not the verb.
+   *
    * @param id the location to move
    * @param request where to put it
+   * @param http the request, for its {@code If-Match}
    * @param user the authenticated caller
-   * @return the location as it now stands
+   * @return the location as it now stands, with its new entity tag
    */
   @PostMapping(value = "/{id}/move", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_UPDATE)
@@ -173,13 +193,18 @@ public class LocationController {
     ProblemType.NOT_FOUND,
     ProblemType.NAME_TAKEN,
     ProblemType.INVALID_MOVE,
-    ProblemType.VALIDATION_FAILED
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
   })
-  public LocationView moveLocation(
+  public ResponseEntity<LocationView> moveLocation(
       @PathVariable UUID id,
       @Valid @RequestBody MoveLocationRequest request,
+      HttpServletRequest http,
       @AuthenticationPrincipal AuthenticatedUser user) {
-    return locations.move(id, request.parentId(), user.userId());
+    LocationView view =
+        locations.move(id, request.parentId(), EntityTags.required(http), user.userId());
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
@@ -223,14 +248,23 @@ public class LocationController {
    * Deletes a location, if nothing is inside it.
    *
    * @param id the location
+   * @param http the request, for its {@code If-Match}
    * @param user the authenticated caller
    */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.LOCATION_DELETE)
-  @CanFail({ProblemType.NOT_FOUND, ProblemType.RESOURCE_EXISTS})
-  public void deleteLocation(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-    locations.delete(id, user.userId());
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.RESOURCE_EXISTS,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public void deleteLocation(
+      @PathVariable UUID id,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    locations.delete(id, EntityTags.required(http), user.userId());
   }
 
   /**

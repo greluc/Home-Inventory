@@ -19,11 +19,13 @@ import de.greluc.homeinv.locations.infrastructure.LocationTreeQueries;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
+import de.greluc.homeinv.platform.Versions;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -173,10 +175,12 @@ public class DefaultLocationService implements LocationService {
    */
   @Transactional
   @Override
-  public LocationView rename(UUID id, String name, UUID actor) {
+  public LocationView rename(
+      UUID id, String name, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
+    Versions.requireCurrent("location", id, expectedVersion, location.getVersion());
     // Excluding itself, so renaming "Cellar" to "cellar" is a rename and not a
     // conflict with the row being renamed.
     requireNameFree(tenantId, location.getParentId(), name, id);
@@ -209,12 +213,14 @@ public class DefaultLocationService implements LocationService {
    */
   @Transactional
   @Override
-  public LocationView move(UUID id, UUID newParentId, UUID actor) {
+  public LocationView move(
+      UUID id, UUID newParentId, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Instant now = Instant.now(clock);
 
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
+    Versions.requireCurrent("location", id, expectedVersion, location.getVersion());
     // Both ends: somebody confined to a subtree may not move a place out of it,
     // and may not move one in from outside (REQ-TEN-007).
     requireInScope(id);
@@ -319,10 +325,11 @@ public class DefaultLocationService implements LocationService {
    */
   @Transactional
   @Override
-  public void delete(UUID id, UUID actor) {
+  public void delete(UUID id, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
+    Versions.requireCurrent("location", id, expectedVersion, location.getVersion());
 
     if (tree.hasChildren(tenantId, id)) {
       throw new LocationNotEmptyException(id, "it still contains other locations");
@@ -419,7 +426,13 @@ public class DefaultLocationService implements LocationService {
         // complete, and what a particular person is shown is a projection of it
         // (REQ-TEN-008).
         redaction.forCaller(location.getCategoryVersionId(), location.getAttributes()),
-        tree.ancestorNames(location.getTenantId(), location.getId()));
+        tree.ancestorNames(location.getTenantId(), location.getId()),
+        // The concurrency token, which is what a client sends back as `If-Match`.
+        // In the view rather than derived from a hash of it: a hash changes when
+        // a redacted field is added or removed for a caller, and two people with
+        // different field permissions would then disagree about what the same
+        // unchanged location's tag is (REQ-API-004).
+        location.getVersion());
   }
 
   /**

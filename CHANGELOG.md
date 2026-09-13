@@ -133,6 +133,13 @@ commit".
 
 ### Added
 
+- **Two people can no longer overwrite each other's edits.** Reading a single
+  item or place now returns an `ETag`, and changing, moving or deleting one
+  requires it back as `If-Match`: without the header the request is refused and
+  nothing is written, and with one that has gone stale it is refused too, saying
+  which version you had and which is current. The web client sends it. *REST API:
+  breaking, pre-release.*
+
 - **An item can be a bundle.** `POST /api/v1/items/{id}/bundle` puts something
   into it, `GET` lists what is in it and `GET /api/v1/items/{id}/bundles` says
   what an item is part of. Nothing moves: the lens in the camera bag is still in
@@ -339,7 +346,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 24 types in the shared
+- **The shared kernel is measured.** `platform` holds 26 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

@@ -149,6 +149,20 @@
     <Class name="de.greluc.homeinv.media.infrastructure.VipsImageProcessor"/>
   </Match>
 
+<!--
+    SERVLET_HEADER on `EntityTags`. Reading `If-Match` is what the class is for, and
+    the value is treated as untrusted from the first line: it is trimmed, required to
+    be a quoted number, parsed with `Long.parseLong`, and otherwise refused. What
+    survives is a `long`. It reaches no response — the refusal deliberately does not
+    repeat what arrived — no log line, no query and no header, and the comparison it
+    feeds is a numeric one against a column the caller cannot influence
+    (REQ-API-004).
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.EntityTags"/>
+  </Match>
+
   <!--
     SERVLET_HEADER on the forwarded-header filter. Reading X-Forwarded-For is what
     the class is for, and it is the one place in the application that does: it

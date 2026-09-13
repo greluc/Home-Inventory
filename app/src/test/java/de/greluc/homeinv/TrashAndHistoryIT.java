@@ -18,6 +18,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,20 +51,20 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
         () -> {
           UUID id = anItem(tenant, "Ladder");
 
-          items.delete(id, tenant.userId());
+          items.delete(id, OptionalLong.empty(), tenant.userId());
           // Gone from the ordinary reads.
           assertThatThrownBy(() -> items.get(id)).isInstanceOf(NotFoundException.class);
           // And visible where a person goes looking for it.
           assertThat(items.trashed(null, 50).items()).extracting(ItemView::id).contains(id);
 
-          ItemView back = items.restore(id, tenant.userId());
+          ItemView back = items.restore(id, OptionalLong.empty(), tenant.userId());
           assertThat(back.lifecycleState()).isEqualTo("ACTIVE");
           assertThat(items.get(id).id()).isEqualTo(id);
           assertThat(items.trashed(null, 50).items()).extracting(ItemView::id).doesNotContain(id);
 
           // Restoring twice is not an error, for the same reason deleting twice
           // is not: a client retrying a request it never saw the answer to.
-          items.restore(id, tenant.userId());
+          items.restore(id, OptionalLong.empty(), tenant.userId());
         });
   }
 
@@ -77,11 +78,11 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           UUID id = anItem(tenant, "Cardboard box");
 
           // The second stage is not a shortcut past the first.
-          assertThatThrownBy(() -> items.purge(id, tenant.userId()))
+          assertThatThrownBy(() -> items.purge(id, OptionalLong.empty(), tenant.userId()))
               .isInstanceOf(IllegalStateException.class);
 
-          items.delete(id, tenant.userId());
-          items.purge(id, tenant.userId());
+          items.delete(id, OptionalLong.empty(), tenant.userId());
+          items.purge(id, OptionalLong.empty(), tenant.userId());
 
           assertThatThrownBy(() -> items.get(id)).isInstanceOf(NotFoundException.class);
           assertThat(items.trashed(null, 50).items()).extracting(ItemView::id).doesNotContain(id);
@@ -105,10 +106,10 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.update(
               id,
               new ItemService.UpdateItemCommand(
-                  "Kettle, electric", "2 litres", null, BigDecimal.ONE, null, null, null, null),
+                  "Kettle, electric", "2 litres", null, BigDecimal.ONE, null, null, null, null), OptionalLong.empty(),
               tenant.userId());
-          items.delete(id, tenant.userId());
-          items.restore(id, tenant.userId());
+          items.delete(id, OptionalLong.empty(), tenant.userId());
+          items.restore(id, OptionalLong.empty(), tenant.userId());
 
           assertThat(historyOf(id))
               .extracting(RevisionLog.RevisionView::kind)
@@ -136,11 +137,11 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.update(
               id,
               new ItemService.UpdateItemCommand(
-                  "Changed name", null, null, BigDecimal.ONE, null, null, null, null),
+                  "Changed name", null, null, BigDecimal.ONE, null, null, null, null), OptionalLong.empty(),
               tenant.userId());
           assertThat(items.get(id).name()).isEqualTo("Changed name");
 
-          ItemView back = items.restoreRevision(id, created, tenant.userId());
+          ItemView back = items.restoreRevision(id, created, OptionalLong.empty(), tenant.userId());
           assertThat(back.name()).isEqualTo("Original name");
 
           // A new revision rather than a rewind: the history still says what

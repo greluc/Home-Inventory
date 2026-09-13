@@ -184,6 +184,25 @@ public enum ProblemType {
   DELETION_PENDING("deletion-pending", HttpStatus.CONFLICT, "Deletion pending"),
 
   /**
+   * A write on a single resource arrived without {@code If-Match} (REQ-API-004).
+   *
+   * <p>{@code 428}, the status invented for exactly this: the server could perform the request and
+   * refuses to, because performing it would risk the lost update the header prevents. There is no
+   * blind overwrite.
+   */
+  PRECONDITION_REQUIRED("precondition-required", HttpStatus.PRECONDITION_REQUIRED,
+      "If-Match is required"),
+
+  /**
+   * The {@code If-Match} does not name the version the resource has (REQ-API-004).
+   *
+   * <p>Somebody else wrote in between, or the tag was never one this API issued. Both get the same
+   * answer because the caller does the same thing about both: read the resource again.
+   */
+  PRECONDITION_FAILED("precondition-failed", HttpStatus.PRECONDITION_FAILED,
+      "The resource has moved on"),
+
+  /**
    * The membership would make a bundle contain itself (REQ-CORE-007).
    *
    * <p>A {@code 409} for the same reason {@code INVALID_MOVE} is: nothing about the request is

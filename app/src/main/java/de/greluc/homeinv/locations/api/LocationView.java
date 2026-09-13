@@ -30,4 +30,5 @@ public record LocationView(
     UUID parentId,
     int depth,
     String attributes,
-    List<String> ancestors) {}
+    List<String> ancestors,
+    long version) {}

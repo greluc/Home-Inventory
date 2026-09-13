@@ -21,6 +21,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
@@ -182,7 +183,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
     inOwn(
         tenant,
         () -> {
-          items.delete(spanner, tenant.userId());
+          items.delete(spanner, OptionalLong.empty(), tenant.userId());
           return null;
         });
 
@@ -201,7 +202,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
         .isEqualTo(1);
 
     // Restored, it is back in the bundle it never left.
-    inOwn(tenant, () -> items.restore(spanner, tenant.userId()));
+    inOwn(tenant, () -> items.restore(spanner, OptionalLong.empty(), tenant.userId()));
     assertThat(inOwn(tenant, () -> bundles.contentsOf(kit, null, 50).items())).hasSize(1);
 
     // Something this tenant cannot see is a 404 rather than a constraint

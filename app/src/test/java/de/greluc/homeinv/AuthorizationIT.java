@@ -149,7 +149,13 @@ class AuthorizationIT extends AbstractIntegrationTest {
     UUID id = UUID.fromString(json.readTree(created).get("id").asString());
 
     mockMvc
-        .perform(delete("/api/v1/items/" + id).session(session).with(csrf()))
+        .perform(
+            delete("/api/v1/items/" + id)
+                .session(session)
+                .with(csrf())
+                // REQ-API-004: every write on a single resource says which version
+                // it acted on, including the ones whose subject is a permission.
+                .header("If-Match", eTagOf(session, "/api/v1/items/" + id)))
         .andExpect(status().isNoContent());
 
     assertThat(tenant.tenantId()).isNotNull();

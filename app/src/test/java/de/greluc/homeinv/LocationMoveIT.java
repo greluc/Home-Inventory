@@ -24,6 +24,7 @@ import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
@@ -90,7 +91,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
     String boxPathBefore = inOwnTransaction(tenant, () -> rawPath(box));
     long ownEventsBefore = ownEvents();
 
-    LocationView moved = inOwnTransaction(tenant, () -> locations.move(box, attic, tenant.userId()));
+    LocationView moved = inOwnTransaction(tenant, () -> locations.move(box, attic, OptionalLong.empty(), tenant.userId()));
 
     // One event for the lot. Anything that walked the contents would publish nine.
     List<LocationMoved> published = events.stream(LocationMoved.class).toList();
@@ -134,7 +135,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
     // A client retrying a request whose answer it never saw. The same reason
     // deleting twice is not an error.
     LocationView same =
-        inOwnTransaction(tenant, () -> locations.move(cellar, house, tenant.userId()));
+        inOwnTransaction(tenant, () -> locations.move(cellar, house, OptionalLong.empty(), tenant.userId()));
 
     assertThat(same.parentId()).isEqualTo(house);
     assertThat(inOwnTransaction(tenant, () -> rawPath(cellar))).isEqualTo(pathBefore);
@@ -155,18 +156,18 @@ class LocationMoveIT extends AbstractIntegrationTest {
     // until a move existed, a parent was fixed at creation and a cycle could not
     // be expressed at all.
     assertThatThrownBy(
-            () -> inOwnTransaction(tenant, () -> locations.move(house, shelf, tenant.userId())))
+            () -> inOwnTransaction(tenant, () -> locations.move(house, shelf, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class)
         .hasMessageContaining("itself");
 
     // Its own child, which is the acceptance criterion in as many words.
     assertThatThrownBy(
-            () -> inOwnTransaction(tenant, () -> locations.move(house, cellar, tenant.userId())))
+            () -> inOwnTransaction(tenant, () -> locations.move(house, cellar, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class);
 
     // And into itself.
     assertThatThrownBy(
-            () -> inOwnTransaction(tenant, () -> locations.move(house, house, tenant.userId())))
+            () -> inOwnTransaction(tenant, () -> locations.move(house, house, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class);
 
     assertThat(inOwnTransaction(tenant, () -> locations.get(house)).parentId()).isNull();
@@ -198,7 +199,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
     // The crate alone would fit under the second-deepest level; what does not fit
     // is the thing inside it, which is the whole point of measuring the subtree.
     assertThatThrownBy(
-            () -> inOwnTransaction(tenant, () -> locations.move(crate, oneAbove, tenant.userId())))
+            () -> inOwnTransaction(tenant, () -> locations.move(crate, oneAbove, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(TooDeepException.class);
 
     // Nothing moved, and the refusal happened before a single path was rewritten.
@@ -207,7 +208,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
 
     // One level higher there is room for both.
     UUID twoAbove = inOwnTransaction(tenant, () -> locations.get(oneAbove).parentId());
-    inOwnTransaction(tenant, () -> locations.move(crate, twoAbove, tenant.userId()));
+    inOwnTransaction(tenant, () -> locations.move(crate, twoAbove, OptionalLong.empty(), tenant.userId()));
     assertThat(inOwnTransaction(tenant, () -> locations.get(inside)).depth())
         .isEqualTo(Location.MAX_DEPTH);
   }
@@ -225,7 +226,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
 
     // REQ-CORE-064 is about siblings, and a move changes who the siblings are.
     assertThatThrownBy(
-            () -> inOwnTransaction(tenant, () -> locations.move(store, house, tenant.userId())))
+            () -> inOwnTransaction(tenant, () -> locations.move(store, house, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(NameTakenException.class);
   }
 
@@ -244,8 +245,8 @@ class LocationMoveIT extends AbstractIntegrationTest {
     // shipped category starts in and the reason this can be switched on in a
     // tenant whose tree already exists.
     assertThat(inOwnTransaction(tenant, () -> types.childCategories(room)).permitted()).isEmpty();
-    inOwnTransaction(tenant, () -> locations.move(box, hall, tenant.userId()));
-    inOwnTransaction(tenant, () -> locations.move(box, null, tenant.userId()));
+    inOwnTransaction(tenant, () -> locations.move(box, hall, OptionalLong.empty(), tenant.userId()));
+    inOwnTransaction(tenant, () -> locations.move(box, null, OptionalLong.empty(), tenant.userId()));
 
     // A rule that names shelves and nothing else.
     TypeAdministration.ChildCategoryRuleView rule =
@@ -254,7 +255,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
     assertThat(rule.permitted()).containsExactly(shelves);
 
     assertThatThrownBy(
-            () -> inOwnTransaction(tenant, () -> locations.move(box, hall, tenant.userId())))
+            () -> inOwnTransaction(tenant, () -> locations.move(box, hall, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class)
         .hasMessageContaining("does not take");
 
@@ -263,15 +264,15 @@ class LocationMoveIT extends AbstractIntegrationTest {
     inOwnTransaction(
         tenant, () -> types.setChildCategories(room, List.of(shelves, boxes), tenant.userId()));
     LocationView moved =
-        inOwnTransaction(tenant, () -> locations.move(box, hall, tenant.userId()));
+        inOwnTransaction(tenant, () -> locations.move(box, hall, OptionalLong.empty(), tenant.userId()));
     assertThat(moved.parentId()).isEqualTo(hall);
 
     // Withdrawn: an empty set is no restriction, not a restriction permitting
     // nothing. The difference decides whether the feature can be turned off again.
     inOwnTransaction(tenant, () -> types.setChildCategories(room, List.of(), tenant.userId()));
     assertThat(inOwnTransaction(tenant, () -> types.childCategories(room)).permitted()).isEmpty();
-    inOwnTransaction(tenant, () -> locations.move(box, null, tenant.userId()));
-    inOwnTransaction(tenant, () -> locations.move(box, hall, tenant.userId()));
+    inOwnTransaction(tenant, () -> locations.move(box, null, OptionalLong.empty(), tenant.userId()));
+    inOwnTransaction(tenant, () -> locations.move(box, hall, OptionalLong.empty(), tenant.userId()));
   }
 
   @Test
@@ -296,6 +297,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
                 .with(
                     org.springframework.security.test.web.servlet.request
                         .SecurityMockMvcRequestPostProcessors.csrf())
+                .header("If-Match", eTagOf(session, "/api/v1/locations/" + house))
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"parentId\":\"" + cellar + "\"}"))
         .andExpect(
@@ -317,6 +319,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
                 .with(
                     org.springframework.security.test.web.servlet.request
                         .SecurityMockMvcRequestPostProcessors.csrf())
+                .header("If-Match", eTagOf(session, "/api/v1/locations/" + cellar))
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"parentId\":null}"))
         .andExpect(

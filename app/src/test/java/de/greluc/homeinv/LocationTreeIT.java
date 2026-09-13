@@ -21,6 +21,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.time.Instant;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -155,11 +156,11 @@ class LocationTreeIT extends AbstractIntegrationTest {
     // Renaming a location to its own name in a different case is a rename, not a
     // conflict with the row being renamed.
     inTenantTransaction(
-        tenant.tenantId(), () -> locationService.rename(cellar, "cellar", tenant.userId()));
+        tenant.tenantId(), () -> locationService.rename(cellar, "cellar", OptionalLong.empty(), tenant.userId()));
 
     // And a tombstone does not hold the name: the index is partial for exactly
     // this (07 §7.1, rule 5).
-    inTenantTransaction(tenant.tenantId(), () -> locationService.delete(cellar, tenant.userId()));
+    inTenantTransaction(tenant.tenantId(), () -> locationService.delete(cellar, OptionalLong.empty(), tenant.userId()));
     LocationView reborn =
         inOwnTransaction(
             tenant.tenantId(), () -> create(category, null, "Cellar", tenant.userId()));
@@ -184,7 +185,7 @@ class LocationTreeIT extends AbstractIntegrationTest {
                 inOwnTransaction(
                     tenant.tenantId(),
                     () -> {
-                      locationService.delete(houseId, tenant.userId());
+                      locationService.delete(houseId, OptionalLong.empty(), tenant.userId());
                       return null;
                     }))
         .isInstanceOf(LocationNotEmptyException.class)
@@ -194,13 +195,13 @@ class LocationTreeIT extends AbstractIntegrationTest {
     inOwnTransaction(
         tenant.tenantId(),
         () -> {
-          locationService.delete(roomId, tenant.userId());
+          locationService.delete(roomId, OptionalLong.empty(), tenant.userId());
           return null;
         });
     inOwnTransaction(
         tenant.tenantId(),
         () -> {
-          locationService.delete(houseId, tenant.userId());
+          locationService.delete(houseId, OptionalLong.empty(), tenant.userId());
           return null;
         });
   }
@@ -220,7 +221,7 @@ class LocationTreeIT extends AbstractIntegrationTest {
 
     String pathBefore = inOwnTransaction(tenant.tenantId(), () -> rawPath(roomId));
     inOwnTransaction(
-        tenant.tenantId(), () -> locationService.rename(roomId, "Küche (oben)", tenant.userId()));
+        tenant.tenantId(), () -> locationService.rename(roomId, "Küche (oben)", OptionalLong.empty(), tenant.userId()));
 
     // The name is not in the path, so the path cannot have changed - and a name
     // with a space and brackets is not even a legal ltree label.

@@ -20,6 +20,7 @@ import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -84,12 +85,12 @@ class QuotasIT extends AbstractIntegrationTest {
           UUID id = anItem(tenant, "Temporary");
           assertThat(used(QuotaGuard.Quota.ITEM_COUNT)).isEqualTo(1);
 
-          items.delete(id, tenant.userId());
+          items.delete(id, OptionalLong.empty(), tenant.userId());
           // Still counted: a trashed item is still a row and still carries its
           // attachments.
           assertThat(used(QuotaGuard.Quota.ITEM_COUNT)).isEqualTo(1);
 
-          items.purge(id, tenant.userId());
+          items.purge(id, OptionalLong.empty(), tenant.userId());
           assertThat(used(QuotaGuard.Quota.ITEM_COUNT)).isZero();
         });
   }

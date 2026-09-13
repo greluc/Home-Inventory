@@ -116,7 +116,11 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
     UUID itemId = UUID.fromString(json.readTree(created).get("id").asString());
 
     mockMvc
-        .perform(delete("/api/v1/items/" + itemId).session(helperSession).with(csrf()))
+        .perform(
+            delete("/api/v1/items/" + itemId)
+                .session(helperSession)
+                .with(csrf())
+                .header("If-Match", eTagOf(helperSession, "/api/v1/items/" + itemId)))
         .andExpect(status().isNoContent());
 
     // Take the permission away again, and the SAME session loses it: an

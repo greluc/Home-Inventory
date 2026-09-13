@@ -38,6 +38,7 @@ import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.NotFoundException;
+import de.greluc.homeinv.platform.StaleVersionException;
 import de.greluc.homeinv.platform.PayloadTooLargeException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
@@ -572,6 +573,52 @@ public class ApiExceptionHandler {
    * does not take this kind of place — because the fix differs even though the token does not.
    *
    * @param exception the refusal, carrying which
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(PreconditionRequiredException.class)
+  public ProblemDetail handlePreconditionRequired(
+      PreconditionRequiredException exception, HttpServletRequest request) {
+    return problem(ProblemType.PRECONDITION_REQUIRED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a write whose {@code If-Match} was not the resource's version (REQ-API-004).
+   *
+   * <p>Carries both versions: a client that knows what it had and what is there can say so, which
+   * is the difference between "somebody changed this" and a dialogue nobody can act on.
+   *
+   * @param exception the refusal, carrying both versions
+   * @param request the request, for the instance URI
+   * @return a {@code 412} problem detail
+   */
+  @ExceptionHandler(StaleVersionException.class)
+  public ProblemDetail handleStaleVersion(
+      StaleVersionException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(ProblemType.PRECONDITION_FAILED, exception.getMessage(), request);
+    problem.setProperty("expectedVersion", exception.getExpected());
+    problem.setProperty("currentVersion", exception.getCurrent());
+    return problem;
+  }
+
+  /**
+   * Answers an {@code If-Match} this API could not have issued (REQ-API-004).
+   *
+   * @param exception the refusal, carrying what arrived
+   * @param request the request, for the instance URI
+   * @return a {@code 412} problem detail
+   */
+  @ExceptionHandler(PreconditionMalformedException.class)
+  public ProblemDetail handleMalformedPrecondition(
+      PreconditionMalformedException exception, HttpServletRequest request) {
+    return problem(ProblemType.PRECONDITION_FAILED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a membership that would make a bundle contain itself (REQ-CORE-007).
+   *
+   * @param exception the refusal
    * @param request the request, for the instance URI
    * @return a {@code 409} problem detail
    */

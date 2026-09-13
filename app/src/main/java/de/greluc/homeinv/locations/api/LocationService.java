@@ -5,6 +5,7 @@
 package de.greluc.homeinv.locations.api;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 /**
@@ -39,10 +40,13 @@ public interface LocationService {
    *
    * @param id the location
    * @param name the new name
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @return the renamed location
    */
-  LocationView rename(UUID id, String name, UUID actor);
+  LocationView rename(UUID id, String name, OptionalLong expectedVersion, UUID actor);
 
   /**
    * Moves a location, and everything under it, somewhere else (REQ-CORE-043).
@@ -59,6 +63,9 @@ public interface LocationService {
    *
    * @param id the location to move
    * @param newParentId where to put it, or {@code null} to make it a root
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @return the location as it now stands
    * @throws de.greluc.homeinv.platform.NotFoundException when the tenant has no such live location,
@@ -68,16 +75,20 @@ public interface LocationService {
    * @throws TooDeepException when the subtree would exceed the depth limit
    * @throws NameTakenException when the target already has a child of this name
    */
-  LocationView move(UUID id, UUID newParentId, UUID actor);
+  LocationView move(UUID id, UUID newParentId, OptionalLong expectedVersion, UUID actor);
 
   /**
    * Deletes a location, if nothing is inside it.
    *
    * @param id the location
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last
+   *     read; empty skips the check, which is what an internal caller with no screen to go
+   *     stale passes (REQ-API-004)
    * @param actor the authenticated user
    * @throws LocationNotEmptyException when a place or an item is still inside it
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
    */
-  void delete(UUID id, UUID actor);
+  void delete(UUID id, OptionalLong expectedVersion, UUID actor);
 
   /**
    * The ids of a location and everything below it (REQ-CORE-049).

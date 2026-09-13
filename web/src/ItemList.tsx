@@ -45,7 +45,7 @@ export function ItemList({
 
   async function remove(item: Item): Promise<void> {
     try {
-      await api.deleteItem(item.id);
+      await api.deleteItem(item.id, item.version);
       onDeleted();
     } catch (cause) {
       onError(cause instanceof ApiError ? cause.detail : t("item.deleteFailed"));

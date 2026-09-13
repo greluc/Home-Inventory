@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -198,7 +199,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                   null,
                   BigDecimal.ONE,
                   null,
-                  "{\"isbn\":\"9780131177055\",\"published\":2005}", null, null),
+                  "{\"isbn\":\"9780131177055\",\"published\":2005}", null, null), OptionalLong.empty(),
               tenant.userId());
           Map<String, Projection> after = projections(item.id());
           assertThat(after.get("published").number()).isEqualByComparingTo("2005");
@@ -207,7 +208,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
           // Trashing takes the projection with it, in the same transaction: a
           // trashed item that kept answering filters would be findable for the
           // whole retention period.
-          items.delete(item.id(), tenant.userId());
+          items.delete(item.id(), OptionalLong.empty(), tenant.userId());
           assertThat(projections(item.id())).isEmpty();
         });
   }

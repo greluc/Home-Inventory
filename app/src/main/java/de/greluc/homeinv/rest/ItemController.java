@@ -16,6 +16,7 @@ import de.greluc.homeinv.inventory.api.ItemKind;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -122,37 +123,53 @@ public class ItemController {
   @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail(ProblemType.NOT_FOUND)
-  public ItemView getItem(@PathVariable UUID id) {
-    return items.get(id);
+  public ResponseEntity<ItemView> getItem(@PathVariable UUID id) {
+    // The ETag a write has to send back (REQ-API-004). The version and not a hash
+    // of the body: the body is redacted per caller, so a hash would differ between
+    // two people looking at the same unchanged row.
+    ItemView view = items.get(id);
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
    * Replaces the mutable fields of an item.
    *
+   * <p>Requires {@code If-Match} (REQ-API-004). Editing the same thing from two screens is the
+   * case the header exists for, and an inventory is edited by a household.
+   *
    * @param id the item
    * @param request the new values
+   * @param http the request, for its {@code If-Match}
    * @param user the authenticated caller
-   * @return the changed item
+   * @return the changed item, with its new entity tag
    */
   @PutMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_UPDATE)
-  @CanFail(ProblemType.NOT_FOUND)
-  public ItemView updateItem(
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public ResponseEntity<ItemView> updateItem(
       @PathVariable UUID id,
       @Valid @RequestBody UpdateItemRequest request,
+      HttpServletRequest http,
       @AuthenticationPrincipal AuthenticatedUser user) {
-    return items.update(
-        id,
-        new ItemService.UpdateItemCommand(
-            request.name(),
-            request.description(),
-            request.locationId(),
-            request.quantity(),
-            request.quantityUnit(),
-            request.attributes(),
-            request.notes(),
-            request.minimumStock()),
-        user.userId());
+    ItemView view =
+        items.update(
+            id,
+            new ItemService.UpdateItemCommand(
+                request.name(),
+                request.description(),
+                request.locationId(),
+                request.quantity(),
+                request.quantityUnit(),
+                request.attributes(),
+                request.notes(),
+                request.minimumStock()),
+            EntityTags.required(http),
+            user.userId());
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
@@ -167,9 +184,12 @@ public class ItemController {
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @RequiresPermission(Permission.ITEM_DELETE)
-  @CanFail(ProblemType.NOT_FOUND)
-  public void deleteItem(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-    items.delete(id, user.userId());
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.PRECONDITION_REQUIRED, ProblemType.PRECONDITION_FAILED})
+  public void deleteItem(
+      @PathVariable UUID id,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    items.delete(id, EntityTags.required(http), user.userId());
   }
 
   /**
@@ -360,10 +380,18 @@ public class ItemController {
    */
   @PostMapping(path = "/{id}/restore", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_DELETE)
-  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
-  public ItemView restoreItem(
-      @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-    return items.restore(id, user.userId());
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public ResponseEntity<ItemView> restoreItem(
+      @PathVariable UUID id,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    ItemView view = items.restore(id, EntityTags.required(http), user.userId());
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
@@ -377,10 +405,18 @@ public class ItemController {
    */
   @DeleteMapping(path = "/{id}/permanently")
   @RequiresPermission(Permission.ITEM_PURGE)
-  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void purgeItem(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-    items.purge(id, user.userId());
+  public void purgeItem(
+      @PathVariable UUID id,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    items.purge(id, EntityTags.required(http), user.userId());
   }
 
   /**
@@ -409,19 +445,28 @@ public class ItemController {
    *
    * @param id the item
    * @param revision which revision to put back
+   * @param http the request, for its {@code If-Match}
    * @param user the authenticated caller
-   * @return the item in its restored state
+   * @return the item in its restored state, with its new entity tag
    */
   @PostMapping(
       path = "/{id}/revisions/{revision}/restore",
       produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_UPDATE)
-  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
-  public ItemView restoreItemRevision(
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public ResponseEntity<ItemView> restoreItemRevision(
       @PathVariable UUID id,
       @PathVariable long revision,
+      HttpServletRequest http,
       @AuthenticationPrincipal AuthenticatedUser user) {
-    return items.restoreRevision(id, revision, user.userId());
+    ItemView view =
+        items.restoreRevision(id, revision, EntityTags.required(http), user.userId());
+    return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
 
   /**
