@@ -11,6 +11,13 @@ build/
 web/dist/
 deploy/secrets/
 docs/
+# ...except the one file the APPLICATION reads at runtime. `docs/reference/` is
+# the source of truth for the shipped item type templates (REQ-CORE-030) and the
+# build copies it into the artifact; excluded from the context, the copy found
+# nothing, the jar shipped without it, and `api` refused to start inside the
+# image while every test on the host passed. The smoke suite caught it, which is
+# what the smoke suite is for.
+!docs/reference/type-templates.yaml
 website/
 design-system/
 *.md

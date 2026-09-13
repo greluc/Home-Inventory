@@ -226,7 +226,21 @@ tasks.named("check") {
 // the artifact carries a copy, so the running application reads exactly what a
 // reader read.
 tasks.named<ProcessResources>("processResources") {
-    from(rootProject.file("docs/reference/type-templates.yaml")) {
+    val templates = rootProject.file("docs/reference/type-templates.yaml")
+    // Checked rather than assumed. A `from()` over a file that is not there copies
+    // nothing and says nothing, and the first sign of it is `api` refusing to start
+    // inside an image because the resource it reads at startup is missing -- which
+    // is exactly what happened when `.dockerignore` excluded `docs/`.
+    doFirst {
+        if (!templates.isFile) {
+            throw GradleException(
+                "docs/reference/type-templates.yaml is missing from this build context. The " +
+                    "application reads it at startup (REQ-CORE-030); a build without it produces " +
+                    "an artifact that cannot start."
+            )
+        }
+    }
+    from(templates) {
         into("catalog")
     }
 }
