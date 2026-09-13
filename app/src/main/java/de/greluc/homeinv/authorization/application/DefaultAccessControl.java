@@ -15,6 +15,7 @@ import de.greluc.homeinv.authorization.api.TenantOwned;
 import de.greluc.homeinv.authorization.infrastructure.RoleDefinitionAdapter;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.NotFoundException;
+import java.util.UUID;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
@@ -84,7 +85,7 @@ public class DefaultAccessControl implements AccessControl {
               + "have made this unreachable.",
           resource.tenantId(),
           caller.tenantId());
-      throw new NotFoundException(resourceNameOf(permission), null);
+      throw new NotFoundException(resourceNameOf(permission), (UUID) null);
     }
     require(permission);
   }

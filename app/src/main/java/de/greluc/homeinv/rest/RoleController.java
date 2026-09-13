@@ -205,7 +205,7 @@ public class RoleController {
    * @throws NotFoundException when it is not one of the six
    */
   private static Role baseOf(String name) {
-    return Role.named(name).orElseThrow(() -> new NotFoundException("role", null));
+    return Role.named(name).orElseThrow(() -> new NotFoundException("role", (UUID) null));
   }
 
   /**
@@ -232,7 +232,7 @@ public class RoleController {
         }
       }
       if (!known) {
-        throw new NotFoundException("permission", null);
+        throw new NotFoundException("permission", (UUID) null);
       }
     }
     return permissions;

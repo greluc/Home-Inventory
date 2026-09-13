@@ -134,7 +134,7 @@ public class FieldVisibilityController {
     if (definitionId != null) {
       return new RoleRef(null, definitionId);
     }
-    return RoleRef.of(Role.named(role).orElseThrow(() -> new NotFoundException("role", null)).name());
+    return RoleRef.of(Role.named(role).orElseThrow(() -> new NotFoundException("role", (UUID) null)).name());
   }
 
   /**

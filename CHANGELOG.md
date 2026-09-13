@@ -139,6 +139,11 @@ commit".
   with a password alone. The web client shows the setup instead of an error.
   *REST API: additive.*
 
+- **You can see where your account is signed in, and end a session from another
+  device.** Each entry says what the device called itself and which network it
+  came from — the network, not the address — and ending one takes effect on that
+  device's next request. *REST API: additive.*
+
 - **A passkey can be the second factor instead of an app.** Register one from the
   browser, sign in with it, and use it where a code would be asked for again.
   Nothing about the authenticator's make is checked — what is checked is that the

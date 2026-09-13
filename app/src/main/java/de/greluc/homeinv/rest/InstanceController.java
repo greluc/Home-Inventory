@@ -76,7 +76,7 @@ public class InstanceController {
     return accounts
         .byEmail(email)
         .map(InstanceController::viewOf)
-        .orElseThrow(() -> new NotFoundException("account", null));
+        .orElseThrow(() -> new NotFoundException("account", (UUID) null));
   }
 
   /**

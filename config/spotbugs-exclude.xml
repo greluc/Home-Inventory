@@ -273,6 +273,19 @@
   </Match>
 
   <!--
+    SERVLET_HEADER_USER_AGENT on `SessionEstablisher`. The header is untrusted and is
+    treated as one: control characters are stripped and the length is bounded before
+    it is stored, it authorises nothing, nothing is looked up with it, and it is read
+    back only by the account it belongs to — the session overview of REQ-AUTH-009,
+    where it is what tells "my phone" from "the machine at work". A parsed one would
+    be a guess presented as a fact, which is why it is stored as it arrived.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER_USER_AGENT"/>
+    <Class name="de.greluc.homeinv.rest.SessionEstablisher"/>
+  </Match>
+
+  <!--
     SERVLET_HEADER on `TraceIdFilter`. `traceparent` is untrusted, which is why
     the trace id is matched against `[0-9a-f]{32}` and rejected when it is the
     all-zero id, before anything is done with it. Unvalidated it would end up in

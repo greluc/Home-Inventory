@@ -1127,6 +1127,37 @@ components:
           format: uuid
           type: string
       type: object
+    OpenSession:
+      description: One open session, as its owner sees it.
+      properties:
+        current:
+          description: |-
+            whether this is the session making the request, which a client shows differently
+            and should not offer to end by accident
+          type: boolean
+        device:
+          description: |-
+            what the client called itself, shortened. A user agent and nothing more: it is
+            what distinguishes "my phone" from "the machine at work" for somebody deciding which to end
+          type: string
+        handle:
+          description: what to call it when ending it — never the session id itself
+          type: string
+        lastSeenAt:
+          description: when it last made a request
+          format: date-time
+          type: string
+        origin:
+          description: |-
+            where it signed in from, with the host part of the address removed —
+            `203.0.113.0/24` rather than the address itself (`REQ-PRIV-006`). Enough to tell a
+            familiar network from a strange one, not enough to be a location history
+          type: string
+        signedInAt:
+          description: when the session was established
+          format: date-time
+          type: string
+      type: object
     OperatorPage:
       description: One page of operators.
       properties:
@@ -6685,6 +6716,137 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Puts a tag on a place.
+  /api/v1/me/sessions:
+    get:
+      description: |-
+        The sessions this account has open (REQ-AUTH-009).
+
+        Every device that is signed in, most recently seen first, each with a handle that stands in
+        for its session id. The id itself is never returned: it is what the cookie carries, so a list
+        of them would be a list of working credentials.
+
+        Bounded like every other collection (`REQ-NFR-010`), and the bound is on the answer rather
+        than on a query: the store returns one account's sessions and there is no stable order to page
+        through. Somebody with more open sessions than the limit sees the most recently used ones,
+        which are the ones a person deciding what to end is looking for.
+      operationId: sessions
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OpenSession'
+                type: array
+          description: the open sessions
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The sessions this account has open (REQ-AUTH-009)
+  /api/v1/me/sessions/{handle}:
+    delete:
+      description: |-
+        Ends one session remotely (REQ-AUTH-009).
+
+        Immediately, not within the ten minutes the requirement allows: the session is removed from
+        the store every request reads, so the next request that device makes has none.
+
+        Ending the current one is allowed and is simply a sign-out — refusing it would be a rule to
+        explain for no benefit, since the caller can sign out anyway.
+      operationId: endSession
+      parameters:
+      - description: which session, from the list
+        in: path
+        name: handle
+        required: true
+        schema:
+          maxLength: 64
+          minLength: 0
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Ends one session remotely (REQ-AUTH-009)
   /api/v1/me/tenant:
     post:
       description: |-

@@ -43,7 +43,8 @@ forbids database and repository access from the access blocks.
 │             /mfa/passkeys {,/challenge,/confirmation,{id}/removal}
 │             /authorize /token /revoke /clients      (OAuth 2.1, see below)
 ├── /.well-known /oauth-authorization-server /jwks.json
-├── /me          profile, devices, sessions, settings · /tenants (memberships) · /tenant (switch)
+├── /me          profile, devices, settings · /tenants (memberships) · /tenant (switch)
+│             /sessions {handle}   what is signed in, and ending one of them
 ├── /tenants     {id}/members {id}/invitations {id}/quotas {id}/settings {id}/export
 ├── /instance    /accounts {id}/entitlements · /operators · /tenants/{id}/quotas
 │             /erasures {tenantId}  what an erasure removed, per block

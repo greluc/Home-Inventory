@@ -207,7 +207,7 @@ public class MediaController {
       // Thrown rather than returned as an empty 404, so the answer is the same
       // RFC 9457 document every other failure in this API is (REQ-API-003). It
       // says nothing a valid signature would not have revealed.
-      throw new NotFoundException("media", null);
+      throw new NotFoundException("media", (UUID) null);
     }
 
     InputStream bytes = media.openVerified(tenantId, sha256);

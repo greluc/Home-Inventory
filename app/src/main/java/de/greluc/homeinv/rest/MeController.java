@@ -6,6 +6,7 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
+import de.greluc.homeinv.identity.api.UserSessions;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.tenancy.api.MembershipLookup;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,10 +15,12 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
@@ -26,11 +29,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -59,9 +65,77 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeController {
 
   private final MembershipLookup memberships;
+  private final UserSessions sessions;
 
   private final SecurityContextRepository securityContextRepository =
       new HttpSessionSecurityContextRepository();
+
+  /**
+   * The sessions this account has open (REQ-AUTH-009).
+   *
+   * <p>Every device that is signed in, most recently seen first, each with a handle that stands in
+   * for its session id. The id itself is never returned: it is what the cookie carries, so a list
+   * of them would be a list of working credentials.
+   *
+   * <p>Bounded like every other collection (`REQ-NFR-010`), and the bound is on the answer rather
+   * than on a query: the store returns one account's sessions and there is no stable order to page
+   * through. Somebody with more open sessions than the limit sees the most recently used ones,
+   * which are the ones a person deciding what to end is looking for.
+   *
+   * @param limit how many at most; capped at 200
+   * @param user the authenticated principal
+   * @param httpRequest the servlet request, so the caller's own session can be marked
+   * @return the open sessions
+   */
+  @GetMapping(path = "/sessions", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.MALFORMED_REQUEST})
+  @PublicEndpoint(
+      reason =
+          "It lists the caller's own sessions and nobody else's. There is no role low "
+              + "enough to be denied knowing where its own account is signed in, and an "
+              + "account with no tenant has sessions like any other.")
+  public List<UserSessions.OpenSession> sessions(
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit,
+      @AuthenticationPrincipal AuthenticatedUser user,
+      HttpServletRequest httpRequest) {
+    return sessions.of(user.userId(), sessionIdOf(httpRequest)).stream().limit(limit).toList();
+  }
+
+  /**
+   * Ends one session remotely (REQ-AUTH-009).
+   *
+   * <p>Immediately, not within the ten minutes the requirement allows: the session is removed from
+   * the store every request reads, so the next request that device makes has none.
+   *
+   * <p>Ending the current one is allowed and is simply a sign-out — refusing it would be a rule to
+   * explain for no benefit, since the caller can sign out anyway.
+   *
+   * @param handle which session, from the list
+   * @param user the authenticated principal
+   */
+  @DeleteMapping("/sessions/{handle}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.NOT_FOUND})
+  @PublicEndpoint(
+      reason =
+          "It ends one of the caller's own sessions. The handle is looked up in that "
+              + "account's own list, so a handle naming somebody else's session is not "
+              + "found rather than refused.")
+  public void endSession(
+      @PathVariable @Size(max = 64) String handle, @AuthenticationPrincipal AuthenticatedUser user) {
+    sessions.end(user.userId(), handle);
+  }
+
+  /**
+   * The caller's own session id, for marking it in the list.
+   *
+   * @param request the servlet request
+   * @return the id, or null when there is somehow no session
+   */
+  private static String sessionIdOf(HttpServletRequest request) {
+    jakarta.servlet.http.HttpSession session = request.getSession(false);
+    return session == null ? null : session.getId();
+  }
 
   /**
    * Every tenant the caller belongs to, oldest membership first.

@@ -24,7 +24,7 @@ public class NotFoundException extends RuntimeException {
   private final transient String resource;
 
   /** The identifier that was looked for. */
-  private final transient UUID id;
+  private final transient String id;
 
   /**
    * Creates the exception.
@@ -33,6 +33,21 @@ public class NotFoundException extends RuntimeException {
    * @param id the identifier that was not found
    */
   public NotFoundException(String resource, UUID id) {
+    this(resource, String.valueOf(id));
+  }
+
+  /**
+   * Creates the exception for something whose identifier is not a UUID.
+   *
+   * <p>Most things here are found by a UUIDv7 (ADR-0016), and a few are not: a field is found by
+   * its key, a session by the handle that stands in for its id (REQ-AUTH-009). The identifier
+   * reaches the message and the log and never the answer, which says only what kind of thing was
+   * not visible — so what type it is matters to a reader of the log and to nobody else.
+   *
+   * @param resource the kind of thing, lowercase and singular
+   * @param id the identifier that was not found
+   */
+  public NotFoundException(String resource, String id) {
     super(resource + " " + id + " not found");
     this.resource = resource;
     this.id = id;

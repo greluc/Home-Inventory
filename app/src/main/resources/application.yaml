@@ -36,6 +36,19 @@ spring:
       username: ${HOMEINV_VALKEY_USER:homeinv}
       password: ${homeinv.secret.valkey-password:}
 
+  session:
+    data:
+      redis:
+        # Indexed, so a session can be found by the account it belongs to. That
+        # is what REQ-AUTH-009's session overview and its remote sign-out are: a
+        # list of one account's sessions, and the removal of one of them. The
+        # default repository stores sessions by id alone and can answer neither.
+        #
+        # What it is indexed BY is not the default either: see SessionIndex,
+        # which keys it on the account id rather than on a principal name that
+        # would carry an e-mail address into a Valkey key.
+        repository-type: indexed
+
   jpa:
     open-in-view: false
     hibernate:

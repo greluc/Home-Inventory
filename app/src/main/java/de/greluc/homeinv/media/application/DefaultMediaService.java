@@ -343,7 +343,7 @@ public class DefaultMediaService implements MediaService {
     // it goes through the repository's own tenant-scoped query.
     if (objects.findByHash(tenantId, sha256).filter(MediaObject::isRetrievable).isEmpty()) {
       // The same 404 an invalid signature gets, for the same reason.
-      throw new NotFoundException("media", null);
+      throw new NotFoundException("media", (UUID) null);
     }
     return blobs.open(tenantId, sha256);
   }

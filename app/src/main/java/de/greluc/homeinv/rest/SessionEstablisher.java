@@ -5,6 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
+import de.greluc.homeinv.identity.api.UserSessions;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
@@ -48,6 +49,54 @@ public class SessionEstablisher {
 
   private final SecurityContextRepository securityContextRepository =
       new HttpSessionSecurityContextRepository();
+
+  /**
+   * What the client calls itself, shortened and stripped.
+   *
+   * <p>A user agent and nothing derived from it. What it is for is telling "my phone" from "the
+   * machine at work" in a list somebody is deciding from, and a parsed one would be a guess
+   * presented as a fact. Control characters go because this string is shown to a person and stored
+   * in a session (REQ-SEC-032), and the length is bounded because a header is caller-supplied.
+   *
+   * @param request the servlet request
+   * @return the user agent, at most 200 characters, or {@code "unknown"}
+   */
+  private static String deviceOf(HttpServletRequest request) {
+    String agent = request.getHeader("User-Agent");
+    if (agent == null || agent.isBlank()) {
+      return "unknown";
+    }
+    String cleaned = agent.replaceAll("\\p{Cntrl}", "").trim();
+    return cleaned.length() > 200 ? cleaned.substring(0, 200) : cleaned;
+  }
+
+  /**
+   * The network a session came from, with the host part removed.
+   *
+   * <p>{@code 203.0.113.0/24} rather than the address, and the first four groups of an IPv6
+   * address rather than the address: enough to tell a familiar network from a strange one, which is
+   * what somebody looking at the list is deciding, and not enough to be a location history.
+   * REQ-PRIV-006 governs how long an address may be kept at all; the honest way to keep one in a
+   * session for a month is not to keep the whole of it.
+   *
+   * @param request the servlet request
+   * @return the truncated address
+   */
+  private static String originOf(HttpServletRequest request) {
+    String address = request.getRemoteAddr();
+    if (address == null || address.isBlank()) {
+      return "unknown";
+    }
+    if (address.contains(":")) {
+      String[] groups = address.split(":");
+      return String.join(":", java.util.Arrays.copyOf(groups, Math.min(4, groups.length)))
+          + "::/64";
+    }
+    String[] octets = address.split("\\.");
+    return octets.length == 4
+        ? octets[0] + "." + octets[1] + "." + octets[2] + ".0/24"
+        : address;
+  }
 
   /**
    * When the second factor was last proved in this session.
@@ -102,6 +151,12 @@ public class SessionEstablisher {
     if (secondFactorProved) {
       request.getSession().setAttribute(SECOND_FACTOR_AT, Instant.now(clock).getEpochSecond());
     }
+
+    // What the session overview of REQ-AUTH-009 shows. Recorded here because this
+    // is where a session begins, and because neither value is available later:
+    // the list is read from the store, not from a request.
+    request.getSession().setAttribute(UserSessions.DEVICE_ATTRIBUTE, deviceOf(request));
+    request.getSession().setAttribute(UserSessions.ORIGIN_ATTRIBUTE, originOf(request));
 
     Authentication token = UsernamePasswordAuthenticationToken.authenticated(user, null, List.of());
     SecurityContext context = SecurityContextHolder.createEmptyContext();
