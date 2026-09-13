@@ -43,10 +43,38 @@ import java.util.UUID;
  * @param role the role held in {@code tenantId}, or null when there is no tenant
  * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null when the role
  *     is a plain built-in one
+ * @param scopeLocationId the part of the location tree this session is confined to (REQ-TEN-007),
+ *     or null for the whole tenant
  */
 public record AuthenticatedUser(
-    UUID userId, UUID tenantId, String email, String locale, String role, UUID roleDefinitionId)
+    UUID userId,
+    UUID tenantId,
+    String email,
+    String locale,
+    String role,
+    UUID roleDefinitionId,
+    UUID scopeLocationId)
     implements Serializable {
+
+  /**
+   * A session over the whole tenant, whose role may be a tenant-owned one.
+   *
+   * @param userId the person
+   * @param tenantId the tenant this session acts for, or null
+   * @param email the address they signed in with
+   * @param locale their interface language
+   * @param role the built-in role, or null
+   * @param roleDefinitionId the tenant-owned role extending it, or null
+   */
+  public AuthenticatedUser(
+      UUID userId,
+      UUID tenantId,
+      String email,
+      String locale,
+      String role,
+      UUID roleDefinitionId) {
+    this(userId, tenantId, email, locale, role, roleDefinitionId, null);
+  }
 
   /**
    * A session whose role is a plain built-in one.
@@ -69,7 +97,9 @@ public record AuthenticatedUser(
    * into a record without it, and a principal whose language is silently null is worse than a
    * session the user has to establish again. Raised again when {@code roleDefinitionId} arrived
    * with REQ-TEN-006, for the sharper version of the same reason: a principal that silently lost
-   * its tenant-owned role would be one quietly demoted to the role's base.
+   * its tenant-owned role would be one quietly demoted to the role's base. And again for
+   * {@code scopeLocationId}, where the failure would run the other way — a principal that lost its
+   * scope would be one silently let out of the garage.
    */
-  private static final long serialVersionUID = 3L;
+  private static final long serialVersionUID = 4L;
 }

@@ -38,8 +38,15 @@ public interface MembershipLookup {
    * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null. Read here
    *     for the same reason the role is: both are established at login, and re-reading per request
    *     would be a second path to the same fact
+   * @param scopeLocationId the part of the tree this membership is confined to (REQ-TEN-007), or
+   *     null for the whole tenant
    */
-  record Membership(UUID tenantId, String tenantName, String role, UUID roleDefinitionId) {}
+  record Membership(
+      UUID tenantId,
+      String tenantName,
+      String role,
+      UUID roleDefinitionId,
+      UUID scopeLocationId) {}
 
   /**
    * The membership a user acts under when they log in.

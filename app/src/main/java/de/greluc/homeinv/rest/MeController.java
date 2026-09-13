@@ -134,7 +134,8 @@ public class MeController {
             user.email(),
             user.locale(),
             membership.role(),
-            membership.roleDefinitionId());
+            membership.roleDefinitionId(),
+            membership.scopeLocationId());
 
     Authentication token =
         UsernamePasswordAuthenticationToken.authenticated(switched, null, List.of());

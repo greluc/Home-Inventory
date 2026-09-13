@@ -12,6 +12,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.api.AccountRegistry;
 import de.greluc.homeinv.tenancy.api.LastOwnerException;
 import de.greluc.homeinv.tenancy.api.MembershipAdministration;
+import de.greluc.homeinv.tenancy.api.RoleEscalationException;
 import de.greluc.homeinv.tenancy.domain.Membership;
 import de.greluc.homeinv.tenancy.infrastructure.MembershipRepository;
 import java.time.Clock;
@@ -78,6 +79,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
                       membership.getRole(),
                       membership.getRoleDefinitionId(),
                       roleNameOf(membership),
+                      membership.getScopeLocationId(),
                       membership.getCreatedAt());
                 })
             .toList();
@@ -93,7 +95,8 @@ public class DefaultMembershipAdministration implements MembershipAdministration
 
   @Override
   @Transactional
-  public MemberView changeRole(UUID userId, String role, UUID roleDefinitionId, UUID actor) {
+  public MemberView changeRole(
+      UUID userId, String role, UUID roleDefinitionId, UUID scopeLocationId, UUID actor) {
     Membership membership = liveMembership(userId);
     RoleRef actorRole = refOf(liveMembership(actor));
 
@@ -120,7 +123,19 @@ public class DefaultMembershipAdministration implements MembershipAdministration
       throw new LastOwnerException();
     }
 
-    membership.changeRole(base, roleDefinitionId, actor, Instant.now(clock));
+    // An administrator who is confined themselves does not confine anybody else.
+    // The obvious escalation is not a subtle one — they would simply hand out a
+    // membership with NO scope — and comparing two subtrees here would mean this
+    // block asking `locations` a question, which would close a cycle: `locations`
+    // already asks this side whether a place still holds anything. Refusing the
+    // whole operation is the answer that needs no dependency and no judgement.
+    Membership actorMembership = liveMembership(actor);
+    if (actorMembership.getScopeLocationId() != null) {
+      throw new RoleEscalationException(
+          actorMembership.getRole(), "a membership scope while confined to one");
+    }
+
+    membership.changeRole(base, roleDefinitionId, scopeLocationId, actor, Instant.now(clock));
     log.info(
         "Member {} of tenant {} is now {} (changed by {})",
         userId,
@@ -202,6 +217,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
         membership.getRole(),
         membership.getRoleDefinitionId(),
         roleNameOf(membership),
+        membership.getScopeLocationId(),
         membership.getCreatedAt());
   }
 

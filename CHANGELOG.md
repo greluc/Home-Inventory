@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **A membership can be confined to one part of the storage tree.** Somebody
+  given the garage sees the garage and everything below it — places, items,
+  searches — and nothing else, and cannot put anything anywhere else either. The
+  confinement is enforced twice: in the application, which is what turns it into
+  a comprehensible "not found", and in the database, so that a query nobody
+  remembered to filter returns nothing rather than a room upstairs. An item with
+  no place at all is not in anybody's garage and stays out of sight.
+  *REST API: additive.*
+
 - **A field marked sensitive is hidden from roles that may not read it.** Hidden
   rather than starred out: the key is absent from the answer, because a mask says
   the field exists and how long its value is, which for a purchase price is most
@@ -343,7 +352,7 @@ commit".
 - A requirements catalogue with 425 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 59 architecture decision records, each with its alternatives and consequences —
+- 60 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

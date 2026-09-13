@@ -101,6 +101,16 @@ public class DefaultItemService implements ItemService {
   private final de.greluc.homeinv.catalog.api.AttributeRedaction redaction;
 
   /**
+   * Answers whether an item's place lies in the part of the tree this session is confined to
+   * (REQ-TEN-007).
+   *
+   * <p>Checked on the loaded item, which is 12 §12.5's layer three. An item with no place is not in
+   * anybody's garage: a scoped session does not see it, which is what confining somebody to a place
+   * has to mean if it is to mean anything.
+   */
+  private final de.greluc.homeinv.inventory.api.PlaceScope scope;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -129,6 +139,8 @@ public class DefaultItemService implements ItemService {
       }
       return new CreateResult(toView(found), false);
     }
+
+    requireInScope(command.locationId());
 
     // Before anything is written, and after the idempotent short circuit above:
     // a repeat of a creation that already happened must not claim a second item.
@@ -587,6 +599,27 @@ public class DefaultItemService implements ItemService {
       BigDecimal minimumStock,
       UUID itemTypeVersionId,
       String lifecycleState) {}
+
+  /**
+   * Refuses a place outside the part of the tree this session is confined to (REQ-TEN-007).
+   *
+   * <p>Layer three of 12 §12.5, and what it adds over the policy is an <em>answer</em>. Without it
+   * the row-level security check refuses the write with a policy violation, which reaches a client
+   * as a {@code 500}; with it the caller is told the place is not there, which is what a place they
+   * may not see looks like to them (REQ-SEC-025).
+   *
+   * @param locationId the place being named, or null
+   * @throws NotFoundException when the session is scoped and the place is elsewhere
+   */
+  private void requireInScope(UUID locationId) {
+    UUID confinedTo =
+        de.greluc.homeinv.platform.CallerContext.current()
+            .map(de.greluc.homeinv.platform.CallerContext.Caller::scopeLocationId)
+            .orElse(null);
+    if (confinedTo != null && !scope.allows(confinedTo, locationId)) {
+      throw new NotFoundException("location", locationId);
+    }
+  }
 
   /**
    * Converts the aggregate into the type other blocks may hold.

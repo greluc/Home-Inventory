@@ -54,6 +54,15 @@ public class Membership {
   @Column(name = "role_definition_id")
   private UUID roleDefinitionId;
 
+  /**
+   * The part of the location tree this membership is confined to, or null (REQ-TEN-007).
+   *
+   * <p>An id and not a path: re-parenting a subtree rewrites every path under it (07 §7.4), and a
+   * stored path would be right until somebody moved the garage.
+   */
+  @Column(name = "scope_location_id")
+  private UUID scopeLocationId;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -104,12 +113,20 @@ public class Membership {
    *
    * @param newRole one of the six built-in role names
    * @param newRoleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null
+   * @param newScopeLocationId the part of the tree to confine them to (REQ-TEN-007), or null for
+   *     the whole tenant
    * @param actor who is making the change
    * @param now the instant of the change
    */
-  public void changeRole(String newRole, UUID newRoleDefinitionId, UUID actor, Instant now) {
+  public void changeRole(
+      String newRole,
+      UUID newRoleDefinitionId,
+      UUID newScopeLocationId,
+      UUID actor,
+      Instant now) {
     this.role = newRole;
     this.roleDefinitionId = newRoleDefinitionId;
+    this.scopeLocationId = newScopeLocationId;
     this.updatedBy = actor;
     this.updatedAt = now;
   }

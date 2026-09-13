@@ -47,18 +47,34 @@ public final class CallerContext {
    * @param tenantId the tenant they are acting for, or null when they are in none
    * @param role the built-in role they hold there, or null when there is no tenant
    * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null
+   * @param scopeLocationId the part of the location tree this membership is confined to
+   *     (REQ-TEN-007), or null for the whole tenant. An id and not a path, because a path is a copy
+   *     of something that moves — see {@code LocationScope}
    */
-  public record Caller(UUID userId, UUID tenantId, String role, UUID roleDefinitionId) {
+  public record Caller(
+      UUID userId, UUID tenantId, String role, UUID roleDefinitionId, UUID scopeLocationId) {
 
     /**
-     * A caller holding a plain built-in role.
+     * A caller holding a plain built-in role over the whole tenant.
      *
      * @param userId the person
      * @param tenantId the tenant they are acting for
      * @param role the built-in role
      */
     public Caller(UUID userId, UUID tenantId, String role) {
-      this(userId, tenantId, role, null);
+      this(userId, tenantId, role, null, null);
+    }
+
+    /**
+     * A caller whose role may be a tenant-owned one, over the whole tenant.
+     *
+     * @param userId the person
+     * @param tenantId the tenant they are acting for
+     * @param role the built-in role
+     * @param roleDefinitionId the tenant-owned role extending it, or null
+     */
+    public Caller(UUID userId, UUID tenantId, String role, UUID roleDefinitionId) {
+      this(userId, tenantId, role, roleDefinitionId, null);
     }
   }
 

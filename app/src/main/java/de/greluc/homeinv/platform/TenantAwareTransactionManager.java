@@ -45,6 +45,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>Only new transactions pass through here. One joining an existing transaction reuses its
  * connection, where the value is already set — and a nested transaction that wanted a *different*
  * tenant would be a bug this class should not quietly enable.
+ *
+ * <h2>The second setting</h2>
+ *
+ * <p>{@code app.location_scope} joins it, for the subtree a membership may be confined to
+ * (REQ-TEN-007, ADR-0059). It is written on every transaction whether or not there is a scope, for
+ * the same reason the tenant is: a pooled connection that kept the previous request's value would
+ * run the next query under it.
  */
 @Slf4j
 public class TenantAwareTransactionManager extends JpaTransactionManager {
@@ -53,6 +60,36 @@ public class TenantAwareTransactionManager extends JpaTransactionManager {
   private static final long serialVersionUID = 1L;
 
   private static final String SET_TENANT = "select set_config('app.tenant_id', ?, true)";
+
+  /**
+   * Publishes the scope's <b>path</b>, resolved from the id the membership stores (ADR-0059).
+   *
+   * <p>The path and not the id, because a policy that resolved an id would resolve it per row. It
+   * is resolved here, once per transaction, so a subtree that has been re-parented since the
+   * session began still reads right — 07 §7.4 rewrites every path under a moved subtree, and a path
+   * remembered at login would be one that is right until somebody moves the garage.
+   *
+   * <p>{@link #UNRESOLVABLE_SCOPE} when the id names nothing this tenant has. The empty string
+   * means "no scope" and would fail <b>open</b>, which is the one outcome this must never have.
+   */
+  private static final String SET_SCOPE =
+      "select set_config('app.location_scope',"
+          + " coalesce((select place.path::text from locations.location place"
+          + "           where place.tenant_id = ?::uuid and place.id = ?::uuid"
+          + "             and place.deleted_at is null), ?),"
+          + " true)";
+
+  /** No scope at all: every policy's subtree condition passes. */
+  private static final String NO_SCOPE = "";
+
+  /**
+   * A label no tree contains, for a scope id that resolves to nothing.
+   *
+   * <p>A deleted place, or one that belongs to another tenant. Writing the empty string would mean
+   * "no scope", and a session confined to a place that has since been removed would be let out of
+   * it rather than shut in.
+   */
+  private static final String UNRESOLVABLE_SCOPE = "scope_resolves_to_nothing";
 
   /** Creates a transaction manager that publishes the tenant context to the database session. */
   public TenantAwareTransactionManager() {
@@ -76,6 +113,8 @@ public class TenantAwareTransactionManager extends JpaTransactionManager {
     super.doBegin(transaction, definition);
 
     String tenant = TenantContext.current().map(UUID::toString).orElse("");
+    UUID scope =
+        CallerContext.current().map(CallerContext.Caller::scopeLocationId).orElse(null);
 
     EntityManagerHolder holder =
         (EntityManagerHolder) TransactionSynchronizationManager.getResource(obtainEntityManagerFactory());
@@ -97,10 +136,23 @@ public class TenantAwareTransactionManager extends JpaTransactionManager {
                 statement.setString(1, tenant);
                 statement.execute();
               }
+              // Written on every transaction, scope or none. Skipping it would
+              // leave whatever the previous transaction on this pooled connection
+              // set, and the next query would run under a stale scope — the same
+              // failure the tenant setting is written unconditionally to avoid.
+              try (PreparedStatement statement = connection.prepareStatement(SET_SCOPE)) {
+                statement.setString(1, tenant.isEmpty() ? null : tenant);
+                statement.setString(2, scope == null ? null : scope.toString());
+                statement.setString(3, scope == null ? NO_SCOPE : UNRESOLVABLE_SCOPE);
+                statement.execute();
+              }
             });
 
     if (log.isTraceEnabled()) {
-      log.trace("Transaction opened for tenant '{}'", tenant.isEmpty() ? "<none>" : tenant);
+      log.trace(
+          "Transaction opened for tenant '{}', scope '{}'",
+          tenant.isEmpty() ? "<none>" : tenant,
+          scope == null ? "<whole tenant>" : scope);
     }
   }
 }

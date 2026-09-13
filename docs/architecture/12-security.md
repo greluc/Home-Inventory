@@ -171,14 +171,14 @@ decision.
 |---|---|
 | 1 — Tenant context | Derived from authentication, **never** from a request parameter. Sets `app.tenant_id` for the transaction. |
 | 2 — Permissions | RBAC: role → permissions. Permission ID `<block>:<resource>:<action>`. |
-| 3 — Object scope | Checked on the **loaded** object: does it belong to the tenant, does it lie in the permitted location subtree |
+| 3 — Object scope | Checked on the **loaded** object: does it belong to the tenant, does it lie in the permitted location subtree. This is what produces a comprehensible answer — a `404` for a place the caller may not see — and it is **not the only** line: since [ADR-0059](../adr/0059-subtree-scope-has-two-lines.md) the subtree is enforced in layer 5 as well, so a query that forgets the filter returns nothing rather than somebody else's room |
 | 4 — Field visibility | `sensitive` fields are **removed** per role, not masked — masked fields reveal existence and length |
-| 5 — RLS | An independent second line in the database |
+| 5 — RLS | An independent second line in the database, for **both** boundaries: the tenant (`app.tenant_id`, [ADR-0003](../adr/0003-multi-tenancy.md)) and the location subtree a membership is confined to (`app.location_scope`, [ADR-0059](../adr/0059-subtree-scope-has-two-lines.md)). Both settings are published by the transaction manager and written on every transaction, scope or none, so a pooled connection cannot carry one request's scope into the next |
 
 | Rule | |
 |---|---|
 | Default | **Deny.** An endpoint without `@RequiresPermission` and without an explicit `@PublicEndpoint` marker fails the build. |
-| Subtree permissions | A role can be scoped to a location subtree (e.g. "garage only") — the check uses the `ltree` path |
+| Subtree permissions | A role can be scoped to a location subtree (e.g. "garage only") — the check uses the `ltree` path, in the application **and** in the policies on `locations.location` and `inventory.item` ([ADR-0059](../adr/0059-subtree-scope-has-two-lines.md)). An item with no place is invisible to a scoped session: a digital item is in nobody's garage. A scope that resolves to nothing — a place since deleted — yields **nothing**, never everything |
 | Privilege escalation | Nobody can grant permissions they do not hold themselves |
 | Proof | Every endpoint has a test for "no permission → 403" and "foreign tenant → 404" |
 

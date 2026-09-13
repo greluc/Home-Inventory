@@ -70,7 +70,11 @@ public class TenantContextFilter extends OncePerRequestFilter {
         // which is exactly the behaviour such a session should have (ADR-0003).
         CallerContext.runAs(
             new CallerContext.Caller(
-                user.userId(), user.tenantId(), user.role(), user.roleDefinitionId()),
+                user.userId(),
+                user.tenantId(),
+                user.role(),
+                user.roleDefinitionId(),
+                user.scopeLocationId()),
             () -> {
               if (user.tenantId() == null) {
                 proceed(request, response, chain);

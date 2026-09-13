@@ -1008,6 +1008,12 @@ components:
             what to call the role: the tenant-owned role's name where there is one,
             otherwise the built-in name. A member list shows this rather than making a client join
           type: string
+        scopeLocationId:
+          description: |-
+            the part of the tree they are confined to (REQ-TEN-007), or null for the
+            whole tenant
+          format: uuid
+          type: string
         userId:
           description: the account
           format: uuid
@@ -1226,6 +1232,12 @@ components:
           description: |-
             a tenant-owned role extending it (REQ-TEN-006), or omitted for a plain
             built-in role. Where it is given it decides the base, and `role` is ignored
+          format: uuid
+          type: string
+        scopeLocationId:
+          description: |-
+            a location to confine them to (REQ-TEN-007), or omitted for the whole
+            tenant
           format: uuid
           type: string
       required:

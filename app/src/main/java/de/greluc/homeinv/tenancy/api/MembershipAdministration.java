@@ -28,6 +28,8 @@ public interface MembershipAdministration {
    * @param roleDefinitionId the tenant-owned role extending it (REQ-TEN-006), or null
    * @param roleName what to call the role: the tenant-owned role's name where there is one,
    *     otherwise the built-in name. A member list shows this rather than making a client join
+   * @param scopeLocationId the part of the tree they are confined to (REQ-TEN-007), or null for the
+   *     whole tenant
    * @param joinedAt when the membership was written
    */
   record MemberView(
@@ -37,6 +39,7 @@ public interface MembershipAdministration {
       String role,
       UUID roleDefinitionId,
       String roleName,
+      UUID scopeLocationId,
       Instant joinedAt) {}
 
   /**
@@ -70,6 +73,10 @@ public interface MembershipAdministration {
    * @param roleDefinitionId a tenant-owned role extending it (REQ-TEN-006), or null for a plain
    *     built-in role. Where it is given, its base must be the role named above — a definition and
    *     a base that disagreed would be two answers to what the person may do
+   * @param scopeLocationId a location to confine them to (REQ-TEN-007), or null for the whole
+   *     tenant. Somebody scoped to the garage sees the garage and everything below it, and nothing
+   *     else — items with no place at all included, because a thing with no place is in nobody's
+   *     garage
    * @param actor who is making the change
    * @return the member as they now stand
    * @throws de.greluc.homeinv.platform.NotFoundException when the person is not a member here, or
@@ -77,7 +84,8 @@ public interface MembershipAdministration {
    * @throws RoleEscalationException when the actor may not grant that role
    * @throws LastOwnerException when the change would leave the tenant without an owner
    */
-  MemberView changeRole(UUID userId, String role, UUID roleDefinitionId, UUID actor);
+  MemberView changeRole(
+      UUID userId, String role, UUID roleDefinitionId, UUID scopeLocationId, UUID actor);
 
   /**
    * Removes somebody from the tenant.

@@ -60,6 +60,15 @@ public class DefaultLocationService implements LocationService {
   /** Removes the sensitive attributes this caller may not read (REQ-TEN-008). */
   private final de.greluc.homeinv.catalog.api.AttributeRedaction redaction;
 
+  /**
+   * Answers whether a place lies in the part of the tree this session is confined to
+   * (REQ-TEN-007).
+   *
+   * <p>12 §12.5 layer three: checked on the <em>loaded</em> object, using the {@code ltree} path. A
+   * scope of null is the whole tenant, which is what a membership without one has.
+   */
+  private final de.greluc.homeinv.locations.api.LocationScope scope;
+
   private final CursorCodec cursors;
   private final Clock clock;
 
@@ -92,6 +101,8 @@ public class DefaultLocationService implements LocationService {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
     Instant now = Instant.now(clock);
+
+    requireInScope(command.parentId());
 
     // Asked before the insert, so the caller gets a `409` naming the name rather
     // than the `500` a constraint violation surfaced as until 2026-09-12. The
@@ -293,6 +304,27 @@ public class DefaultLocationService implements LocationService {
         // (REQ-TEN-008).
         redaction.forCaller(location.getCategoryVersionId(), location.getAttributes()),
         tree.ancestorNames(location.getTenantId(), location.getId()));
+  }
+
+  /**
+   * Refuses a parent outside the part of the tree this session is confined to (REQ-TEN-007).
+   *
+   * <p>Layer three of 12 §12.5. The policy would refuse the write too, as a policy violation that
+   * reaches a client as a {@code 500}; this turns it into the answer a place they may not see
+   * deserves (REQ-SEC-025). A scoped session creating a root — no parent at all — is refused for
+   * the same reason: a root is outside every subtree, its own included.
+   *
+   * @param parentId the parent being named, or null for a root
+   * @throws NotFoundException when the session is scoped and the parent is elsewhere
+   */
+  private void requireInScope(UUID parentId) {
+    UUID confinedTo =
+        de.greluc.homeinv.platform.CallerContext.current()
+            .map(de.greluc.homeinv.platform.CallerContext.Caller::scopeLocationId)
+            .orElse(null);
+    if (confinedTo != null && !scope.contains(confinedTo, parentId)) {
+      throw new NotFoundException("location", parentId);
+    }
   }
 
   /**

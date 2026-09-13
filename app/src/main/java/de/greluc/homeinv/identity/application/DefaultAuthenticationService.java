@@ -155,7 +155,8 @@ public class DefaultAuthenticationService implements AuthenticationService {
         user.getEmail(),
         user.getLocale(),
         membership.get().role(),
-        membership.get().roleDefinitionId());
+        membership.get().roleDefinitionId(),
+        membership.get().scopeLocationId());
   }
 
   /**
