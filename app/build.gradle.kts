@@ -135,9 +135,29 @@ val generateTestUrlSigningKey by tasks.registering {
     }
 }
 
+val generateTestCredentialKey by tasks.registering {
+    val target = layout.buildDirectory.file("generated/test-secrets/test-credential.key")
+    outputs.file(target)
+    doLast {
+        val file = target.get().asFile
+        file.parentFile.mkdirs()
+        // 32 bytes, which is CredentialKey's AES-256 floor, as the base64 line a
+        // secret manager would hand over. A fixed value on purpose: it seals
+        // nothing that outlives a test container, and a random one would make a
+        // failure depend on which run wrote it.
+        val material = "home-inv test credential key - not a secret - REQ-AUTH-002"
+            .toByteArray(Charsets.UTF_8)
+            .copyOf(32)
+        file.writeText(Base64.getEncoder().encodeToString(material) + "\n")
+    }
+}
+
 tasks.named<ProcessResources>("processTestResources") {
-    dependsOn(generateTestUrlSigningKey)
+    dependsOn(generateTestUrlSigningKey, generateTestCredentialKey)
     from(generateTestUrlSigningKey.map { it.outputs.files.singleFile }) {
+        into("db")
+    }
+    from(generateTestCredentialKey.map { it.outputs.files.singleFile }) {
         into("db")
     }
     from(rootProject.file("deploy/postgres/initdb/00-roles.sql")) {

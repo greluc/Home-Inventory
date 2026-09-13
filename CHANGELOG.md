@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **An account can be protected by a second factor.** An authenticator app is set
+  up in two steps — the code is shown once, and a code generated from it is what
+  makes it count — and ten single-use recovery codes come with it, shown once and
+  never again. The login is then two calls: the password, then the code. A code
+  already used is refused for the rest of its own thirty seconds, and taking the
+  factor off asks for a code rather than only for an open session. The secret is
+  sealed with a key the deployment mounts, so a database dump is not a set of
+  working second factors. *REST API: additive.*
+
 - **When the thirty days are up, the tenant is erased and a certificate says what
   went.** The worker walks every building block in turn, each removes its share,
   and the result is one certificate per erased tenant — how many rows each block
@@ -366,7 +375,7 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 425 numbered, testable requirements across
+- A requirements catalogue with 426 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
 - 61 architecture decision records, each with its alternatives and consequences —

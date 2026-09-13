@@ -61,7 +61,12 @@ class MigrationRulesTest {
           // writes it (REQ-TEN-011). It holds no content — a tenant id, the name
           // it had, who asked, when, and counts — and only the instance operator
           // reads it.
-          "tenancy.erasure_certificate");
+          "tenancy.erasure_certificate",
+          // The second factor is asked for between the password and the session,
+          // when there is no tenant yet to scope a policy with (REQ-AUTH-002).
+          // Reachable only through the caller's own session: no endpoint takes a
+          // user id, and no operator path reaches somebody else's authenticator.
+          "identity.credential");
 
   private static final Pattern CREATE_TABLE =
       Pattern.compile("create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([a-z_]+\\.[a-z_]+)",
@@ -109,22 +114,31 @@ class MigrationRulesTest {
     // the row comes into existence pointing at somebody else's data. Making the
     // tenant part of the key is what makes that impossible rather than merely
     // caught by the application.
+    // The exception is a property of the TARGET rather than a file name: a
+    // reference to an instance-wide table is single-column because that table has
+    // no tenant to carry. `tenancy.membership -> identity.app_user` is the entry
+    // 07 §7.9 names, and `identity.credential -> identity.app_user` is the same
+    // case. Keyed on the file name, as this was until 2026-09-13, the rule passed
+    // anything that happened to live in the same migration.
     Pattern singleColumn =
         Pattern.compile(
-            "foreign\\s+key\\s*\\(\\s*[a-z_]+\\s*\\)\\s*references", Pattern.CASE_INSENSITIVE);
+            "foreign\\s+key\\s*\\(\\s*[a-z_]+\\s*\\)\\s*references\\s+([a-z_]+\\.[a-z_]+)",
+            Pattern.CASE_INSENSITIVE);
     Pattern inlineReference =
-        Pattern.compile("^\\s*[a-z_]+\\s+uuid[^,]*\\breferences\\b", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+        Pattern.compile(
+            "^\\s*[a-z_]+\\s+uuid[^,]*\\breferences\\s+([a-z_]+\\.[a-z_]+)",
+            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
     List<String> offenders = new ArrayList<>();
     for (Path script : scripts()) {
-      String text = Files.readString(script, StandardCharsets.UTF_8);
-      String withoutComments = stripComments(text);
-      if (singleColumn.matcher(withoutComments).find()
-          || inlineReference.matcher(withoutComments).find()) {
-        // The one documented exception: membership -> app_user, single-column
-        // because app_user is instance-wide and has no tenant to carry.
-        if (!script.getFileName().toString().contains("tenant_and_membership")) {
-          offenders.add(script.getFileName().toString());
+      String withoutComments = stripComments(Files.readString(script, StandardCharsets.UTF_8));
+      for (Pattern pattern : List.of(singleColumn, inlineReference)) {
+        Matcher matcher = pattern.matcher(withoutComments);
+        while (matcher.find()) {
+          String target = matcher.group(1).toLowerCase(Locale.ROOT);
+          if (!INSTANCE_WIDE.contains(target)) {
+            offenders.add(script.getFileName() + " -> " + target);
+          }
         }
       }
     }

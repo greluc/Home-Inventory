@@ -236,3 +236,11 @@ homeinv:
   ingress-host: ${HOMEINV_INGRESS_HOST:web}
   security:
     url-signing-key-file: ${HOMEINV_URL_SIGNING_KEY_FILE:}
+    # Seals the TOTP secrets of REQ-AUTH-002. Its own key, because rotating the
+    # one that signs media URLs must not invalidate every account's second
+    # factor, and because a credential belongs to a person rather than to a
+    # tenant, whose keys ADR-0019 wraps with a different master.
+    credential-key-file: ${HOMEINV_CREDENTIAL_KEY_FILE:}
+    # What an authenticator app calls this instance in its list. Shown to a
+    # person and nothing depends on it, which is why it has a default.
+    totp-issuer: ${HOMEINV_TOTP_ISSUER:Home Inventory}

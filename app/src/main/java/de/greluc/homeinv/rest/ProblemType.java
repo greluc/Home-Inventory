@@ -39,6 +39,34 @@ public enum ProblemType {
   /** No valid credential was presented. */
   UNAUTHENTICATED("unauthenticated", HttpStatus.UNAUTHORIZED, "Unauthenticated"),
 
+  /**
+   * The password was right and the account holds a second factor (REQ-AUTH-002).
+   *
+   * <p>A {@code 401} like a wrong password, and a different token, because it is the one case where
+   * the client must do something other than ask for the password again: it asks for the code and
+   * posts it to {@code /api/v1/auth/mfa}. Saying this much costs nothing — whoever sees it has
+   * already presented the right password for the address.
+   */
+  SECOND_FACTOR_REQUIRED(
+      "second-factor-required", HttpStatus.UNAUTHORIZED, "Second factor required"),
+
+  /**
+   * The code presented is not valid (REQ-AUTH-002).
+   *
+   * <p>One token for a wrong code, a code from a time step already spent, a recovery code already
+   * used and an account with no second factor at all. Telling them apart would say whether a guess
+   * was close, and "already used" would confirm that the code existed.
+   */
+  SECOND_FACTOR_INVALID("second-factor-invalid", HttpStatus.UNAUTHORIZED, "Second factor invalid"),
+
+  /**
+   * The account already has a confirmed second factor (REQ-AUTH-002).
+   *
+   * <p>A {@code 409}: enrolling again would replace a working authenticator with an unproven one,
+   * and the way out is to remove the old one, which asks for a code.
+   */
+  SECOND_FACTOR_ENROLLED("second-factor-enrolled", HttpStatus.CONFLICT, "Second factor enrolled"),
+
   /** Authenticated, and not permitted on a resource they may know exists. */
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 

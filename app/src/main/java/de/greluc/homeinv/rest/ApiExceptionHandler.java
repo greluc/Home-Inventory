@@ -6,6 +6,9 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.identity.api.InvalidCredentialsException;
+import de.greluc.homeinv.identity.api.InvalidSecondFactorException;
+import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
+import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -439,6 +442,57 @@ public class ApiExceptionHandler {
   public ProblemDetail handleInvalidCredentials(
       InvalidCredentialsException exception, HttpServletRequest request) {
     return problem(ProblemType.UNAUTHENTICATED, "The e-mail address or password is not correct.",
+        request);
+  }
+
+  /**
+   * Answers a login that has passed the password and owes a code (REQ-AUTH-002).
+   *
+   * <p>Its own type rather than a plain {@code 401}, because it is the one case where the client
+   * must do something other than ask for the password again.
+   *
+   * @param exception the half-done login
+   * @param request the request, for the instance URI
+   * @return the problem
+   */
+  @ExceptionHandler(SecondFactorRequiredException.class)
+  public ProblemDetail handleSecondFactorRequired(
+      SecondFactorRequiredException exception, HttpServletRequest request) {
+    return problem(
+        ProblemType.SECOND_FACTOR_REQUIRED,
+        "This account is protected by a second factor. Post the code to /api/v1/auth/mfa.",
+        request);
+  }
+
+  /**
+   * Answers a code that is not valid (REQ-AUTH-002).
+   *
+   * <p>One answer for a wrong code, a spent one and an account with no second factor: telling them
+   * apart would say whether a guess was close.
+   *
+   * @param exception the rejection
+   * @param request the request, for the instance URI
+   * @return the problem
+   */
+  @ExceptionHandler(InvalidSecondFactorException.class)
+  public ProblemDetail handleInvalidSecondFactor(
+      InvalidSecondFactorException exception, HttpServletRequest request) {
+    return problem(ProblemType.SECOND_FACTOR_INVALID, "That code is not valid.", request);
+  }
+
+  /**
+   * Answers an enrolment over a confirmed one (REQ-AUTH-002).
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return the problem
+   */
+  @ExceptionHandler(SecondFactorAlreadyEnrolledException.class)
+  public ProblemDetail handleSecondFactorEnrolled(
+      SecondFactorAlreadyEnrolledException exception, HttpServletRequest request) {
+    return problem(
+        ProblemType.SECOND_FACTOR_ENROLLED,
+        "This account already has a second factor. Remove it before enrolling another.",
         request);
   }
 

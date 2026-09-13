@@ -150,7 +150,7 @@ catalogue.
 | Mechanism | Decision |
 |---|---|
 | Password | Argon2id (≥ 19 MiB, t=2, p=1 — aligned with the OWASP recommendation, raisable by configuration), minimum length 12, no forced complexity, no forced rotation, checked against a breach list |
-| Second factor | TOTP (RFC 6238) and **WebAuthn/passkeys**. **Mandatory** for `OWNER` and `ADMIN`. Recovery codes single-use, stored hashed. |
+| Second factor | TOTP (RFC 6238) and **WebAuthn/passkeys**. **Mandatory** for `OWNER` and `ADMIN`. Recovery codes single-use, stored hashed. The login is then two calls: the password is answered with `401 second-factor-required` and the code goes to `POST /api/v1/auth/mfa`, against a half-done login the session holds for five minutes and spends on the first answer, right or wrong. Enrolment is two calls as well — a secret is shown once, and a code generated from it is what makes the factor count; an enrolment nobody confirmed locks nobody out. A code from a time step already accepted is refused, so one read over a shoulder is not usable for the rest of its thirty seconds (RFC 6238 §5.2; `REQ-AUTH-002`, proved by `SecondFactorIT`) |
 | Federation | OIDC Authorization Code + PKCE. Linking an external account to an existing one only after re-authentication. No automatic account linking by e-mail address alone — that is a known takeover route. |
 | Registration | Default `invite_only`. An invitation is a single-use, time-limited token bound to the e-mail address. |
 | Reset | A single-use token, valid 30 min, consumption invalidates all sessions, a notification goes to the old address |
@@ -218,6 +218,7 @@ The riskiest input in the system.
 |---|---|
 | Passwords | Argon2id, never reversible |
 | Tokens in the database | Stored only as a SHA-256 hash |
+| Second-factor secrets | A dedicated key, `HOMEINV_CREDENTIAL_KEY_FILE`, sealing the TOTP secrets with AES-GCM (`REQ-SEC-109`). A password is hashed and never recovered; a shared secret cannot be, because verifying a code means generating one — so a database dump without this file is not a set of working second factors, which is the whole point of having a second one. Separate from the media key for the plainest reason: rotating what signs a URL must not lock every account out of its own authenticator. Recovery codes are **hashed** with the password encoder instead, because a code is used once and typed by a person |
 | Signed URLs and cursors | A dedicated key, `HOMEINV_URL_SIGNING_KEY_FILE`, separate from the JWT signing key. `REQ-MED-010` requires short-lived signed media URLs from stage 0 and [08 §8.2](08-api-contract.md) an opaque **signed** cursor; neither named a key until 2026-09-11, and the only key in the matrix was an identity key. A URL signature must not be forgeable by anything that can mint a session token ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)) |
 | `sensitive` fields (licence keys, credentials of digital goods) | **Envelope encryption**: a data key per tenant, encrypted with a master key from the environment. AES-256-GCM with additional authenticated data (tenant + field + item) — an encrypted value cannot be moved into another record. See [ADR-0019](../adr/0019-sensitive-field-encryption.md). |
 | Plugin settings of type `secret` | Encrypted likewise; a plugin reads only its own |

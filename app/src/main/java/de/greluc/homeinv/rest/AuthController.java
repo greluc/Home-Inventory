@@ -7,6 +7,8 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.AuthenticationService;
+import de.greluc.homeinv.identity.api.SecondFactor;
+import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -16,6 +18,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -38,16 +41,21 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>An adapter, like every controller here: whether the credentials are good is decided by
  * {@link AuthenticationService}, and this class turns the outcome into a session.
+ *
+ * <p>A login is one call or two. An account with a second factor gets {@code 401
+ * second-factor-required} from {@code /login} — the password was right, and nothing is
+ * authenticated yet — and finishes at {@code /mfa} with the code (REQ-AUTH-002).
  */
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
   private final AuthenticationService authentication;
-
-  private final SecurityContextRepository securityContextRepository =
-      new HttpSessionSecurityContextRepository();
+  private final SecondFactor secondFactor;
+  private final PendingLogin pendingLogin;
+  private final SessionEstablisher sessions;
 
   /**
    * Verifies credentials and establishes a session.
@@ -62,7 +70,11 @@ public class AuthController {
    * @return who the caller now is
    */
   @PostMapping(value = "/login", produces = MediaType.APPLICATION_JSON_VALUE)
-  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.RATE_LIMITED})
+  @CanFail({
+    ProblemType.UNAUTHENTICATED,
+    ProblemType.SECOND_FACTOR_REQUIRED,
+    ProblemType.RATE_LIMITED
+  })
   @PublicEndpoint(
       reason =
           "It establishes the session every other permission is evaluated against. "
@@ -76,25 +88,48 @@ public class AuthController {
     AuthenticatedUser user =
         authentication.login(request.email(), request.password(), clientAddressOf(httpRequest));
 
-    // Rotate the session id rather than discarding the session. This is the
-    // servlet container's own fixation defence: the id an attacker may have
-    // planted is replaced, while the session object itself survives — which
-    // invalidate-and-recreate does not, and which is what a client holding the
-    // session would otherwise lose.
-    if (httpRequest.getSession(false) != null) {
-      httpRequest.changeSessionId();
-    } else {
-      httpRequest.getSession(true);
+    // Half a login. The password was right, and the account has a second factor,
+    // so nothing is authenticated yet: the principal waits in the session and the
+    // caller answers at /api/v1/auth/mfa.
+    if (secondFactor.isRequiredFor(user.userId())) {
+      pendingLogin.remember(httpRequest, user);
+      throw new SecondFactorRequiredException();
     }
 
-    Authentication token = UsernamePasswordAuthenticationToken.authenticated(user, null, List.of());
-    SecurityContext context = SecurityContextHolder.createEmptyContext();
-    context.setAuthentication(token);
-    SecurityContextHolder.setContext(context);
-    securityContextRepository.saveContext(context, httpRequest, httpResponse);
+    return sessions.establish(user, httpRequest, httpResponse, false);
+  }
 
-    return new SessionView(
-        user.userId(), user.tenantId(), user.email(), user.locale(), user.role());
+  /**
+   * Answers the second factor and finishes the login (REQ-AUTH-002).
+   *
+   * <p>The pending login is consumed whether or not the code is right: a wrong one costs the
+   * password again. An attacker holding a stolen cookie therefore gets one guess per password,
+   * rather than as many as they like against a session that keeps waiting.
+   *
+   * @param request the code, which may be a TOTP code or a recovery code
+   * @param httpRequest the servlet request, carrying the pending login
+   * @param httpResponse the servlet response, which the security context is written to
+   * @return who the caller now is
+   */
+  @PostMapping(value = "/mfa", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail({ProblemType.UNAUTHENTICATED, ProblemType.SECOND_FACTOR_INVALID})
+  @PublicEndpoint(
+      reason =
+          "It is the second half of the login, and the caller has no session to be "
+              + "permitted by yet. What it does have is a pending login this rejects "
+              + "without, and which is consumed on the first attempt either way.")
+  public SessionView completeLogin(
+      @Valid @RequestBody SecondFactorRequest request,
+      HttpServletRequest httpRequest,
+      HttpServletResponse httpResponse) {
+
+    AuthenticatedUser user = pendingLogin.claim(httpRequest);
+    SecondFactor.Kind kind = secondFactor.verify(user.userId(), request.code());
+    SessionView session = sessions.establish(user, httpRequest, httpResponse, true);
+    if (kind == SecondFactor.Kind.RECOVERY_CODE) {
+      log.warn("Account {} completed a login with a recovery code.", user.userId());
+    }
+    return session;
   }
 
   /**
@@ -152,6 +187,30 @@ public class AuthController {
   private static String clientAddressOf(HttpServletRequest request) {
     String remote = request.getRemoteAddr();
     return remote == null ? "unknown" : remote;
+  }
+
+  /**
+   * The body of a second-factor answer.
+   *
+   * @param code the six digits from the authenticator app, or one of the recovery codes. Bounded
+   *     because it reaches an Argon2id comparison, where an unbounded field is an invitation to
+   *     spend 19 MiB on a megabyte of nothing
+   */
+  public record SecondFactorRequest(@NotBlank @Size(max = 64) String code) {
+
+    /**
+     * The fact that there was a code, and never the code.
+     *
+     * <p>Spring MVC logs the deserialised body at {@code DEBUG} through this record's generated
+     * {@code toString}; a one-time code in a log is a one-time code somebody else can still use
+     * inside its window (REQ-SEC-050). The same trap {@link LoginRequest} carries.
+     *
+     * @return the record with the code masked
+     */
+    @Override
+    public String toString() {
+      return "SecondFactorRequest[code=***]";
+    }
   }
 
   /**

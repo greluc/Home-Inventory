@@ -8,6 +8,7 @@ db-migration-password random
 data-encryption-master-key random
 jwt-signing-key ed25519
 bootstrap-password random
+credential-key random
 url-signing-key random
 valkey-password random
 mq-password random

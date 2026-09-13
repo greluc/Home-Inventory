@@ -202,6 +202,17 @@
   </Match>
 
   <!--
+    And the same in `CredentialKey.tryDecodeBase64`, which is the same method for
+    the same reason: a key file holding raw bytes is not base64, and null is how
+    that is said. An empty array would be a key of length zero, which the length
+    check would then reject with the wrong message.
+  -->
+  <Match>
+    <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+    <Class name="de.greluc.homeinv.identity.infrastructure.CredentialKey"/>
+  </Match>
+
+  <!--
     IMPROPER_UNICODE on TextInputModule's NFC normalisation. Normalising IS the
     class's purpose, and the order is the one the rule wants: normalise, strip
     control characters, trim — and only then does Bean Validation run on the
@@ -225,17 +236,28 @@
   </Match>
 
   <!--
-    RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT on `AuthController.login`. Both calls
-    are made FOR their effect on the container's session store, and both have one:
-    `changeSessionId()` replaces the id an attacker may have planted, which is the
-    servlet container's own fixation defence, and `getSession(true)` creates the
-    session the security context is about to be written into. The rule reads the
-    `HttpServletRequest` interface, where neither is declared to mutate anything.
+    RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT on the two places that rotate a session.
+    Both calls are made FOR their effect on the container's session store, and both
+    have one: `changeSessionId()` replaces the id an attacker may have planted,
+    which is the servlet container's own fixation defence, and `getSession(true)`
+    creates the session the security context — or the pending login of REQ-AUTH-002
+    — is about to be written into. The rule reads the `HttpServletRequest`
+    interface, where neither is declared to mutate anything.
+
+    It named `AuthController.login` until the second factor arrived and the login
+    became two calls: the rotation now happens in `PendingLogin.remember`, when the
+    password is accepted, and again in `SessionEstablisher.establish`, when the
+    session is actually created.
   -->
   <Match>
     <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
-    <Class name="de.greluc.homeinv.rest.AuthController"/>
-    <Method name="login"/>
+    <Class name="de.greluc.homeinv.rest.PendingLogin"/>
+    <Method name="remember"/>
+  </Match>
+  <Match>
+    <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    <Class name="de.greluc.homeinv.rest.SessionEstablisher"/>
+    <Method name="establish"/>
   </Match>
 
   <!--

@@ -100,6 +100,15 @@ public class WebSecurityConfiguration {
                     .requestMatchers(
                         "/api/v1/auth/login", "/actuator/health/**", "/livez", "/readyz")
                     .permitAll()
+                    // The second half of a login (REQ-AUTH-002). The caller has no
+                    // session to be authenticated by yet — that is what this call
+                    // establishes — and what it does have is the pending login the
+                    // password left in the session, which the controller rejects
+                    // without. Exactly this path: everything under
+                    // /api/v1/auth/mfa/ administers the caller's own credentials
+                    // and needs a session like anything else.
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/mfa")
+                    .permitAll()
                     // Accepting an invitation is how somebody becomes a person on
                     // this instance (REQ-AUTH-004), so it cannot require being one.
                     // Only the accept: the endpoints that ISSUE and withdraw

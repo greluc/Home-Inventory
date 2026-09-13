@@ -46,6 +46,7 @@ Environment=HOMEINV_SEARCH_USER=homeinv
 Environment=HOMEINV_DB_PASSWORD_FILE=/run/secrets/db-password
 Environment=HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE=/run/secrets/data-encryption-master-key
 Environment=HOMEINV_URL_SIGNING_KEY_FILE=/run/secrets/url-signing-key
+Environment=HOMEINV_CREDENTIAL_KEY_FILE=/run/secrets/credential-key
 Environment=HOMEINV_VALKEY_PASSWORD_FILE=/run/secrets/valkey-password
 Environment=HOMEINV_MQ_PASSWORD_FILE=/run/secrets/mq-password
 Environment=HOMEINV_SEARCH_PASSWORD_FILE=/run/secrets/search-password
@@ -53,6 +54,7 @@ Environment=HOMEINV_MTLS_CORE_FILE=/run/secrets/mtls-core
 Secret=db-password,type=mount
 Secret=data-encryption-master-key,type=mount
 Secret=url-signing-key,type=mount
+Secret=credential-key,type=mount
 Secret=valkey-password,type=mount
 Secret=mq-password,type=mount
 Secret=search-password,type=mount

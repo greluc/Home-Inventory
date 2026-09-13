@@ -318,6 +318,7 @@ services:
       - url-signing-key          # signs media URLs (REQ-MED-010) and pagination cursors
                                  # (08 §8.2). Both were specified as signed and neither
                                  # had a key in this file.
+      - credential-key           # seals the second-factor secrets of REQ-AUTH-002
       - valkey-password
       - mq-password
       - search-password
@@ -381,6 +382,7 @@ services:
       - db-password
       - data-encryption-master-key
       - url-signing-key          # the worker renders label artifacts and signs their URLs
+      - credential-key           # the same image and the same beans as api (REQ-AUTH-002)
       - valkey-password
       - mq-password
       - search-password
@@ -876,6 +878,19 @@ secrets:
       deployment running, and this is not one: without it the one-shot fails and api
       does not start).
 
+  credential-key:
+    required: true
+    kind: random
+    services: [api, worker]
+    notes: >
+      Seals the TOTP secrets of REQ-AUTH-002 at rest. A password is hashed and never
+      recovered; a shared secret cannot be, because verifying a code means generating
+      one — so a database dump without this file is not a set of working second factors,
+      which is the whole point of having a second one. Separate from
+      data-encryption-master-key, which wraps the per-tenant data keys of ADR-0019: a
+      credential belongs to a person rather than to a tenant. `worker` holds it because
+      it runs the same image and the same beans; it verifies no code, and a profile
+      conditional instead would break the first background job that needs one.
   url-signing-key:
     required: true
     kind: random

@@ -52,6 +52,7 @@ homeinv:
     # container that is destroyed with the suite - it is not a secret and it is
     # not one anywhere else either.
     url-signing-key-file: build/resources/test/db/test-url-signing.key
+    credential-key-file: build/resources/test/db/test-credential.key
 
   # A dedicated media host, distinct from the application host and same-site with
   # it. Both properties are stated rather than defaulted, because the check that

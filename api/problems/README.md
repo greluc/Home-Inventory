@@ -34,6 +34,9 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`invitation-unusable`](invitation-unusable.md) | `410` | assigned | The invitation cannot be used: no such token, or it has been used, withdrawn or has run out. |
 | [`invitation-not-yours`](invitation-not-yours.md) | `403` | assigned | The invited address already has an account, and the caller is not signed in as it. |
 | [`role-escalation`](role-escalation.md) | `403` | assigned | Somebody tried to grant, or withdraw, a role carrying permissions they do not hold themselves. |
+| [`second-factor-required`](second-factor-required.md) | `401` | assigned | The password was accepted and the account is protected by a second factor; the code goes to `POST /api/v1/auth/mfa`. |
+| [`second-factor-invalid`](second-factor-invalid.md) | `401` | assigned | The code presented is not valid. |
+| [`second-factor-enrolled`](second-factor-enrolled.md) | `409` | assigned | The account already has a confirmed second factor. |
 | [`deletion-pending`](deletion-pending.md) | `409` | assigned | The tenant has already been asked to be erased; the grace period is running. |
 | [`revocation-unusable`](revocation-unusable.md) | `410` | assigned | The revocation link cannot be used: no such token, already used, or the grace period is over. |
 | [`precondition-failed`](precondition-failed.md) | `412` | assigned | The `If-Match` entity tag does not match the resource's current version. |

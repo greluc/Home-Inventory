@@ -435,6 +435,25 @@ components:
             `minimal` installation is by design — this is the only way it reaches anybody
           type: string
       type: object
+    EnrolmentView:
+      description: What an account holds.
+      properties:
+        enrolledAt:
+          description: when it was confirmed, or null
+          format: date-time
+          type: string
+        recoveryCodesLeft:
+          description: |-
+            how many single-use codes are unspent. Zero beside a confirmed factor
+            is worth showing: losing the phone then loses the account
+          format: int32
+          type: integer
+        totpConfirmed:
+          description: |-
+            whether a confirmed authenticator exists, which is what makes the second
+            factor required at login
+          type: boolean
+      type: object
     EntitlementsRequest:
       description: The body of an entitlement change.
       properties:
@@ -1162,6 +1181,15 @@ components:
           format: int64
           type: integer
       type: object
+    RecoveryCodesView:
+      description: The recovery codes, readable this once.
+      properties:
+        codes:
+          description: ten single-use codes
+          items:
+            type: string
+          type: array
+      type: object
     RelationPage:
       description: One page of relations.
       properties:
@@ -1371,6 +1399,20 @@ components:
           description: the cursor for the following page, or `null` when this was the last
           type: string
       type: object
+    SecondFactorRequest:
+      description: The body of a second-factor answer.
+      properties:
+        code:
+          description: |-
+            the six digits from the authenticator app, or one of the recovery codes. Bounded
+            because it reaches an Argon2id comparison, where an unbounded field is an invitation to
+            spend 19 MiB on a megabyte of nothing
+          maxLength: 64
+          minLength: 0
+          type: string
+      required:
+      - code
+      type: object
     SessionView:
       description: |-
         Who the caller is after the switch.
@@ -1572,6 +1614,16 @@ components:
           type: string
         role:
           description: the role the caller holds in it
+          type: string
+      type: object
+    TotpEnrolmentView:
+      description: A secret that has just been generated.
+      properties:
+        provisioningUri:
+          description: the `otpauth://` URI a QR code carries
+          type: string
+        secret:
+          description: the shared secret in base32, for somebody typing it in by hand
           type: string
       type: object
     UpdateItemRequest:
@@ -1809,7 +1861,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
-          description: Unauthenticated (`unauthenticated`)
+          description: Unauthenticated (`unauthenticated`), or Second factor required (`second-factor-required`)
         '405':
           content:
             application/problem+json:
@@ -1919,6 +1971,335 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Who the caller is.
+  /api/v1/auth/mfa:
+    post:
+      description: |-
+        Answers the second factor and finishes the login (REQ-AUTH-002).
+
+        The pending login is consumed whether or not the code is right: a wrong one costs the
+        password again. An attacker holding a stolen cookie therefore gets one guess per password,
+        rather than as many as they like against a session that keeps waiting.
+      operationId: completeLogin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecondFactorRequest'
+        description: the code, which may be a TOTP code or a recovery code
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+          description: who the caller now is
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`), or Second factor invalid (`second-factor-invalid`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Answers the second factor and finishes the login (REQ-AUTH-002)
+  /api/v1/auth/mfa/enrolment:
+    get:
+      description: What the caller's account holds.
+      operationId: enrolment
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrolmentView'
+          description: the enrolment
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What the caller's account holds.
+  /api/v1/auth/mfa/recovery-codes:
+    post:
+      description: Issues a fresh set of recovery codes, retiring whatever is left of the old one.
+      operationId: reissueRecoveryCodes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodesView'
+          description: the new codes, in clear, for the only time they are readable
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`), or Second factor invalid (`second-factor-invalid`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Issues a fresh set of recovery codes, retiring whatever is left of the old one.
+  /api/v1/auth/mfa/totp:
+    post:
+      description: |-
+        Begins a TOTP enrolment.
+
+        The secret is returned **once**, here, and is unreadable afterwards: it is sealed under
+        the instance's credential key before it is stored. A client that loses it asks again, which
+        replaces the unconfirmed enrolment.
+      operationId: beginTotp
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpEnrolmentView'
+          description: the secret and the `otpauth://` URI a QR code carries
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Second factor enrolled (`second-factor-enrolled`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Begins a TOTP enrolment
+  /api/v1/auth/mfa/totp/confirmation:
+    post:
+      description: |-
+        Confirms an enrolment with a code, and issues the recovery codes.
+
+        The codes are returned **once**, here. They are stored as Argon2id hashes, so nothing —
+        this application included — can show them again.
+      operationId: confirmTotp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecondFactorRequest'
+        description: the code from the authenticator app
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodesView'
+          description: the recovery codes, in clear, for the only time they are readable
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`), or Second factor invalid (`second-factor-invalid`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Confirms an enrolment with a code, and issues the recovery codes
+  /api/v1/auth/mfa/totp/removal:
+    post:
+      description: |-
+        Removes the second factor, with a code as the proof.
+
+        A `POST` to a noun rather than a `DELETE`, because the proof travels in a body:
+        a one-time code in a query string is a one-time code in an access log.
+      operationId: removeTotp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecondFactorRequest'
+        description: a current code, or a recovery code
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`), or Second factor invalid (`second-factor-invalid`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes the second factor, with a code as the proof
   /api/v1/catalog/fields/{id}:
     delete:
       description: Removes a deprecated field and every value stored under it.

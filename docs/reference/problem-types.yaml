@@ -336,6 +336,48 @@ assigned:
     sources:
       - "REQ-TEN-010: nobody can grant permissions they do not hold themselves"
 
+  - token: second-factor-required
+    status: 401
+    since: 1
+    summary: >
+      The password was accepted and the account is protected by a second factor;
+      the code goes to `POST /api/v1/auth/mfa`.
+    notes: >
+      A 401 like a wrong password, and its own token because it is the one case
+      where the client does something other than ask for the password again.
+      Saying this much costs nothing: whoever sees it has already presented the
+      right password for the address. The half-done login lives in the session
+      for five minutes and is consumed by the first answer, right or wrong.
+    sources:
+      - "REQ-AUTH-002, 12 §12.4"
+
+  - token: second-factor-invalid
+    status: 401
+    since: 1
+    summary: >
+      The code presented is not valid.
+    notes: >
+      ONE token for a wrong code, a code from a time step already spent, a
+      recovery code already used and an account with no second factor at all —
+      the treatment `invitation-unusable` gets, for the same reason. Telling them
+      apart would say whether a guess was close, and "already used" would confirm
+      that the code existed.
+    sources:
+      - "REQ-AUTH-002, 12 §12.4"
+
+  - token: second-factor-enrolled
+    status: 409
+    since: 1
+    summary: >
+      The account already has a confirmed second factor.
+    notes: >
+      Enrolling again would replace a working authenticator with an unproven one,
+      and somebody who then lost the new QR code would be locked out with a valid
+      app on their phone. The way out is to remove the old one, which asks for a
+      code.
+    sources:
+      - "REQ-AUTH-002"
+
   - token: deletion-pending
     status: 409
     since: 1
