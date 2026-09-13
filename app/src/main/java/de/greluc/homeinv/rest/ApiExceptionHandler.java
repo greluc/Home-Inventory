@@ -7,6 +7,7 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.InvalidSecondFactorException;
+import de.greluc.homeinv.identity.api.RegistrationClosedException;
 import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
@@ -464,6 +465,19 @@ public class ApiExceptionHandler {
         ProblemType.SECOND_FACTOR_REQUIRED,
         "This account is protected by a second factor. Post the code to /api/v1/auth/mfa.",
         request);
+  }
+
+  /**
+   * Answers an invitation that would have created an account on an instance that makes none.
+   *
+   * @param exception the refusal, carrying what the caller should do
+   * @param request the request, for the instance URI
+   * @return the problem
+   */
+  @ExceptionHandler(RegistrationClosedException.class)
+  public ProblemDetail handleRegistrationClosed(
+      RegistrationClosedException exception, HttpServletRequest request) {
+    return problem(ProblemType.REGISTRATION_CLOSED, exception.getMessage(), request);
   }
 
   /**

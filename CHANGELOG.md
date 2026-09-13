@@ -139,6 +139,12 @@ commit".
   with a password alone. The web client shows the setup instead of an error.
   *REST API: additive.*
 
+- **An instance can be closed to new accounts.** `HOMEINV_REGISTRATION_MODE`
+  now does something: `invite_only` as before, and `closed`, where an invitation
+  still adds somebody who already has an account and creates nobody who does not.
+  A value that names no mode stops the instance rather than being guessed at.
+  *REST API: additive.*
+
 - **A tenant can hand a machine its own token.** A service account holds one of
   the six roles, belongs to one tenant and stops working on a date that has to be
   given. The token is shown once, at creation, and is never readable again;

@@ -33,6 +33,7 @@ public class AccountRegistryAdapter implements AccountRegistry {
 
   private final AppUserRepository users;
   private final UserProvisioning provisioning;
+  private final RegistrationPolicy registration;
 
   @Override
   @Transactional(readOnly = true)
@@ -69,6 +70,11 @@ public class AccountRegistryAdapter implements AccountRegistry {
   @Override
   @Transactional
   public UUID register(String email, String displayName, String locale, String password) {
+    // REQ-AUTH-004: on an instance that creates no accounts, an invitation for an
+    // address nobody has creates none either. Checked here rather than in the
+    // controller because this is the one place an account comes into existence
+    // through an invitation, and a second caller must not be able to go round it.
+    registration.requireRegistrationPermitted();
     return provisioning
         .createIfAbsent(email, displayName, locale, password)
         .orElseThrow(

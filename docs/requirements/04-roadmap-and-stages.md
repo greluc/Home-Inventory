@@ -85,7 +85,7 @@ tags and roles themselves — without a developer and without a restart.
 | **Type system** | Item types and location categories with freely definable fields, inheritance, versioning, the generated JSON Schema, value lists, type templates |
 | **Attribute storage** | JSONB plus `item_attr_index`, the consistency reconciliation, the rebuild run |
 | **Tenants** | Creation, memberships, invitations, roles and permissions, subtree scoping, field visibility, quotas, deletion with a grace period |
-| **Login** | Second factor (TOTP, passkeys), re-confirmation, the session overview, service accounts |
+| **Login** | Second factor (TOTP, passkeys), re-confirmation, the session overview, service accounts. **Not** access and refresh tokens: they belong to the OAuth flow of `REQ-AUTH-007`, which is stage 3, and `REQ-AUTH-008` moved there with it on 2026-09-13 |
 | **Tags** | Tags, groups, merging |
 | **Lifecycle** | Warranty, maintenance log, lending, sale, disposal, trash, history with restore, value reporting (purchase price, current value, replacement value, the insurance report) |
 | **Search** | OpenSearch with facets, filters, sorting, saved searches, the PostgreSQL fallback |
@@ -136,7 +136,7 @@ and the app works a week offline and then reconciles without loss.
 | **Plugin SDK** | `homeinv-plugin-api` (Apache-2.0), SDKs for **Java, Kotlin, Rust, Python and Go**, the protobuf module, the **contract test suite**, a project template, example plugins covering the SDK languages, `PLUGINS.md`, `ui:panel` |
 | **Enrichment** | The `MetadataResolver` port, ISBN and EAN resolvers, the proposal model, `FieldMapping`, caching |
 | **Further ports** | Printer plugins, `ScanSource` for Bluetooth scanners, push channels (Firebase, APNs, Web Push), `ValuationProvider` |
-| **Apps** | Kotlin Multiplatform with Compose Multiplatform, OAuth 2.1 with PKCE, camera, scanner |
+| **Apps** | Kotlin Multiplatform with Compose Multiplatform, OAuth 2.1 with PKCE, camera, scanner. The **token properties** come with the flow that issues them: access tokens valid ten minutes, refresh tokens rotating with reuse detection, and a reuse ending every session of the account (`REQ-AUTH-008`, moved here from stage 1 on 2026-09-13 — stage 1 hands out no access token at all) |
 | **Offline** | Full bidirectional reconciliation, the three-way compare, conflict records and their resolution, device management with remote wipe, the media queue, property-based tests |
 | **Web offline** | The PWA with IndexedDB, a service worker, local search |
 

@@ -354,6 +354,21 @@ assigned:
     sources:
       - "REQ-AUTH-011, 12 §12.4"
 
+  - token: registration-closed
+    status: 403
+    since: 1
+    summary: >
+      This instance creates no accounts; the invitation is good, but the address
+      behind it has none.
+    notes: >
+      `HOMEINV_REGISTRATION_MODE=closed` (REQ-AUTH-004). The invitation is NOT
+      consumed: somebody who already has an account can accept the same one, and
+      the way out is an account from the operator. Its own token rather than a
+      plain `forbidden`, because what the caller should do about it is specific
+      and the refusal is about the instance rather than about them.
+    sources:
+      - "REQ-AUTH-004, 12 §12.4"
+
   - token: second-factor-missing
     status: 403
     since: 1

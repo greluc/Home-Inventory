@@ -247,6 +247,11 @@ homeinv:
   # and checked against the list above, because a deployment where it is missing
   # produces no error at all — only wrong numbers (06 §6.7).
   ingress-host: ${HOMEINV_INGRESS_HOST:web}
+  # Who may come to exist on this instance (REQ-AUTH-004). `invite_only` by
+  # default; `closed` creates no account at all, and `open` needs a confirmed
+  # address and therefore plugin-smtp — an instance configured for it without one
+  # refuses to start rather than offering a sign-up nobody can finish.
+  registration-mode: ${HOMEINV_REGISTRATION_MODE:invite_only}
   security:
     url-signing-key-file: ${HOMEINV_URL_SIGNING_KEY_FILE:}
     # Seals the TOTP secrets of REQ-AUTH-002. Its own key, because rotating the

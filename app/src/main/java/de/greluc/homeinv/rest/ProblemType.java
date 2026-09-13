@@ -85,6 +85,16 @@ public enum ProblemType {
    */
   SECOND_FACTOR_STALE("second-factor-stale", HttpStatus.FORBIDDEN, "Second factor stale"),
 
+  /**
+   * This instance creates no accounts (REQ-AUTH-004).
+   *
+   * <p>A {@code 403} on the one call that would have created one: accepting an invitation for an
+   * address nobody has, while {@code HOMEINV_REGISTRATION_MODE} is {@code closed}. Its own token
+   * because what the caller should do about it is specific — ask the operator for an account, then
+   * accept the invitation while signed in — and the invitation itself is still good.
+   */
+  REGISTRATION_CLOSED("registration-closed", HttpStatus.FORBIDDEN, "Registration closed"),
+
   /** Authenticated, and not permitted on a resource they may know exists. */
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 
