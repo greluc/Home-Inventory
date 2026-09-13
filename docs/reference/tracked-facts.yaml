@@ -215,11 +215,12 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 31
-    pattern: '(?:(\d+)|thirty-one)\s+(?:named\s+)?permissions?\b'
+    value: 32
+    pattern: '(?:(\d+)|thirty-two)\s+(?:named\s+)?permissions?\b'
     notes: >
       Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on
-      2026-09-13, and the tenancy block's six with the member administration the same day.
+      2026-09-13, the tenancy block's six with the member administration the same day, and
+      `identity:service-account:administer` with the machine tokens of REQ-AUTH-010.
       `AuthorizationRegistryTest` already proves the registry and the `Permission` enum name the same
       set on every build; this is the third copy — the number as it appears in prose — and it is
       tracked on the same principle as the rest: a fact stated twice is checked, not trusted.

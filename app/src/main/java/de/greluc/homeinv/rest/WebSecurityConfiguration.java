@@ -49,6 +49,7 @@ public class WebSecurityConfiguration {
   public SecurityFilterChain filterChain(
       HttpSecurity http,
       TenantContextFilter tenantContextFilter,
+      ServiceAccountAuthenticationFilter serviceAccountAuthenticationFilter,
       CorsConfigurationSource corsConfigurationSource,
       ProblemEntryPoint problemEntryPoint)
       throws Exception {
@@ -74,6 +75,15 @@ public class WebSecurityConfiguration {
                     // secure source, single-use and time-limited — which is what a
                     // CSRF token would be protecting, and a page that could forge
                     // this request would need that token to begin with.
+                    // A request authenticated by a Bearer token carries no cookie,
+                    // and CSRF is an attack on a credential the browser attaches by
+                    // itself. Nothing a foreign page can do adds an Authorization
+                    // header (REQ-AUTH-010).
+                    .ignoringRequestMatchers(
+                        request -> {
+                          String authorization = request.getHeader("Authorization");
+                          return authorization != null && authorization.startsWith("Bearer ");
+                        })
                     .ignoringRequestMatchers(
                         "/api/v1/auth/login",
                         "/api/v1/invitations/*/accept",
@@ -155,9 +165,15 @@ public class WebSecurityConfiguration {
         // request that never asks (see CsrfCookieFilter).
         .addFilterAfter(
             new CsrfCookieFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+        // A machine presents its token on every request and has no session, so the
+        // principal has to exist before anything reads one — and before the tenant
+        // context filter, which publishes the tenant the principal names
+        // (REQ-AUTH-010).
         .addFilterAfter(
-            tenantContextFilter,
+            serviceAccountAuthenticationFilter,
             org.springframework.security.web.context.SecurityContextHolderFilter.class)
+        .addFilterAfter(
+            tenantContextFilter, ServiceAccountAuthenticationFilter.class)
         // Form login and HTTP Basic are off: the only way in is the JSON endpoint,
         // so there is one code path to rate-limit and one to audit.
         .formLogin(form -> form.disable())

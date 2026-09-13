@@ -45,6 +45,11 @@ import java.util.UUID;
  *     is a plain built-in one
  * @param scopeLocationId the part of the location tree this session is confined to (REQ-TEN-007),
  *     or null for the whole tenant
+ * @param machine whether this is a service account rather than a person (REQ-AUTH-010). It changes
+ *     two things and neither is a permission: the second factor REQ-AUTH-003 requires of a role is
+ *     not asked of a machine, which cannot have one, and the re-confirmation of REQ-AUTH-011 is
+ *     never satisfied by one — so the operations a person is asked to confirm are exactly the ones
+ *     a machine may not perform unattended
  */
 public record AuthenticatedUser(
     UUID userId,
@@ -53,8 +58,31 @@ public record AuthenticatedUser(
     String locale,
     String role,
     UUID roleDefinitionId,
-    UUID scopeLocationId)
+    UUID scopeLocationId,
+    boolean machine)
     implements Serializable {
+
+  /**
+   * A session belonging to a person, over the whole tenant.
+   *
+   * @param userId the person
+   * @param tenantId the tenant this session acts for, or null
+   * @param email the address they signed in with
+   * @param locale their interface language
+   * @param role the built-in role, or null
+   * @param roleDefinitionId the tenant-owned role extending it, or null
+   * @param scopeLocationId the part of the tree they are confined to, or null
+   */
+  public AuthenticatedUser(
+      UUID userId,
+      UUID tenantId,
+      String email,
+      String locale,
+      String role,
+      UUID roleDefinitionId,
+      UUID scopeLocationId) {
+    this(userId, tenantId, email, locale, role, roleDefinitionId, scopeLocationId, false);
+  }
 
   /**
    * A session over the whole tenant, whose role may be a tenant-owned one.
@@ -99,7 +127,9 @@ public record AuthenticatedUser(
    * with REQ-TEN-006, for the sharper version of the same reason: a principal that silently lost
    * its tenant-owned role would be one quietly demoted to the role's base. And again for
    * {@code scopeLocationId}, where the failure would run the other way — a principal that lost its
-   * scope would be one silently let out of the garage.
+   * scope would be one silently let out of the garage. And again for {@code machine}: a principal
+   * that lost the flag would be a service account asked for a second factor it cannot have — a
+   * machine that stops working rather than one that gains anything.
    */
-  private static final long serialVersionUID = 4L;
+  private static final long serialVersionUID = 5L;
 }

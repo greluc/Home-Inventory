@@ -787,6 +787,16 @@ components:
             way the link reaches anybody, which 04 §4.3 describes as the expected reduced state
           type: string
       type: object
+    IssuedServiceAccount:
+      description: A service account that has just been created, and its token.
+      properties:
+        account:
+          $ref: '#/components/schemas/ServiceAccountView'
+          description: the account
+        token:
+          description: the token, in clear, for the only time it is readable
+          type: string
+      type: object
     ItemPage:
       description: One page of items.
       properties:
@@ -1505,6 +1515,68 @@ components:
         passkey:
           description: Whether a passkey is answering.
           type: boolean
+      type: object
+    ServiceAccountRequest:
+      description: What a new service account needs.
+      properties:
+        description:
+          description: what it is for, or null
+          maxLength: 1000
+          minLength: 0
+          type: string
+        expiresAt:
+          description: |-
+            when it stops working. Required — REQ-AUTH-010 asks for an expiry date, and a
+            machine credential nobody reviews is one nobody revokes
+          format: date-time
+          type: string
+        name:
+          description: what to call it, so a list of tokens is a list somebody can act on
+          maxLength: 200
+          minLength: 0
+          type: string
+        role:
+          description: the built-in role it holds, one of the six names
+          maxLength: 20
+          minLength: 0
+          type: string
+        roleDefinitionId:
+          description: a tenant-owned role extending it (REQ-TEN-006), or null
+          format: uuid
+          type: string
+      required:
+      - expiresAt
+      - name
+      - role
+      type: object
+    ServiceAccountView:
+      description: A service account as its tenant sees it.
+      properties:
+        description:
+          description: what it is for, or null
+          type: string
+        expiresAt:
+          description: when it stops working
+          format: date-time
+          type: string
+        id:
+          description: the account
+          format: uuid
+          type: string
+        lastUsedAt:
+          description: when it last authenticated, or null when it never has
+          format: date-time
+          type: string
+        name:
+          description: what it is called
+          type: string
+        role:
+          description: the built-in role it holds
+          type: string
+        roleDefinitionId:
+          description: the tenant-owned role extending it, or null
+          format: uuid
+          type: string
       type: object
     SessionView:
       description: |-
@@ -4127,7 +4199,7 @@ paths:
         Withdrawing one that was never made is not an error, for the reason deleting twice is not.
         What it cannot do is take a field from `OWNER`: that grant is the default rather than a
         row, and a tenant whose owner cannot read its own data is one nobody can administer.
-      operationId: revoke_1
+      operationId: revoke_2
       parameters:
       - description: the field's key
         in: path
@@ -9059,6 +9131,225 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Where this tenant stands in each of its four quotas (REQ-TEN-009)
+  /api/v1/tenants/{tenantId}/service-accounts:
+    get:
+      description: The tenant's service accounts, newest first.
+      operationId: list
+      parameters:
+      - description: the tenant, which must be the session's own
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServiceAccountView'
+                type: array
+          description: the accounts, never their tokens
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tenant's service accounts, newest first.
+    post:
+      description: Issues a service account, and returns its token once.
+      operationId: issue
+      parameters:
+      - description: the tenant, which must be the session's own
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceAccountRequest'
+        description: what to call it, what it may do, and when it stops working
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedServiceAccount'
+          description: the account and its token, which is readable here and nowhere else
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Second factor stale (`second-factor-stale`), or Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Issues a service account, and returns its token once.
+  /api/v1/tenants/{tenantId}/service-accounts/{id}:
+    delete:
+      description: Revokes one, at once.
+      operationId: revoke_1
+      parameters:
+      - description: the tenant, which must be the session's own
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the account
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Second factor stale (`second-factor-stale`), or Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Revokes one, at once.
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

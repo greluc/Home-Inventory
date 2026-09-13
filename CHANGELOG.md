@@ -139,6 +139,13 @@ commit".
   with a password alone. The web client shows the setup instead of an error.
   *REST API: additive.*
 
+- **A tenant can hand a machine its own token.** A service account holds one of
+  the six roles, belongs to one tenant and stops working on a date that has to be
+  given. The token is shown once, at creation, and is never readable again;
+  revoking one takes effect on the next request it makes. Issuing and revoking
+  ask for the second factor again, because handing out a token is handing out the
+  role it carries. *REST API: additive.*
+
 - **You can see where your account is signed in, and end a session from another
   device.** Each entry says what the device called itself and which network it
   came from — the network, not the address — and ending one takes effect on that

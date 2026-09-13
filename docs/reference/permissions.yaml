@@ -165,6 +165,14 @@ permissions:
     description: Remove somebody from the tenant, and withdraw an unused invitation.
 
 
+  - id: identity:service-account:administer
+    since: 1
+    description: >
+      Issue, list and revoke the tenant's machine tokens (REQ-AUTH-010). A token
+      carries one of the six roles, so whoever may hand one out may hand out that
+      role — which is why ADMIN and OWNER hold this and nobody else does, and why
+      issuing one asks for the second factor again (REQ-AUTH-011).
+
   - id: tenancy:tenant:delete
     since: 1
     description: >
@@ -308,6 +316,7 @@ roles:
       - tenancy:member:invite
       - tenancy:member:update
       - tenancy:member:remove
+      - identity:service-account:administer
 
   - name: OWNER
     rationale: >

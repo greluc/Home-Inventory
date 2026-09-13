@@ -121,7 +121,16 @@ public enum Permission {
    * tenant is the act nobody else can undo after the grace period, and an administrator who could
    * start it could start it on their last day.
    */
-  TENANT_DELETE("tenancy:tenant:delete");
+  TENANT_DELETE("tenancy:tenant:delete"),
+
+  /**
+   * Issue, list and revoke the tenant's machine tokens (REQ-AUTH-010).
+   *
+   * <p>{@code identity} and not {@code tenancy}: a service account is a way of authenticating, and
+   * the block that owns the notion owns the permission. Held by {@code ADMIN} and {@code OWNER}
+   * alone — a token carries a role, so whoever may hand one out may hand out that role.
+   */
+  SERVICE_ACCOUNT_ADMINISTER("identity:service-account:administer");
 
   private final String id;
 

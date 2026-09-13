@@ -286,6 +286,20 @@
   </Match>
 
   <!--
+    SERVLET_HEADER on the two places that read `Authorization`: the filter that
+    authenticates a service account (REQ-AUTH-010) and the CSRF matcher that
+    exempts a request carrying one. The header IS the credential here, which is the
+    one case where reading it is the whole point — it is compared against a stored
+    SHA-256 and reaches nothing else: not a response, not a log line, not a query
+    built from it. A caller who lies about it is refused with `unauthenticated`,
+    which is the safe direction.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="~de\.greluc\.homeinv\.rest\.(ServiceAccountAuthenticationFilter|WebSecurityConfiguration).*"/>
+  </Match>
+
+  <!--
     SERVLET_HEADER on `TraceIdFilter`. `traceparent` is untrusted, which is why
     the trace id is matched against `[0-9a-f]{32}` and rejected when it is the
     all-zero id, before anything is done with it. Unvalidated it would end up in

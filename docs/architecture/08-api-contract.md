@@ -46,6 +46,7 @@ forbids database and repository access from the access blocks.
 ├── /me          profile, devices, settings · /tenants (memberships) · /tenant (switch)
 │             /sessions {handle}   what is signed in, and ending one of them
 ├── /tenants     {id}/members {id}/invitations {id}/quotas {id}/settings {id}/export
+│             {id}/service-accounts {id}   machine tokens (REQ-AUTH-010)
 ├── /instance    /accounts {id}/entitlements · /operators · /tenants/{id}/quotas
 │             /erasures {tenantId}  what an erasure removed, per block
 │                                                      (the instance operator only)

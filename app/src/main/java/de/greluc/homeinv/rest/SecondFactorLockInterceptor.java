@@ -63,7 +63,11 @@ public class SecondFactorLockInterceptor implements HandlerInterceptor {
     }
 
     AuthenticatedUser user = principal();
-    if (user == null || user.role() == null) {
+    if (user == null || user.role() == null || user.machine()) {
+      // A service account holds a role and cannot hold a second factor
+      // (REQ-AUTH-010). Asking it for one would be a token that never works; what
+      // stands in for the factor is that the token expires and is revocable, and
+      // that everything REQ-AUTH-011 guards is refused to it anyway.
       return true;
     }
     policy.requireEnrolled(new RoleRef(user.role(), user.roleDefinitionId()), user.userId());
