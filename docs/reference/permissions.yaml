@@ -45,6 +45,14 @@ permissions:
       Delete an item. Two-stage from stage 1 (REQ-CORE-009), which is what makes
       granting it to MEMBER reasonable rather than reckless.
 
+
+  - id: inventory:item:purge
+    since: 1
+    description: >
+      Remove an item for good, with its attachments. The second stage of
+      REQ-CORE-009 and the one that cannot be undone, which is why it is not
+      `inventory:item:delete`: trashing is a decision a person can change their
+      mind about, and somebody may be trusted with that and not with this.
   - id: locations:location:read
     since: 0
     description: Read a location and its subtree.

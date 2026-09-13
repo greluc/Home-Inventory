@@ -25,8 +25,16 @@ public enum Permission {
   ITEM_CREATE("inventory:item:create"),
   /** Change an item. */
   ITEM_UPDATE("inventory:item:update"),
-  /** Delete an item. */
+  /** Delete an item — the first stage, which puts it in the trash and can be undone. */
   ITEM_DELETE("inventory:item:delete"),
+  /**
+   * Remove an item for good, with its attachments (REQ-CORE-009).
+   *
+   * <p>Separate from {@link #ITEM_DELETE} because it is the one operation on an item that cannot be
+   * undone. Trashing is a decision a person can change their mind about; this is not, and the two
+   * being one permission would mean nobody could be given the reversible half alone.
+   */
+  ITEM_PURGE("inventory:item:purge"),
 
   /** Read a location. */
   LOCATION_READ("locations:location:read"),

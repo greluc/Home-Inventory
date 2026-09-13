@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -71,6 +72,84 @@ public interface ItemService {
    * @param created {@code true} when this call created it
    */
   record CreateResult(ItemView item, boolean created) {}
+
+  /**
+   * Brings an item back out of the trash (REQ-CORE-009).
+   *
+   * <p>Idempotent: restoring something that is not in the trash succeeds and changes nothing, so a
+   * client retrying a request it never saw the answer to is not told it failed.
+   *
+   * @param id the item
+   * @param actor the authenticated user
+   * @return the item, active again
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant never had such an item
+   * @throws IllegalStateException when it is physical and the place it was in has since been removed
+   */
+  ItemView restore(UUID id, UUID actor);
+
+  /**
+   * Removes an item for good — the second stage of REQ-CORE-009.
+   *
+   * <p>The one irreversible operation on an item, which is why it is a permission of its own and why
+   * it is refused for anything that is not in the trash: a person purges what they have already
+   * decided to delete, not what they are looking at.
+   *
+   * <p>The revision history stays. It is what says the thing ever existed, and a removal that erased
+   * its own record would leave nobody able to answer that.
+   *
+   * @param id the item, which must already be in the trash
+   * @param actor the authenticated user
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant never had such an item
+   * @throws IllegalStateException when it is not in the trash
+   */
+  void purge(UUID id, UUID actor);
+
+  /**
+   * One page of the tenant's trashed items, newest first.
+   *
+   * @param cursor an opaque cursor from a previous page, or {@code null} for the first
+   * @param limit how many at most; capped at 200
+   * @return the page and a cursor for the next one
+   */
+  ItemPage trashed(String cursor, int limit);
+
+  /**
+   * One page of an item's history, newest first (REQ-CORE-010).
+   *
+   * @param id the item
+   * @param cursor an opaque cursor from a previous page, or {@code null} for the first
+   * @param limit how many at most; capped at 200
+   * @return the page and a cursor for the next one
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant never had such an item
+   */
+  de.greluc.homeinv.audit.api.RevisionLog.RevisionPage history(UUID id, String cursor, int limit);
+
+  /**
+   * Makes an earlier state current again (REQ-CORE-010).
+   *
+   * <p>A restore is an ordinary change: it produces a new revision rather than rewinding to an old
+   * one, so the history after it still says what happened and when. What it puts back are the fields
+   * a person edits — name, description, place, quantity and attributes — and not the type version,
+   * because an item does not travel between versions.
+   *
+   * @param id the item
+   * @param revision which revision to put back
+   * @param actor the authenticated user
+   * @return the item in its restored state
+   * @throws de.greluc.homeinv.platform.NotFoundException when the item or the revision is not
+   *     visible to this tenant
+   * @throws de.greluc.homeinv.catalog.api.InvalidAttributesException when the old attribute set no
+   *     longer matches the item's type version
+   */
+  ItemView restoreRevision(UUID id, long revision, UUID actor);
+
+  /**
+   * One page of items.
+   *
+   * @param items the items on this page
+   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
+   */
+  record ItemPage(List<ItemView> items, String nextCursor) {}
 
   /**
    * What is needed to create an item.

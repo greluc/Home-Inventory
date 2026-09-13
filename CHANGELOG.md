@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **Deleting an item is two steps, and every change is recoverable.** A deletion
+  puts the item in the trash, where it is listed, restorable and out of every
+  ordinary read; removing it for good is a separate operation behind a permission
+  of its own, and it takes the attachments with it. Beside that, every change now
+  keeps the state it produced: an item's history is readable, an earlier state can
+  be made current again — as a new entry rather than a rewind, so the history
+  still says what happened — and the record of an item outlives the item itself,
+  because something has to be able to say it existed. *REST API: additive.*
+
 - **Tags.** One tenant-wide vocabulary that goes on items and on places alike,
   with optional groups, a colour and an icon. A group can be made exclusive, so a
   thing carries one of new, used or broken rather than two of them. Two tags can

@@ -490,6 +490,18 @@ components:
       required:
       - dataType
       type: object
+    ItemPage:
+      description: One page of items.
+      properties:
+        items:
+          description: the items on this page
+          items:
+            $ref: '#/components/schemas/ItemView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
     ItemTypePage:
       description: One page of item types.
       properties:
@@ -806,6 +818,46 @@ components:
           type: string
       required:
       - name
+      type: object
+    RevisionPage:
+      description: One page of history.
+      properties:
+        items:
+          description: the revisions on this page, newest first
+          items:
+            $ref: '#/components/schemas/RevisionView'
+          type: array
+        nextCursor:
+          description: the cursor for the next page, or `null` when this was the last
+          type: string
+      type: object
+    RevisionView:
+      description: One entry of a history.
+      properties:
+        changedAt:
+          description: when
+          format: date-time
+          type: string
+        changedBy:
+          description: who, or `null` where a system process made the change
+          format: uuid
+          type: string
+        kind:
+          description: what happened
+          enum:
+          - CREATED
+          - UPDATED
+          - TRASHED
+          - RESTORED
+          - PURGED
+          type: string
+        revision:
+          description: this entry's number in the entity's history, counting from one
+          format: int64
+          type: integer
+        snapshot:
+          description: the state it produced, as JSON text
+          type: string
       type: object
     SearchResult:
       description: What was found.
@@ -2726,6 +2778,79 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Creates an item, or returns the one that is already there
+  /api/v1/items/trash:
+    get:
+      description: One page of the tenant's trashed items (REQ-CORE-009).
+      operationId: trashedItems
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the tenant's trashed items (REQ-CORE-009).
   /api/v1/items/{id}:
     delete:
       description: |-
@@ -2923,6 +3048,289 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces the mutable fields of an item.
+  /api/v1/items/{id}/permanently:
+    delete:
+      description: |-
+        Removes an item for good — the second stage of a deletion, and the irreversible one.
+
+        Refused for anything that is not already in the trash: a person purges what they have
+        decided to delete, not what they are looking at.
+      operationId: purgeItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes an item for good — the second stage of a deletion, and the irreversible one
+  /api/v1/items/{id}/restore:
+    post:
+      description: Brings an item back out of the trash.
+      operationId: restoreItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: the item, active again
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Brings an item back out of the trash.
+  /api/v1/items/{id}/revisions:
+    get:
+      description: One page of an item's history, newest first (REQ-CORE-010).
+      operationId: itemRevisions
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionPage'
+          description: the page and a cursor for the next one
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of an item's history, newest first (REQ-CORE-010).
+  /api/v1/items/{id}/revisions/{revision}/restore:
+    post:
+      description: |-
+        Makes an earlier state current again.
+
+        A new revision rather than a rewind: the history after a restore still says what happened and
+        when, which is what makes it a history rather than a current state with extra steps.
+      operationId: restoreItemRevision
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: which revision to put back
+        in: path
+        name: revision
+        required: true
+        schema:
+          format: int64
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: the item in its restored state
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Makes an earlier state current again
   /api/v1/items/{id}/tags:
     get:
       description: The tags one item carries.

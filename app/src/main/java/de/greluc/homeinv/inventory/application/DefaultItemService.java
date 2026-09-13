@@ -11,16 +11,19 @@ import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.domain.Item;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.infrastructure.ItemRepository;
+import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.List;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +47,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultItemService implements ItemService {
 
   private final ItemRepository items;
+
+  /** What a trash cursor is bound to, so it cannot resume the live listing. */
+  private static final String TRASH_CURSOR = "items-trashed";
+
+  /** The cap REQ-NFR-010 puts on every page of every collection. */
+  private static final int MAX_PAGE = 200;
+
+  /** Signs and checks the keyset cursors, as every other listing does. */
+  private final CursorCodec cursors;
   private final CatalogProvisioning catalog;
   private final Clock clock;
 
@@ -60,6 +72,15 @@ public class DefaultItemService implements ItemService {
 
   /** Writes the side table, inside the same transaction as the item. */
   private final de.greluc.homeinv.inventory.infrastructure.AttributeProjector projector;
+
+  /** Keeps what every change produced, so an earlier state can be read and put back. */
+  private final de.greluc.homeinv.audit.api.RevisionLog revisions;
+
+  /** Turns an item into the snapshot a revision carries, and back. */
+  private final tools.jackson.databind.ObjectMapper json;
+
+  /** Tells the blocks that hang things on an item that it is gone for good. */
+  private final org.springframework.context.ApplicationEventPublisher events;
 
   /**
    * Creates an item, or returns the one that is already there.
@@ -126,6 +147,12 @@ public class DefaultItemService implements ItemService {
     // In the same transaction as the write, which is what makes an attribute
     // filter transactionally exact (REQ-CORE-013).
     projector.project(id, typeVersionId, attributes);
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.CREATED,
+        snapshot(item),
+        actor);
     log.debug("Item {} created in tenant {}", id, tenantId);
     return new CreateResult(toView(item), true);
   }
@@ -229,6 +256,12 @@ public class DefaultItemService implements ItemService {
     // a change that is still in the persistence context.
     items.flush();
     projector.project(id, item.getItemTypeVersionId(), attributes);
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
     return toView(item);
   }
 
@@ -249,11 +282,203 @@ public class DefaultItemService implements ItemService {
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
     item.markDeleted(actor, Instant.now(clock));
     items.flush();
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.TRASHED,
+        snapshot(item),
+        actor);
     // The projection goes with it, in the same transaction: a trashed item that
     // kept answering attribute filters would be a deleted thing that is still
     // findable, for the whole retention period (07 §7.3, REQ-CORE-013).
     projector.clear(id);
   }
+
+  @Transactional
+  @Override
+  public ItemView restore(UUID id, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    if (!item.isDeleted()) {
+      return toView(item);
+    }
+    item.restore(actor, Instant.now(clock));
+    items.flush();
+    // The projection comes back with it: trashing removed the item's rows so it
+    // would stop answering attribute filters, and restoring has to undo exactly
+    // that (07 §7.3).
+    projector.project(id, item.getItemTypeVersionId(), item.getAttributes());
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.RESTORED,
+        snapshot(item),
+        actor);
+    log.debug("Item {} restored in tenant {}", id, tenantId);
+    return toView(item);
+  }
+
+  @Transactional
+  @Override
+  public void purge(UUID id, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    if (!item.isDeleted()) {
+      throw new IllegalStateException(
+          "This item is not in the trash. Final removal is the second stage of a deletion, not a "
+              + "shortcut past the first (REQ-CORE-009).");
+    }
+
+    // The last revision is written BEFORE the row goes, and says what was
+    // destroyed. Afterwards there is nothing left to take a snapshot of.
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.PURGED,
+        snapshot(item),
+        actor);
+
+    // Inside this transaction: `media.attachment` is polymorphic and can have no
+    // foreign key into the item (07 §7.8), so nothing in the database would
+    // remove it and a purge would leave an attachment pointing at an id nothing
+    // answers for.
+    events.publishEvent(new de.greluc.homeinv.inventory.api.ItemPurged(tenantId, id));
+
+    items.delete(item);
+    items.flush();
+    log.info("Item {} purged in tenant {} by {}", id, tenantId, actor);
+  }
+
+  @Transactional(readOnly = true)
+  @Override
+  public ItemPage trashed(String cursor, int limit) {
+    UUID tenantId = TenantContext.require();
+    int size = Math.clamp(limit, 1, MAX_PAGE);
+    List<Item> rows;
+    if (cursor == null || cursor.isBlank()) {
+      rows = items.findTrashed(tenantId, PageRequest.of(0, size));
+    } else {
+      CursorCodec.Position after = cursors.decode(cursor, TRASH_CURSOR);
+      rows = items.findTrashedAfter(tenantId, after.createdAt(), after.id(), PageRequest.of(0, size));
+    }
+    List<ItemView> views = rows.stream().map(DefaultItemService::toView).toList();
+    String next = null;
+    if (rows.size() == size) {
+      Item last = rows.get(rows.size() - 1);
+      next = cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), TRASH_CURSOR);
+    }
+    return new ItemPage(views, next);
+  }
+
+  @Transactional(readOnly = true)
+  @Override
+  public de.greluc.homeinv.audit.api.RevisionLog.RevisionPage history(
+      UUID id, String cursor, int limit) {
+    UUID tenantId = TenantContext.require();
+    // Either the item is still here or its history is: a purge removes the row
+    // and deliberately keeps the record (REQ-CORE-009), so a check for the row
+    // alone would make the last thing a person can learn about a removed item
+    // unreachable. Both halves are tenant-scoped, so neither says anything about
+    // a foreign id (REQ-SEC-016) — and an id this tenant never had is a 404
+    // rather than an empty page.
+    boolean known =
+        items.findAny(tenantId, id).isPresent()
+            || !revisions
+                .history(de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, null, 1)
+                .items()
+                .isEmpty();
+    if (!known) {
+      throw new NotFoundException("item", id);
+    }
+    return revisions.history(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, cursor, limit);
+  }
+
+  @Transactional
+  @Override
+  public ItemView restoreRevision(UUID id, long revision, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    var record =
+        revisions.revision(de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, revision);
+    Snapshot earlier = json.readValue(record.snapshot(), Snapshot.class);
+
+    // Against the item's own type version, not against the one the snapshot was
+    // written with: an item does not travel between versions, and a set that was
+    // valid then may not be now — which is a refusal a person can act on rather
+    // than a write that quietly stores something the type forbids.
+    String attributes = validated(item.getItemTypeVersionId(), earlier.attributes());
+
+    item.update(
+        earlier.name(),
+        earlier.description(),
+        earlier.locationId(),
+        earlier.quantity() != null ? earlier.quantity() : BigDecimal.ONE,
+        earlier.quantityUnit(),
+        attributes,
+        actor,
+        Instant.now(clock));
+    items.flush();
+    projector.project(id, item.getItemTypeVersionId(), attributes);
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
+    log.debug("Item {} restored to revision {} in tenant {}", id, revision, tenantId);
+    return toView(item);
+  }
+
+  /**
+   * The state of an item, as a revision carries it.
+   *
+   * <p>Written by this block and read by this block. It is deliberately not {@link ItemView}: a view
+   * is a published type that may gain and lose fields as the API changes, and a snapshot written
+   * last year has to stay readable. What it holds is what a restore puts back, plus the type version
+   * so a reader can tell which definitions the attributes were written against.
+   *
+   * @param item the aggregate
+   * @return the snapshot as JSON text
+   */
+  private String snapshot(Item item) {
+    return json.writeValueAsString(
+        new Snapshot(
+            item.getName(),
+            item.getDescription(),
+            item.getKind().name(),
+            item.getLocationId(),
+            item.getQuantity(),
+            item.getQuantityUnit(),
+            item.getAttributes(),
+            item.getItemTypeVersionId(),
+            item.getLifecycleState()));
+  }
+
+  /**
+   * What a revision of an item holds.
+   *
+   * @param name the name at that moment
+   * @param description the description
+   * @param kind physical or digital, which never changes and is recorded so a snapshot is readable
+   *     on its own
+   * @param locationId where it was
+   * @param quantity how many
+   * @param quantityUnit the unit
+   * @param attributes the type version's fields, as JSON text
+   * @param itemTypeVersionId which definitions those attributes were written against
+   * @param lifecycleState the state a person reads
+   */
+  private record Snapshot(
+      String name,
+      String description,
+      String kind,
+      UUID locationId,
+      BigDecimal quantity,
+      String quantityUnit,
+      String attributes,
+      UUID itemTypeVersionId,
+      String lifecycleState) {}
 
   /**
    * Converts the aggregate into the type other blocks may hold.

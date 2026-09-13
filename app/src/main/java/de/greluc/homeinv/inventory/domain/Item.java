@@ -291,6 +291,32 @@ public class Item {
   }
 
   /**
+   * Brings the item back out of the trash (REQ-CORE-009).
+   *
+   * <p>Idempotent, like the deletion it undoes: restoring an item that is not in the trash changes
+   * nothing and raises nothing.
+   *
+   * @param actor the user restoring it
+   * @param now the instant of the restoration
+   * @throws IllegalStateException when the item is physical and the place it was in has since been
+   *     removed, because a physical item resides in exactly one location (REQ-CORE-003)
+   */
+  public void restore(UUID actor, Instant now) {
+    if (this.deletedAt == null) {
+      return;
+    }
+    if (this.kind == ItemKind.PHYSICAL && this.locationId == null) {
+      throw new IllegalStateException(
+          "This item cannot be restored: the place it was in no longer exists, and a physical item "
+              + "resides in exactly one location.");
+    }
+    this.deletedAt = null;
+    this.lifecycleState = "ACTIVE";
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
    * Marks the item deleted, leaving the row in place as a tombstone.
    *
    * <p>Idempotent: deleting an already deleted item changes nothing and raises nothing, because a
@@ -305,6 +331,10 @@ public class Item {
       return;
     }
     this.deletedAt = now;
+    // The state a person reads, beside the timestamp the queries filter on. Both
+    // move together, so a listing that shows the state and a query that hides the
+    // row can never disagree (REQ-CORE-009).
+    this.lifecycleState = "TRASHED";
     this.updatedBy = actor;
     this.updatedAt = now;
   }

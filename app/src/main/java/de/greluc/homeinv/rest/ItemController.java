@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -16,6 +17,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -33,6 +36,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -158,6 +162,95 @@ public class ItemController {
   @CanFail(ProblemType.NOT_FOUND)
   public void deleteItem(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     items.delete(id, user.userId());
+  }
+
+  /**
+   * One page of the tenant's trashed items (REQ-CORE-009).
+   *
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(path = "/trash", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail(ProblemType.MALFORMED_REQUEST)
+  public ItemService.ItemPage trashedItems(
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return items.trashed(cursor, limit);
+  }
+
+  /**
+   * Brings an item back out of the trash.
+   *
+   * @param id the item
+   * @param user the authenticated caller
+   * @return the item, active again
+   */
+  @PostMapping(path = "/{id}/restore", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_DELETE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public ItemView restoreItem(
+      @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
+    return items.restore(id, user.userId());
+  }
+
+  /**
+   * Removes an item for good — the second stage of a deletion, and the irreversible one.
+   *
+   * <p>Refused for anything that is not already in the trash: a person purges what they have
+   * decided to delete, not what they are looking at.
+   *
+   * @param id the item
+   * @param user the authenticated caller
+   */
+  @DeleteMapping(path = "/{id}/permanently")
+  @RequiresPermission(Permission.ITEM_PURGE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void purgeItem(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
+    items.purge(id, user.userId());
+  }
+
+  /**
+   * One page of an item's history, newest first (REQ-CORE-010).
+   *
+   * @param id the item
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(path = "/{id}/revisions", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public RevisionLog.RevisionPage itemRevisions(
+      @PathVariable UUID id,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return items.history(id, cursor, limit);
+  }
+
+  /**
+   * Makes an earlier state current again.
+   *
+   * <p>A new revision rather than a rewind: the history after a restore still says what happened and
+   * when, which is what makes it a history rather than a current state with extra steps.
+   *
+   * @param id the item
+   * @param revision which revision to put back
+   * @param user the authenticated caller
+   * @return the item in its restored state
+   */
+  @PostMapping(
+      path = "/{id}/revisions/{revision}/restore",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public ItemView restoreItemRevision(
+      @PathVariable UUID id,
+      @PathVariable long revision,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return items.restoreRevision(id, revision, user.userId());
   }
 
   /**

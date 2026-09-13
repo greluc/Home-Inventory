@@ -5,8 +5,10 @@
 package de.greluc.homeinv.inventory.infrastructure;
 
 import de.greluc.homeinv.inventory.domain.Item;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -51,6 +53,41 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
    */
   @Query("select i from Item i where i.tenantId = :tenantId and i.id = :id")
   Optional<Item> findAny(@Param("tenantId") UUID tenantId, @Param("id") UUID id);
+
+  /**
+   * One page of the tenant's trashed items, oldest first.
+   *
+   * <p>Ordered by creation and id rather than by when they were trashed, because that is the pair
+   * the keyset cursor everywhere else in this application resumes from — and the order a person
+   * reads the trash in is a client's business.
+   *
+   * @param tenantId the tenant
+   * @param page how many at most
+   * @return the items in the trash
+   */
+  @Query(
+      "select i from Item i where i.tenantId = :tenantId and i.deletedAt is not null "
+          + "order by i.createdAt, i.id")
+  List<Item> findTrashed(@Param("tenantId") UUID tenantId, Pageable page);
+
+  /**
+   * The next page of trashed items, after the position a cursor names.
+   *
+   * @param tenantId the tenant
+   * @param createdAt where the last page ended
+   * @param id the tie-breaker for two rows created in the same microsecond
+   * @param page how many at most
+   * @return the next items in the trash
+   */
+  @Query(
+      "select i from Item i where i.tenantId = :tenantId and i.deletedAt is not null "
+          + "and (i.createdAt > :createdAt or (i.createdAt = :createdAt and i.id > :id)) "
+          + "order by i.createdAt, i.id")
+  List<Item> findTrashedAfter(
+      @Param("tenantId") UUID tenantId,
+      @Param("createdAt") java.time.Instant createdAt,
+      @Param("id") UUID id,
+      Pageable page);
 
   /**
    * Whether a live item with this id already exists for the tenant.
