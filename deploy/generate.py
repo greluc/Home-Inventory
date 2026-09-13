@@ -139,9 +139,30 @@ ReceiveTimeout 60
 #     Valkey held no credential at all until ADR-0044, which meant every session
 #     and every rate-limit counter was readable by anything that could open port
 #     6379 on `internal` — `web` included, at the time.
-VALKEY_ACL_TEMPLATE = """user default off
-user {user} on >{password} ~* +@all
-"""
+#   * THREE CHANNELS, and they are not optional. An ACL grants no pub/sub channel
+#     at all by default, and the indexed session store subscribes to exactly
+#     three: the keyspace notifications Valkey emits when a session key is
+#     deleted or expires, and Spring Session's own "created" pattern. They are
+#     what keeps the per-account session index of REQ-AUTH-009 from filling with
+#     sessions that are gone. Without them the application does not degrade — it
+#     refuses to start, with `NOPERM No permissions to access a channel`, which is
+#     how this line came to be written.
+#
+#     They are spelled out rather than globbed because Valkey matches them
+#     differently for the two commands: a SUBSCRIBE channel is glob-matched
+#     against the allowed patterns, but a PSUBSCRIBE pattern has to be one of them
+#     LITERALLY. `&__key*__:*` therefore looks like it covers everything here and
+#     covers nothing — which is what the first attempt did.
+#
+#     The `0` is the database index. The deployment does not set one, so it is
+#     Valkey's default; an operator who changes it changes these three lines with
+#     it.
+VALKEY_ACL_TEMPLATE = (
+    "user default off\n"
+    "user {user} on >{password} ~*"
+    " &__keyevent@0__:del &__keyevent@0__:expired &spring:session:event:0:created:*"
+    " +@all\n"
+)
 
 OPENSEARCH_USERS_TEMPLATE = """# GENERATED FROM ../services.yaml — DO NOT EDIT.
 #

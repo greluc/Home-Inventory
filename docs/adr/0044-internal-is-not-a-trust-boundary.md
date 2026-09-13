@@ -66,7 +66,7 @@ Every service on it authenticates its callers:
 | Service | Mechanism | Secret |
 |---|---|---|
 | `postgres` | password per role, unchanged | `db-password`, `db-migration-password` |
-| `valkey` | ACL user `homeinv`; `default` **disabled** | `valkey-password` |
+| `valkey` | ACL user `homeinv`; `default` **disabled**; three named pub/sub channels and no others | `valkey-password` |
 | `rabbitmq` | user `homeinv`; `guest` unusable anyway | `mq-password` |
 | `opensearch` | client user `homeinv`, separate from `admin`, over TLS | `search-password`, `mtls-search` |
 | `blobstore` | **gRPC over mTLS with a pinned fingerprint** — the same mechanism the plugin `BlobStore` adapters already use | `mtls-blobstore`, `mtls-core` |
