@@ -37,7 +37,20 @@ public interface TenantLifecycle {
     SUSPENDED,
 
     /** Asked to be erased, waiting out the grace period. */
-    PENDING_DELETION
+    PENDING_DELETION,
+
+    /**
+     * Erased: every block has removed its share and a certificate was issued.
+     *
+     * <p>The row carrying this state is a tombstone — the id, the name the tenant had, and who
+     * asked and when. Nobody reaches it: an erased tenant has no memberships left, so no session
+     * can act for it, and {@link #state()} would have to be asked by somebody who is not there.
+     *
+     * <p>It exists because the row does. A finished erasure that left the state reading
+     * {@code PENDING_DELETION} would be the one fact in that row nobody could check against the
+     * rest of it.
+     */
+    ERASED
   }
 
   /**

@@ -9,6 +9,7 @@ import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.OperatorDirectory;
+import de.greluc.homeinv.tenancy.api.ErasureCertificates;
 import de.greluc.homeinv.tenancy.api.QuotaAdministration;
 import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -55,6 +56,7 @@ public class InstanceController {
   private final AccountAdministration accounts;
   private final OperatorDirectory operators;
   private final QuotaAdministration quotas;
+  private final ErasureCertificates certificates;
 
   /**
    * Finds an account by its login address.
@@ -216,6 +218,41 @@ public class InstanceController {
    *     no way to say "unlimited", because an unbounded quota is not a quota
    */
   public record QuotaRequest(@PositiveOrZero long permitted) {}
+
+  /**
+   * One page of erasure certificates, newest first (REQ-TEN-011).
+   *
+   * <p>Read here and nowhere else. A tenant that has been erased has no members left to ask, and
+   * the table is instance-wide for exactly that reason: evidence of an erasure has to outlive the
+   * thing it is about (07 §7.1).
+   *
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200
+   * @return the certificates
+   */
+  @GetMapping(path = "/erasures", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
+  public ErasureCertificates.CertificatePage erasures(
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return certificates.certificates(cursor, limit);
+  }
+
+  /**
+   * The certificate for one tenant.
+   *
+   * @param tenantId the tenant that was erased
+   * @return its certificate
+   */
+  @GetMapping(path = "/erasures/{tenantId}", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND})
+  public ErasureCertificates.Certificate erasure(@PathVariable UUID tenantId) {
+    return certificates
+        .forTenant(tenantId)
+        .orElseThrow(() -> new NotFoundException("erasure", tenantId));
+  }
 
   /**
    * Maps the port's view onto the wire.

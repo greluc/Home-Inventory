@@ -103,6 +103,24 @@ components:
       required:
       - value
       type: object
+    BlockReport:
+      description: What one block removed, or deliberately did not.
+      properties:
+        block:
+          description: the building block's name, as 04 §4.3 spells it
+          type: string
+        note:
+          description: |-
+            what was left and why, or null when everything of this block's went. The one entry
+            that always carries a note is `audit`: the application holds `INSERT` and
+            `SELECT` on the log and nothing else (`REQ-SEC-069`), so the log outlives the erasure
+            and is removed by the retention run under `homeinv_housekeeping`
+          type: string
+        rowsRemoved:
+          description: how many rows went
+          format: int64
+          type: integer
+      type: object
     CategoryPage:
       description: One page of location categories.
       properties:
@@ -146,6 +164,50 @@ components:
         publishedVersionId:
           description: the newest published version, or `null`
           format: uuid
+          type: string
+      type: object
+    Certificate:
+      description: One certificate.
+      properties:
+        completedAt:
+          description: when the last block reported
+          format: date-time
+          type: string
+        report:
+          description: |-
+            one entry per building block: how many rows it removed, and where something was
+            deliberately left, why
+          items:
+            $ref: '#/components/schemas/BlockReport'
+          type: array
+        requestedAt:
+          description: when the erasure was asked for
+          format: date-time
+          type: string
+        requestedBy:
+          description: |-
+            which account asked. An opaque id and nothing more, which is what 05 §5.9
+            means by keeping the record "pseudonymised"
+          format: uuid
+          type: string
+        tenantId:
+          description: the tenant that was erased
+          format: uuid
+          type: string
+        tenantName:
+          description: what it was called, as it stood when the erasure began
+          type: string
+      type: object
+    CertificatePage:
+      description: One page of certificates, newest first.
+      properties:
+        items:
+          description: the certificates
+          items:
+            $ref: '#/components/schemas/Certificate'
+          type: array
+        nextCursor:
+          description: where the next page starts, or null when this was the last
           type: string
       type: object
     ConstraintsRequest:
@@ -3618,6 +3680,140 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces what an account is entitled to do on the instance
+  /api/v1/instance/erasures:
+    get:
+      description: |-
+        One page of erasure certificates, newest first (REQ-TEN-011).
+
+        Read here and nowhere else. A tenant that has been erased has no members left to ask, and
+        the table is instance-wide for exactly that reason: evidence of an erasure has to outlive the
+        thing it is about (07 §7.1).
+      operationId: erasures
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificatePage'
+          description: the certificates
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of erasure certificates, newest first (REQ-TEN-011)
+  /api/v1/instance/erasures/{tenantId}:
+    get:
+      description: The certificate for one tenant.
+      operationId: erasure
+      parameters:
+      - description: the tenant that was erased
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: its certificate
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The certificate for one tenant.
   /api/v1/instance/operators:
     get:
       description: |-

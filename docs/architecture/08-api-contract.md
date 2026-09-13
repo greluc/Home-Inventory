@@ -43,6 +43,7 @@ forbids database and repository access from the access blocks.
 ├── /me          profile, devices, sessions, settings · /tenants (memberships) · /tenant (switch)
 ├── /tenants     {id}/members {id}/invitations {id}/quotas {id}/settings {id}/export
 ├── /instance    /accounts {id}/entitlements · /operators · /tenants/{id}/quotas
+│             /erasures {tenantId}  what an erasure removed, per block
 │                                                      (the instance operator only)
 ├── /invitations {token}/accept          (no session: this is how an account is made)
 ├── /tenant-revocations {token}          (no session: the erasure is what removed it)

@@ -330,35 +330,54 @@ capabilities granted to it. Every call is logged and bounded.
 sequenceDiagram
     autonumber
     participant O as Owner
-    participant T as tenancy
-    participant MQ as RabbitMQ
-    participant ALL as all blocks
-    participant B as BlobStore
-    participant OS as OpenSearch
+    participant T as tenancy (api)
+    participant W as tenancy (worker)
+    participant ALL as each block, in order
+    participant C as erasure_certificate
 
-    O->>T: DELETE /api/v1/tenants/{id} (second factor again)
+    O->>T: DELETE /api/v1/tenants/{id}
     T->>T: state = PENDING_DELETION, 30-day grace period
-    T-->>O: 202 + revocation link, confirmation mail
+    T-->>O: 202 + revocation link (and by mail where plugin-smtp is installed)
     Note over T: access blocked immediately, data still present
 
     alt Grace period elapsed
-        T->>MQ: TenantDeletionConfirmed
-        MQ->>ALL: each block deletes its share of the schema,<br/>reports completion
-        ALL->>B: remove blobs with no remaining reference
-        ALL->>OS: delete the tenant index
-        ALL->>T: completion report per block
-        T->>T: all reported → generate erasure certificate
-        T-->>O: erasure certificate by e-mail
+        W->>W: hourly sweep: which tenants are due?
+        W->>W: read the tenant's name before it goes
+        loop each block, in the order the foreign keys allow
+            W->>ALL: delete this block's share (tenant context, own transaction)
+            ALL-->>W: rows removed, and what was deliberately left
+        end
+        W->>W: tenant row → ERASED, revocation token cleared
+        W->>C: erasure certificate, one line per block
+        Note over C: instance-wide: the evidence outlives its subject
     else Revoked within the period
-        O->>T: restore
-        T->>T: state = ACTIVE
+        O->>T: GET /api/v1/tenant-revocations/{token}
+        T->>T: state = ACTIVE, token spent
     end
 ```
 
 **Demonstrates:** erasure is a supervised, evidenced flow with a completion
 report per block — not a `DELETE CASCADE` after which nobody knows whether
 everything really went. The audit entry about the erasure itself remains
-(pseudonymised).
+(pseudonymised), and so does the tenant's audit log: the application may not
+delete it (`REQ-SEC-069`), the retention run does within the tenant's own period
+(`REQ-PRIV-010`), and the certificate says so rather than implying it went.
+
+**The run is one pass in the worker, not a choreography**
+([ADR-0060](../adr/0060-the-erasure-runs-in-one-pass.md)). This diagram drew
+`TenantDeletionConfirmed` on RabbitMQ until 2026-09-13, with each block
+consuming it and reporting back. A choreography has a middle — "three of seven
+have reported" — and the blocks are not independent: an item references a place
+and a type version, a membership the location a member is confined to. The pass
+walks them in a declared order, each in its own transaction, and marks the tenant
+erased only after the last of them, so a run interrupted halfway is one the next
+sweep finishes.
+
+**Blobs are not removed by the run.** They are reclaimed by the orphan sweep of
+[13 §13.8](13-operations-and-observability.md), which removes what no reference
+points at, with a grace period. Every derived store — the search index, the
+thumbnails — is rebuilt from PostgreSQL and holds nothing the erasure needs to
+be asked about.
 
 ## 5.10 A stocktake run
 

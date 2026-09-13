@@ -55,7 +55,13 @@ class MigrationRulesTest {
           // Infrastructure rather than domain data (07 §7.1, rule 4): the relay
           // reads every tenant's rows by design, and a policy would hide them
           // from the one process whose job is to publish them.
-          "outbox.event_publication");
+          "outbox.event_publication",
+          // Evidence of an erasure has to outlive the thing it is about: a
+          // tenant-scoped certificate would be removed by the very run that
+          // writes it (REQ-TEN-011). It holds no content — a tenant id, the name
+          // it had, who asked, when, and counts — and only the instance operator
+          // reads it.
+          "tenancy.erasure_certificate");
 
   private static final Pattern CREATE_TABLE =
       Pattern.compile("create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([a-z_]+\\.[a-z_]+)",

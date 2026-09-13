@@ -154,6 +154,7 @@ vulnerability.
 | Audit partitions | monthly | Create and archive |
 | Orphaned blobs | weekly | Check reference counts, remove unreferenced ones — **with a grace period**, never immediately |
 | Expired tokens and invitations | hourly | |
+| **Erase tenants whose grace period has elapsed** | hourly | One pass per tenant, block by block in a declared order, each block in its own transaction and inside the tenant's own context; the tenant row is tombstoned last and an erasure certificate is written (`REQ-TEN-011`, [ADR-0060](../adr/0060-the-erasure-runs-in-one-pass.md)). Hourly rather than daily, because the person waiting for it is the person who asked. Finding the due tenants spans tenants, so it goes through a `SECURITY DEFINER` function ([07 §7.5](07-data-model.md)) rather than the broker — unlike the catch-up scan below, this sweep has a tenant list to start from |
 | Evaluate reminders | hourly | Warranty, maintenance, returns, minimum stock |
 | Carry quota usage forward | hourly | |
 | Reconcile `item_attr_index` | nightly | Sample against `attributes`, deviations as a metric |

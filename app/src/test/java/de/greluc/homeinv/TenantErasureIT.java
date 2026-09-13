@@ -10,9 +10,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.platform.TenantContext;
+import de.greluc.homeinv.tenancy.application.TenantErasureRunner;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
 import java.time.Instant;
 import java.util.Map;
@@ -41,6 +43,8 @@ class TenantErasureIT extends AbstractIntegrationTest {
   private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private AppUserRepository users;
+  @Autowired private AccountAdministration accounts;
+  @Autowired private TenantErasureRunner runner;
   @Autowired private TenantProvisioningService provisioning;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
@@ -167,7 +171,85 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .andExpect(status().isOk());
   }
 
+  @Test
+  @DisplayName("the certificate it leaves is the operator's to read, and nobody else's")
+  void theCertificateIsReadByTheOperator() throws Exception {
+    Tenant tenant = tenantWithOwner("erase-certified@example.org", "Certified");
+    MockHttpSession owner = login("erase-certified@example.org");
+
+    mockMvc
+        .perform(delete("/api/v1/tenants/" + tenant.tenantId()).session(owner).with(csrf()))
+        .andExpect(status().isAccepted());
+
+    // The request is backdated rather than the grace period shortened, so the
+    // thirty days the requirement names stay the ones under test.
+    backdate(tenant);
+    runner.eraseDueTenants();
+
+    // An ordinary account does not reach the instance surface at all.
+    UUID ordinary = createUser("erase-onlooker@example.org");
+    provisioning.provision("Onlooker", ordinary);
+    mockMvc
+        .perform(
+            get("/api/v1/instance/erasures").session(login("erase-onlooker@example.org")))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/forbidden"));
+
+    MockHttpSession operator = operatorSession("erase-operator@example.org");
+    mockMvc
+        .perform(get("/api/v1/instance/erasures").session(operator))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.items[?(@.tenantId == '" + tenant.tenantId() + "')]").exists());
+
+    mockMvc
+        .perform(get("/api/v1/instance/erasures/" + tenant.tenantId()).session(operator))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.tenantName").value("Certified"))
+        .andExpect(jsonPath("$.requestedBy").value(tenant.ownerId().toString()))
+        .andExpect(jsonPath("$.report[?(@.block == 'audit')].note").exists());
+
+    // A tenant that was never erased has no certificate, and says so the way
+    // every other unknown thing does.
+    mockMvc
+        .perform(get("/api/v1/instance/erasures/" + UUID.randomUUID()).session(operator))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/not-found"));
+  }
+
   // -------------------------------------------------------------------------
+
+  /**
+   * Moves a request past its grace period.
+   *
+   * @param tenant whose request
+   */
+  private void backdate(Tenant tenant) {
+    TenantContext.runAs(
+        tenant.tenantId(),
+        () ->
+            transactions.executeWithoutResult(
+                status ->
+                    jdbc.sql(
+                            "update tenancy.tenant set deletion_requested_at ="
+                                + " now() - interval '31 days'")
+                        .update()));
+  }
+
+  /**
+   * An account that administers the instance, signed in.
+   *
+   * @param email its login address
+   * @return its session
+   * @throws Exception when signing in fails, which is the test failing
+   */
+  private MockHttpSession operatorSession(String email) throws Exception {
+    UUID userId = createUser(email);
+    provisioning.provision("The operator's own", userId);
+    transactions.executeWithoutResult(
+        status -> accounts.replaceEntitlements(userId, true, false, null, userId));
+    return login(email);
+  }
 
   /** A provisioned tenant and the user who owns it. */
   private record Tenant(UUID tenantId, UUID ownerId) {}

@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **When the thirty days are up, the tenant is erased and a certificate says what
+  went.** The worker walks every building block in turn, each removes its share,
+  and the result is one certificate per erased tenant — how many rows each block
+  removed, and where something was deliberately left. The audit log is what was
+  left: the application may not delete it, the retention run does within the
+  tenant's own period, and the certificate says so rather than implying it went.
+  The instance operator reads the certificates at `/api/v1/instance/erasures`.
+  *REST API: additive.*
+
 - **A tenant can ask to be erased, and has thirty days to change its mind.** The
   owner — and only the owner, which is the first thing an administrator may not
   do — asks, and the tenant stops answering straight away while its data stays
@@ -245,7 +254,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 22 types in the shared
+- **The shared kernel is measured.** `platform` holds 23 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).
@@ -360,7 +369,7 @@ commit".
 - A requirements catalogue with 425 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 60 architecture decision records, each with its alternatives and consequences —
+- 61 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

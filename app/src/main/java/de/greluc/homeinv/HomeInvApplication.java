@@ -31,6 +31,10 @@ import org.springframework.modulith.Modulith;
     sharedModules = "platform",
     additionalPackages = {})
 @SpringBootApplication
+// Recurring tasks (13 §13.8). Every one of them is @Profile("worker"), so `api`
+// starts a scheduler that has nothing to run rather than none at all — which is
+// cheaper than two application classes that differ by one annotation.
+@org.springframework.scheduling.annotation.EnableScheduling
 public class HomeInvApplication {
 
   /**
