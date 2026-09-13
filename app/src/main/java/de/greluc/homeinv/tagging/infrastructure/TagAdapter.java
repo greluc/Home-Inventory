@@ -5,6 +5,7 @@
 package de.greluc.homeinv.tagging.infrastructure;
 
 import de.greluc.homeinv.platform.CursorCodec;
+import de.greluc.homeinv.platform.LastRow;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tagging.api.TagAssigned;
@@ -104,7 +105,9 @@ public class TagAdapter implements TagService {
   private final ApplicationEventPublisher events;
 
   /** Where the last row read sat, for the next page's cursor. */
-  private CursorCodec.Position position;
+  // Where the last row of a page sat lives in a `LastRow` per call, not in a
+  // field: this adapter is a singleton and a field would be shared by every
+  // request in flight.
 
   @Override
   @Transactional
@@ -139,8 +142,11 @@ public class TagAdapter implements TagService {
   @Transactional(readOnly = true)
   public TagPage tags(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
-    List<TagView> rows = page(TAG_PAGE, TAG_PAGE_AFTER, cursor, size, TAG_CURSOR, this::tagOf);
-    return new TagPage(rows, nextCursor(rows.size(), size, TAG_CURSOR));
+    LastRow last = new LastRow();
+    List<TagView> rows =
+        page(
+            TAG_PAGE, TAG_PAGE_AFTER, cursor, size, TAG_CURSOR, (rs, rowNum) -> tagOf(rs, last));
+    return new TagPage(rows, nextCursor(rows.size(), size, TAG_CURSOR, last));
   }
 
   @Override
@@ -277,24 +283,25 @@ public class TagAdapter implements TagService {
   public TagPage tagsOf(TagTarget target, UUID targetId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
-    position = null;
+    LastRow last = new LastRow();
 
     List<TagView> rows;
     if (cursor == null || cursor.isBlank()) {
       rows =
           jdbc.sql(target == TagTarget.ITEM ? TAGS_OF_ITEM : TAGS_OF_LOCATION)
               .params(tenantId, targetId, size)
-              .query((rs, rowNum) -> tagOf(rs, rowNum))
+              .query((rs, rowNum) -> tagOf(rs, last))
               .list();
     } else {
       CursorCodec.Position from = cursors.decode(cursor, ASSIGNED_CURSOR);
+      java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
       rows =
           jdbc.sql(target == TagTarget.ITEM ? TAGS_OF_ITEM_AFTER : TAGS_OF_LOCATION_AFTER)
-              .params(tenantId, targetId, from.createdAt(), from.createdAt(), from.id(), size)
-              .query((rs, rowNum) -> tagOf(rs, rowNum))
+              .params(tenantId, targetId, at, at, from.id(), size)
+              .query((rs, rowNum) -> tagOf(rs, last))
               .list();
     }
-    return new TagPage(rows, nextCursor(rows.size(), size, ASSIGNED_CURSOR));
+    return new TagPage(rows, nextCursor(rows.size(), size, ASSIGNED_CURSOR, last));
   }
 
   @Override
@@ -339,9 +346,16 @@ public class TagAdapter implements TagService {
   @Transactional(readOnly = true)
   public TagGroupPage groups(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
+    LastRow last = new LastRow();
     List<TagGroupView> rows =
-        page(GROUP_PAGE, GROUP_PAGE_AFTER, cursor, size, TAG_GROUP_CURSOR, this::groupOf);
-    return new TagGroupPage(rows, nextCursor(rows.size(), size, TAG_GROUP_CURSOR));
+        page(
+            GROUP_PAGE,
+            GROUP_PAGE_AFTER,
+            cursor,
+            size,
+            TAG_GROUP_CURSOR,
+            (rs, rowNum) -> groupOf(rs, last));
+    return new TagGroupPage(rows, nextCursor(rows.size(), size, TAG_GROUP_CURSOR, last));
   }
 
   // -------------------------------------------------------------------------
@@ -458,7 +472,8 @@ public class TagAdapter implements TagService {
     return jdbc
         .sql(TAG_COLUMNS + " where tenant_id = ? and id = ?")
         .params(TenantContext.require(), tagId)
-        .query((rs, rowNum) -> tagOf(rs, rowNum))
+        // A single row: the holder is a formality, because nothing pages one.
+        .query((rs, rowNum) -> tagOf(rs, new LastRow()))
         .optional()
         .orElseThrow(() -> new NotFoundException("tag", tagId));
   }
@@ -488,7 +503,7 @@ public class TagAdapter implements TagService {
     return jdbc
         .sql(GROUP_COLUMNS + " where tenant_id = ? and id = ?")
         .params(TenantContext.require(), groupId)
-        .query((rs, rowNum) -> groupOf(rs, rowNum))
+        .query((rs, rowNum) -> groupOf(rs, new LastRow()))
         .optional()
         .orElseThrow(() -> new NotFoundException("tag group", groupId));
   }
@@ -501,10 +516,8 @@ public class TagAdapter implements TagService {
    * @return the view
    * @throws SQLException when the row cannot be read
    */
-  private TagView tagOf(ResultSet rs, int rowNum) throws SQLException {
-    position =
-        new CursorCodec.Position(
-            rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
+  private TagView tagOf(ResultSet rs, LastRow last) throws SQLException {
+    last.at(rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
     return new TagView(
         rs.getObject("id", UUID.class),
         rs.getString("name"),
@@ -522,10 +535,8 @@ public class TagAdapter implements TagService {
    * @return the view
    * @throws SQLException when the row cannot be read
    */
-  private TagGroupView groupOf(ResultSet rs, int rowNum) throws SQLException {
-    position =
-        new CursorCodec.Position(
-            rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
+  private TagGroupView groupOf(ResultSet rs, LastRow last) throws SQLException {
+    last.at(rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
     String labels = rs.getString("labels");
     Map<String, String> byLanguage = new LinkedHashMap<>();
     if (labels != null && !labels.isBlank()) {
@@ -560,15 +571,13 @@ public class TagAdapter implements TagService {
       String fingerprint,
       org.springframework.jdbc.core.RowMapper<T> mapper) {
     UUID tenantId = TenantContext.require();
-    position = null;
     if (cursor == null || cursor.isBlank()) {
       return jdbc.sql(first).params(tenantId, size).query(mapper).list();
     }
     CursorCodec.Position from = cursors.decode(cursor, fingerprint);
-    return jdbc.sql(after)
-        .params(tenantId, from.createdAt(), from.createdAt(), from.id(), size)
-        .query(mapper)
-        .list();
+    // Wrapped, not an Instant: the driver cannot infer a SQL type for one.
+    java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
+    return jdbc.sql(after).params(tenantId, at, at, from.id(), size).query(mapper).list();
   }
 
   /**
@@ -577,9 +586,12 @@ public class TagAdapter implements TagService {
    * @param read how many rows came back
    * @param size how many were asked for
    * @param fingerprint what the cursor is bound to
+   * @param last where the last row of this page sat
    * @return the cursor, or {@code null}
    */
-  private String nextCursor(int read, int size, String fingerprint) {
-    return read == size && position != null ? cursors.encode(position, fingerprint) : null;
+  private String nextCursor(int read, int size, String fingerprint, LastRow last) {
+    return read == size && last.position() != null
+        ? cursors.encode(last.position(), fingerprint)
+        : null;
   }
 }

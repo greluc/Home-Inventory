@@ -69,6 +69,8 @@ public class LocationCategoryQueries implements LocationCategories {
     } else {
       // Throws when the cursor was tampered with or belongs to another listing.
       CursorCodec.Position after = cursors.decode(cursor, CURSOR_FINGERPRINT);
+      // Wrapped, not an Instant: the driver cannot infer a SQL type for one.
+      java.sql.Timestamp at = java.sql.Timestamp.from(after.createdAt());
       rows =
           jdbc.sql(
                   """
@@ -79,7 +81,7 @@ public class LocationCategoryQueries implements LocationCategories {
                   order by created_at asc, id asc
                   limit ?
                   """)
-              .params(tenantId, after.createdAt(), after.createdAt(), after.id(), size)
+              .params(tenantId, at, at, after.id(), size)
               .query(Row.class)
               .list();
     }

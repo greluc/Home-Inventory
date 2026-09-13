@@ -17,6 +17,7 @@ import de.greluc.homeinv.catalog.api.TypeVersionPublished;
 import de.greluc.homeinv.catalog.application.JsonSchemaGenerator;
 import de.greluc.homeinv.catalog.domain.FieldTightening;
 import de.greluc.homeinv.platform.CursorCodec;
+import de.greluc.homeinv.platform.LastRow;
 import de.greluc.homeinv.platform.TenantContext;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -77,15 +78,10 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private static final String CATEGORY_CURSOR = "catalog-location-categories";
   private static final String VALUE_LIST_CURSOR = "catalog-value-lists";
 
-  /**
-   * Where the last row read sat, for the cursor of the next page.
-   *
-   * <p>Written by the row mappers below rather than read back off the view, because the views
-   * deliberately carry no timestamps: a creation time is not something a client of the type editor
-   * needs, and adding one to every record so this class could read it back would be the tail wagging
-   * the dog.
-   */
-  private CursorCodec.Position position;
+  // Where the last row of a page sat is carried in a `LastRow` created per call
+  // and handed to the mapper, not in a field: the mappers write it because the
+  // views deliberately carry no timestamps, and a field on a singleton adapter
+  // would be shared by every request in flight.
 
   // -------------------------------------------------------------------------
   // Item types
@@ -147,6 +143,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   @Transactional(readOnly = true)
   public ItemTypePage itemTypes(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
+    LastRow last = new LastRow();
     List<ItemTypeView> rows =
         page(
             ITEM_TYPE_SELECT + ITEM_TYPE_PAGE,
@@ -154,8 +151,9 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             cursor,
             size,
             ITEM_TYPE_CURSOR,
-            (rs, rowNum) -> itemTypeOf(rs));
-    return new ItemTypePage(rows, nextCursor(rows.size(), size, ITEM_TYPE_CURSOR, lastPosition()));
+            (rs, rowNum) -> itemTypeOf(rs, last));
+    return new ItemTypePage(
+        rows, nextCursor(rows.size(), size, ITEM_TYPE_CURSOR, last.position()));
   }
 
   @Override
@@ -241,6 +239,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   @Transactional(readOnly = true)
   public CategoryPage categories(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
+    LastRow last = new LastRow();
     List<CategoryView> rows =
         page(
             CATEGORY_SELECT + CATEGORY_PAGE,
@@ -248,8 +247,9 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             cursor,
             size,
             CATEGORY_CURSOR,
-            (rs, rowNum) -> categoryOf(rs));
-    return new CategoryPage(rows, nextCursor(rows.size(), size, CATEGORY_CURSOR, lastPosition()));
+            (rs, rowNum) -> categoryOf(rs, last));
+    return new CategoryPage(
+        rows, nextCursor(rows.size(), size, CATEGORY_CURSOR, last.position()));
   }
 
   @Override
@@ -758,6 +758,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   @Transactional(readOnly = true)
   public ValueListPage valueLists(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
+    LastRow last = new LastRow();
     List<UUID> ids =
         page(
             VALUE_LIST_PAGE,
@@ -766,12 +767,13 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             size,
             VALUE_LIST_CURSOR,
             (rs, rowNum) -> {
-              position = new CursorCodec.Position(
+              last.at(
                   rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
               return rs.getObject("id", UUID.class);
             });
     List<ValueListView> rows = ids.stream().map(this::valueList).toList();
-    return new ValueListPage(rows, nextCursor(rows.size(), size, VALUE_LIST_CURSOR, position));
+    return new ValueListPage(
+        rows, nextCursor(rows.size(), size, VALUE_LIST_CURSOR, last.position()));
   }
 
   @Override
@@ -988,16 +990,15 @@ public class TypeAdministrationAdapter implements TypeAdministration {
       String fingerprint,
       org.springframework.jdbc.core.RowMapper<T> mapper) {
     UUID tenantId = TenantContext.require();
-    position = null;
     if (cursor == null || cursor.isBlank()) {
       return jdbc.sql(first).params(tenantId, size).query(mapper).list();
     }
     // Throws when the cursor was tampered with or belongs to another listing.
     CursorCodec.Position from = cursors.decode(cursor, fingerprint);
-    return jdbc.sql(after)
-        .params(tenantId, from.createdAt(), from.createdAt(), from.id(), size)
-        .query(mapper)
-        .list();
+    // Wrapped, not passed as an Instant: the driver cannot infer a SQL type for
+    // one and answers "bad SQL grammar" for a statement that is perfectly good.
+    java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
+    return jdbc.sql(after).params(tenantId, at, at, from.id(), size).query(mapper).list();
   }
 
   /**
@@ -1016,15 +1017,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   }
 
   /**
-   * Where the last row of the page just read sat.
-   *
-   * @return the position, or {@code null} when the page was empty
-   */
-  private CursorCodec.Position lastPosition() {
-    return position;
-  }
-
-  /**
    * One item type, or nothing when this tenant has no such type.
    *
    * @param typeId the type
@@ -1033,7 +1025,8 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private Optional<ItemTypeView> loadItemType(UUID typeId) {
     return jdbc.sql(ITEM_TYPE_SELECT + ITEM_TYPE_BY_ID)
         .params(TenantContext.require(), typeId)
-        .query((rs, rowNum) -> itemTypeOf(rs))
+        // A single row: the holder is a formality, because nothing pages one.
+        .query((rs, rowNum) -> itemTypeOf(rs, new LastRow()))
         .optional();
   }
 
@@ -1046,7 +1039,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private Optional<CategoryView> loadCategory(UUID categoryId) {
     return jdbc.sql(CATEGORY_SELECT + CATEGORY_BY_ID)
         .params(TenantContext.require(), categoryId)
-        .query((rs, rowNum) -> categoryOf(rs))
+        .query((rs, rowNum) -> categoryOf(rs, new LastRow()))
         .optional();
   }
 
@@ -1057,10 +1050,9 @@ public class TypeAdministrationAdapter implements TypeAdministration {
    * @return the view
    * @throws java.sql.SQLException when the row cannot be read
    */
-  private ItemTypeView itemTypeOf(java.sql.ResultSet rs) throws java.sql.SQLException {
-    position =
-        new CursorCodec.Position(
-            rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
+  private ItemTypeView itemTypeOf(java.sql.ResultSet rs, LastRow last)
+      throws java.sql.SQLException {
+    last.at(rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
     return new ItemTypeView(
         rs.getObject("id", UUID.class),
         rs.getString("key"),
@@ -1080,10 +1072,9 @@ public class TypeAdministrationAdapter implements TypeAdministration {
    * @return the view
    * @throws java.sql.SQLException when the row cannot be read
    */
-  private CategoryView categoryOf(java.sql.ResultSet rs) throws java.sql.SQLException {
-    position =
-        new CursorCodec.Position(
-            rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
+  private CategoryView categoryOf(java.sql.ResultSet rs, LastRow last)
+      throws java.sql.SQLException {
+    last.at(rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
     return new CategoryView(
         rs.getObject("id", UUID.class),
         rs.getString("key"),

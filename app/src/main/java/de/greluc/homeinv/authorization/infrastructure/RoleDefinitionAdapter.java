@@ -140,9 +140,9 @@ public class RoleDefinitionAdapter implements RoleAdministration {
       jdbc.sql(DEFINITIONS).params(tenantId, size).query(collect);
     } else {
       CursorCodec.Position from = cursors.decode(cursor, CURSOR);
-      jdbc.sql(DEFINITIONS_AFTER)
-          .params(tenantId, from.createdAt(), from.createdAt(), from.id(), size)
-          .query(collect);
+      // Wrapped, not an Instant: the driver cannot infer a SQL type for one.
+      java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
+      jdbc.sql(DEFINITIONS_AFTER).params(tenantId, at, at, from.id(), size).query(collect);
     }
 
     String next =

@@ -6,6 +6,7 @@ package de.greluc.homeinv.inventory.infrastructure;
 
 import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.platform.CursorCodec;
+import de.greluc.homeinv.platform.LastRow;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import java.sql.ResultSet;
@@ -60,7 +61,10 @@ public class ItemRelationAdapter implements ItemRelations {
         union all
         select id, source_id, target_id, relation_type, true as inbound, created_at
         from inventory.item_relation where tenant_id = ? and target_id = ?
-      ) both
+      -- `either_end` and not `both`: `both` is a reserved word in PostgreSQL
+      -- (`trim(both ...)`), so the alias was a syntax error -- in the statement
+      -- that only the SECOND page reaches, which is why it stood for months.
+      ) either_end
       where created_at > ? or (created_at = ? and id > ?)
       order by created_at, id
       limit ?
@@ -70,8 +74,8 @@ public class ItemRelationAdapter implements ItemRelations {
   private final CursorCodec cursors;
   private final ItemRepository items;
 
-  /** Where the last row read sat, for the next page's cursor. */
-  private CursorCodec.Position position;
+  // Where the last row of a page sat lives in a `LastRow` per call: a field here
+  // would be shared by every request in flight, this being a singleton.
 
   @Override
   @Transactional
@@ -106,7 +110,8 @@ public class ItemRelationAdapter implements ItemRelations {
             where tenant_id = ? and source_id = ? and target_id = ? and relation_type = ?
             """)
         .params(tenantId, sourceId, targetId, type.name())
-        .query(this::relationOf)
+        // A single row: the holder is a formality, because nothing pages one.
+        .query((rs, rowNum) -> relationOf(rs, new LastRow()))
         .single();
   }
 
@@ -124,26 +129,30 @@ public class ItemRelationAdapter implements ItemRelations {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
     items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
-    position = null;
+    LastRow last = new LastRow();
 
     List<RelationView> rows;
     if (cursor == null || cursor.isBlank()) {
       rows =
           jdbc.sql(RELATIONS)
               .params(tenantId, itemId, tenantId, itemId, size)
-              .query(this::relationOf)
+              .query((rs, rowNum) -> relationOf(rs, last))
               .list();
     } else {
       CursorCodec.Position from = cursors.decode(cursor, CURSOR);
+      // Wrapped, not an Instant: the driver cannot infer a SQL type for one, and
+      // the statement is only reached on the second page.
+      java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
       rows =
           jdbc.sql(RELATIONS_AFTER)
-              .params(
-                  tenantId, itemId, tenantId, itemId, from.createdAt(), from.createdAt(), from.id(), size)
-              .query(this::relationOf)
+              .params(tenantId, itemId, tenantId, itemId, at, at, from.id(), size)
+              .query((rs, rowNum) -> relationOf(rs, last))
               .list();
     }
     String next =
-        rows.size() == size && position != null ? cursors.encode(position, CURSOR) : null;
+        rows.size() == size && last.position() != null
+            ? cursors.encode(last.position(), CURSOR)
+            : null;
     return new RelationPage(rows, next);
   }
 
@@ -151,14 +160,12 @@ public class ItemRelationAdapter implements ItemRelations {
    * Maps one row.
    *
    * @param rs the row
-   * @param rowNum which row, as the mapper contract takes it
+   * @param last where to record this row's position, for the next page's cursor
    * @return the relation
    * @throws SQLException when the row cannot be read
    */
-  private RelationView relationOf(ResultSet rs, int rowNum) throws SQLException {
-    position =
-        new CursorCodec.Position(
-            rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
+  private RelationView relationOf(ResultSet rs, LastRow last) throws SQLException {
+    last.at(rs.getTimestamp("created_at").toInstant(), rs.getObject("id", UUID.class));
     return new RelationView(
         rs.getObject("id", UUID.class),
         rs.getObject("source_id", UUID.class),

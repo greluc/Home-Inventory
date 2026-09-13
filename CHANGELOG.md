@@ -41,6 +41,14 @@ commit".
 
 ### Fixed
 
+- **Asking for the second page of a list failed.** Every listing that is served
+  straight from SQL — item types, location categories, value lists, tags, tag
+  groups, a thing's tags, tenant-owned roles, an item's relations — answered an
+  error as soon as a client followed the cursor it had just been given. Nothing
+  showed it while the lists were short enough to fit on one page. All of them
+  page to the end now, and a test walks each one past its first page so the next
+  listing cannot arrive broken the same way.
+
 - **The application could serve a blank page, with only a console message to
   say why.** Its Content-Security-Policy names the hash of the one inline script
   — the theme bootstrap that unhides the page — and that hash was taken from the
@@ -331,7 +339,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 23 types in the shared
+- **The shared kernel is measured.** `platform` holds 24 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).
