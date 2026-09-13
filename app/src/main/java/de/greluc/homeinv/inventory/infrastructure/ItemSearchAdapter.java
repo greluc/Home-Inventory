@@ -6,8 +6,10 @@ package de.greluc.homeinv.inventory.infrastructure;
 
 import de.greluc.homeinv.inventory.api.ItemSearchQuery;
 import de.greluc.homeinv.inventory.api.ItemView;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.TenantContext;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -87,7 +89,11 @@ public class ItemSearchAdapter implements ItemSearchQuery {
         """
         select id, name, description, kind, location_id, quantity, quantity_unit,
                attributes::text as attributes, item_type_version_id, notes, minimum_stock,
-               lifecycle_state, created_at, updated_at, version
+               lifecycle_state, created_at, updated_at, version,
+               purchase_amount, purchase_currency, purchased_on, purchase_source,
+               warranty_until, lifetime_warranty,
+               replacement_amount, replacement_currency, replacement_as_of, replacement_source,
+               current_amount, current_currency, current_as_of
         from inventory.item
         where tenant_id = ?
           and deleted_at is null
@@ -153,6 +159,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
                         // at compile time.
                         rs.getObject("created_at", OffsetDateTime.class).toInstant(),
                         rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
+                        valuationOf(rs),
                         rs.getLong("version")))
             .list();
 
@@ -166,5 +173,58 @@ public class ItemSearchAdapter implements ItemSearchQuery {
             : Optional.empty();
 
     return new Page(List.copyOf(page), last);
+  }
+  /**
+   * The three figures of REQ-LIFE-001/002/014, read off the row.
+   *
+   * <p>A listing shows them, so it reads them: an item with a purchase price whose list entry had
+   * none would be a list nobody could total from.
+   *
+   * @param rs the row
+   * @return the valuation
+   * @throws SQLException when the row cannot be read
+   */
+  private static Valuation valuationOf(java.sql.ResultSet rs) throws SQLException {
+    return new Valuation(
+        money(rs.getBigDecimal("purchase_amount"), rs.getString("purchase_currency")),
+        date(rs, "purchased_on"),
+        rs.getString("purchase_source"),
+        date(rs, "warranty_until"),
+        rs.getBoolean("lifetime_warranty"),
+        money(rs.getBigDecimal("replacement_amount"), rs.getString("replacement_currency")),
+        date(rs, "replacement_as_of"),
+        rs.getString("replacement_source") == null
+            ? null
+            : Valuation.Provenance.valueOf(rs.getString("replacement_source")),
+        money(rs.getBigDecimal("current_amount"), rs.getString("current_currency")),
+        date(rs, "current_as_of"));
+  }
+
+  /**
+   * An amount and its code as one value.
+   *
+   * @param amount the amount column
+   * @param currency the currency column
+   * @return the money, or {@code null} when the row carries neither
+   */
+  private static de.greluc.homeinv.platform.Money money(
+      java.math.BigDecimal amount, String currency) {
+    return amount == null || currency == null
+        ? null
+        : new de.greluc.homeinv.platform.Money(amount, java.util.Currency.getInstance(currency));
+  }
+
+  /**
+   * A {@code date} column as a {@link java.time.LocalDate}.
+   *
+   * @param rs the row
+   * @param column which column
+   * @return the date, or {@code null}
+   * @throws SQLException when the row cannot be read
+   */
+  private static java.time.LocalDate date(java.sql.ResultSet rs, String column)
+      throws SQLException {
+    java.sql.Date value = rs.getDate(column);
+    return value == null ? null : value.toLocalDate();
   }
 }

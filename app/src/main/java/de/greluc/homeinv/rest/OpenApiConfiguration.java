@@ -45,6 +45,33 @@ import org.springframework.web.bind.annotation.RequestBody;
 @Configuration
 public class OpenApiConfiguration {
 
+  static {
+    // What springdoc would infer from `Money` is the record's shape: an amount as
+    // a JSON number and a currency as an object with six properties. What the
+    // application actually writes is `{"amount":"49.90","currency":"EUR"}`,
+    // because `MoneyModule` says so and REQ-NFR-070 requires the string. A
+    // document that described the inferred shape would be a contract that lies
+    // about every price in the system.
+    //
+    // Replaced here rather than annotated on `Money` itself: the value type lives
+    // in the shared kernel, and a swagger annotation there would put an HTTP
+    // concern into the one package that depends on no framework of any kind.
+    org.springdoc.core.utils.SpringDocUtils.getConfig()
+        .replaceWithClass(de.greluc.homeinv.platform.Money.class, MoneyJson.class);
+  }
+
+  /**
+   * The JSON shape of an amount of money (REQ-NFR-070).
+   *
+   * <p>Exists for the document alone. Nothing constructs one: {@code MoneyModule} does the
+   * conversion, and this record is what springdoc is told to describe in its place.
+   *
+   * @param amount the amount as a decimal string — never a JSON number, which is a {@code double}
+   *     by the time it has been through a browser
+   * @param currency the ISO 4217 code, three letters
+   */
+  public record MoneyJson(String amount, String currency) {}
+
   /** The URI of the licence the core is published under, as SPDX names it. */
   private static final String LICENCE_URL = "https://www.gnu.org/licenses/agpl-3.0.html";
 

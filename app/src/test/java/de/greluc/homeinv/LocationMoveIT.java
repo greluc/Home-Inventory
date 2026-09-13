@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationMoved;
 import de.greluc.homeinv.locations.api.LocationService;
@@ -371,7 +372,7 @@ class LocationMoveIT extends AbstractIntegrationTest {
                 null,
                 "{}",
                 null,
-                null), Optional.empty(),
+                null, Valuation.NONE), Optional.empty(),
             currentActor)
         .item()
         .id();

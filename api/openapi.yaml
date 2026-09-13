@@ -417,6 +417,8 @@ components:
           maxLength: 30
           minLength: 0
           type: string
+        valuation:
+          $ref: '#/components/schemas/ValuationRequest'
       required:
       - kind
       - name
@@ -993,6 +995,8 @@ components:
           description: when it last changed
           format: date-time
           type: string
+        valuation:
+          $ref: '#/components/schemas/Valuation'
         version:
           description: |-
             the optimistic lock, which a client echoes back on update to detect a concurrent
@@ -1231,6 +1235,22 @@ components:
         userId:
           description: the account
           format: uuid
+          type: string
+      type: object
+    MoneyJson:
+      description: |-
+        The JSON shape of an amount of money (REQ-NFR-070).
+
+        Exists for the document alone. Nothing constructs one: `MoneyModule` does the
+        conversion, and this record is what springdoc is told to describe in its place.
+      properties:
+        amount:
+          description: |-
+            the amount as a decimal string — never a JSON number, which is a `double`
+            by the time it has been through a browser
+          type: string
+        currency:
+          description: the ISO 4217 code, three letters
           type: string
       type: object
     MoveLocationRequest:
@@ -2001,6 +2021,8 @@ components:
           maxLength: 30
           minLength: 0
           type: string
+        valuation:
+          $ref: '#/components/schemas/ValuationRequest'
       required:
       - name
       type: object
@@ -2011,6 +2033,121 @@ components:
           description: an icon name for clients, or omitted to remove the one it has
           maxLength: 64
           minLength: 0
+          type: string
+      type: object
+    Valuation:
+      description: |-
+        What an item cost, what covers it, and what it would cost to replace (REQ-LIFE-001/002/014).
+
+        ## Three figures, never derived from one another
+
+        `REQ-LIFE-014` says it about the replacement value in as many words — "independent of
+        the current value and never derived from it" — and it holds for all three. A camera bought for
+        900 may be worth 200 second-hand and cost 1,100 to buy new today; an insurer asks for the third
+        number, a seller for the second and the tax office for the first. Each carries its own as-of
+        date, because a valuation without one is a number of unknown age.
+
+        Columns on the item rather than fields of a type version, decided with the owner on
+        2026-09-13: `REQ-LIFE-015` asks for totals per location, type and tag across *every*
+        type, and an attribute exists only where its type happened to declare it, under whatever name
+        that type chose.
+      properties:
+        currentValue:
+          $ref: '#/components/schemas/MoneyJson'
+          description: what it is worth now, or `null` (REQ-LIFE-009)
+        currentValueAsOf:
+          description: the day that figure was true, or `null`
+          format: date
+          type: string
+        lifetimeWarranty:
+          description: |-
+            whether it is covered for life, in which case `warrantyUntil` is
+            `null`. A flag rather than a date far in the future, because "2099-12-31" is a date
+            somebody would eventually have to explain
+          type: boolean
+        purchase:
+          $ref: '#/components/schemas/MoneyJson'
+          description: what it cost, or `null`
+        purchaseSource:
+          description: |-
+            where from — a shop, a person, a listing — or `null`. Free text: an
+            invoice is an attachment like any other and needs no field of its own
+          type: string
+        purchasedOn:
+          description: when it was bought, or `null`
+          format: date
+          type: string
+        replacement:
+          $ref: '#/components/schemas/MoneyJson'
+          description: what it would cost to replace, or `null`
+        replacementAsOf:
+          description: the day that figure was true, or `null`
+          format: date
+          type: string
+        replacementSource:
+          description: |-
+            who said so — {@link Provenance#MANUAL Provenance#MANUAL} or {@link Provenance#PLUGIN Provenance#PLUGIN} —
+            or `null`
+          enum:
+          - MANUAL
+          - PLUGIN
+          type: string
+        warrantyUntil:
+          description: when the warranty ends, or `null`
+          format: date
+          type: string
+      type: object
+    ValuationRequest:
+      description: |-
+        What an item cost, what covers it and what replacing it would cost (REQ-LIFE-001/002/014).
+
+        Replaced whole rather than merged, like the attributes and for the same reason: a figure
+        left out is one deliberately cleared, and under a merge "remove the purchase price" would have
+        no spelling at all.
+
+        Each amount is `{"amount":"49.90","currency":"EUR"`} — a string, never a JSON number,
+        because a number is a `double` by the time it has been through a browser.
+      properties:
+        currentValue:
+          $ref: '#/components/schemas/MoneyJson'
+          description: what it is worth now, or omitted
+        currentValueAsOf:
+          description: the day that figure was true
+          format: date
+          type: string
+        lifetimeWarranty:
+          description: |-
+            whether it is covered for life, in which case `warrantyUntil`
+            must be omitted: both is two answers to one question and is refused
+          type: boolean
+        purchase:
+          $ref: '#/components/schemas/MoneyJson'
+          description: what it cost, or omitted
+        purchaseSource:
+          description: where from — a shop, a person, a listing
+          maxLength: 300
+          minLength: 0
+          type: string
+        purchasedOn:
+          description: when it was bought, or omitted
+          format: date
+          type: string
+        replacement:
+          $ref: '#/components/schemas/MoneyJson'
+          description: what replacing it would cost, or omitted
+        replacementAsOf:
+          description: the day that figure was true
+          format: date
+          type: string
+        replacementSource:
+          description: '`MANUAL` or `PLUGIN`'
+          enum:
+          - MANUAL
+          - PLUGIN
+          type: string
+        warrantyUntil:
+          description: when the warranty ends, or omitted
+          format: date
           type: string
       type: object
     ValueListEntryView:

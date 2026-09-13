@@ -195,8 +195,8 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-LIFE-001 | Purchase data: price, currency, date, source, invoice attachment. | M | 1 | The fields exist and are reportable |
-| REQ-LIFE-002 | Warranty: expiry date or lifetime warranty, proof attachment. | M | 1 | Expiry raises a reminder |
+| REQ-LIFE-001 | Purchase data: price, currency, date, source, invoice attachment. **Columns on the item**, not fields of a type version (decided 2026-09-13): a report across every type cannot read a field that exists only where a type happened to declare it. The invoice is an attachment like any other and needs no field of its own. | M | 1 | `ItemValuationIT` records and reads them back; the amount and its currency are one value that a database check refuses to separate |
+| REQ-LIFE-002 | Warranty: expiry date **or** lifetime warranty — a flag rather than a date far in the future, which is a date somebody would eventually have to explain — plus a proof attachment. | M | 1 | `ItemValuationIT` refuses a warranty that both ends and lasts for life, in the value type and in a database check. *The reminder is `REQ-NOTI-003`'s and arrives with the notification rules.* |
 | REQ-LIFE-003 | A **maintenance log** per item with date, kind, cost, note, attachment. | S | 1 | Entries in chronological order, not retroactively editable |
 | REQ-LIFE-004 | Maintenance intervals raise reminders. | S | 1 | The interval is settable and the reminder fires |
 | REQ-LIFE-005 | **Lending**: borrower (internal or free text), handed-out date, due date, return. | S | 1 | A lent item is recognisable as such and not deletable |
@@ -208,7 +208,7 @@ Priority: `M` must · `S` should · `K` could — Stage: 0 MVP · 1 core ·
 | REQ-LIFE-011 | The stocktake report proposes corrections; nothing is applied automatically. | M | 2 | Every correction is individually confirmable |
 | REQ-LIFE-012 | **Moving mode**: create and label a box, scan items into it, seal it, move it as a whole. | M | 2 | The full flow as an acceptance test |
 | REQ-LIFE-013 | Expiry dates (warranty, licence, best-before) are collected in one overview. | S | 1 | The overview is sorted by due date |
-| REQ-LIFE-014 | **Replacement value** as a separate field per item, with an as-of date and provenance (maintained manually or determined by a plugin). It is **independent** of the current value and never derived from it. | M | 1 | Both values are separately recordable and separately reportable |
+| REQ-LIFE-014 | **Replacement value** as a separate column per item, with an as-of date and provenance (maintained manually or determined by a plugin). It is **independent** of the current value and never derived from it. | M | 1 | `ItemValuationIT` records a purchase price, a replacement value and a current value that disagree with one another on purpose — 899, 1100 and 200 — and reads all three back unchanged. Nothing in the schema or the code derives one from another |
 | REQ-LIFE-015 | Reports state purchase price, current value and replacement value **separately and unambiguously labelled** — per location, type and tag. The three figures are never mixed. | M | 1 | Totals agree per figure with the sum of the individual values; labelling is unambiguous |
 | REQ-LIFE-016 | An **insurance report** is producible: replacement value per room and in total, with the primary photo, the purchase receipt and the as-of date per item, as a PDF and as a table. | S | 1 | The report is producible for a location subtree and is complete |
 | REQ-LIFE-017 | Every monetary total is computed and displayed **per currency**. Where a set spans several currencies, the report shows one line per currency and states that no conversion took place — a mixed-currency total is never produced, not even as an approximation. | M | 1 | A tenant with EUR and USD items gets two lines and an explicit note, never one number |

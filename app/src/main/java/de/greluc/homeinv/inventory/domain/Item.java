@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -138,6 +139,58 @@ public class Item {
   @Column(name = "quantity_unit")
   private String quantityUnit;
 
+  /**
+   * What it cost, what covers it and what replacing it would cost (REQ-LIFE-001/002/014).
+   *
+   * <p>Ten columns and no embedded type, because the three figures are independent: a row may
+   * carry a purchase price and nothing else, or a replacement value written by a plugin and no
+   * purchase at all. An {@code @Embedded} would make them one thing that is present or absent
+   * together, which is the one shape they never have.
+   *
+   * <p>Held as {@link BigDecimal} and a three-letter code rather than as {@code Money}: the value
+   * type lives in {@code platform} and knows nothing of JPA, and a converter per figure would be
+   * three converters to keep in step. {@link #valuation()} assembles them on the way out, which is
+   * the one place that has to be right.
+   */
+  @Column(name = "purchase_amount")
+  private BigDecimal purchaseAmount;
+
+  @Column(name = "purchase_currency")
+  private String purchaseCurrency;
+
+  @Column(name = "purchased_on")
+  private LocalDate purchasedOn;
+
+  @Column(name = "purchase_source")
+  private String purchaseSource;
+
+  @Column(name = "warranty_until")
+  private LocalDate warrantyUntil;
+
+  @Column(name = "lifetime_warranty", nullable = false)
+  private boolean lifetimeWarranty;
+
+  @Column(name = "replacement_amount")
+  private BigDecimal replacementAmount;
+
+  @Column(name = "replacement_currency")
+  private String replacementCurrency;
+
+  @Column(name = "replacement_as_of")
+  private LocalDate replacementAsOf;
+
+  @Column(name = "replacement_source")
+  private String replacementSource;
+
+  @Column(name = "current_amount")
+  private BigDecimal currentAmount;
+
+  @Column(name = "current_currency")
+  private String currentCurrency;
+
+  @Column(name = "current_as_of")
+  private LocalDate currentAsOf;
+
   /** Where the item is in its life. Stage 0 writes {@code ACTIVE} only. */
   @Column(name = "lifecycle_state", nullable = false)
   private String lifecycleState;
@@ -188,8 +241,10 @@ public class Item {
       String attributes,
       String notes,
       BigDecimal minimumStock,
+      de.greluc.homeinv.inventory.api.Valuation valuation,
       UUID actor,
       Instant now) {
+    applyValuation(valuation);
     this.id = id;
     this.tenantId = tenantId;
     this.itemTypeVersionId = itemTypeVersionId;
@@ -246,6 +301,7 @@ public class Item {
       String attributes,
       String notes,
       BigDecimal minimumStock,
+      de.greluc.homeinv.inventory.api.Valuation valuation,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -270,6 +326,7 @@ public class Item {
         attributes,
         notes,
         minimumStock,
+        valuation,
         actor,
         now);
   }
@@ -302,6 +359,7 @@ public class Item {
       String attributes,
       String notes,
       BigDecimal minimumStock,
+      de.greluc.homeinv.inventory.api.Valuation valuation,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -321,8 +379,85 @@ public class Item {
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.notes = Notes.sanitise(notes);
     this.minimumStock = minimumStock;
+    applyValuation(valuation);
     this.updatedBy = actor;
     this.updatedAt = now;
+  }
+
+  /**
+   * Records what the item cost, what covers it and what replacing it would cost.
+   *
+   * <p>Whole, never in part: an update sends the three figures it means the item to have, and one
+   * left out is one deliberately cleared. That is the same rule the attributes follow, and the
+   * alternative — merging — would make "remove the purchase price" unsayable.
+   *
+   * @param valuation the figures, or {@link de.greluc.homeinv.inventory.api.Valuation#NONE}
+   */
+  private void applyValuation(de.greluc.homeinv.inventory.api.Valuation valuation) {
+    de.greluc.homeinv.inventory.api.Valuation values =
+        valuation == null ? de.greluc.homeinv.inventory.api.Valuation.NONE : valuation;
+
+    this.purchaseAmount = values.purchase() == null ? null : values.purchase().amount();
+    this.purchaseCurrency = values.purchase() == null ? null : values.purchase().currencyCode();
+    this.purchasedOn = values.purchasedOn();
+    this.purchaseSource = values.purchaseSource();
+
+    this.warrantyUntil = values.warrantyUntil();
+    this.lifetimeWarranty = values.lifetimeWarranty();
+
+    this.replacementAmount = values.replacement() == null ? null : values.replacement().amount();
+    this.replacementCurrency =
+        values.replacement() == null ? null : values.replacement().currencyCode();
+    this.replacementAsOf = values.replacementAsOf();
+    this.replacementSource =
+        values.replacementSource() == null ? null : values.replacementSource().name();
+
+    this.currentAmount = values.currentValue() == null ? null : values.currentValue().amount();
+    this.currentCurrency =
+        values.currentValue() == null ? null : values.currentValue().currencyCode();
+    this.currentAsOf = values.currentValueAsOf();
+  }
+
+  /**
+   * The three figures as one value (REQ-LIFE-001/002/014).
+   *
+   * <p>Assembled here rather than mapped by JPA, which is the one place that has to be right: the
+   * columns are ten and the value type is one, and a converter per figure would be three
+   * converters to keep in step.
+   *
+   * @return the valuation, {@link de.greluc.homeinv.inventory.api.Valuation#NONE} when nothing was
+   *     ever recorded
+   */
+  public de.greluc.homeinv.inventory.api.Valuation valuation() {
+    return new de.greluc.homeinv.inventory.api.Valuation(
+        money(purchaseAmount, purchaseCurrency),
+        purchasedOn,
+        purchaseSource,
+        warrantyUntil,
+        lifetimeWarranty,
+        money(replacementAmount, replacementCurrency),
+        replacementAsOf,
+        replacementSource == null
+            ? null
+            : de.greluc.homeinv.inventory.api.Valuation.Provenance.valueOf(replacementSource),
+        money(currentAmount, currentCurrency),
+        currentAsOf);
+  }
+
+  /**
+   * An amount and its code as one value, or nothing when neither is there.
+   *
+   * @param amount the amount column
+   * @param currency the currency column
+   * @return the money, or {@code null}
+   */
+  private static de.greluc.homeinv.platform.Money money(BigDecimal amount, String currency) {
+    // A database CHECK refuses one without the other, so a row with exactly one
+    // of them cannot exist -- and if one ever did, this would be the place that
+    // quietly invented a currency for it.
+    return amount == null || currency == null
+        ? null
+        : new de.greluc.homeinv.platform.Money(amount, java.util.Currency.getInstance(currency));
   }
 
   /**

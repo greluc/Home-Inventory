@@ -41,6 +41,12 @@
 #     off free text, which full-text search covers anyway.
 #   * `unit` belongs to `quantity` and `money` carries its currency per value, so
 #     no template states a currency.
+#
+# WHAT IS DELIBERATELY NOT HERE: `purchasePrice` and `warrantyUntil`. Both were in
+# this file until 2026-09-13 and both are now COLUMNS on the item
+# (REQ-LIFE-001/002), because a report across every type cannot read a field that
+# exists only where a type happened to declare it. The same fact in two places is
+# two places that disagree, so the template no longer states it.
 
 schemaVersion: 1
 updated: 2026-09-13
@@ -90,10 +96,6 @@ templates:
         labels: { en: Binding, de: Einband }
         dataType: text
         facetable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
-        sortable: true
       - key: summary
         labels: { en: Summary, de: Inhalt }
         dataType: multiline
@@ -138,14 +140,6 @@ templates:
         labels: { en: Purchased on, de: Gekauft am }
         dataType: date
         sortable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
-        sortable: true
-      - key: warrantyUntil
-        labels: { en: Warranty until, de: Garantie bis }
-        dataType: date
-        sortable: true
       - key: manual
         labels: { en: Manual, de: Anleitung }
         dataType: url
@@ -184,14 +178,6 @@ templates:
         sortable: true
       - key: purchasedOn
         labels: { en: Purchased on, de: Gekauft am }
-        dataType: date
-        sortable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
-        sortable: true
-      - key: warrantyUntil
-        labels: { en: Warranty until, de: Garantie bis }
         dataType: date
         sortable: true
       - key: serviceIntervalMonths
@@ -243,10 +229,6 @@ templates:
         labels: { en: Purchased on, de: Gekauft am }
         dataType: date
         sortable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
-        sortable: true
       - key: assemblyRequired
         labels: { en: Needs assembling, de: Aufbau nötig }
         dataType: boolean
@@ -287,10 +269,6 @@ templates:
       - key: purchasedOn
         labels: { en: Purchased on, de: Gekauft am }
         dataType: date
-        sortable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
         sortable: true
       - key: condition
         labels: { en: Condition, de: Zustand }
@@ -345,10 +323,6 @@ templates:
       - key: purchasedOn
         labels: { en: Purchased on, de: Gekauft am }
         dataType: date
-        sortable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
         sortable: true
       - key: renewal
         labels: { en: Renews automatically, de: Verlängert sich automatisch }
@@ -440,10 +414,6 @@ templates:
         labels: { en: Country of origin, de: Herkunftsland }
         dataType: text
         facetable: true
-      - key: purchasePrice
-        labels: { en: Purchase price, de: Kaufpreis }
-        dataType: money
-        sortable: true
       - key: notesOnUse
         labels: { en: Notes on use, de: Hinweise zur Verwendung }
         dataType: multiline

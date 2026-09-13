@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.TenantContext;
@@ -157,7 +158,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
         () ->
             items.create(
                 new ItemService.CreateItemCommand(
-                    null, null, name, description, ItemKind.DIGITAL, null, null, null, null, null, null), Optional.empty(),
+                    null, null, name, description, ItemKind.DIGITAL, null, null, null, null, null, null, Valuation.NONE), Optional.empty(),
                 tenant.userId()));
   }
 

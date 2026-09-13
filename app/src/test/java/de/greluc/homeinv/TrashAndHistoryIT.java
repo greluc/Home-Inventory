@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
@@ -107,7 +108,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.update(
               id,
               new ItemService.UpdateItemCommand(
-                  "Kettle, electric", "2 litres", null, BigDecimal.ONE, null, null, null, null), OptionalLong.empty(),
+                  "Kettle, electric", "2 litres", null, BigDecimal.ONE, null, null, null, null, Valuation.NONE), OptionalLong.empty(),
               tenant.userId());
           items.delete(id, OptionalLong.empty(), tenant.userId());
           items.restore(id, OptionalLong.empty(), tenant.userId());
@@ -138,7 +139,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.update(
               id,
               new ItemService.UpdateItemCommand(
-                  "Changed name", null, null, BigDecimal.ONE, null, null, null, null), OptionalLong.empty(),
+                  "Changed name", null, null, BigDecimal.ONE, null, null, null, null, Valuation.NONE), OptionalLong.empty(),
               tenant.userId());
           assertThat(items.get(id).name()).isEqualTo("Changed name");
 
@@ -172,7 +173,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
   private UUID anItem(Tenant tenant, String name) {
     return items.create(
             new ItemService.CreateItemCommand(
-                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null), Optional.empty(),
+                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null, Valuation.NONE), Optional.empty(),
             tenant.userId())
         .item()
         .id();

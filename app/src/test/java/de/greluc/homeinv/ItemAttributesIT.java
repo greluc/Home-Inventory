@@ -16,6 +16,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.application.TenantProvisioningService;
@@ -78,7 +79,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                           {"isbn":"9780134757599",
                            "published":2018,
                            "purchasePrice":{"amount":"49.90","currency":"EUR"}}
-                          """, null, null), Optional.empty(),
+                          """, null, null, Valuation.NONE), Optional.empty(),
                       tenant.userId())
                   .item();
           assertThat(stored.attributes()).contains("9780134757599");
@@ -96,7 +97,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                               null,
                               BigDecimal.ONE,
                               null,
-                              "{\"published\":\"not a year\"}", null, null), Optional.empty(),
+                              "{\"published\":\"not a year\"}", null, null, Valuation.NONE), Optional.empty(),
                           tenant.userId()))
               .isInstanceOfSatisfying(
                   InvalidAttributesException.class,
@@ -118,7 +119,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                               null,
                               BigDecimal.ONE,
                               null,
-                              "{\"invented\":\"x\"}", null, null), Optional.empty(),
+                              "{\"invented\":\"x\"}", null, null, Valuation.NONE), Optional.empty(),
                           tenant.userId()))
               .isInstanceOf(InvalidAttributesException.class);
         });
@@ -148,7 +149,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                            "published":2003,
                            "purchasePrice":{"amount":"59.95","currency":"EUR"},
                            "licenceKey":"not-projected"}
-                          """, null, null), Optional.empty(),
+                          """, null, null, Valuation.NONE), Optional.empty(),
                       tenant.userId())
                   .item();
 
@@ -187,7 +188,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                           null,
                           BigDecimal.ONE,
                           null,
-                          "{\"isbn\":\"9780131177055\",\"published\":2004}", null, null), Optional.empty(),
+                          "{\"isbn\":\"9780131177055\",\"published\":2004}", null, null, Valuation.NONE), Optional.empty(),
                       tenant.userId())
                   .item();
           assertThat(projections(item.id()).get("published").number()).isEqualByComparingTo("2004");
@@ -200,7 +201,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                   null,
                   BigDecimal.ONE,
                   null,
-                  "{\"isbn\":\"9780131177055\",\"published\":2005}", null, null), OptionalLong.empty(),
+                  "{\"isbn\":\"9780131177055\",\"published\":2005}", null, null, Valuation.NONE), OptionalLong.empty(),
               tenant.userId());
           Map<String, Projection> after = projections(item.id());
           assertThat(after.get("published").number()).isEqualByComparingTo("2005");

@@ -13,6 +13,7 @@ import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemBundles;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -276,7 +277,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
                 null,
                 "{}",
                 null,
-                null),
+                null, Valuation.NONE),
             Optional.empty(),
             tenant.userId())
         .item()

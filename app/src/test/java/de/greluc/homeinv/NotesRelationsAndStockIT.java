@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.domain.Notes;
 import de.greluc.homeinv.platform.TenantContext;
@@ -153,7 +154,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                             "packs",
                             null,
                             null,
-                            BigDecimal.valueOf(2)), Optional.empty(),
+                            BigDecimal.valueOf(2), Valuation.NONE), Optional.empty(),
                         tenant.userId())
                     .item();
             assertThat(stored.minimumStock()).isEqualByComparingTo("2");
@@ -169,7 +170,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                         "packs",
                         null,
                         null,
-                        BigDecimal.valueOf(2)), OptionalLong.empty(),
+                        BigDecimal.valueOf(2), Valuation.NONE), OptionalLong.empty(),
                     tenant.userId());
             assertThat(low.quantity()).isEqualByComparingTo("1");
             assertThat(low.minimumStock()).isEqualByComparingTo("2");
@@ -187,7 +188,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
    */
   private ItemService.CreateItemCommand command(String name, String notes, BigDecimal minimumStock) {
     return new ItemService.CreateItemCommand(
-        null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, notes, minimumStock);
+        null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, notes, minimumStock, Valuation.NONE);
   }
 
   /**

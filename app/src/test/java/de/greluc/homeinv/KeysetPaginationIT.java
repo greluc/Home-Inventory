@@ -17,6 +17,7 @@ import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tagging.api.TagGroupView;
@@ -336,7 +337,7 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
                 null,
                 "{}",
                 null,
-                null),
+                null, Valuation.NONE),
             Optional.empty(),
             tenant.userId())
         .item()

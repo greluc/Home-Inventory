@@ -11,6 +11,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -134,7 +135,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                               null,
                               null,
                               null,
-                              null), Optional.empty(),
+                              null, Valuation.NONE), Optional.empty(),
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
@@ -266,7 +267,7 @@ class LocationScopeIT extends AbstractIntegrationTest {
                 null,
                 null,
                 null,
-                null), Optional.empty(),
+                null, Valuation.NONE), Optional.empty(),
             tenant.userId())
         .item()
         .id();

@@ -50,4 +50,5 @@ public record ItemView(
     String lifecycleState,
     Instant createdAt,
     Instant updatedAt,
+    Valuation valuation,
     long version) {}

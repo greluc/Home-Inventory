@@ -11,6 +11,8 @@ import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.inventory.api.ItemView;
+import de.greluc.homeinv.inventory.api.Valuation;
+import de.greluc.homeinv.platform.Money;
 import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -25,6 +27,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -114,7 +117,8 @@ public class ItemController {
                 request.quantityUnit(),
                 request.attributes(),
                 request.notes(),
-                request.minimumStock()),
+                request.minimumStock(),
+                ValuationRequest.asValuation(request.valuation())),
             IdempotencyKeys.from(http, request, json),
             user.userId());
 
@@ -177,7 +181,8 @@ public class ItemController {
                 request.quantityUnit(),
                 request.attributes(),
                 request.notes(),
-                request.minimumStock()),
+                request.minimumStock(),
+                ValuationRequest.asValuation(request.valuation())),
             EntityTags.required(http),
             user.userId());
     return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
@@ -515,7 +520,8 @@ public class ItemController {
       @Size(max = 30) String quantityUnit,
       @Size(max = 65_536) String attributes,
       @Size(max = 20_000) String notes,
-      @PositiveOrZero BigDecimal minimumStock) {}
+      @PositiveOrZero BigDecimal minimumStock,
+      @Valid ValuationRequest valuation) {}
 
   /**
    * The body of an update. {@code kind} is absent: a physical item does not become a digital one.
@@ -538,5 +544,64 @@ public class ItemController {
       @Size(max = 30) String quantityUnit,
       @Size(max = 65_536) String attributes,
       @Size(max = 20_000) String notes,
-      @PositiveOrZero BigDecimal minimumStock) {}
+      @PositiveOrZero BigDecimal minimumStock,
+      @Valid ValuationRequest valuation) {}
+
+  /**
+   * What an item cost, what covers it and what replacing it would cost (REQ-LIFE-001/002/014).
+   *
+   * <p>Replaced whole rather than merged, like the attributes and for the same reason: a figure
+   * left out is one deliberately cleared, and under a merge "remove the purchase price" would have
+   * no spelling at all.
+   *
+   * <p>Each amount is {@code {"amount":"49.90","currency":"EUR"}} — a string, never a JSON number,
+   * because a number is a {@code double} by the time it has been through a browser.
+   *
+   * @param purchase what it cost, or omitted
+   * @param purchasedOn when it was bought, or omitted
+   * @param purchaseSource where from — a shop, a person, a listing
+   * @param warrantyUntil when the warranty ends, or omitted
+   * @param lifetimeWarranty whether it is covered for life, in which case {@code warrantyUntil}
+   *     must be omitted: both is two answers to one question and is refused
+   * @param replacement what replacing it would cost, or omitted
+   * @param replacementAsOf the day that figure was true
+   * @param replacementSource {@code MANUAL} or {@code PLUGIN}
+   * @param currentValue what it is worth now, or omitted
+   * @param currentValueAsOf the day that figure was true
+   */
+  public record ValuationRequest(
+      Money purchase,
+      LocalDate purchasedOn,
+      @Size(max = 300) String purchaseSource,
+      LocalDate warrantyUntil,
+      boolean lifetimeWarranty,
+      Money replacement,
+      LocalDate replacementAsOf,
+      Valuation.Provenance replacementSource,
+      Money currentValue,
+      LocalDate currentValueAsOf) {
+
+    /**
+     * The figures as the domain takes them.
+     *
+     * @param request the body's valuation, or {@code null} when it carried none
+     * @return the valuation, {@link Valuation#NONE} for an absent one
+     */
+    static Valuation asValuation(ValuationRequest request) {
+      if (request == null) {
+        return Valuation.NONE;
+      }
+      return new Valuation(
+          request.purchase(),
+          request.purchasedOn(),
+          request.purchaseSource(),
+          request.warrantyUntil(),
+          request.lifetimeWarranty(),
+          request.replacement(),
+          request.replacementAsOf(),
+          request.replacementSource(),
+          request.currentValue(),
+          request.currentValueAsOf());
+    }
+  }
 }

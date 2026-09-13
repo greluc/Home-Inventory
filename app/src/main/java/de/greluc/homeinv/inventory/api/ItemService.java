@@ -196,6 +196,10 @@ public interface ItemService {
    *     (REQ-CORE-014)
    * @param minimumStock the level below which it needs restocking, or {@code null}. An item that
    *     carries one is a consumable (REQ-CORE-008)
+   * @param valuation what it cost, what covers it and what replacing it would cost
+   *     (REQ-LIFE-001/002/014). Replaced whole: a figure left out is one deliberately
+   *     cleared, which is the same rule the attributes follow and the only one under which
+   *     "remove the purchase price" is sayable at all
    */
   record CreateItemCommand(
       UUID id,
@@ -208,7 +212,8 @@ public interface ItemService {
       String quantityUnit,
       String attributes,
       String notes,
-      BigDecimal minimumStock) {}
+      BigDecimal minimumStock,
+      Valuation valuation) {}
 
   /**
    * What may be changed about an item. {@code kind} is absent: a physical item does not become a
@@ -222,6 +227,8 @@ public interface ItemService {
    * @param quantityUnit the new unit, may be {@code null}
    * @param notes the new notes; HTML is removed server-side
    * @param minimumStock the new restocking level, or {@code null} to stop tracking one
+   * @param valuation what it cost, what covers it and what replacing it would cost
+   *     (REQ-LIFE-001/002/014); replaced whole, so a figure left out is one cleared
    */
   record UpdateItemCommand(
       String name,
@@ -231,5 +238,6 @@ public interface ItemService {
       String quantityUnit,
       String attributes,
       String notes,
-      BigDecimal minimumStock) {}
+      BigDecimal minimumStock,
+      Valuation valuation) {}
 }

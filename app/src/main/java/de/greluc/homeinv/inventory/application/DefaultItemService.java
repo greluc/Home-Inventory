@@ -202,6 +202,7 @@ public class DefaultItemService implements ItemService {
             attributes,
             command.notes(),
             command.minimumStock(),
+            command.valuation(),
             actor,
             now);
 
@@ -372,6 +373,7 @@ public class DefaultItemService implements ItemService {
         attributes,
         command.notes(),
         command.minimumStock(),
+        command.valuation(),
         actor,
         Instant.now(clock));
 
@@ -574,7 +576,8 @@ public class DefaultItemService implements ItemService {
             stored.notes(),
             stored.minimumStock(),
             stored.itemTypeVersionId(),
-            stored.lifecycleState());
+            stored.lifecycleState(),
+            stored.valuation());
     return new de.greluc.homeinv.audit.api.RevisionLog.RevisionView(
         revision.revision(),
         revision.kind(),
@@ -618,6 +621,11 @@ public class DefaultItemService implements ItemService {
         attributes,
         earlier.notes(),
         earlier.minimumStock(),
+        // A restore puts back what the snapshot holds, and a snapshot written
+        // before this column existed holds nothing -- which clears the figures
+        // rather than keeping today's. That is the honest reading of "restore":
+        // the state as it was, including what it did not have.
+        earlier.valuation(),
         actor,
         Instant.now(clock));
     items.flush();
@@ -656,7 +664,8 @@ public class DefaultItemService implements ItemService {
             item.getNotes(),
             item.getMinimumStock(),
             item.getItemTypeVersionId(),
-            item.getLifecycleState()));
+            item.getLifecycleState(),
+            item.valuation()));
   }
 
   /**
@@ -686,7 +695,8 @@ public class DefaultItemService implements ItemService {
       String notes,
       BigDecimal minimumStock,
       UUID itemTypeVersionId,
-      String lifecycleState) {}
+      String lifecycleState,
+      de.greluc.homeinv.inventory.api.Valuation valuation) {}
 
   /**
    * Refuses a place outside the part of the tree this session is confined to (REQ-TEN-007).
@@ -730,6 +740,7 @@ public class DefaultItemService implements ItemService {
         item.getLifecycleState(),
         item.getCreatedAt(),
         item.getUpdatedAt(),
+        item.valuation(),
         item.getVersion());
   }
 

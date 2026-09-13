@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tagging.api.TagService;
@@ -193,7 +194,7 @@ class TagsIT extends AbstractIntegrationTest {
   private UUID anItem(Tenant tenant, String name) {
     return items.create(
             new ItemService.CreateItemCommand(
-                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null), Optional.empty(),
+                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null, Valuation.NONE), Optional.empty(),
             tenant.userId())
         .item()
         .id();

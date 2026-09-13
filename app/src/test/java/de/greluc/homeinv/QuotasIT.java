@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.tenancy.api.QuotaAdministration;
@@ -204,7 +205,7 @@ class QuotasIT extends AbstractIntegrationTest {
         .create(
             new ItemService.CreateItemCommand(
                 null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null,
-                null), Optional.empty(),
+                null, Valuation.NONE), Optional.empty(),
             tenant.userId())
         .item()
         .id();

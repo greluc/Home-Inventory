@@ -133,6 +133,13 @@ commit".
 
 ### Added
 
+- **An item records what it cost, what covers it and what replacing it would
+  cost.** Purchase price with its date and where it came from, a warranty that
+  either ends on a day or lasts for life, a replacement value with the day it was
+  true and who said so, and a current value beside it. The three figures are
+  independent: a camera bought for 899 can be worth 200 and cost 1,100 to replace,
+  and an insurer asks for the third. *REST API: additive.*
+
 - **Money has a type of its own now**, so a total can never mix currencies: adding
   euros to dollars throws rather than producing a number that looks right.
   Rounding never happens without being asked for, amounts travel as text rather
@@ -382,7 +389,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 27 types in the shared
+- **The shared kernel is measured.** `platform` holds 28 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

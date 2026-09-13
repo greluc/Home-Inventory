@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.locations.api.LocationService;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.TenantContext;
@@ -167,7 +168,7 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
                   .create(
                       new ItemService.CreateItemCommand(
                           null, null, "A thing", null, ItemKind.PHYSICAL, shelf, BigDecimal.ONE,
-                          null, null, null, null), Optional.empty(),
+                          null, null, null, null, Valuation.NONE), Optional.empty(),
                       tenant.userId())
                   .item()
                   .id();

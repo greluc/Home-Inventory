@@ -15,6 +15,7 @@ import de.greluc.homeinv.identity.domain.AppUser;
 import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.TenantContext;
@@ -81,7 +82,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                             null,
                             "{\"carrier\":\"vendor account\",\"licenceKey\":\"not a real licence key\"}",
                             null,
-                            null),
+                            null, Valuation.NONE),
                         Optional.empty(),
                         tenant.userId())
                     .item()
@@ -138,7 +139,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                             null,
                             "{\"carrier\":\"vendor account\",\"licenceKey\":\"not a real licence key\"}",
                             null,
-                            null),
+                            null, Valuation.NONE),
                         Optional.empty(),
                         tenant.userId())
                     .item()
@@ -165,7 +166,7 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                                     null,
                                     "{\"carrier\":\"a different account\"}",
                                     null,
-                                    null),
+                                    null, Valuation.NONE),
                                 OptionalLong.empty(),
                                 tenant.userId()))));
 
