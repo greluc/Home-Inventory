@@ -67,6 +67,26 @@ export interface Item {
   version: number;
 }
 
+/** What an account holds besides its password (REQ-AUTH-002). */
+export interface SecondFactorEnrolment {
+  totpConfirmed: boolean;
+  enrolledAt: string | null;
+  recoveryCodesLeft: number;
+}
+
+/** A secret that has just been generated, readable this once. */
+export interface TotpEnrolment {
+  /** The shared secret in base32, for somebody typing it into an app by hand. */
+  secret: string;
+  /** The `otpauth://` URI an authenticator app reads from a QR code or a link. */
+  provisioningUri: string;
+}
+
+/** The recovery codes, readable this once. */
+export interface RecoveryCodes {
+  codes: string[];
+}
+
 /** A page of search results. */
 export interface SearchResult {
   items: Item[];
@@ -199,6 +219,46 @@ export const api = {
     request<Session>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
+    }),
+
+  /**
+   * Answers the second factor and finishes a login (REQ-AUTH-002).
+   *
+   * Called when {@link api.login} failed with `second-factor-required`, which is
+   * not an error the person can do anything about by typing the password again:
+   * the password was right, and what is missing is the code.
+   *
+   * @param code the six digits from the authenticator app, or a recovery code
+   * @returns who the caller now is
+   */
+  completeSecondFactor: (code: string): Promise<Session> =>
+    request<Session>("/api/v1/auth/mfa", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
+  /** What the account holds besides its password. */
+  secondFactor: (): Promise<SecondFactorEnrolment> =>
+    request<SecondFactorEnrolment>("/api/v1/auth/mfa/enrolment"),
+
+  /**
+   * Begins an enrolment; the secret comes back once and is never readable again.
+   *
+   * @returns the secret and the provisioning URI
+   */
+  beginTotpEnrolment: (): Promise<TotpEnrolment> =>
+    request<TotpEnrolment>("/api/v1/auth/mfa/totp", { method: "POST" }),
+
+  /**
+   * Confirms an enrolment with a code from the new secret, and takes the recovery codes.
+   *
+   * @param code the six digits the app shows
+   * @returns the recovery codes, readable this once
+   */
+  confirmTotpEnrolment: (code: string): Promise<RecoveryCodes> =>
+    request<RecoveryCodes>("/api/v1/auth/mfa/totp/confirmation", {
+      method: "POST",
+      body: JSON.stringify({ code }),
     }),
 
   /** Ends the session. */

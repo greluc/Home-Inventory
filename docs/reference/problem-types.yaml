@@ -336,6 +336,26 @@ assigned:
     sources:
       - "REQ-TEN-010: nobody can grant permissions they do not hold themselves"
 
+  - token: second-factor-missing
+    status: 403
+    since: 1
+    summary: >
+      The role this session holds requires a second factor and the account has
+      none; the way out is to enrol one.
+    notes: >
+      A 403 rather than a 401: the caller is authenticated, and what is missing is
+      not a credential for this request but an authenticator on the account.
+      REQ-AUTH-003 makes the factor mandatory for OWNER and ADMIN and for any role
+      that reads a sensitive field; the membership is still granted — refusing it
+      would leave a tenant nobody owns, because creating one makes an owner and
+      the first owner of an instance is made by a one-shot with nobody to ask for
+      a code. It is also the answer to granting sensitive field visibility to a
+      role whose members have none, where the detail says how many and never who.
+      `/api/v1/auth/**` and `/api/v1/me/**` keep answering, so the way out and the
+      switch to another tenant are always reachable.
+    sources:
+      - "REQ-AUTH-003, 12 §12.4"
+
   - token: second-factor-required
     status: 401
     since: 1

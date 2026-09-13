@@ -67,6 +67,16 @@ public enum ProblemType {
    */
   SECOND_FACTOR_ENROLLED("second-factor-enrolled", HttpStatus.CONFLICT, "Second factor enrolled"),
 
+  /**
+   * The role requires a second factor and the account has none (REQ-AUTH-003).
+   *
+   * <p>A {@code 403} and not a {@code 401}: the caller is authenticated, and what is missing is not
+   * a credential for this request but an authenticator on the account. Distinct from
+   * {@link #FORBIDDEN}, because the client can do something about this one — it sends the person to
+   * the enrolment rather than telling them they may not be here.
+   */
+  SECOND_FACTOR_MISSING("second-factor-missing", HttpStatus.FORBIDDEN, "Second factor missing"),
+
   /** Authenticated, and not permitted on a resource they may know exists. */
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 

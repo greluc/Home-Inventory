@@ -6,7 +6,10 @@ package de.greluc.homeinv.authorization.infrastructure;
 
 import de.greluc.homeinv.authorization.api.FieldVisibility;
 import de.greluc.homeinv.authorization.api.Role;
+import de.greluc.homeinv.authorization.api.RoleHolders;
 import de.greluc.homeinv.authorization.api.RoleRef;
+import de.greluc.homeinv.authorization.api.SecondFactorMissingException;
+import de.greluc.homeinv.authorization.api.SecondFactorStatus;
 import de.greluc.homeinv.platform.TenantContext;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -49,6 +52,11 @@ public class FieldVisibilityAdapter implements FieldVisibility {
           + " where tenant_id = ? and deleted_at is null"
           + " and (built_in_role = ? or role_definition_id = ?)";
 
+  private static final String ANY_FOR_ROLE =
+      "select exists(select 1 from authz.field_visibility"
+          + " where tenant_id = ? and deleted_at is null"
+          + " and (built_in_role = ? or role_definition_id = ?))";
+
   private static final String ALL_RULES =
       "select field_key, built_in_role, role_definition_id from authz.field_visibility"
           + " where tenant_id = ? and deleted_at is null order by field_key";
@@ -64,6 +72,26 @@ public class FieldVisibilityAdapter implements FieldVisibility {
           + " and role_definition_id is not distinct from ?";
 
   private final JdbcClient jdbc;
+  private final RoleHolders roleHolders;
+  private final SecondFactorStatus secondFactors;
+
+  @Override
+  @Transactional(readOnly = true)
+  public boolean readsSensitiveFields(RoleRef role) {
+    if (role == null) {
+      return false;
+    }
+    if (Role.named(role.builtIn()).filter(ALWAYS::contains).isPresent()) {
+      // Without a query: these two read every sensitive field by default, whether
+      // or not this tenant has ever made a rule.
+      return true;
+    }
+    return Boolean.TRUE.equals(
+        jdbc.sql(ANY_FOR_ROLE)
+            .params(TenantContext.require(), role.builtIn(), role.definitionId())
+            .query(Boolean.class)
+            .single());
+  }
 
   @Override
   @Transactional(readOnly = true)
@@ -109,6 +137,14 @@ public class FieldVisibilityAdapter implements FieldVisibility {
   @Transactional
   public void allow(String fieldKey, RoleRef role, UUID actor) {
     UUID tenantId = TenantContext.require();
+
+    // REQ-AUTH-003's second half, and it is checked here rather than in the
+    // controller because it is part of what granting means: a role that reads a
+    // sensitive field may not be held by somebody who signs in with a password
+    // alone. The rule is enforced where the grant is written, so a second caller
+    // — GraphQL, a future import — cannot reach the write without it.
+    requireHoldersEnrolled(role);
+
     jdbc.sql(GRANT)
         .params(tenantId, fieldKey, builtInOf(role), role.definitionId(), actor, actor)
         .update();
@@ -123,6 +159,30 @@ public class FieldVisibilityAdapter implements FieldVisibility {
         .params(tenantId, fieldKey, builtInOf(role), role.definitionId())
         .update();
     log.info("Field '{}' withdrawn from {} in tenant {} by {}", fieldKey, role, tenantId, actor);
+  }
+
+  /**
+   * Refuses a grant that would let somebody read a sensitive field with a password alone.
+   *
+   * <p>The count and never the names: an administrator needs to know that somebody has to act, and
+   * which colleague has an authenticator is not their business — the reasoning REQ-SEC-016 applies
+   * to addresses, applied to credentials.
+   *
+   * @param role the role being granted the field
+   * @throws SecondFactorMissingException when a live member holding it has no second factor
+   */
+  private void requireHoldersEnrolled(RoleRef role) {
+    long without =
+        roleHolders.holdersOf(role).stream()
+            .filter(user -> !secondFactors.isEnrolled(user))
+            .count();
+    if (without > 0) {
+      throw new SecondFactorMissingException(
+          without
+              + " member(s) holding this role have no second factor, and a sensitive field may not"
+              + " be read with a password alone (REQ-AUTH-003). They set one up at"
+              + " /api/v1/auth/mfa/totp.");
+    }
   }
 
   /**

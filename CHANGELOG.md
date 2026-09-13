@@ -125,6 +125,14 @@ commit".
 
 ### Added
 
+- **Owners and administrators must have a second factor.** The role is granted
+  as before — creating a tenant still makes you its owner — but it cannot be used
+  until an authenticator exists: every request in that tenant says so and points
+  at the setup, while signing out, switching tenants and enrolling stay
+  reachable. A sensitive field cannot be granted to a role whose members sign in
+  with a password alone. The web client shows the setup instead of an error.
+  *REST API: additive.*
+
 - **An account can be protected by a second factor.** An authenticator app is set
   up in two steps — the code is shown once, and a code generated from it is what
   makes it count — and ten single-use recovery codes come with it, shown once and
@@ -378,7 +386,7 @@ commit".
 - A requirements catalogue with 426 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 61 architecture decision records, each with its alternatives and consequences —
+- 62 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

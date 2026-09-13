@@ -21,6 +21,10 @@ set -eu
 
 BASE="${1:-http://localhost:8080}"
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+# A one-time password, because the owner has to enrol one before the role can be
+# used at all (REQ-AUTH-003) and the bootstrap one-shot has nobody to ask.
+# shellcheck source=totp.sh
+. "$HERE/smoke/totp.sh"
 JAR=$(mktemp)
 OUT=$(mktemp)
 trap 'rm -f "$JAR" "$OUT"' EXIT
@@ -108,6 +112,47 @@ status=$(curl --silent --output "$OUT" --write-out '%{http_code}' \
 [ "$status" = "200" ] || die "login answered $status"
 TENANT=$(field tenantId)
 say "signed in, tenant $TENANT"
+
+printf '\nSetting up the second factor the OWNER role requires\n'
+# REQ-AUTH-003: the membership is granted and every request in the tenant is
+# refused until an authenticator exists. The password alone gets a session and
+# nothing to do with it, which is exactly what an operator sees on a fresh
+# deployment — so the journey does what they do.
+status=$(api GET /api/v1/locations/categories)
+[ "$status" = "403" ] || die "an owner with no second factor was not refused: $status"
+grep -q 'second-factor-missing' "$OUT" \
+    || die "the refusal did not name second-factor-missing"
+
+status=$(api POST /api/v1/auth/mfa/totp)
+[ "$status" = "200" ] || die "the enrolment answered $status"
+SECRET=$(field secret)
+[ -n "$SECRET" ] || die "no secret came back from the enrolment"
+
+status=$(api POST /api/v1/auth/mfa/totp/confirmation \
+    --header 'Content-Type: application/json' \
+    --data "{\"code\":\"$(totp_code "$SECRET")\"}")
+[ "$status" = "200" ] || die "confirming the second factor answered $status"
+say "second factor enrolled, ten recovery codes issued"
+
+# The confirmation spent this time step, and a code from a step already accepted
+# is refused (RFC 6238 5.2). Waiting for the next one is what a person does
+# without noticing; a test cannot, so it says so. At most thirty seconds, once.
+sleep $(( 30 - $(date +%s) % 30 ))
+
+# And the login is two calls from here on, which is what a person will meet.
+status=$(curl --silent --output "$OUT" --write-out '%{http_code}' \
+    --cookie-jar "$JAR" \
+    --header 'Content-Type: application/json' \
+    --data "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" \
+    "$BASE/api/v1/auth/login")
+[ "$status" = "401" ] || die "the login did not ask for the second factor: $status"
+grep -q 'second-factor-required' "$OUT" || die "the login did not name second-factor-required"
+
+status=$(api POST /api/v1/auth/mfa \
+    --header 'Content-Type: application/json' \
+    --data "{\"code\":\"$(totp_code "$SECRET")\"}")
+[ "$status" = "200" ] || die "answering the second factor at login gave $status"
+say "signed in again, with the code"
 
 printf '\nCreating somewhere to put things\n'
 status=$(api GET /api/v1/locations/categories)

@@ -11,7 +11,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -155,6 +157,160 @@ public abstract class AbstractIntegrationTest {
                 webApplicationContext.getBean(de.greluc.homeinv.rest.JsonBodyLimitFilter.class))
             .apply(springSecurity())
             .build();
+  }
+
+  /** The secrets this test enrolled, so that {@link #signIn} can answer a challenge. */
+  private final java.util.Map<UUID, String> secondFactorSecrets = new java.util.HashMap<>();
+
+  /**
+   * Signs an account in, answering the second factor when it is asked for.
+   *
+   * <p>A login is one call or two (REQ-AUTH-002), and which one it is depends on the account. A
+   * test that wrote out both would be a test about the login rather than about its own subject, and
+   * every test here that acts as an {@code OWNER} needs a factor because REQ-AUTH-003 refuses the
+   * role without one.
+   *
+   * <p>The replay guard is rewound before the code is generated. In life the phone shows a new code
+   * every thirty seconds and a person signs in once; a test signs in five times in the same step,
+   * and waiting out the clock would put half a minute into each of them. What is being rewound is
+   * the guard's record, not the guard — {@code SecondFactorIT} proves it works, with no rewinding.
+   *
+   * @param email the address
+   * @param password the password
+   * @return the established session
+   * @throws Exception when a call fails, which is the test failing
+   */
+  protected MockHttpSession signIn(String email, String password) throws Exception {
+    MockHttpSession session = new MockHttpSession();
+    int status =
+        mockMvc
+            .perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/api/v1/auth/login")
+                    .session(session)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
+            .andReturn()
+            .getResponse()
+            .getStatus();
+    if (status == 200) {
+      return session;
+    }
+    if (status != 401) {
+      throw new AssertionError("The login answered " + status + " for " + email);
+    }
+
+    UUID userId =
+        webApplicationContext
+            .getBean(de.greluc.homeinv.identity.infrastructure.AppUserRepository.class)
+            .findByEmail(email)
+            .orElseThrow(() -> new AssertionError("No account for " + email))
+            .getId();
+    String secret =
+        secondFactorSecrets.computeIfAbsent(
+            userId,
+            id -> {
+              throw new AssertionError("No second factor was enrolled for " + email);
+            });
+
+    rewindSecondFactor(userId);
+    String code =
+        de.greluc.homeinv.identity.application.TotpCodes.generate(
+            base32(secret),
+            de.greluc.homeinv.identity.application.TotpCodes.stepOf(java.time.Instant.now()));
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                    "/api/v1/auth/mfa")
+                .session(session)
+                .with(
+                    org.springframework.security.test.web.servlet.request
+                        .SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"" + code + "\"}"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+    return session;
+  }
+
+  /**
+   * Forgets which time step this account last spent, so the next code is accepted.
+   *
+   * @param userId the account
+   */
+  private void rewindSecondFactor(UUID userId) {
+    webApplicationContext
+        .getBean(org.springframework.transaction.support.TransactionTemplate.class)
+        .executeWithoutResult(
+            status ->
+                webApplicationContext
+                    .getBean(org.springframework.jdbc.core.simple.JdbcClient.class)
+                    .sql("update identity.credential set last_used_at = null where user_id = ?")
+                    .param(userId)
+                    .update());
+  }
+
+  /**
+   * Base32 back to bytes, which only a test needs.
+   *
+   * @param encoded the secret as the enrolment returned it
+   * @return the raw secret
+   */
+  private static byte[] base32(String encoded) {
+    String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    int buffer = 0;
+    int bits = 0;
+    for (char c : encoded.toCharArray()) {
+      buffer = (buffer << 5) | alphabet.indexOf(c);
+      bits += 5;
+      if (bits >= 8) {
+        out.write((buffer >> (bits - 8)) & 0xff);
+        bits -= 8;
+      }
+    }
+    return out.toByteArray();
+  }
+
+  /**
+   * Gives an account a confirmed second factor, without the two-call enrolment.
+   *
+   * <p>REQ-AUTH-003 refuses every request from an {@code OWNER} or {@code ADMIN} who has none, so
+   * most tests here would otherwise begin by enrolling one through the API and generating a code —
+   * five calls of ceremony before the thing under test. The whole enrolment loop is proved in
+   * {@code SecondFactorIT}; this writes the row that loop would leave behind.
+   *
+   * <p>The secret is sealed with the same key the application uses, because a row it could not open
+   * would be a factor nobody can answer — including the tests that sign in with one.
+   *
+   * @param userId the account
+   * @return the base32 secret, for a test that wants to generate a code from it
+   */
+  protected String enrolSecondFactor(UUID userId) {
+    byte[] secret = de.greluc.homeinv.identity.application.TotpCodes.newSecret();
+    java.time.Instant now = java.time.Instant.now();
+    de.greluc.homeinv.identity.domain.Credential credential =
+        de.greluc.homeinv.identity.domain.Credential.enrol(
+            userId,
+            de.greluc.homeinv.identity.domain.Credential.TOTP,
+            webApplicationContext
+                .getBean(de.greluc.homeinv.identity.infrastructure.CredentialKey.class)
+                .seal(secret),
+            "test authenticator",
+            now);
+    credential.confirm(now);
+    webApplicationContext
+        .getBean(org.springframework.transaction.support.TransactionTemplate.class)
+        .executeWithoutResult(
+            status ->
+                webApplicationContext
+                    .getBean(
+                        de.greluc.homeinv.identity.infrastructure.CredentialRepository.class)
+                    .save(credential));
+    String encoded = de.greluc.homeinv.identity.application.TotpCodes.base32(secret);
+    secondFactorSecrets.put(userId, encoded);
+    return encoded;
   }
 
   /**

@@ -18,7 +18,11 @@
     "submit": "Anmelden",
     "working": "Anmelden…",
     "failed": "E-Mail-Adresse oder Passwort stimmen nicht.",
-    "throttled": "Zu viele Versuche. Bitte kurz warten."
+    "throttled": "Zu viele Versuche. Bitte kurz warten.",
+    "code": "Code",
+    "submitCode": "Bestätigen",
+    "codeHint": "Dieses Konto ist durch einen zweiten Faktor geschützt. Gib den Code aus deiner Authenticator-App ein oder einen deiner Wiederherstellungscodes.",
+    "codeFailed": "Dieser Code stimmt nicht. Melde dich erneut an und nimm den nächsten."
   },
   "session": {
     "signOut": "Abmelden"
@@ -93,5 +97,18 @@
   "error": {
     "network": "Die Anfrage ist fehlgeschlagen. Besteht eine Verbindung?",
     "withTrace": "{{detail}} ({{traceId}})"
+  },
+  "mfa": {
+    "title": "Zweiten Faktor einrichten",
+    "why": "Besitzer und Administratoren melden sich mit Code und Passwort an. Bis einer eingerichtet ist, antwortet dieser Mandant nicht.",
+    "begin": "Starten",
+    "working": "Einen Moment…",
+    "secretHint": "Trage dieses Geheimnis in deine Authenticator-App ein und gib dann den angezeigten Code ein.",
+    "openInApp": "In einer Authenticator-App öffnen",
+    "code": "Code aus der App",
+    "confirm": "Bestätigen",
+    "recoveryTitle": "Deine Wiederherstellungscodes",
+    "recoveryHint": "Bewahre sie sicher auf. Jeder meldet dich einmal an, wenn das Telefon weg ist — und sie werden nur hier angezeigt.",
+    "continue": "Weiter"
   }
 }

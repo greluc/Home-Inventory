@@ -19,6 +19,7 @@ import { LocationPanel } from "./LocationPanel";
 import { LoginForm } from "./LoginForm";
 import { ItemList } from "./ItemList";
 import { NewItemForm } from "./NewItemForm";
+import { SecondFactorSetup } from "./SecondFactorSetup";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -43,6 +44,7 @@ export function App(): React.JSX.Element {
   const [categories, setCategories] = useState<LocationCategory[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
 
   const signedIn = useCallback((who: Session): void => {
     setSession(who);
@@ -57,6 +59,18 @@ export function App(): React.JSX.Element {
       .finally(() => setChecking(false));
   }, [signedIn]);
 
+  // REQ-AUTH-003: an OWNER or ADMIN with no second factor holds the role and may
+  // not use it. Every request answers `second-factor-missing` until they enrol,
+  // so the shell watches for that one type and shows the way out rather than an
+  // error message repeated on every panel.
+  const noteLock = useCallback((cause: unknown): boolean => {
+    if (cause instanceof ApiError && cause.type.endsWith("/second-factor-missing")) {
+      setLocked(true);
+      return true;
+    }
+    return false;
+  }, []);
+
   const reload = useCallback(
     async (text: string, language: string): Promise<void> => {
       try {
@@ -64,10 +78,12 @@ export function App(): React.JSX.Element {
         setItems(result.items);
         setError(null);
       } catch (cause) {
-        setError(describe(cause, t));
+        if (!noteLock(cause)) {
+          setError(describe(cause, t));
+        }
       }
     },
-    [t],
+    [t, noteLock],
   );
 
   const reloadPlaces = useCallback((): Promise<void> => {
@@ -77,8 +93,12 @@ export function App(): React.JSX.Element {
         setCategories(kinds.items);
         return undefined;
       })
-      .catch((cause: unknown) => setError(describe(cause, t)));
-  }, [t]);
+      .catch((cause: unknown) => {
+        if (!noteLock(cause)) {
+          setError(describe(cause, t));
+        }
+      });
+  }, [t, noteLock]);
 
   useEffect(() => {
     if (!session) {
@@ -114,6 +134,19 @@ export function App(): React.JSX.Element {
 
   if (!session) {
     return <LoginForm onAuthenticated={signedIn} />;
+  }
+
+  if (locked) {
+    return (
+      <SecondFactorSetup
+        onEnrolled={() => {
+          setLocked(false);
+          setError(null);
+          void reloadPlaces();
+          void reload(query, i18n.resolvedLanguage ?? "en");
+        }}
+      />
+    );
   }
 
   return (

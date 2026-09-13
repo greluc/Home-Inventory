@@ -28,6 +28,8 @@ export function LoginForm({
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +40,11 @@ export function LoginForm({
     try {
       onAuthenticated(await api.login(email, password));
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 429) {
+      if (cause instanceof ApiError && cause.type.endsWith("/second-factor-required")) {
+        // Not a failure: the password was right and the account is protected.
+        // The pending login lives on the server for five minutes (REQ-AUTH-002).
+        setNeedsCode(true);
+      } else if (cause instanceof ApiError && cause.status === 429) {
         setError(t("login.throttled"));
       } else {
         setError(t("login.failed"));
@@ -46,6 +52,64 @@ export function LoginForm({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submitCode(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      onAuthenticated(await api.completeSecondFactor(code));
+    } catch (cause) {
+      // One message for a wrong code, a spent one and a window that ran out: the
+      // server answers them the same way and so does this.
+      setError(t("login.codeFailed"));
+      setCode("");
+      if (cause instanceof ApiError && cause.status !== 401) {
+        setNeedsCode(false);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (needsCode) {
+    return (
+      <main className="login">
+        <div className="login-card">
+          <div className="login-head">
+            <h1>{t("app.title")}</h1>
+            <div className="bar-actions">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
+          </div>
+
+          <p>{t("login.codeHint")}</p>
+
+          <form onSubmit={(event) => void submitCode(event)}>
+            <label>
+              {t("login.code")}
+              <input
+                type="text"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+              />
+            </label>
+
+            {error !== null && <p role="alert">{error}</p>}
+
+            <button type="submit" disabled={busy}>
+              {busy ? t("login.working") : t("login.submitCode")}
+            </button>
+          </form>
+        </div>
+      </main>
+    );
   }
 
   return (

@@ -15,6 +15,7 @@ import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.authorization.api.RoleNameTakenException;
+import de.greluc.homeinv.authorization.api.SecondFactorMissingException;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.tagging.api.TagService;
 import de.greluc.homeinv.tenancy.api.InvitationAlreadyOpenException;
@@ -462,6 +463,23 @@ public class ApiExceptionHandler {
         ProblemType.SECOND_FACTOR_REQUIRED,
         "This account is protected by a second factor. Post the code to /api/v1/auth/mfa.",
         request);
+  }
+
+  /**
+   * Answers a role being used without the second factor it requires (REQ-AUTH-003).
+   *
+   * <p>The detail says what to do about it, and it is the exception's own message rather than a
+   * sentence written here: the two places that raise it — a session and a grant — need different
+   * ones, and both are about somebody enrolling.
+   *
+   * @param exception the refusal, carrying what the caller should do
+   * @param request the request, for the instance URI
+   * @return the problem
+   */
+  @ExceptionHandler(SecondFactorMissingException.class)
+  public ProblemDetail handleSecondFactorMissing(
+      SecondFactorMissingException exception, HttpServletRequest request) {
+    return problem(ProblemType.SECOND_FACTOR_MISSING, exception.getMessage(), request);
   }
 
   /**

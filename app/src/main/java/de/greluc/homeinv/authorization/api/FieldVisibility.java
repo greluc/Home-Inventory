@@ -66,6 +66,20 @@ public interface FieldVisibility {
   SensitiveAccess sensitiveAccessFor(RoleRef role);
 
   /**
+   * Whether this role may read any sensitive field at all.
+   *
+   * <p>Asked by {@link SecondFactorPolicy}: a role that reads a sensitive field may be used only by
+   * an account with a second factor (REQ-AUTH-003). It is a separate question from
+   * {@link #sensitiveAccessFor(RoleRef)} because it is asked once per request rather than once per
+   * field, and because the answer for {@code OWNER} and {@code ADMIN} is yes whether or not the
+   * tenant has ever made a rule.
+   *
+   * @param role the role in question
+   * @return true when the role reads at least one sensitive field
+   */
+  boolean readsSensitiveFields(RoleRef role);
+
+  /**
    * Every rule this tenant has made.
    *
    * @return the rules, field order

@@ -18,7 +18,11 @@
     "submit": "Sign in",
     "working": "Signing in…",
     "failed": "That e-mail address and password do not match.",
-    "throttled": "Too many attempts. Please wait a moment."
+    "throttled": "Too many attempts. Please wait a moment.",
+    "code": "Code",
+    "submitCode": "Confirm",
+    "codeHint": "Your account is protected by a second factor. Enter the code from your authenticator app, or one of your recovery codes.",
+    "codeFailed": "That code is not valid. Sign in again and try the next one."
   },
   "session": {
     "signOut": "Sign out"
@@ -93,5 +97,18 @@
   "error": {
     "network": "The request failed. Are you connected?",
     "withTrace": "{{detail}} ({{traceId}})"
+  },
+  "mfa": {
+    "title": "Set up a second factor",
+    "why": "Owners and administrators sign in with a code as well as a password. Until you set one up, this tenant will not answer.",
+    "begin": "Start",
+    "working": "Working…",
+    "secretHint": "Add this secret to your authenticator app, then enter the code it shows.",
+    "openInApp": "Open in an authenticator app",
+    "code": "Code from the app",
+    "confirm": "Confirm",
+    "recoveryTitle": "Your recovery codes",
+    "recoveryHint": "Keep these somewhere safe. Each one signs you in once if you lose your phone, and they are shown here and nowhere else.",
+    "continue": "Continue"
   }
 }

@@ -198,6 +198,10 @@ class MediaListingIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
+    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
+    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
+    // here it is a precondition rather than the subject.
+    enrolSecondFactor(userId);
     return userId;
   }
 

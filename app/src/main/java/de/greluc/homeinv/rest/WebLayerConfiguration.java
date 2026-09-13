@@ -29,6 +29,7 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
   private final PermissionInterceptor permissionInterceptor;
   private final ApiCallQuotaInterceptor apiCallQuotaInterceptor;
   private final TenantAccessInterceptor tenantAccessInterceptor;
+  private final SecondFactorLockInterceptor secondFactorLockInterceptor;
 
   /**
    * Puts the permission check in front of every handler.
@@ -47,6 +48,11 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
     // that is suspended or waiting to be erased answers 403 and should not come
     // out of anybody's monthly allowance either (REQ-TEN-011, O26).
     registry.addInterceptor(tenantAccessInterceptor);
+    // And then the roles that may not be used without a second factor
+    // (REQ-AUTH-003). After the tenant's own state, because a tenant waiting to
+    // be erased should say so rather than asking somebody to set up an
+    // authenticator for a tenant that is about to go.
+    registry.addInterceptor(secondFactorLockInterceptor);
     // After the permission check, deliberately. A call the caller was never
     // allowed to make should not come out of their monthly allowance, and the
     // order here is what decides that (REQ-TEN-009).

@@ -217,6 +217,70 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
    * @param tenant whose type system
    * @return the published type's id
    */
+  @Test
+  @DisplayName("are not granted to a role whose members sign in with a password alone")
+  void aGrantNeedsItsHoldersToHaveASecondFactor() throws Exception {
+    Tenant tenant = tenantWithOwner("fv-mfa-owner@example.org", "Second factor");
+    MockHttpSession owner = login("fv-mfa-owner@example.org");
+    aTypeWithAPurchasePrice(tenant);
+    UUID member = addMember(tenant, "fv-mfa-member@example.org", "MEMBER");
+    removeSecondFactor(member);
+
+    // REQ-AUTH-003: a role that reads a sensitive field may not be held by
+    // somebody with no second factor, so the grant is refused rather than
+    // quietly making a purchase price readable with a password alone.
+    mockMvc
+        .perform(
+            post("/api/v1/field-visibility")
+                .session(owner)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("fieldKey", "purchasePrice", "role", "MEMBER"))))
+        .andExpect(status().isForbidden())
+        .andExpect(
+            jsonPath("$.type").value("https://home-inv.example/problems/second-factor-missing"))
+        // How many, and never who.
+        .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("1 member(s)")))
+        .andExpect(
+            jsonPath("$.detail")
+                .value(
+                    org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("fv-mfa-member@example.org"))));
+
+    enrolSecondFactor(member);
+
+    mockMvc
+        .perform(
+            post("/api/v1/field-visibility")
+                .session(owner)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    json.writeValueAsString(
+                        Map.of("fieldKey", "purchasePrice", "role", "MEMBER"))))
+        .andExpect(status().isNoContent());
+  }
+
+  /**
+   * Takes an account's second factor away, leaving the tombstone a removal leaves.
+   *
+   * <p>The test helper in the base class gives every account one, because REQ-AUTH-003 refuses an
+   * {@code OWNER} without it. This test is about somebody who has none.
+   *
+   * @param userId the account
+   */
+  private void removeSecondFactor(UUID userId) {
+    transactions.executeWithoutResult(
+        status ->
+            jdbc.sql(
+                    "update identity.credential set deleted_at = now(), updated_at = now()"
+                        + " where user_id = ?")
+                .param(userId)
+                .update());
+  }
+
   private UUID aTypeWithAPurchasePrice(Tenant tenant) {
     return TenantContext.callAs(
         tenant.tenantId(),
@@ -301,19 +365,15 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
+    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
+    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
+    // here it is a precondition rather than the subject.
+    enrolSecondFactor(userId);
     return userId;
   }
 
   private MockHttpSession login(String email) throws Exception {
-    MockHttpSession session = new MockHttpSession();
-    mockMvc
-        .perform(
-            post("/api/v1/auth/login")
-                .session(session)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("email", email, "password", PASSWORD))))
-        .andExpect(status().isOk());
-    return session;
+    return signIn(email, PASSWORD);
   }
 
   private static RequestPostProcessor csrf() {

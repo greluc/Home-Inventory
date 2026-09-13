@@ -98,9 +98,9 @@ docs/architecture/11-offline-synchronisation.md:143:cannot
 docs/architecture/11-offline-synchronisation.md:170:cannot
 docs/architecture/11-offline-synchronisation.md:265:is refused
 docs/architecture/12-security.md:16:cannot
-docs/architecture/12-security.md:180:fails the build
-docs/architecture/12-security.md:203:enforced
-docs/architecture/12-security.md:328:enforced
+docs/architecture/12-security.md:181:fails the build
+docs/architecture/12-security.md:204:enforced
+docs/architecture/12-security.md:329:enforced
 docs/architecture/13-operations-and-observability.md:129:cannot
 docs/architecture/13-operations-and-observability.md:73:cannot
 docs/architecture/14-quality-risks-glossary.md:117:enforces

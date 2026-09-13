@@ -168,6 +168,10 @@ class TenantIsolationIT extends AbstractIntegrationTest {
                     "de",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
+    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
+    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
+    // here it is a precondition rather than the subject.
+    enrolSecondFactor(userId);
     UUID tenantId = provisioning.provision(tenantName, userId);
     return new Fixture(userId, tenantId, email);
   }
@@ -180,17 +184,7 @@ class TenantIsolationIT extends AbstractIntegrationTest {
    * @throws Exception when the request fails
    */
   private MockHttpSession login(String email) throws Exception {
-    MockHttpSession session = new MockHttpSession();
-    mockMvc
-        .perform(
-            post("/api/v1/auth/login")
-                .session(session)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    json.writeValueAsString(
-                        java.util.Map.of("email", email, "password", PASSWORD))))
-        .andExpect(status().isOk());
-    return session;
+    return signIn(email, PASSWORD);
   }
 
   /**

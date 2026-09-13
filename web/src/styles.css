@@ -110,6 +110,11 @@ label input, label textarea { display: block; width: 100%; margin-top: .25rem; }
 
 /* A label wrapping a select in the bar: the select carries the control, the
    label only names it for a screen reader. */
+/* The recovery codes, shown once and copied onto paper: monospaced so a 5 and an
+   S are told apart, and wide enough that a code never wraps mid-way. */
+.recovery-codes { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: .35rem; }
+.recovery-codes code { font-size: 1rem; letter-spacing: .08em; }
+
 .language { display: inline-block; margin: 0; }
 .language select {
   font: inherit; color: inherit; background: var(--surface-raised);

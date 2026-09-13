@@ -82,3 +82,4 @@ Date: YYYY-MM-DD
 | [0058](0058-authz-schema-name.md) | The `authorization` block's schema is called `authz`, because the name is reserved | Accepted |
 | [0059](0059-subtree-scope-has-two-lines.md) | The location scope holds in the application **and** in row-level security | Accepted |
 | [0060](0060-the-erasure-runs-in-one-pass.md) | A tenant erasure is one ordered pass in the worker, not a choreography | Accepted |
+| [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
