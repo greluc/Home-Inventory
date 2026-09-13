@@ -4,16 +4,22 @@
  */
 package de.greluc.homeinv.tenancy.api;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * What {@code identity} is allowed to ask {@code tenancy}.
+ * The memberships of one person, answerable without a tenant context.
  *
  * <p>A port, not a repository: the login flow needs one fact - which tenant this person acts for -
  * and giving it the membership repository would let it read and write tenant data it has no
  * business touching. The interface is in the published {@code api} package because it is the only
  * part of {@code tenancy} another block may look at (REQ-NFR-020).
+ *
+ * <p>Every method here works where {@code app.tenant_id} is not set, which is what makes this
+ * different from every other read in the system and why it goes through the {@code SECURITY
+ * DEFINER} function of 07 §7.5. Choosing which tenant to act for cannot require already acting for
+ * one.
  */
 public interface MembershipLookup {
 
@@ -26,9 +32,11 @@ public interface MembershipLookup {
    * the same fact and one more place for the two to disagree.
    *
    * @param tenantId the tenant the session acts for
+   * @param tenantName the tenant's display name. Read here because a switcher that offers ids is
+   *     not a switcher, and the person choosing has no context in which to look the names up
    * @param role the membership's role, as stored - one of the six in the table's check constraint
    */
-  record Membership(UUID tenantId, String role) {}
+  record Membership(UUID tenantId, String tenantName, String role) {}
 
   /**
    * The membership a user acts under when they log in.
@@ -42,4 +50,16 @@ public interface MembershipLookup {
    *     legitimate state
    */
   Optional<Membership> primaryMembershipOf(UUID userId);
+
+  /**
+   * Every live membership of a person, oldest first.
+   *
+   * <p>What {@code GET /api/v1/me/tenants} shows and what the switch checks against (REQ-TEN-003),
+   * and what a tenant quota is counted from (REQ-TEN-002). Deliberately unpaginated: a person with
+   * more memberships than fit in one answer has hit the quota long before.
+   *
+   * @param userId the person
+   * @return their memberships, in the order they joined
+   */
+  List<Membership> membershipsOf(UUID userId);
 }

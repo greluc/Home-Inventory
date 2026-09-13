@@ -5,8 +5,11 @@
 package de.greluc.homeinv.identity.infrastructure;
 
 import de.greluc.homeinv.identity.domain.AppUser;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -31,4 +34,35 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
    */
   @Query("select u from AppUser u where lower(u.email) = lower(:email) and u.deletedAt is null")
   Optional<AppUser> findByEmail(@Param("email") String email);
+
+  /**
+   * The first page of the live accounts that administer the instance (ADR-0057).
+   *
+   * <p>Oldest first: the first operator is the one the bootstrap service made, and an operator
+   * reading this list wants to see it there. Ordered by {@code createdAt} and {@code id} together,
+   * because two accounts created in the same millisecond would otherwise page unstably.
+   *
+   * @param limit how many at most
+   * @return the instance operators
+   */
+  @Query("select u from AppUser u where u.instanceOperator = true and u.deletedAt is null"
+      + " order by u.createdAt asc, u.id asc")
+  List<AppUser> findInstanceOperators(Limit limit);
+
+  /**
+   * The operators after a keyset position.
+   *
+   * <p>A keyset and not an offset: an offset over a list somebody is editing skips and repeats rows
+   * (08 §8.2), and an operator list is edited exactly while it is being read.
+   *
+   * @param since the creation instant the previous page ended at
+   * @param id the id it ended at, breaking a tie within the same instant
+   * @param limit how many at most
+   * @return the next operators
+   */
+  @Query("select u from AppUser u where u.instanceOperator = true and u.deletedAt is null"
+      + " and (u.createdAt > :since or (u.createdAt = :since and u.id > :id))"
+      + " order by u.createdAt asc, u.id asc")
+  List<AppUser> findInstanceOperatorsAfter(
+      @Param("since") Instant since, @Param("id") UUID id, Limit limit);
 }

@@ -818,6 +818,7 @@ data loss, no migration.
 | `HOMEINV_BLOBSTORE_FINGERPRINT` | yes | The pinned certificate fingerprint of the in-deployment `blobstore`, checked on every connection — the same mechanism a plugin registration uses (`REQ-SEC-056`). [ADR-0043](../adr/0043-blobstore-as-its-own-service.md) gave that service every tenant's media and no authentication |
 | `HOMEINV_TRUSTED_PROXIES` | yes | CIDR list; `X-Forwarded-*` is honoured only from here. **Both hops**: the operator's reverse proxy **and** `web`'s address on `frontend` (`REQ-SEC-103`) |
 | `HOMEINV_REGISTRATION_MODE` | no (`invite_only`) | `invite_only` / `open` / `closed` |
+| `HOMEINV_TENANTS_PER_USER` | no (`10`) | How many tenants one account may be in, unless the operator sets a limit on the account itself. Between 0 and **200**, which is the page size `REQ-NFR-010` caps every collection at — so a person's tenants always fit in one answer and the switcher never silently omits one. A value outside that range **aborts startup** rather than being clamped ([ADR-0057](../adr/0057-the-instance-operator.md)) |
 | `HOMEINV_PROFILE` | no (`standard`) | see 6.10 |
 
 ## 6.12 Upgrading

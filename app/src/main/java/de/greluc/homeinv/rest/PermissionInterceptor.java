@@ -6,6 +6,7 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.authorization.api.AccessControl;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
+import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,7 +17,8 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * Enforces {@link RequiresPermission} before a handler runs (REQ-SEC-023).
+ * Enforces {@link RequiresPermission} and {@link RequiresEntitlement} before a handler runs
+ * (REQ-SEC-023, ADR-0057).
  *
  * <h2>Deny by default, twice over</h2>
  *
@@ -71,15 +73,32 @@ public class PermissionInterceptor implements HandlerInterceptor {
       return true;
     }
 
+    RequiresEntitlement entitled = method.getMethodAnnotation(RequiresEntitlement.class);
     RequiresPermission required = method.getMethodAnnotation(RequiresPermission.class);
+
+    if (entitled != null && required != null) {
+      // Two declarations are two answers to "what does this need", and the one a
+      // reader trusts is whichever they read first. Refused rather than resolved
+      // by precedence, because a precedence rule is the thing nobody remembers.
+      throw new IllegalStateException(
+          ("%s carries both @RequiresEntitlement and @RequiresPermission. An endpoint declares one "
+                  + "or the other (ADR-0057).")
+              .formatted(method.getMethod()));
+    }
+
+    if (entitled != null) {
+      accessControl.require(entitled.value());
+      return true;
+    }
+
     if (required == null) {
       // Not an exception a client should be able to distinguish from a genuine
       // denial, and not something the application should serve around. It throws
       // rather than returning false so that the failure reaches the log with the
       // method name in it.
       throw new IllegalStateException(
-          ("%s carries neither @RequiresPermission nor @PublicEndpoint. The default is deny "
-                  + "(REQ-SEC-023).")
+          ("%s carries none of @RequiresPermission, @RequiresEntitlement and @PublicEndpoint. "
+                  + "The default is deny (REQ-SEC-023).")
               .formatted(method.getMethod()));
     }
 

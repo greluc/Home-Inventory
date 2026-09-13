@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.bootstrap;
 
+import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.api.UserProvisioning;
 import de.greluc.homeinv.tenancy.api.TenantProvisioning;
 import java.util.Optional;
@@ -50,6 +51,7 @@ import org.springframework.stereotype.Component;
 public class BootstrapRunner implements ApplicationRunner {
 
   private final UserProvisioning users;
+  private final AccountAdministration accounts;
   private final TenantProvisioning tenants;
   private final ConfigurableApplicationContext context;
 
@@ -95,12 +97,19 @@ public class BootstrapRunner implements ApplicationRunner {
     try {
       Optional<UUID> created = users.createIfAbsent(email, displayName, locale, password);
       if (created.isEmpty()) {
-        log.info("This instance already has its owner; nothing to do.");
+        restoreOperatorIfNoneIsLeft();
         exit(0);
         return;
       }
 
-      UUID tenantId = tenants.provision(tenantName, created.get());
+      // The first account is the instance operator and may create tenants
+      // (ADR-0057). Both are granted here because there is nobody else who could
+      // grant them: an instance whose first account holds neither is one nobody
+      // can administer and nobody can add a second tenant to.
+      UUID owner = created.get();
+      accounts.replaceEntitlements(owner, true, true, null, owner);
+
+      UUID tenantId = tenants.provision(tenantName, owner);
       log.info(
           "Created the first owner and tenant {}. Sign in at HOMEINV_PUBLIC_BASE_URL.", tenantId);
       exit(0);
@@ -110,6 +119,43 @@ public class BootstrapRunner implements ApplicationRunner {
       log.error("Could not create the first owner.", failed);
       exit(1);
     }
+  }
+
+  /**
+   * Gives the bootstrap account the operator entitlement back, but only if nobody has it.
+   *
+   * <p>The recovery path ADR-0057 names. Nothing in the application stops the last operator
+   * clearing their own flag — deciding in code which operator is the last one is a question the
+   * application cannot answer while somebody else is deleting an account — so the way back is this
+   * service, which the operator already runs on every deployment.
+   *
+   * <p>Deliberately conditional on there being <b>no</b> operator at all. Restoring it
+   * unconditionally would mean an instance that has deliberately moved operatorship to somebody
+   * else gets it handed back to the bootstrap address on the next redeploy, silently, forever.
+   */
+  private void restoreOperatorIfNoneIsLeft() {
+    if (!accounts.operators(null, 1).items().isEmpty()) {
+      log.info("This instance already has its owner; nothing to do.");
+      return;
+    }
+    accounts
+        .byEmail(email)
+        .ifPresentOrElse(
+            account -> {
+              accounts.replaceEntitlements(
+                  account.id(),
+                  true,
+                  account.mayCreateTenants(),
+                  account.tenantLimit(),
+                  account.id());
+              log.warn(
+                  "This instance had no operator left. Restored it on the bootstrap account {}.",
+                  account.id());
+            },
+            () ->
+                log.error(
+                    "This instance has no operator, and the bootstrap address belongs to no live "
+                        + "account. Set HOMEINV_BOOTSTRAP_EMAIL to an existing account."));
   }
 
   private void exit(int code) {

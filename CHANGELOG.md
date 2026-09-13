@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **A person can have more than one tenant, and move between them without
+  signing in again.** An account the operator has entitled creates tenants of its
+  own — a household, a club, a workshop — up to a limit the operator sets per
+  account or instance-wide, and a switch changes which one the session acts for
+  and nothing else. Who may grant that, install a plugin or later view as another
+  user is now a thing rather than a word: the instance operator is a flag on an
+  account, the first one belongs to the account the deployment creates, and their
+  own area is `/api/v1/instance`. *REST API: additive.*
+
 - **Notes, relations between items, and a restocking level.** Every item carries a
   paragraph of notes in limited Markdown, and the HTML is removed before the text
   is stored, so a client that renders it cannot be made to run somebody's script.
@@ -296,7 +305,7 @@ commit".
 - A requirements catalogue with 425 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 57 architecture decision records, each with its alternatives and consequences —
+- 58 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

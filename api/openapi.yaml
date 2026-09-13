@@ -5,6 +5,37 @@
 # (ADR-0049).
 components:
   schemas:
+    AccountView:
+      description: |-
+        An account as the operator's view shows it.
+
+        No password hash, no session information, no list of tenants: an operator administers
+        entitlements, and the rest is the account holder's.
+      properties:
+        displayName:
+          description: what the interface calls them
+          type: string
+        email:
+          description: the login address
+          type: string
+        id:
+          description: the account
+          format: uuid
+          type: string
+        instanceOperator:
+          description: whether they administer the instance
+          type: boolean
+        locked:
+          description: whether the account is barred from authenticating
+          type: boolean
+        mayCreateTenants:
+          description: whether they may create tenants
+          type: boolean
+        tenantLimit:
+          description: their own limit, or null when the instance-wide default applies
+          format: int32
+          type: integer
+      type: object
     AddEntryRequest:
       description: A value to add to a list.
       properties:
@@ -252,6 +283,19 @@ components:
       - categoryId
       - name
       type: object
+    CreateTenantRequest:
+      description: The body of a tenant creation.
+      properties:
+        name:
+          description: |-
+            what to call it. The only thing a new tenant needs: everything else it has —
+            the built-in item type, the location categories — is seeded for it
+          maxLength: 200
+          minLength: 0
+          type: string
+      required:
+      - name
+      type: object
     CreateValueListRequest:
       description: What to call a new value list.
       properties:
@@ -267,6 +311,22 @@ components:
           type: object
       required:
       - key
+      type: object
+    EntitlementsRequest:
+      description: The body of an entitlement change.
+      properties:
+        instanceOperator:
+          description: whether the account administers the instance
+          type: boolean
+        mayCreateTenants:
+          description: whether it may create tenants (REQ-TEN-002)
+          type: boolean
+        tenantLimit:
+          description: how many tenants it may be in, or omitted for the instance-wide default
+          format: int32
+          maximum: 200
+          minimum: 0
+          type: integer
       type: object
     FieldConstraints:
       description: |-
@@ -791,6 +851,18 @@ components:
           format: int32
           type: integer
       type: object
+    OperatorPage:
+      description: One page of operators.
+      properties:
+        items:
+          description: the accounts
+          items:
+            $ref: '#/components/schemas/AccountView'
+          type: array
+        nextCursor:
+          description: where the next page starts, or null when this was the last
+          type: string
+      type: object
     Problem:
       additionalProperties: true
       description: 'An error, as RFC 9457 describes one. A client branches on `type` and never on `detail`:
@@ -944,27 +1016,41 @@ components:
           type: string
       type: object
     SessionView:
-      description: Who the caller is.
+      description: |-
+        Who the caller is after the switch.
+
+        The same shape `GET /api/v1/auth/me` answers with, so a client has one type for "the
+        session" however it changed.
       properties:
         email:
-          description: the address they logged in with
+          description: the address they signed in with
           type: string
         locale:
+          description: their interface language
           type: string
         role:
-          description: |-
-            the membership's role. Returned so the client can decide what to *offer*; it never
-            decides what is allowed, which happens in the application layer on every request
-            (REQ-SEC-022). A UI that shows a button nobody may press teaches people to ignore errors.
+          description: the role they hold in the new tenant
           type: string
         tenantId:
-          description: the tenant this session acts for
+          description: the tenant this session now acts for
           format: uuid
           type: string
         userId:
           description: the person
           format: uuid
           type: string
+      type: object
+    SwitchTenantRequest:
+      description: The body of a switch.
+      properties:
+        tenantId:
+          description: |-
+            the tenant to act for. Must be one the caller is a member of; anything else is
+            answered as though it did not exist
+          format: uuid
+          type: string
+      required:
+      - tenantId
       type: object
     TagGroupPage:
       description: One page of tag groups.
@@ -1091,6 +1177,34 @@ components:
           type: string
         name:
           description: the name a person reads, unique per tenant among the live ones
+          type: string
+      type: object
+    TenantMembershipView:
+      description: One of the caller's memberships.
+      properties:
+        id:
+          description: the tenant
+          format: uuid
+          type: string
+        name:
+          description: its display name, which is what a switcher shows
+          type: string
+        role:
+          description: the role the caller holds in it
+          type: string
+      type: object
+    TenantView:
+      description: A tenant as its member sees it.
+      properties:
+        id:
+          description: the tenant
+          format: uuid
+          type: string
+        name:
+          description: its display name
+          type: string
+        role:
+          description: the role the caller holds in it
           type: string
       type: object
     UpdateItemRequest:
@@ -2769,6 +2883,303 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Adds a field to a draft.
+  /api/v1/instance/accounts:
+    get:
+      description: |-
+        Finds an account by its login address.
+
+        The operator's way in: they know the address somebody wrote to them, not a UUID. An address
+        with no live account is a `404`, which here says exactly what it means — the operator is
+        entitled to know whether an account exists, which is the difference between this endpoint and
+        every tenant-scoped one.
+      operationId: byEmail
+      parameters:
+      - description: the address to look up
+        in: query
+        name: email
+        required: true
+        schema:
+          format: email
+          maxLength: 320
+          minLength: 0
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountView'
+          description: the account
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Finds an account by its login address
+  /api/v1/instance/accounts/{id}:
+    get:
+      description: One account by id.
+      operationId: byId
+      parameters:
+      - description: the account
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountView'
+          description: the account
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One account by id.
+  /api/v1/instance/accounts/{id}/entitlements:
+    put:
+      description: |-
+        Replaces what an account is entitled to do on the instance.
+
+        All three values in one request, because they are one decision. Nothing here stops an
+        operator clearing their own flag and locking the instance out of its own administration; the
+        way back is the one-shot `bootstrap` service, run again with the same address, and
+        guarding against it in code would mean deciding in the application which operator is the last
+        one — a question the application cannot answer while somebody else is deleting an account.
+      operationId: setEntitlements
+      parameters:
+      - description: the account to change
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntitlementsRequest'
+        description: the new entitlements
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountView'
+          description: the account as it now stands
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Replaces what an account is entitled to do on the instance
+  /api/v1/instance/operators:
+    get:
+      description: |-
+        One page of the accounts that administer the instance.
+
+        "Who can do this to us" — the question an operator asks before granting and an auditor asks
+        afterwards.
+      operationId: operators
+      parameters:
+      - description: an opaque cursor from a previous page, or omitted for the first
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorPage'
+          description: the operators, oldest account first
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One page of the accounts that administer the instance
   /api/v1/items:
     post:
       description: |-
@@ -4604,6 +5015,155 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Puts a tag on a place.
+  /api/v1/me/tenant:
+    post:
+      description: |-
+        Switches the session to another tenant the caller belongs to.
+
+        A tenant the caller is not a member of is a `404` and never a `403`: a denial
+        would confirm the tenant exists, which for somebody outside it is the fact they were not
+        supposed to learn (REQ-SEC-025). Switching to the tenant already active is allowed and does
+        nothing, because a client retrying a request whose answer it never saw must not get an error.
+      operationId: switchTenant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwitchTenantRequest'
+        description: the tenant to act for
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+          description: the session as it now stands
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Switches the session to another tenant the caller belongs to
+  /api/v1/me/tenants:
+    get:
+      description: |-
+        Every tenant the caller belongs to, oldest membership first.
+
+        Read through the lookup that works without a tenant context, because the caller is asking
+        which tenant to have and therefore cannot be required to already have one.
+
+        There is no cursor, and there does not need to be one: a tenant limit is capped at 200
+        (`AppUser.MAX_TENANT_LIMIT`), which is REQ-NFR-010's page size, so one page holds every
+        membership anybody can have. The `limit` exists so that a client asking for fewer gets
+        fewer, and so that the bound is visible in the contract rather than only in a constraint.
+      operationId: tenants
+      parameters:
+      - description: how many at most; capped at 200, which is also the most anybody can have
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/TenantMembershipView'
+                type: array
+          description: the memberships, each with the tenant's name and the role held in it
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Every tenant the caller belongs to, oldest membership first
   /api/v1/media:
     get:
       description: One page of the files attached to one thing, oldest first.
@@ -5494,6 +6054,84 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Merges one tag into another (REQ-CORE-063)
+  /api/v1/tenants:
+    post:
+      description: |-
+        Creates a tenant and makes the caller its owner.
+
+        The session is not switched to it. A creation that silently moved the caller out of the
+        tenant they were working in would lose whatever they had open; the client switches with
+        `POST /api/v1/me/tenant` when the person asks for it.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+        description: the tenant's name
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantView'
+          description: the new tenant
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`), or Quota exceeded (`quota-exceeded`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a tenant and makes the caller its owner
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

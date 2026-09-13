@@ -13,6 +13,7 @@ import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
 import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.tagging.api.TagService;
+import de.greluc.homeinv.tenancy.api.TenantLimitReachedException;
 import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
@@ -90,6 +91,31 @@ public class ApiExceptionHandler {
     log.warn("Forbidden: {}", exception.getMessage());
     return problem(ProblemType.FORBIDDEN, "Your role does not permit this operation.",
         request);
+  }
+
+  /**
+   * Answers a tenant the account may not have, because it already has as many as it may.
+   *
+   * <p>Both numbers travel as members rather than only in the sentence: 05 §5.1 says a quota
+   * refusal carries "the current and permitted amount", and a client showing that pair should not
+   * have to read English to find it.
+   *
+   * @param exception the refusal, carrying the two numbers
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 403} with {@code quota-exceeded}
+   */
+  @ExceptionHandler(TenantLimitReachedException.class)
+  public ProblemDetail handleTenantLimit(
+      TenantLimitReachedException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.QUOTA_EXCEEDED,
+            "This account is in as many tenants as it may be. Ask the operator to raise the limit.",
+            request);
+    problem.setProperty("current", exception.getCurrent());
+    problem.setProperty("permitted", exception.getPermitted());
+    problem.setProperty("quota", "tenants-per-user");
+    return problem;
   }
 
   /**

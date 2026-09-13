@@ -34,6 +34,16 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AppUser {
 
+  /**
+   * The highest tenant limit an account may be given.
+   *
+   * <p>REQ-NFR-010's page size, and it is a cap on this number for a concrete reason: a person who
+   * could be in more tenants than fit in one page would have a tenant switcher that silently omits
+   * some of them. The same ceiling is in the table's {@code CHECK}, because a write that bypasses
+   * the application must not be the way around it.
+   */
+  public static final int MAX_TENANT_LIMIT = 200;
+
   @Id
   @Column(name = "id", nullable = false, updatable = false)
   private UUID id;
@@ -81,6 +91,36 @@ public class AppUser {
    */
   @Column(name = "locked_at")
   private Instant lockedAt;
+
+  /**
+   * Whether this account administers the instance itself (ADR-0057, REQ-SEC-072).
+   *
+   * <p>Not a role and not a permission: the six roles are held within a tenant, and this is read
+   * where there is none. It grants nothing inside any tenant — row-level security answers to
+   * {@code app.tenant_id} and not to who asked.
+   */
+  @Column(name = "instance_operator", nullable = false)
+  private boolean instanceOperator;
+
+  /**
+   * Whether this account may create tenants (REQ-TEN-002).
+   *
+   * <p>Off unless an operator grants it, and deliberately not implied by {@link #instanceOperator}:
+   * administering an instance is not the same as accumulating tenants on it.
+   */
+  @Getter(AccessLevel.NONE) // The class-level @Getter would name it isMayCreateTenants().
+  @Column(name = "may_create_tenants", nullable = false)
+  private boolean mayCreateTenants;
+
+  /**
+   * How many tenants this account may own in total, or null for the instance-wide default.
+   *
+   * <p>Null is not "none" and not "unlimited" — it is "nobody has said anything about this person",
+   * and the deployment's {@code HOMEINV_TENANTS_PER_USER} then answers. An override exists so that
+   * an operator can make an exception for one person without raising the bar for everybody.
+   */
+  @Column(name = "tenant_limit")
+  private Integer tenantLimit;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
@@ -170,5 +210,68 @@ public class AppUser {
    */
   public boolean canAuthenticate() {
     return lockedAt == null && deletedAt == null;
+  }
+
+  /**
+   * Whether this account may create tenants.
+   *
+   * <p>Hand-written because the generated accessor would be called {@code isMayCreateTenants}, and
+   * a name nobody would choose is a name every caller reads twice.
+   *
+   * @return {@code true} when the entitlement is granted
+   */
+  public boolean mayCreateTenants() {
+    return mayCreateTenants;
+  }
+
+  /**
+   * Replaces what this account is entitled to do on the instance (ADR-0057).
+   *
+   * <p>All three at once rather than one setter each, because they are granted together in one
+   * operator action and one audit entry. A partial update would make "what is this account
+   * entitled to" a question with several answers depending on which call arrived last.
+   *
+   * @param instanceOperator whether the account administers the instance
+   * @param mayCreateTenants whether it may create tenants
+   * @param tenantLimit how many it may own, or null to fall back to the instance-wide default
+   * @param actor the operator making the change, recorded on the row
+   * @param now the instant of the change
+   */
+  public void replaceEntitlements(
+      boolean instanceOperator,
+      boolean mayCreateTenants,
+      Integer tenantLimit,
+      UUID actor,
+      Instant now) {
+    if (tenantLimit != null && (tenantLimit < 0 || tenantLimit > MAX_TENANT_LIMIT)) {
+      throw new IllegalArgumentException(
+          "A tenant limit is between 0 and " + MAX_TENANT_LIMIT + ", inclusive");
+    }
+    this.instanceOperator = instanceOperator;
+    this.mayCreateTenants = mayCreateTenants;
+    this.tenantLimit = tenantLimit;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Makes this account an instance operator, if it is not one already.
+   *
+   * <p>For the {@code bootstrap} service, which runs on every deployment and must be able to put
+   * the instance back in a state where somebody can administer it — including after the last
+   * operator cleared their own flag, which nothing in the code prevents (ADR-0057). It touches
+   * nothing else: not the password, which an operator may since have changed, and not the tenant
+   * entitlements, which are a separate grant.
+   *
+   * @param now the instant of the change
+   * @return whether anything changed, so the caller can say so rather than logging either way
+   */
+  public boolean ensureInstanceOperator(Instant now) {
+    if (instanceOperator) {
+      return false;
+    }
+    this.instanceOperator = true;
+    this.updatedAt = now;
+    return true;
   }
 }

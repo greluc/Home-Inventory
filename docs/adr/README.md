@@ -78,3 +78,4 @@ Date: YYYY-MM-DD
 | [0054](0054-the-scan-is-asynchronous.md) | The malware scan runs in the worker, and the upload is answered before it | Accepted |
 | [0055](0055-five-first-class-plugin-sdks.md) | Five first-class plugin SDKs: Java, Kotlin, Rust, Python and Go | Accepted |
 | [0056](0056-schema-validation-with-the-shipped-document.md) | Attributes are validated with the shipped schema document, and it resolves nothing remotely | Accepted |
+| [0057](0057-the-instance-operator.md) | The instance operator is a flag on an account, not a role in a tenant | Accepted |

@@ -20,6 +20,7 @@ import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
+import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.Role;
 import jakarta.persistence.Entity;
@@ -185,8 +186,12 @@ class ArchitectureRulesTest {
         if (!isHandler) {
           continue;
         }
+        // Three markers, one rule: every handler DECLARES what it needs. The
+        // third arrived with ADR-0057, because an endpoint that creates the
+        // caller's first tenant has no tenant to hold a permission in.
         boolean declared =
             method.isAnnotatedWith(RequiresPermission.class)
+                || method.isAnnotatedWith(RequiresEntitlement.class)
                 || method.isAnnotatedWith(PublicEndpoint.class);
         if (!declared) {
           undeclared.add(controller.getSimpleName() + "." + method.getName());
@@ -196,8 +201,8 @@ class ArchitectureRulesTest {
 
     assertThat(undeclared)
         .as(
-            "every handler carries @RequiresPermission or an explicit @PublicEndpoint with a "
-                + "written reason; the default is deny (REQ-SEC-023)")
+            "every handler carries @RequiresPermission, @RequiresEntitlement or an explicit "
+                + "@PublicEndpoint with a written reason; the default is deny (REQ-SEC-023)")
         .isEmpty();
   }
 

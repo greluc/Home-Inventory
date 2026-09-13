@@ -57,8 +57,8 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:466:enforced
-docs/architecture/04-building-blocks.md:471:enforced
+docs/architecture/04-building-blocks.md:467:enforced
+docs/architecture/04-building-blocks.md:472:enforced
 docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot
@@ -70,7 +70,7 @@ docs/architecture/06-deployment-view.md:536:cannot
 docs/architecture/06-deployment-view.md:722:cannot
 docs/architecture/06-deployment-view.md:793:cannot
 docs/architecture/06-deployment-view.md:83:cannot
-docs/architecture/06-deployment-view.md:870:fails the build
+docs/architecture/06-deployment-view.md:871:fails the build
 docs/architecture/07-data-model.md:380:cannot
 docs/architecture/07-data-model.md:501:enforces
 docs/architecture/07-data-model.md:528:cannot
@@ -80,11 +80,10 @@ docs/architecture/07-data-model.md:557:guaranteed
 docs/architecture/07-data-model.md:562:enforces
 docs/architecture/07-data-model.md:581:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:175:enforced
 docs/architecture/08-api-contract.md:176:enforced
-docs/architecture/08-api-contract.md:257:cannot
-docs/architecture/08-api-contract.md:335:fails the build
-docs/architecture/08-api-contract.md:345:fails the build
+docs/architecture/08-api-contract.md:177:enforced
+docs/architecture/08-api-contract.md:258:cannot
+docs/architecture/08-api-contract.md:336:fails the build
 docs/architecture/09-extensibility-and-plugins.md:183:cannot
 docs/architecture/09-extensibility-and-plugins.md:196:cannot
 docs/architecture/09-extensibility-and-plugins.md:219:cannot

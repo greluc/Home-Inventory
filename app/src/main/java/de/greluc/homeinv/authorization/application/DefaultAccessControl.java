@@ -6,26 +6,51 @@ package de.greluc.homeinv.authorization.application;
 
 import de.greluc.homeinv.authorization.api.AccessControl;
 import de.greluc.homeinv.authorization.api.AccessDeniedException;
+import de.greluc.homeinv.authorization.api.AccountEntitlements;
+import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.Role;
 import de.greluc.homeinv.authorization.api.TenantOwned;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.NotFoundException;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * Evaluates a permission against the caller's built-in role.
+ * Evaluates a permission against the caller's built-in role, and an entitlement against their
+ * account.
  *
  * <p>Stage 0 has no stored role definitions: the six built-in roles and their grants are code, in
  * {@link Role}. Stage 1 adds tenant-owned roles that extend them, and this is where that lookup
  * lands — the callers of {@link AccessControl} do not change when it does, which is the reason the
  * interface exists at all.
+ *
+ * <p>The two questions are answered from different places on purpose (ADR-0057). A permission is
+ * decided from the role in the principal, which was established at login for one tenant; an
+ * entitlement is read from the account on every call, because it is granted by an operator to
+ * somebody who may be signed in while it happens.
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class DefaultAccessControl implements AccessControl {
+
+  private final AccountEntitlements entitlements;
+
+  @Override
+  public void require(Entitlement entitlement) {
+    CallerContext.Caller caller = CallerContext.require();
+    if (!entitlements.holds(caller.userId(), entitlement)) {
+      // At WARN and named, for the same reason a permission denial is: it is
+      // either an attack or an administration mistake, and an operator wants to
+      // see both. REQ-TEN-010 asks for the attempt to be logged as well as
+      // rejected, and this is where that happens for the instance level.
+      log.warn("Denied: the caller's account does not hold {}.", entitlement.id());
+      throw new AccessDeniedException(entitlement);
+    }
+  }
 
   @Override
   public void require(Permission permission) {

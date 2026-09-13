@@ -40,8 +40,9 @@ forbids database and repository access from the access blocks.
 ├── /auth        /login /logout /refresh /mfa /passkeys /password-reset
 │             /authorize /token /revoke /clients      (OAuth 2.1, see below)
 ├── /.well-known /oauth-authorization-server /jwks.json
-├── /me          profile, devices, sessions, settings
+├── /me          profile, devices, sessions, settings · /tenants (memberships) · /tenant (switch)
 ├── /tenants     {id}/members {id}/invitations {id}/quotas {id}/settings {id}/export
+├── /instance    /accounts {id}/entitlements · /operators   (the instance operator only)
 ├── /roles       tenant-owned roles and permissions
 ├── /item-types  {id}/versions {id}/fields   (the type system)
 ├── /location-categories
@@ -342,4 +343,4 @@ send the fragment to the server, so it leaks nothing.
 | Protobuf unbroken | `buf breaking` | yes |
 | Generated clients compile | TS `tsc`, Kotlin build | yes |
 | Event schemas unbroken | Schema comparison | yes |
-| Every endpoint has an authorization test | A dedicated rule: an endpoint without `@RequiresPermission` **and** without an explicit `@PublicEndpoint` marker fails the build | yes |
+| Every endpoint has an authorization test | A dedicated rule: an endpoint declaring none of `@RequiresPermission`, `@RequiresEntitlement` ([ADR-0057](../adr/0057-the-instance-operator.md)) and an explicit `@PublicEndpoint` marker fails the build, in `ArchitectureRulesTest` and again in `PermissionInterceptor` at run time | yes |

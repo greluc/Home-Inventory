@@ -43,6 +43,16 @@ public enum ProblemType {
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 
   /**
+   * A quota would be exceeded by this operation (REQ-TEN-009).
+   *
+   * <p>Carries the current and the permitted amount, because a client that has to parse the
+   * sentence to show "3 of 3 used" is a client that shows the wrong number in one of the two
+   * languages. A {@code 403} and not a {@code 429}: waiting does not help, and {@code Retry-After}
+   * would be a lie (05 §5.1).
+   */
+  QUOTA_EXCEEDED("quota-exceeded", HttpStatus.FORBIDDEN, "Quota exceeded"),
+
+  /**
    * The resource does not exist, <em>or</em> exists and is not visible to this caller.
    *
    * <p>The two are deliberately one token. Separating them would let a caller confirm that a foreign

@@ -21,4 +21,18 @@ public class AccessDeniedException extends RuntimeException {
   public AccessDeniedException(Permission permission) {
     super("The caller's role does not hold " + permission.id() + ".");
   }
+
+  /**
+   * The same answer for an instance-level entitlement the account does not hold (ADR-0057).
+   *
+   * <p>One exception for both, because a client has one thing to do about either: ask somebody who
+   * can grant it. Splitting them would put the difference between "your role is too low here" and
+   * "your account is not entitled on this instance" into an error body, and the second half is a
+   * fact about the instance's administration rather than about the request.
+   *
+   * @param entitlement the entitlement that was required
+   */
+  public AccessDeniedException(Entitlement entitlement) {
+    super("The caller's account does not hold " + entitlement.id() + ".");
+  }
 }

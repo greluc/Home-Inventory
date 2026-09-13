@@ -181,10 +181,10 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 |---|---|
 | Schema | `identity` |
 | Key notions | `User`, `Credential` (password/TOTP/passkey), `Session`, `RefreshToken`, `ServiceAccount`, `IdentityProvider` |
-| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView` |
+| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else) |
 | Outbound ports | `PasswordHasher` (Argon2id, in-core) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
 | Events | `UserRegistered`, `UserDeactivated`, `CredentialChanged`, `SuspiciousLoginDetected` |
-| Notable | Knows **no** tenants and **no** permissions. Who someone is and what someone may do are separate questions. |
+| Notable | Knows **no** tenants and **no** permissions. Who someone is and what someone may do are separate questions. The account nevertheless carries three **instance-level** facts — `instance_operator`, `may_create_tenants` and `tenant_limit` ([ADR-0057](../adr/0057-the-instance-operator.md)) — and they are not a contradiction: nothing here evaluates them. This block stores them, `authorization` answers with them through the `AccountEntitlements` port, and no tenant can grant one. |
 
 ---
 
@@ -196,7 +196,7 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 |---|---|
 | Schema | `tenancy` |
 | Key notions | `Tenant`, `Membership`, `Invitation`, `Quota`, `TenantSettings` |
-| Publishes | `TenantService`, `MembershipQuery`, `QuotaGuard` |
+| Publishes | `TenantService` (creating a tenant as a person, within the account's bound), `TenantProvisioning` (the mechanism, which the one-shot `bootstrap` service uses and which has no opinion about who may), `MembershipLookup` (the memberships of one person, answerable **without** a tenant context), `QuotaGuard` |
 | Outbound ports | `MailSender` — served by `plugin-smtp` ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)). Invitations therefore need that plugin installed; without it a tenant administrator can still add members, but no invitation mail goes out, and the UI says so |
 | Events | `TenantCreated`, `TenantSuspended`, `TenantDeletionRequested`, `MemberJoined`, `MemberLeft`, `QuotaExceeded` |
 | Notable | `QuotaGuard` is called **before** every creating operation (item count, bytes stored, plugin count, API calls). That way abuse limitation is not something to bolt on later. |
@@ -211,11 +211,12 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 | | |
 |---|---|
 | Schema | `authorization` — **from stage 1**. Stage 0 has none and creates none: the six built-in roles and their grants are code, and an empty schema passes every check while documenting nothing (the same rule `V1__extensions_schemas_grants.sql` follows). The registry is [`docs/reference/permissions.yaml`](../reference/permissions.yaml), compared against the code on every build |
-| Key notions | `Role` (built-in from stage 0, tenant-owned from stage 1), `Permission`, `PolicyDecision`, `Scope` |
-| Publishes | `AccessControl.require(permission)` and `require(permission, resource)`, `Permission`, `Role`, `@RequiresPermission`, `@PublicEndpoint` |
+| Key notions | `Role` (built-in from stage 0, tenant-owned from stage 1), `Permission`, `Entitlement` (instance-level, from stage 1 — [ADR-0057](../adr/0057-the-instance-operator.md)), `PolicyDecision`, `Scope` |
+| Publishes | `AccessControl.require(permission)`, `require(permission, resource)` and `require(entitlement)`, `Permission`, `Role`, `Entitlement`, `@RequiresPermission`, `@RequiresEntitlement`, `@PublicEndpoint`, and the `AccountEntitlements` port that `identity` implements |
 | Events | `RoleAssigned`, `RoleDefinitionChanged`, `AccessDenied` (for audit) |
 | Permission model | `<block>:<resource>:<action>` — e.g. `inventory:item:create`, `catalog:type:update`, `labeling:job:print`. Field-level visibility through `field-visibility` rules per role (e.g. purchase price only for `ADMIN`). |
 | Built-in roles | `OWNER`, `ADMIN`, `MEMBER`, `CONTRIBUTOR`, `VIEWER`, `GUEST` — tenant-owned roles extend, they do not replace |
+| Entitlements | `INSTANCE_OPERATOR` and `CREATE_TENANT`, on the **account** rather than in a tenant. A permission is evaluated against the role a session holds in the tenant it acts for; these are read where there is none — creating one's first tenant, administering the instance — and no tenant could grant one anyway ([ADR-0057](../adr/0057-the-instance-operator.md)) |
 | Notable | **Never** decides on data it loads itself. Resources are handed in as already-loaded, tenant-checked objects. This closes time-of-check/time-of-use gaps. |
 
 ---

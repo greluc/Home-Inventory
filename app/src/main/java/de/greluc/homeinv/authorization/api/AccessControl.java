@@ -48,6 +48,20 @@ public interface AccessControl {
   void require(Permission permission, TenantOwned resource);
 
   /**
+   * Requires an instance-level entitlement of the calling account (ADR-0057).
+   *
+   * <p>Read from the account rather than from the session's role, because these endpoints run where
+   * there is no tenant to hold a role in: creating one's first tenant, and administering the
+   * instance itself.
+   *
+   * @param entitlement what the operation needs
+   * @throws AccessDeniedException when the account does not hold it
+   * @throws IllegalStateException when there is no caller at all, which is a wiring fault rather
+   *     than a denial
+   */
+  void require(Entitlement entitlement);
+
+  /**
    * Whether the caller holds a permission, without throwing.
    *
    * <p>For deciding what to offer rather than what to allow — a UI that shows a delete button

@@ -205,3 +205,45 @@ roles:
   - name: OWNER
     rationale: The person the tenant belongs to.
     grants: all
+
+# ---------------------------------------------------------------------------
+# ENTITLEMENTS
+#
+# NOT permissions, and kept apart from them for a reason rather than for tidiness
+# (ADR-0057). A permission is evaluated against the role a session holds IN THE
+# TENANT IT ACTS FOR; an entitlement is a flag on the account itself, read where
+# there is no tenant at all — creating one's first tenant, administering the
+# instance. No tenant can grant one: a tenant that could hand out "may create a
+# tenant" would be handing out the right to create a second one.
+#
+# The ids are shaped like permission ids on purpose. They end up in the same
+# audit entries and the same denial log lines, and a reader should not have to
+# know which of the two mechanisms produced one to know what was refused.
+#
+# `AuthorizationRegistryTest` compares this list against
+# `de.greluc.homeinv.authorization.api.Entitlement` on every build, the same way
+# it does for the permissions above.
+# ---------------------------------------------------------------------------
+entitlements:
+  - id: instance:operator
+    since: 1
+    name: INSTANCE_OPERATOR
+    description: >
+      Administers the instance itself: grants entitlements, sets instance-wide
+      quota defaults, installs plugins, and impersonates (REQ-SEC-072). Granted
+      to the bootstrap account, and by an existing operator to anybody else.
+    notable: >
+      Grants nothing inside any tenant. Row-level security answers to
+      `app.tenant_id` and not to who asked, so an operator who is not a member of
+      a tenant reads none of its rows — which is why impersonation is its own
+      audited, time-limited act rather than a side effect of this flag.
+
+  - id: instance:tenant:create
+    since: 1
+    name: CREATE_TENANT
+    description: >
+      Creates tenants (REQ-TEN-002), bounded by the account's tenant limit or by
+      the instance-wide `HOMEINV_TENANTS_PER_USER` default.
+    notable: >
+      Deliberately NOT implied by `instance:operator`, so that administering an
+      instance does not silently accumulate tenants of one's own.

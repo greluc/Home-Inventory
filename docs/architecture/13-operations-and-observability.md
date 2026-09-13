@@ -173,7 +173,7 @@ under its own service account with its own permissions.
 
 | Task | Tooling |
 |---|---|
-| Create, suspend, resume, delete tenants | Administration UI |
+| Create, suspend, resume, delete tenants | Administration UI, over `/api/v1/instance/**` — every endpoint there gated on the `INSTANCE_OPERATOR` entitlement, which is a flag on an account and never a role in a tenant ([ADR-0057](../adr/0057-the-instance-operator.md)) |
 | Set and monitor quotas | Per tenant; instance-wide defaults |
 | Tenant-scoped reporting | Occupancy, activity, cost (storage), error rate |
 | Export a single tenant | Complete, including media, without touching the others |

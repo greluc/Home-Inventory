@@ -6,6 +6,7 @@ package de.greluc.homeinv;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.Role;
 import java.io.IOException;
@@ -136,6 +137,49 @@ class AuthorizationRegistryTest {
   }
 
   // -------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("names exactly the entitlements the code defines, with the same ids (ADR-0057)")
+  void entitlementsMatchTheCode() {
+    // The second mechanism, written down in the same file and checked the same
+    // way. An entitlement id reaches an audit entry and a denial log line exactly
+    // as a permission id does, so the same drift is possible and the same check
+    // closes it.
+    Map<String, String> documented = new LinkedHashMap<>();
+    for (Map<String, Object> entry : entitlementEntries()) {
+      documented.put((String) entry.get("name"), (String) entry.get("id"));
+    }
+
+    Map<String, String> implemented = new LinkedHashMap<>();
+    for (Entitlement entitlement : EnumSet.allOf(Entitlement.class)) {
+      implemented.put(entitlement.name(), entitlement.id());
+    }
+
+    assertThat(documented)
+        .as("every Entitlement is in docs/reference/permissions.yaml under the same id")
+        .isEqualTo(implemented);
+  }
+
+  @Test
+  @DisplayName("keeps entitlements out of the permission catalogue, because they are not roles")
+  void anEntitlementIsNotAPermission() {
+    Set<String> permissionIds =
+        permissionEntries().stream().map(entry -> (String) entry.get("id")).collect(Collectors.toSet());
+
+    for (Entitlement entitlement : EnumSet.allOf(Entitlement.class)) {
+      assertThat(permissionIds)
+          .as(
+              "%s is an instance-level entitlement; listing it as a permission would make it "
+                  + "grantable by a tenant-owned role (ADR-0057)",
+              entitlement.id())
+          .doesNotContain(entitlement.id());
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> entitlementEntries() {
+    return (List<Map<String, Object>>) registry().get("entitlements");
+  }
 
   @SuppressWarnings("unchecked")
   private static List<Map<String, Object>> permissionEntries() {
