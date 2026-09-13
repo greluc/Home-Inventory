@@ -5,6 +5,7 @@
 package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.audit.api.RevisionLog;
+import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -58,6 +59,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ItemController {
 
   private final ItemService items;
+  private final ItemRelations relations;
 
   /**
    * Creates an item, or returns the one that is already there.
@@ -97,7 +99,9 @@ public class ItemController {
                 request.locationId(),
                 request.quantity(),
                 request.quantityUnit(),
-                request.attributes()),
+                request.attributes(),
+                request.notes(),
+                request.minimumStock()),
             user.userId());
 
     ItemView view = result.item();
@@ -143,7 +147,9 @@ public class ItemController {
             request.locationId(),
             request.quantity(),
             request.quantityUnit(),
-            request.attributes()),
+            request.attributes(),
+            request.notes(),
+            request.minimumStock()),
         user.userId());
   }
 
@@ -163,6 +169,75 @@ public class ItemController {
   public void deleteItem(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     items.delete(id, user.userId());
   }
+
+  /**
+   * Every relation this item takes part in, from either end (REQ-CORE-006).
+   *
+   * @param id the item
+   * @param cursor an opaque cursor from a previous page, or omitted for the first
+   * @param limit how many at most; capped at 200 by the service
+   * @return the page and a cursor for the next one
+   */
+  @GetMapping(path = "/{id}/relations", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public ItemRelations.RelationPage itemRelations(
+      @PathVariable UUID id,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return relations.relationsOf(id, cursor, limit);
+  }
+
+  /**
+   * Relates this item to another.
+   *
+   * @param id the item the relation is stated from
+   * @param request what it points at and how
+   * @param user the authenticated caller
+   * @return the relation
+   */
+  @PostMapping(path = "/{id}/relations", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.CREATED)
+  public ItemRelations.RelationView relateItem(
+      @PathVariable UUID id,
+      @Valid @RequestBody RelationRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return relations.relate(
+        id,
+        request.targetId(),
+        ItemRelations.RelationType.valueOf(request.type().toUpperCase(java.util.Locale.ROOT)),
+        user.userId());
+  }
+
+  /**
+   * Removes a relation.
+   *
+   * @param id the item, which is in the path so the relation is addressed where it is read
+   * @param relationId the relation
+   * @param user the authenticated caller
+   */
+  @DeleteMapping(path = "/{id}/relations/{relationId}")
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail(ProblemType.NOT_FOUND)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void unrelateItem(
+      @PathVariable UUID id,
+      @PathVariable UUID relationId,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    relations.unrelate(relationId, user.userId());
+  }
+
+  /**
+   * The body of a relation.
+   *
+   * @param targetId the item this one points at
+   * @param type {@code ACCESSORY_OF}, {@code PART_OF}, {@code REPLACEMENT_FOR} or {@code RELATED}
+   */
+  public record RelationRequest(
+      @jakarta.validation.constraints.NotNull UUID targetId,
+      @NotBlank @Size(max = 20) String type) {}
 
   /**
    * One page of the tenant's trashed items (REQ-CORE-009).
@@ -274,6 +349,8 @@ public class ItemController {
    * @param quantityUnit the unit
    * @param attributes the fields the type declares, as a JSON object. Checked against the version's
    *     schema, and an offending value is a {@code 422} naming its path (REQ-CORE-005)
+   * @param notes a paragraph in limited Markdown; HTML is removed before it is stored
+   * @param minimumStock the level below which this consumable needs restocking, or omitted
    */
   public record CreateItemRequest(
       UUID id,
@@ -284,7 +361,9 @@ public class ItemController {
       UUID locationId,
       @PositiveOrZero BigDecimal quantity,
       @Size(max = 30) String quantityUnit,
-      @Size(max = 65_536) String attributes) {}
+      @Size(max = 65_536) String attributes,
+      @Size(max = 20_000) String notes,
+      @PositiveOrZero BigDecimal minimumStock) {}
 
   /**
    * The body of an update. {@code kind} is absent: a physical item does not become a digital one.
@@ -296,6 +375,8 @@ public class ItemController {
    * @param quantityUnit the new unit
    * @param attributes the new attribute set as a JSON object, checked against the version the item
    *     was written against rather than against whatever the type says today
+   * @param notes the new notes; HTML is removed before they are stored
+   * @param minimumStock the new restocking level, or omitted to stop tracking one
    */
   public record UpdateItemRequest(
       @NotBlank @Size(max = 500) String name,
@@ -303,5 +384,7 @@ public class ItemController {
       UUID locationId,
       @PositiveOrZero BigDecimal quantity,
       @Size(max = 30) String quantityUnit,
-      @Size(max = 65_536) String attributes) {}
+      @Size(max = 65_536) String attributes,
+      @Size(max = 20_000) String notes,
+      @PositiveOrZero BigDecimal minimumStock) {}
 }

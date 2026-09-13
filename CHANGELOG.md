@@ -125,6 +125,15 @@ commit".
 
 ### Added
 
+- **Notes, relations between items, and a restocking level.** Every item carries a
+  paragraph of notes in limited Markdown, and the HTML is removed before the text
+  is stored, so a client that renders it cannot be made to run somebody's script.
+  Items can be related to one another — accessory of, part of, replacement for, or
+  simply related — and a relation is stated once and read from both ends, never
+  points at its own item, and asked for twice is the one that already exists. A
+  consumable can name the level below which it needs restocking; falling under it
+  raises an event. *REST API: additive.*
+
 - **Deleting an item is two steps, and every change is recoverable.** A deletion
   puts the item in the trash, where it is listed, restorable and out of every
   ordinary read; removing it for good is a separate operation behind a permission

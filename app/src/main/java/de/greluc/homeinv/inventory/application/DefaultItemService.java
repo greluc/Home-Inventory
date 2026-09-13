@@ -136,6 +136,8 @@ public class DefaultItemService implements ItemService {
             command.quantity() != null ? command.quantity() : BigDecimal.ONE,
             command.quantityUnit(),
             attributes,
+            command.notes(),
+            command.minimumStock(),
             actor,
             now);
 
@@ -153,6 +155,13 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.CREATED,
         snapshot(item),
         actor);
+    // A consumable that starts below its own minimum is already low; nothing
+    // "fell", but the thing a reminder is for is true from the first moment.
+    if (item.isBelowMinimum()) {
+      events.publishEvent(
+          new de.greluc.homeinv.inventory.api.StockBelowMinimum(
+              tenantId, id, item.getQuantity(), item.getMinimumStock()));
+    }
     log.debug("Item {} created in tenant {}", id, tenantId);
     return new CreateResult(toView(item), true);
   }
@@ -196,7 +205,12 @@ public class DefaultItemService implements ItemService {
         // compareTo, not equals: BigDecimal.equals is scale-sensitive, so 1 and
         // 1.0 would count as different content and turn a retry into a conflict.
         && item.getQuantity().compareTo(wanted) == 0
-        && Objects.equals(item.getQuantityUnit(), command.quantityUnit());
+        && Objects.equals(item.getQuantityUnit(), command.quantityUnit())
+        // The notes as they would be STORED, not as they were sent: a retry that
+        // sends `<b>x</b>` where `x` is stored is the same request, and comparing
+        // the raw text would make every such retry a conflict.
+        && Objects.equals(
+            item.getNotes(), de.greluc.homeinv.inventory.domain.Notes.sanitise(command.notes()));
   }
 
   /**
@@ -240,6 +254,9 @@ public class DefaultItemService implements ItemService {
     // type says today: an edit to an old item must not start failing because the
     // type moved on (REQ-CORE-025).
     String attributes = validated(item.getItemTypeVersionId(), command.attributes());
+    // Read before the change, so the event below reports a CROSSING rather than a
+    // state: an edit to something already known to be low is not news.
+    boolean wasBelow = item.isBelowMinimum();
 
     item.update(
         command.name(),
@@ -248,6 +265,8 @@ public class DefaultItemService implements ItemService {
         command.quantity() != null ? command.quantity() : BigDecimal.ONE,
         command.quantityUnit(),
         attributes,
+        command.notes(),
+        command.minimumStock(),
         actor,
         Instant.now(clock));
 
@@ -262,6 +281,11 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
         snapshot(item),
         actor);
+    if (!wasBelow && item.isBelowMinimum()) {
+      events.publishEvent(
+          new de.greluc.homeinv.inventory.api.StockBelowMinimum(
+              tenantId, id, item.getQuantity(), item.getMinimumStock()));
+    }
     return toView(item);
   }
 
@@ -416,6 +440,8 @@ public class DefaultItemService implements ItemService {
         earlier.quantity() != null ? earlier.quantity() : BigDecimal.ONE,
         earlier.quantityUnit(),
         attributes,
+        earlier.notes(),
+        earlier.minimumStock(),
         actor,
         Instant.now(clock));
     items.flush();
@@ -451,6 +477,8 @@ public class DefaultItemService implements ItemService {
             item.getQuantity(),
             item.getQuantityUnit(),
             item.getAttributes(),
+            item.getNotes(),
+            item.getMinimumStock(),
             item.getItemTypeVersionId(),
             item.getLifecycleState()));
   }
@@ -466,6 +494,8 @@ public class DefaultItemService implements ItemService {
    * @param quantity how many
    * @param quantityUnit the unit
    * @param attributes the type version's fields, as JSON text
+   * @param notes the paragraph a person wrote
+   * @param minimumStock the restocking level, or {@code null}
    * @param itemTypeVersionId which definitions those attributes were written against
    * @param lifecycleState the state a person reads
    */
@@ -477,6 +507,8 @@ public class DefaultItemService implements ItemService {
       BigDecimal quantity,
       String quantityUnit,
       String attributes,
+      String notes,
+      BigDecimal minimumStock,
       UUID itemTypeVersionId,
       String lifecycleState) {}
 
@@ -496,6 +528,8 @@ public class DefaultItemService implements ItemService {
         item.getQuantity(),
         item.getQuantityUnit(),
         item.getAttributes(),
+        item.getNotes(),
+        item.getMinimumStock(),
         item.getLifecycleState(),
         item.getCreatedAt(),
         item.getUpdatedAt(),

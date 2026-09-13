@@ -97,6 +97,25 @@ public class Item {
   @Type(JsonbType.class)
   private String attributes;
 
+  /**
+   * A paragraph a person writes about this thing (REQ-CORE-014).
+   *
+   * <p>Limited Markdown, and the limit is applied on the way in: {@link Notes#sanitise} removes the
+   * raw HTML every Markdown implementation would otherwise pass through, so what is stored is what
+   * will be shown and no reader has to clean it again.
+   */
+  @Column(name = "notes")
+  private String notes;
+
+  /**
+   * The level below which this thing needs restocking, or {@code null} (REQ-CORE-008).
+   *
+   * <p>An item that carries one IS a consumable. There is no separate flag: a flag and a threshold
+   * would be two ways of saying the same thing, and one of them would eventually be wrong.
+   */
+  @Column(name = "minimum_stock")
+  private BigDecimal minimumStock;
+
   /** Whether the item exists in the physical world, which decides whether it needs a location. */
   @Enumerated(EnumType.STRING)
   @Column(name = "kind", nullable = false)
@@ -167,12 +186,16 @@ public class Item {
       BigDecimal quantity,
       String quantityUnit,
       String attributes,
+      String notes,
+      BigDecimal minimumStock,
       UUID actor,
       Instant now) {
     this.id = id;
     this.tenantId = tenantId;
     this.itemTypeVersionId = itemTypeVersionId;
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
+    this.notes = Notes.sanitise(notes);
+    this.minimumStock = minimumStock;
     this.name = name;
     this.description = description;
     this.kind = kind;
@@ -200,6 +223,8 @@ public class Item {
    * @param quantityUnit the unit, may be null
    * @param attributes the type version's fields as JSON text, already validated by the caller;
    *     {@code null} means an empty set
+   * @param notes a paragraph about this thing; HTML in it is removed here
+   * @param minimumStock the level below which it needs restocking, or {@code null}
    * @param actor the user creating it, recorded in the audit columns
    * @param now the creation instant, passed in so tests need no clock trickery
    * @return the new item, not yet persisted
@@ -219,6 +244,8 @@ public class Item {
       BigDecimal quantity,
       String quantityUnit,
       String attributes,
+      String notes,
+      BigDecimal minimumStock,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -241,6 +268,8 @@ public class Item {
         quantity,
         quantityUnit,
         attributes,
+        notes,
+        minimumStock,
         actor,
         now);
   }
@@ -258,6 +287,8 @@ public class Item {
    * @param quantity the new quantity; must not be negative
    * @param quantityUnit the new unit, may be null
    * @param attributes the new attribute set as JSON text, already validated by the caller
+   * @param notes the new notes; HTML in them is removed here
+   * @param minimumStock the new restocking level, or {@code null} to stop tracking one
    * @param actor the user making the change
    * @param now the instant of the change
    * @throws IllegalArgumentException under the same conditions as {@link #create}
@@ -269,6 +300,8 @@ public class Item {
       BigDecimal quantity,
       String quantityUnit,
       String attributes,
+      String notes,
+      BigDecimal minimumStock,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -286,6 +319,8 @@ public class Item {
     this.quantity = quantity;
     this.quantityUnit = quantityUnit;
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
+    this.notes = Notes.sanitise(notes);
+    this.minimumStock = minimumStock;
     this.updatedBy = actor;
     this.updatedAt = now;
   }
@@ -346,5 +381,14 @@ public class Item {
    */
   public boolean isDeleted() {
     return deletedAt != null;
+  }
+
+  /**
+   * Whether this thing is a consumable that has run low (REQ-CORE-008).
+   *
+   * @return true when a minimum is tracked and the quantity is under it
+   */
+  public boolean isBelowMinimum() {
+    return minimumStock != null && quantity != null && quantity.compareTo(minimumStock) < 0;
   }
 }

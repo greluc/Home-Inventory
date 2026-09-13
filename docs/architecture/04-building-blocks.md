@@ -249,12 +249,12 @@ attributes, quantities, relations, lifecycle.
 |---|---|
 | Schema | `inventory` |
 | Key notions | `Item` (aggregate root), `ItemAttributes` (JSONB), `ItemRelation`, `ItemLifecycle`, `MaintenanceEntry`, `Loan`, `Bundle`, `ConsumableStock`, `Valuation` (purchase price, current value, replacement value) |
-| Publishes | `ItemService`, `ItemQuery`, `ItemView`, `ItemRef` |
+| Publishes | `ItemService`, `ItemQuery`, `ItemRelations`, `ItemView`, `ItemRef` |
 | Outbound ports | `AttributeValidator` (catalog), `LocationLookup` (locations), `QuotaGuard` (tenancy), `AccessControl` (authorization), `CodeAssignment` (identification), **`AuditService` (audit)** — [05 §5.1](05-runtime-view.md) writes an audit entry inside the item transaction, and without this port that write would be a block reaching into a foreign schema, which [4.5](#45-mapping-blocks-to-database-schemas) forbids |
 | Events | `ItemCreated`, `ItemUpdated`, `ItemMoved`, `ItemDeleted`, `ItemRestored`, `ItemLent`, `ItemReturned`, `ItemDisposed`, `QuantityChanged`, `StockBelowMinimum` |
 | Item kinds | `PHYSICAL` (has a location, can carry a code) and `DIGITAL` (no physical place, instead a carrier/account, licence key, expiry, seat count) |
 | States | `ACTIVE` → `LENT` → `ACTIVE` · `ACTIVE` → `ARCHIVED` · `ACTIVE` → `TRASHED` → `ACTIVE`/`PURGED` · `ACTIVE` → `SOLD`/`DISPOSED` |
-| Invariants | A physical item has exactly one location · attributes are valid against the type version · quantity ≥ 0 · a bundle does not contain itself · a lent item is not deleted |
+| Invariants | A physical item has exactly one location · attributes are valid against the type version · quantity ≥ 0 · no item is related to itself · a bundle does not contain itself · a lent item is not deleted |
 
 ---
 
@@ -446,7 +446,7 @@ translates protocol into use-case call and back.
 | `tenancy` | tenancy | Source schema for `tenant_id` foreign keys |
 | `authorization` | authorization | |
 | `catalog` | catalog | Type and field definitions, JSON Schema cache |
-| `inventory` | inventory | Holds `item`, `item_attr_index` |
+| `inventory` | inventory | Holds `item`, `item_attr_index`, `item_relation` |
 | `locations` | locations | Requires the `ltree` extension |
 | `tagging` | tagging | |
 | `media` | media | Metadata only, never binary data. The blobs themselves live under `sha256/<tenantId>/<hash>` in the `BlobStore` ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)) |

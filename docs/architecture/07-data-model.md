@@ -235,6 +235,14 @@ CREATE TABLE inventory.item (
     location_id         uuid,
     quantity            numeric(19,4) NOT NULL DEFAULT 1 CHECK (quantity >= 0),
     quantity_unit       text,
+    -- The level below which a consumable needs restocking (REQ-CORE-008). An item
+    -- that has one IS a consumable; a separate flag would be a second way of saying
+    -- the same thing, and one of the two would eventually be wrong.
+    minimum_stock       numeric(19,4) CHECK (minimum_stock IS NULL OR minimum_stock >= 0),
+    -- A paragraph in limited Markdown (REQ-CORE-014). Not a field of the type system,
+    -- because every item has one whatever its type says. HTML is stripped where the
+    -- value is WRITTEN, not where it is rendered.
+    notes               text,
     lifecycle_state     text NOT NULL DEFAULT 'ACTIVE',
     attributes          jsonb NOT NULL DEFAULT '{}'::jsonb,
     -- Fallback search, GENERATED so it cannot drift from the row it describes. TWO
@@ -260,6 +268,10 @@ CREATE TABLE inventory.item (
     version             bigint NOT NULL DEFAULT 1,
     CONSTRAINT physical_needs_location
         CHECK (kind <> 'PHYSICAL' OR location_id IS NOT NULL OR deleted_at IS NOT NULL),
+    -- Stated in the database as well as in the request validation, because a write
+    -- that bypasses the application must not be the way around the limit.
+    CONSTRAINT item_notes_length
+        CHECK (notes IS NULL OR length(notes) <= 20000),
     UNIQUE (tenant_id, id),                          -- the target of composite FKs, see 7.5
     -- Composite, so a reference cannot cross a tenant boundary even though
     -- foreign key checks bypass RLS — see 7.5.
@@ -277,6 +289,10 @@ CREATE INDEX item_tenant_updated ON inventory.item (tenant_id, updated_at DESC)
     WHERE deleted_at IS NULL;
 CREATE INDEX item_search_fts_de ON inventory.item USING gin (search_vector_de);
 CREATE INDEX item_search_fts_en ON inventory.item USING gin (search_vector_en);
+-- "Which consumables are below their minimum" — the question a reminder asks, and
+-- the reason this is an index rather than a scan over every item a tenant owns.
+CREATE INDEX item_below_minimum ON inventory.item (tenant_id)
+    WHERE minimum_stock IS NOT NULL AND deleted_at IS NULL;
 ```
 
 ### The index side table
@@ -613,7 +629,7 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | `tagging.tag` | A tenant-wide label | `UNIQUE(tenant_id, lower(name))` **where it is still itself**: a merged tag keeps its name so history reads correctly, and `merged_into` points at what it became so a client holding the old id is redirected rather than told it never existed (`REQ-CORE-063`) |
 | `tagging.tag_group` | A group of tags | `exclusive` makes a thing carry at most one of them — "condition" is new, used or broken, never two of those |
 | `tagging.tag_assignment` | Tag → item or place | Exactly one target, in two nullable columns with `num_nonnulls(...) = 1` and a composite foreign key each. A polymorphic `(kind, id)` pair would be a reference the database cannot check, which is the same reason [7.5](#75-tenant-isolation-row-level-security) gives for every composite key here, and `MigrationRulesTest` fails a reference between tenant-scoped tables that is not composite |
-| `inventory.item_relation` | Relations | `relation_type` (`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR`, `RELATED`), directed, `CHECK` against self-reference |
+| `inventory.item_relation` | Relations between items | `relation_type` (`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR`, `RELATED`). **Directed and stored once:** "the lens is an accessory of the camera" is one row, which the camera reads the other way round — two rows for one fact are two rows that can disagree, and the read is a union of the two directions carrying a flag for which end was asked. `CHECK (source_id <> target_id)`, because an item is not an accessory of itself; `UNIQUE (tenant_id, source_id, target_id, relation_type)`, so asking twice yields the first; a composite foreign key at each end ([7.5](#75-tenant-isolation-row-level-security)) with `ON DELETE CASCADE`, because a relation to an item that is gone is not a fact about anything |
 | `inventory.loan` | Lending | Borrower (internal or free text), handed out, due back, returned |
 | `plugins.plugin_registration` | Plugin registry | Manifest, contract version, certificate fingerprint |
 | `plugins.granted_capability` | Granted capabilities | Per tenant, with timestamp, granting person and revocation |

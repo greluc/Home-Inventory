@@ -86,6 +86,9 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
   private static final Pattern REFUSED_CONSTRAINT =
       Pattern.compile("violates check constraint \"([^\"]+)\"");
 
+  /** The two columns of an {@code a <> b} check, which ask for two different rows. */
+  private static final Pattern DISTINCT = Pattern.compile("\\((\\w+) <> (\\w+)\\)");
+
   /** The columns of a {@code num_nonnulls(a, b) = 1} check. */
   private static final Pattern ONE_OF =
       Pattern.compile("num_nonnulls\\(([^)]*)\\)\\s*=\\s*1");
@@ -359,7 +362,8 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         String constraint = named.find() ? named.group(1) : null;
         if (attempt >= 3
             || constraint == null
-            || !relax(superuser, table, constraint, columns, values)) {
+            || !relax(
+                superuser, table, constraint, columns, values, tenant, foreignTargets, seeded)) {
           throw new AssertionError(
               "The isolation proof could not seed " + table + ". Teach the seeder the column it "
                   + "could not derive a value for rather than exempting the table — an unseeded "
@@ -373,19 +377,24 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
   }
 
   /**
-   * Drops or narrows the columns a refused check names, so the row can be offered again.
+   * Changes the row so that the check PostgreSQL refused on accepts it, so it can be offered again.
    *
-   * <p>Two shapes are understood, and both come from the catalogue rather than from a list here.
+   * <p>Three shapes are understood, and all three come from the catalogue rather than from a list
+   * here. {@code a <> b} points the second of its two columns at a second row of whatever it
+   * references, because that check exists to say the two ends are different things;
    * {@code num_nonnulls(a, b) = 1} keeps the first of its columns that the row carries and drops the
-   * rest; anything else drops every nullable column the clause names. A clause that names only
-   * mandatory columns cannot be satisfied by dropping anything, and this says so by changing nothing
-   * — which surfaces as the original failure with its own message.
+   * rest; anything else drops every nullable column the clause names. A clause that fits none of
+   * them cannot be satisfied by changing anything here, and this says so by changing nothing — which
+   * surfaces as the original failure with its own message.
    *
    * @param superuser the connection that may read the catalogue
    * @param table the qualified table name
    * @param constraint the constraint PostgreSQL refused on
    * @param columns the columns of the pending insert, modified in place
    * @param values their values, kept in step with the columns
+   * @param tenant the tenant the row belongs to
+   * @param foreignTargets the table each foreign-key column points at
+   * @param seeded ids already written, per table and tenant
    * @return whether anything changed, and a retry is therefore worth making
    * @throws SQLException when the catalogue cannot be read
    */
@@ -394,12 +403,31 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       String table,
       String constraint,
       List<String> columns,
-      List<String> values)
+      List<String> values,
+      UUID tenant,
+      Map<String, String> foreignTargets,
+      Map<String, Map<UUID, UUID>> seeded)
       throws SQLException {
 
     String clause = constraintDefinition(superuser, table, constraint);
     if (clause == null) {
       return false;
+    }
+
+    // `source_id <> target_id`: the row wants two DIFFERENT rows of the table those
+    // columns reference, and the seeder keeps exactly one per table and tenant. A
+    // second one is written for the occasion and the later column is pointed at it,
+    // which is what `inventory.item_relation` asks for and what any other table
+    // saying "these two ends are not the same thing" will ask for too.
+    Matcher distinct = DISTINCT.matcher(clause);
+    while (distinct.find()) {
+      String second = distinct.group(2);
+      int at = columns.indexOf(second);
+      String target = foreignTargets.get(second);
+      if (at >= 0 && target != null && columns.contains(distinct.group(1))) {
+        values.set(at, "'" + seedAnotherRow(superuser, target, tenant, seeded) + "'");
+        return true;
+      }
     }
 
     Matcher oneOf = ONE_OF.matcher(clause);
@@ -434,6 +462,34 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       }
     }
     return changed;
+  }
+
+  /**
+   * Writes one more row of a table, beside the one the seeder keeps for this tenant.
+   *
+   * <p>For the rows that reference two different rows of the same table. The map of seeded ids holds
+   * one per table and tenant, because that is all a foreign key needs; this borrows the same
+   * machinery to make a second, and leaves the map pointing at the first, so that nothing else
+   * changes.
+   *
+   * @param superuser the connection to write with
+   * @param table the qualified table name
+   * @param tenant the tenant the row belongs to
+   * @param seeded ids already written, per table and tenant
+   * @return the id of the extra row
+   * @throws SQLException when the row cannot be written
+   */
+  private UUID seedAnotherRow(
+      Connection superuser, String table, UUID tenant, Map<String, Map<UUID, UUID>> seeded)
+      throws SQLException {
+    Map<UUID, UUID> perTenant = seeded.computeIfAbsent(table, ignored -> new HashMap<>());
+    UUID first = perTenant.remove(tenant);
+    seedRow(superuser, table, tenant, seeded);
+    UUID extra = perTenant.get(tenant);
+    if (first != null) {
+      perTenant.put(tenant, first);
+    }
+    return extra;
   }
 
   /**

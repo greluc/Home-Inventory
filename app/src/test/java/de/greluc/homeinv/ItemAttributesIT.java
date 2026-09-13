@@ -76,7 +76,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                           {"isbn":"9780134757599",
                            "published":2018,
                            "purchasePrice":{"amount":"49.90","currency":"EUR"}}
-                          """),
+                          """, null, null),
                       tenant.userId())
                   .item();
           assertThat(stored.attributes()).contains("9780134757599");
@@ -94,7 +94,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                               null,
                               BigDecimal.ONE,
                               null,
-                              "{\"published\":\"not a year\"}"),
+                              "{\"published\":\"not a year\"}", null, null),
                           tenant.userId()))
               .isInstanceOfSatisfying(
                   InvalidAttributesException.class,
@@ -116,7 +116,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                               null,
                               BigDecimal.ONE,
                               null,
-                              "{\"invented\":\"x\"}"),
+                              "{\"invented\":\"x\"}", null, null),
                           tenant.userId()))
               .isInstanceOf(InvalidAttributesException.class);
         });
@@ -146,7 +146,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                            "published":2003,
                            "purchasePrice":{"amount":"59.95","currency":"EUR"},
                            "licenceKey":"not-projected"}
-                          """),
+                          """, null, null),
                       tenant.userId())
                   .item();
 
@@ -185,7 +185,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                           null,
                           BigDecimal.ONE,
                           null,
-                          "{\"isbn\":\"9780131177055\",\"published\":2004}"),
+                          "{\"isbn\":\"9780131177055\",\"published\":2004}", null, null),
                       tenant.userId())
                   .item();
           assertThat(projections(item.id()).get("published").number()).isEqualByComparingTo("2004");
@@ -198,7 +198,7 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                   null,
                   BigDecimal.ONE,
                   null,
-                  "{\"isbn\":\"9780131177055\",\"published\":2005}"),
+                  "{\"isbn\":\"9780131177055\",\"published\":2005}", null, null),
               tenant.userId());
           Map<String, Projection> after = projections(item.id());
           assertThat(after.get("published").number()).isEqualByComparingTo("2005");

@@ -166,6 +166,10 @@ public interface ItemService {
    * @param quantityUnit the unit, may be {@code null}
    * @param attributes the fields the type declares, as JSON text; {@code null} means none. Checked
    *     against the version's generated schema before anything is written (REQ-CORE-005)
+   * @param notes a paragraph about this thing, in limited Markdown; HTML is removed server-side
+   *     (REQ-CORE-014)
+   * @param minimumStock the level below which it needs restocking, or {@code null}. An item that
+   *     carries one is a consumable (REQ-CORE-008)
    */
   record CreateItemCommand(
       UUID id,
@@ -176,7 +180,9 @@ public interface ItemService {
       UUID locationId,
       BigDecimal quantity,
       String quantityUnit,
-      String attributes) {}
+      String attributes,
+      String notes,
+      BigDecimal minimumStock) {}
 
   /**
    * What may be changed about an item. {@code kind} is absent: a physical item does not become a
@@ -188,6 +194,8 @@ public interface ItemService {
    * @param locationId the new location; required while the item is physical
    * @param quantity the new quantity; {@code null} means one
    * @param quantityUnit the new unit, may be {@code null}
+   * @param notes the new notes; HTML is removed server-side
+   * @param minimumStock the new restocking level, or {@code null} to stop tracking one
    */
   record UpdateItemCommand(
       String name,
@@ -195,5 +203,7 @@ public interface ItemService {
       UUID locationId,
       BigDecimal quantity,
       String quantityUnit,
-      String attributes) {}
+      String attributes,
+      String notes,
+      BigDecimal minimumStock) {}
 }

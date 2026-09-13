@@ -28,6 +28,8 @@ import java.util.UUID;
  * @param attributes the fields the item's type version declares, as JSON text. The source of
  *     truth for every attribute (ADR-0004); what a key means is the catalog's business, and a
  *     client reads the type version's schema to render it
+ * @param notes the paragraph a person wrote, in limited Markdown with the HTML already removed
+ * @param minimumStock the level below which this consumable needs restocking, or {@code null}
  * @param lifecycleState where the item is in its life; stage 0 always {@code ACTIVE}
  * @param createdAt when it was created
  * @param updatedAt when it last changed
@@ -43,6 +45,8 @@ public record ItemView(
     BigDecimal quantity,
     String quantityUnit,
     String attributes,
+    String notes,
+    BigDecimal minimumStock,
     String lifecycleState,
     Instant createdAt,
     Instant updatedAt,

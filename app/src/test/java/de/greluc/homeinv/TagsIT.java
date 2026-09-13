@@ -192,7 +192,7 @@ class TagsIT extends AbstractIntegrationTest {
   private UUID anItem(Tenant tenant, String name) {
     return items.create(
             new ItemService.CreateItemCommand(
-                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null),
+                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null),
             tenant.userId())
         .item()
         .id();

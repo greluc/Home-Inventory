@@ -105,7 +105,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.update(
               id,
               new ItemService.UpdateItemCommand(
-                  "Kettle, electric", "2 litres", null, BigDecimal.ONE, null, null),
+                  "Kettle, electric", "2 litres", null, BigDecimal.ONE, null, null, null, null),
               tenant.userId());
           items.delete(id, tenant.userId());
           items.restore(id, tenant.userId());
@@ -136,7 +136,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.update(
               id,
               new ItemService.UpdateItemCommand(
-                  "Changed name", null, null, BigDecimal.ONE, null, null),
+                  "Changed name", null, null, BigDecimal.ONE, null, null, null, null),
               tenant.userId());
           assertThat(items.get(id).name()).isEqualTo("Changed name");
 
@@ -170,7 +170,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
   private UUID anItem(Tenant tenant, String name) {
     return items.create(
             new ItemService.CreateItemCommand(
-                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null),
+                null, null, name, null, ItemKind.DIGITAL, null, BigDecimal.ONE, null, null, null, null),
             tenant.userId())
         .item()
         .id();
