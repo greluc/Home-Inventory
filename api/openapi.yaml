@@ -220,6 +220,42 @@ components:
           description: where the next page starts, or null when this was the last
           type: string
       type: object
+    ChildCategoriesRequest:
+      description: The categories a category is to take underneath it (REQ-CORE-047).
+      properties:
+        permitted:
+          description: |-
+            the categories, by id. Omitted or empty withdraws the restriction, so the
+            category takes everything again; the cap is the one every collection here carries
+          items:
+            format: uuid
+            type: string
+          maxItems: 200
+          minItems: 0
+          type: array
+      type: object
+    ChildCategoryRuleView:
+      description: |-
+        What one category takes underneath it (REQ-CORE-047).
+
+        No cursor and no page, and that is deliberate: the list is the rule itself, and half a
+        whitelist is not a smaller answer but a wrong one. It cannot outgrow the tenant's categories,
+        which is a configuration surface a person maintains by hand — the write caps it at 200 anyway,
+        for the reason every collection here is capped.
+      properties:
+        categoryId:
+          description: the category the rule belongs to
+          format: uuid
+          type: string
+        permitted:
+          description: |-
+            the categories it takes, by id, ordered by when each was permitted. Empty
+            means no restriction at all and therefore everything, not nothing
+          items:
+            format: uuid
+            type: string
+          type: array
+      type: object
     ConstraintsRequest:
       description: The declarative limits on a field.
       properties:
@@ -1134,6 +1170,17 @@ components:
           type: string
         userId:
           description: the account
+          format: uuid
+          type: string
+      type: object
+    MoveLocationRequest:
+      description: Where a location is to be moved.
+      properties:
+        parentId:
+          description: |-
+            the new parent, or null to make it a root. A client that means "out of
+            everything" says so with null rather than with an absent field, and both are read the same
+            way
           format: uuid
           type: string
       type: object
@@ -3430,6 +3477,153 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Archives a location category.
+  /api/v1/catalog/location-categories/{id}/child-categories:
+    get:
+      description: What a category takes underneath it (REQ-CORE-047).
+      operationId: childCategories
+      parameters:
+      - description: the category
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildCategoryRuleView'
+          description: the rule; an empty list means it takes everything
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What a category takes underneath it (REQ-CORE-047).
+    put:
+      description: |-
+        Replaces what a category takes underneath it (REQ-CORE-047).
+
+        A `PUT` of the whole set, because the rule *is* the set: there is no sensible
+        half of a whitelist, and a client that sends it whole is idempotent by construction. An empty
+        list withdraws the restriction.
+      operationId: setChildCategories
+      parameters:
+      - description: the category
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChildCategoriesRequest'
+        description: the categories it will take
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChildCategoryRuleView'
+          description: the rule as it now stands
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Replaces what a category takes underneath it (REQ-CORE-047)
   /api/v1/catalog/types/{ownerId}/versions:
     post:
       description: Starts a draft of a type or a category, copying what is published now.
@@ -6585,6 +6779,110 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: The items in a location, optionally including everything below it (REQ-CORE-049)
+  /api/v1/locations/{id}/move:
+    post:
+      description: |-
+        Moves a location, with everything under it (REQ-CORE-043).
+
+        Its own sub-path rather than a `PATCH` on the location: what changes is one
+        relationship, and a client that sends the whole location to move it is a client that can rename
+        it by accident. `parentId` omitted or null makes it a root. 08 §8.1 names this endpoint,
+        and the spelling follows every other verb in this API — `/archive`, `/publish`,
+        `/restore`.
+
+        `POST` and still idempotent: moving a place to where it already is answers `200`
+        and changes nothing, so a client retrying a request whose answer it never saw is not told it
+        failed.
+      operationId: moveLocation
+      parameters:
+      - description: the location to move
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveLocationRequest'
+        description: where to put it
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationView'
+          description: the location as it now stands
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Invalid move (`invalid-move`), or Name taken (`name-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Moves a location, with everything under it (REQ-CORE-043)
   /api/v1/locations/{id}/tags:
     get:
       description: The tags one place carries.

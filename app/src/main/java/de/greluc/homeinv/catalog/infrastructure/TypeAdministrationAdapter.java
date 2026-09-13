@@ -20,6 +20,7 @@ import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.TenantContext;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -249,6 +250,84 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         .params(actor, TenantContext.require(), categoryId)
         .update();
     return loadCategory(categoryId).orElseThrow();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public ChildCategoryRuleView childCategories(UUID categoryId) {
+    loadCategory(categoryId).orElseThrow(() -> unknown("location category", categoryId));
+    return new ChildCategoryRuleView(categoryId, permittedChildren(categoryId));
+  }
+
+  @Override
+  @Transactional
+  public ChildCategoryRuleView setChildCategories(
+      UUID categoryId, List<UUID> permitted, UUID actor) {
+
+    UUID tenantId = TenantContext.require();
+    loadCategory(categoryId).orElseThrow(() -> unknown("location category", categoryId));
+
+    // Order preserved and duplicates dropped, because the caller sent a set and
+    // wrote it as a list: two of the same id is one rule, and refusing the request
+    // over it would be pedantry about a request whose meaning is not in doubt.
+    List<UUID> wanted = new ArrayList<>(new LinkedHashSet<>(permitted));
+    if (wanted.size() > MAX_PAGE) {
+      throw new IllegalArgumentException(
+          "A category takes at most " + MAX_PAGE + " permitted child categories.");
+    }
+    for (UUID child : wanted) {
+      // Checked one by one rather than left to the foreign key: the constraint
+      // would refuse the whole request without saying which id was wrong, and a
+      // caller reconciling a rule set needs to know that.
+      loadCategory(child).orElseThrow(() -> unknown("location category", child));
+    }
+
+    // Replaced whole. Working out which rows to add and which to drop would be the
+    // same two statements and a diff that can be wrong; this cannot.
+    jdbc.sql(
+            """
+            delete from catalog.location_category_child
+            where tenant_id = ? and parent_category_id = ?
+            """)
+        .params(tenantId, categoryId)
+        .update();
+    for (UUID child : wanted) {
+      jdbc.sql(
+              """
+              insert into catalog.location_category_child
+                  (tenant_id, parent_category_id, child_category_id, created_by)
+              values (?, ?, ?, ?)
+              """)
+          .params(tenantId, categoryId, child, actor)
+          .update();
+    }
+
+    log.info(
+        "Location category {} now takes {} child categor(ies) in tenant {}.",
+        categoryId,
+        wanted.size(),
+        tenantId);
+    return new ChildCategoryRuleView(categoryId, permittedChildren(categoryId));
+  }
+
+  /**
+   * The ids a category permits underneath it, oldest rule first.
+   *
+   * @param categoryId the category
+   * @return the permitted categories, empty when the category is unrestricted
+   */
+  private List<UUID> permittedChildren(UUID categoryId) {
+    return jdbc
+        .sql(
+            """
+            select child_category_id
+            from catalog.location_category_child
+            where tenant_id = ? and parent_category_id = ?
+            order by created_at, child_category_id
+            """)
+        .params(TenantContext.require(), categoryId)
+        .query(UUID.class)
+        .list();
   }
 
   // -------------------------------------------------------------------------

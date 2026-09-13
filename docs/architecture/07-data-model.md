@@ -33,20 +33,24 @@
    elide them, and four of the five sample tables then disagreed with this rule.
    A migration check enforces it, so the samples and the rule cannot drift again.
 
-   **A *domain* table is one that holds mutable state a user edits.** Three kinds
-   of table are not that, carry no `version` and no audit columns, and are listed
-   here exhaustively for the same reason the instance-wide list above is closed —
-   otherwise the check contradicts this chapter's own DDL, which it did:
+   **A *domain* table is one that holds mutable state a user edits.** Five kinds
+   of table are not that. They carry no `version`, and of the four audit columns
+   only the ones that can mean anything for them, and they are listed here
+   exhaustively for the same reason the instance-wide list above is closed —
+   otherwise the check contradicts this chapter's own DDL, which it did. *Said
+   "three kinds" over a table of four until 2026-09-13, when the fifth was added
+   with `catalog.location_category_child`.*
 
    | Kind | Tables | Why the columns would be meaningless |
    |---|---|---|
    | **Derived** | `inventory.item_attr_index` | A projection of `item.attributes`, rebuilt wholesale by `REINDEX_ATTRIBUTES`. It has no version of its own — the row it mirrors does — and no author but the application |
    | **Append-only records of an event** | `sync.change_log`, `audit.audit_entry`, `audit.chain_anchor`, `audit.chain_truncation` ([ADR-0046](../adr/0046-truncatable-audit-chain.md)), `identification.label_base_url_usage`, `tenancy.erasure_certificate` | Nothing updates them, so `version`, `updated_at` and `updated_by` would be dead columns. `occurred_at` and the actor are already in the row, under the names the record uses |
    | **Infrastructure** | `outbox.event_publication`, `idempotency.processed_request`, `crypto.tenant_data_key` | Owned by a mechanism, not by a block's domain model. A data key is issued and retired, never edited |
+   | **A rule that exists or does not** | `catalog.location_category_child` | A row *is* the permission for one category to sit under another (`REQ-CORE-047`). There is nothing in it to edit — withdrawing it is a `DELETE` and granting it again is an `INSERT` — so an `updated_by` could only ever repeat `created_by`. The whole set is replaced in one transaction, which is also why it needs no optimistic lock: the last writer's set is the rule, and half a whitelist is not a smaller answer but a wrong one |
    | **Issued, never edited** | `identification.public_code`, `identification.code_binding` | A code is drawn, printed and bound; nobody edits one. `public_code` has no `tenant_id` at all (see rule 2), so it has no `updated_by` that could mean anything, and `code_binding` is **historised** — a reassignment appends a row rather than updating one, which is what preserves the binding history (`REQ-IDENT-004`). Both were on rule 2's closed list and on neither of rule 4's, so rule 4 demanded `version` and four audit columns from tables with no tenant and no editing user |
 
-   **The list is closed.** A new table that is none of the three needs the columns;
-   a new table that claims to be one of the three needs a row here.
+   **The list is closed.** A new table that is none of the five needs the columns;
+   a new table that claims to be one of the five needs a row here.
 5. **No deletion without a tombstone.** A domain delete sets `deleted_at`; final
    removal is a separate, logged operation that leaves a tombstone for
    reconciliation.
@@ -144,6 +148,19 @@ CREATE TABLE catalog.location_category_version (   -- the mirror of item_type_ve
     UNIQUE (location_category_id, version_number),
     UNIQUE (tenant_id, id),
     FOREIGN KEY (tenant_id, location_category_id)
+        REFERENCES catalog.location_category (tenant_id, id) ON DELETE CASCADE
+);
+
+CREATE TABLE catalog.location_category_child (     -- what a category takes under it (REQ-CORE-047)
+    tenant_id          uuid NOT NULL,
+    parent_category_id uuid NOT NULL,
+    child_category_id  uuid NOT NULL,
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    created_by         uuid,
+    PRIMARY KEY (tenant_id, parent_category_id, child_category_id),
+    FOREIGN KEY (tenant_id, parent_category_id)
+        REFERENCES catalog.location_category (tenant_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (tenant_id, child_category_id)
         REFERENCES catalog.location_category (tenant_id, id) ON DELETE CASCADE
 );
 

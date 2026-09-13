@@ -125,6 +125,21 @@ commit".
 
 ### Added
 
+- **A place can be moved, and what is inside it comes along.** `POST
+  /api/v1/locations/{id}/move` re-parents a location and everything under it —
+  moving a box with two hundred things in it is one operation and one event, not
+  two hundred. A move into the location's own subtree is refused, as is one that
+  would push the deepest thing inside it past the twelve-level ceiling, or onto a
+  name a sibling at the destination already has. *REST API: additive.*
+
+- **A category can say what goes underneath it.** `PUT
+  /api/v1/catalog/location-categories/{id}/child-categories` sets the categories a
+  category takes — "only a shelf goes in a cupboard" — and a move that breaks the
+  rule is refused. A category with no rule takes everything, which is where every
+  category starts and what sending the empty set goes back to, so the restriction
+  can be switched on in a tenant whose tree already exists and switched off again.
+  Nothing already in place is moved out. *REST API: additive.*
+
 - **Handing out permissions asks for the code again.** Granting a role, inviting
   somebody, defining a role, opening a sensitive field and asking for the tenant
   to be erased all need the second factor proved within the last fifteen minutes;

@@ -178,6 +178,35 @@ esac
 ITEM=$(field id)
 say "created item $ITEM"
 
+printf '\nREQ-CORE-043: the box moves and the drill goes with it\n'
+status=$(api POST /api/v1/locations \
+    --header 'Content-Type: application/json' \
+    --data "{\"name\":\"Garage $RUN\",\"categoryId\":\"$CATEGORY\"}")
+[ "$status" = "201" ] || die "creating the second location answered $status"
+GARAGE=$(field id)
+
+status=$(api POST "/api/v1/locations/$LOCATION/move" \
+    --header 'Content-Type: application/json' \
+    --data "{\"parentId\":\"$GARAGE\"}")
+[ "$status" = "200" ] || die "moving a location answered $status"
+[ "$(field parentId)" = "$GARAGE" ] || die "the move did not change the parent"
+
+# The assertion that matters, and the reason this step is worth a smoke run at
+# all: the item was never touched. It names the place it is in, that place is the
+# same place, and moving a box is one operation however much is inside it.
+status=$(api GET "/api/v1/items/$ITEM")
+[ "$status" = "200" ] || die "reading the item back answered $status"
+[ "$(field locationId)" = "$LOCATION" ] || die "the item did not stay where it was"
+
+# And a move into its own subtree is refused, which is what keeps the tree a
+# tree now that a parent is no longer fixed at creation (REQ-CORE-045).
+status=$(api POST "/api/v1/locations/$GARAGE/move" \
+    --header 'Content-Type: application/json' \
+    --data "{\"parentId\":\"$LOCATION\"}")
+[ "$status" = "409" ] || die "a cycle answered $status and should have answered 409"
+grep -q 'problems/invalid-move' "$OUT" || die "the refusal did not name invalid-move"
+say "moved $LOCATION into $GARAGE; the item stayed put and a cycle was refused"
+
 printf '\nREQ-SEC-092: an infected upload never becomes retrievable\n'
 # The EICAR test string, assembled rather than written out, and never put on
 # disk at all. Two different scanners object to it:

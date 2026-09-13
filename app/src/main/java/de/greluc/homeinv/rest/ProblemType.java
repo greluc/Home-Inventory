@@ -184,6 +184,16 @@ public enum ProblemType {
   DELETION_PENDING("deletion-pending", HttpStatus.CONFLICT, "Deletion pending"),
 
   /**
+   * The move would break the tree (REQ-CORE-045, REQ-CORE-047).
+   *
+   * <p>A {@code 409}: nothing about the request is malformed, and the same request would work
+   * against a different target. Two causes — a place moving into its own subtree, and a category
+   * that does not take the kind of place being moved into it — because the caller does the same
+   * thing about both: choose somewhere else.
+   */
+  INVALID_MOVE("invalid-move", HttpStatus.CONFLICT, "Invalid move"),
+
+  /**
    * A sibling already carries the name a location was to be given.
    *
    * <p>Separate from {@link #RESOURCE_EXISTS}, which is about a client-chosen <em>id</em>: a

@@ -45,6 +45,32 @@ public interface LocationService {
   LocationView rename(UUID id, String name, UUID actor);
 
   /**
+   * Moves a location, and everything under it, somewhere else (REQ-CORE-043).
+   *
+   * <p>One operation and one event, whatever is inside: an item names the place it is in, and that
+   * place has not changed — only where the place itself sits. The materialised paths below it are
+   * rewritten in a single statement.
+   *
+   * <p>Three things can refuse it. A target inside the moved subtree would be a cycle, which is
+   * what {@code REQ-CORE-045} forbids and what a path cannot represent. A target whose category has
+   * declared what it takes, and did not name this one, is {@code REQ-CORE-047}. And a subtree whose
+   * deepest place would land past the ceiling is {@link TooDeepException} — measured from the
+   * deepest descendant, because moving a box moves everything in it.
+   *
+   * @param id the location to move
+   * @param newParentId where to put it, or {@code null} to make it a root
+   * @param actor the authenticated user
+   * @return the location as it now stands
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant has no such live location,
+   *     or no such target
+   * @throws InvalidMoveException when the target is inside the subtree, or its category does not
+   *     take this one
+   * @throws TooDeepException when the subtree would exceed the depth limit
+   * @throws NameTakenException when the target already has a child of this name
+   */
+  LocationView move(UUID id, UUID newParentId, UUID actor);
+
+  /**
    * Deletes a location, if nothing is inside it.
    *
    * @param id the location

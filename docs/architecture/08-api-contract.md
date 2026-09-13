@@ -54,29 +54,35 @@ forbids database and repository access from the access blocks.
 ├── /tenant-revocations {token}          (no session: the erasure is what removed it)
 ├── /roles       {id}   tenant-owned roles and the permissions they add
 ├── /field-visibility   which roles read which sensitive fields
-├── /item-types  {id}/versions {id}/fields   (the type system)
-├── /location-categories
+├── /catalog     /item-types /location-categories /versions /fields /value-lists
+│                {id}/child-categories   (what a category takes under it)
 ├── /items       {id} {id}/attachments {id}/relations {id}/maintenance
-│                {id}/loans {id}/history {id}/codes  · /items:bulk
-├── /locations   {id} {id}/children {id}/items {id}/move {id}/seal
-├── /tags        {id} /tags:merge
+│                {id}/loans {id}/history {id}/codes  · /items/bulk
+├── /locations   {id} {id}/children {id}/items {id}/move {id}/seal {id}/tags
+├── /tags        {id} /tags/merge
 ├── /media       /uploads (tus) {id} {id}/variants
 ├── /codes       /resolve  {code}  (public resolution: /c/{code})
 ├── /scans       scan sessions and individual scans
 ├── /label-templates  /label-media  /print-jobs
-├── /enrichment  /proposals {id}:accept {id}:reject  /resolvers
+├── /enrichment  /proposals {id}/accept {id}/reject  /resolvers
 ├── /search      /saved-searches
 ├── /stocktakes  {id}/scans {id}/report
 ├── /sync        /pull /push /conflicts /devices
 ├── /notifications  /rules /subscriptions
 ├── /import-jobs /export-jobs /mapping-profiles
-├── /plugins     {id}/capabilities {id}/health {id}:enable {id}:disable
+├── /plugins     {id}/capabilities {id}/health {id}/enable {id}/disable
 ├── /audit       log queries
 └── /webhooks    delivery targets and delivery attempts
 ```
 
-Non-CRUD operations use the form `POST /resource/{id}:action` (a colon, as in
-Google AIP) — that keeps them distinguishable from sub-resources.
+Non-CRUD operations use the form `POST /resource/{id}/action` — `{id}/archive`,
+`{id}/publish`, `{id}/restore`, `{id}/move`. *This read `POST /resource/{id}:action`
+(a colon, as in Google AIP) until 2026-09-13, by which time a dozen implemented
+endpoints used the sub-path and none used a colon; the code is right and the
+sentence was wrong.* A verb at the end of a path is distinguishable from a
+sub-resource by what it is — an imperative, never a plural — and the colon buys
+that distinction at the cost of a character half of every HTTP toolchain escapes
+in a path.
 
 > **`identity` is an OAuth 2.1 authorization server, not just a login endpoint.**
 > `REQ-AUTH-007` and `REQ-SEC-019` require the apps to authenticate through
@@ -137,7 +143,7 @@ results are correct, only poorer. `503` stays reserved for "this will not work".
 | **ETag / If-Match** | Every single resource returns `ETag: "<version>"`. `PUT`/`PATCH`/`DELETE` **require** `If-Match`. A missing header → `428 Precondition Required`; a mismatch → `412`. There is no blind overwrite. |
 | **Idempotency-Key** | Every creating `POST` accepts `Idempotency-Key`. Key plus payload hash are written to **PostgreSQL in the same transaction as the record they protect** and retained 24 h ([ADR-0009](../adr/0009-messaging-and-events.md)) — so there is no window in which the entity exists and the key does not. A repeat with the same payload → the original response; with a different payload → `409`. Indispensable for mobile clients on unreliable networks, which is why it may not depend on a cache. |
 | **Client-generated IDs** | The client may supply `id` (UUIDv7). If it already exists with the same content, the result is `200` instead of `201`. A prerequisite for offline creation. |
-| **Bulk operations** | `POST /items:bulk` handles up to 500 entries, **partially successful**, with a status line per entry (a `207`-style payload) and an idempotency key per entry. |
+| **Bulk operations** | `POST /items/bulk` handles up to 500 entries, **partially successful**, with a status line per entry (a `207`-style payload) and an idempotency key per entry. |
 
 ### Error format (RFC 9457)
 

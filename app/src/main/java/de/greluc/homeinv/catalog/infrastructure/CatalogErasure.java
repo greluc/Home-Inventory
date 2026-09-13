@@ -42,6 +42,7 @@ public class CatalogErasure implements TenantErasure {
           "delete from catalog.value_list",
           "delete from catalog.item_type_version",
           "delete from catalog.item_type",
+          "delete from catalog.location_category_child",
           "delete from catalog.location_category_version",
           "delete from catalog.location_category");
 

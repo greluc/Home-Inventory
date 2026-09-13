@@ -57,8 +57,8 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:469:enforced
-docs/architecture/04-building-blocks.md:474:enforced
+docs/architecture/04-building-blocks.md:471:enforced
+docs/architecture/04-building-blocks.md:476:enforced
 docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot
@@ -71,19 +71,19 @@ docs/architecture/06-deployment-view.md:722:cannot
 docs/architecture/06-deployment-view.md:793:cannot
 docs/architecture/06-deployment-view.md:83:cannot
 docs/architecture/06-deployment-view.md:876:fails the build
-docs/architecture/07-data-model.md:382:cannot
-docs/architecture/07-data-model.md:503:enforces
-docs/architecture/07-data-model.md:530:cannot
-docs/architecture/07-data-model.md:538:enforced
-docs/architecture/07-data-model.md:540:cannot
-docs/architecture/07-data-model.md:559:guaranteed
-docs/architecture/07-data-model.md:564:enforces
-docs/architecture/07-data-model.md:583:enforced
+docs/architecture/07-data-model.md:399:cannot
+docs/architecture/07-data-model.md:520:enforces
+docs/architecture/07-data-model.md:547:cannot
+docs/architecture/07-data-model.md:555:enforced
+docs/architecture/07-data-model.md:557:cannot
+docs/architecture/07-data-model.md:576:guaranteed
+docs/architecture/07-data-model.md:581:enforces
+docs/architecture/07-data-model.md:600:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:186:enforced
-docs/architecture/08-api-contract.md:187:enforced
-docs/architecture/08-api-contract.md:268:cannot
-docs/architecture/08-api-contract.md:346:fails the build
+docs/architecture/08-api-contract.md:192:enforced
+docs/architecture/08-api-contract.md:193:enforced
+docs/architecture/08-api-contract.md:274:cannot
+docs/architecture/08-api-contract.md:352:fails the build
 docs/architecture/09-extensibility-and-plugins.md:183:cannot
 docs/architecture/09-extensibility-and-plugins.md:196:cannot
 docs/architecture/09-extensibility-and-plugins.md:219:cannot

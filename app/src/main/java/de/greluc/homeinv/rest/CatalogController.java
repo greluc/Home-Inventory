@@ -182,6 +182,46 @@ public class CatalogController {
     return types.archiveCategory(id, user.userId());
   }
 
+  /**
+   * What a category takes underneath it (REQ-CORE-047).
+   *
+   * @param id the category
+   * @return the rule; an empty list means it takes everything
+   */
+  @GetMapping(
+      path = "/location-categories/{id}/child-categories",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TYPE_READ)
+  @CanFail(ProblemType.NOT_FOUND)
+  public TypeAdministration.ChildCategoryRuleView childCategories(@PathVariable UUID id) {
+    return types.childCategories(id);
+  }
+
+  /**
+   * Replaces what a category takes underneath it (REQ-CORE-047).
+   *
+   * <p>A {@code PUT} of the whole set, because the rule <em>is</em> the set: there is no sensible
+   * half of a whitelist, and a client that sends it whole is idempotent by construction. An empty
+   * list withdraws the restriction.
+   *
+   * @param id the category
+   * @param request the categories it will take
+   * @param user the authenticated caller
+   * @return the rule as it now stands
+   */
+  @PutMapping(
+      path = "/location-categories/{id}/child-categories",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TYPE_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public TypeAdministration.ChildCategoryRuleView setChildCategories(
+      @PathVariable UUID id,
+      @Valid @RequestBody ChildCategoriesRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return types.setChildCategories(
+        id, request.permitted() == null ? List.of() : request.permitted(), user.userId());
+  }
+
   // -------------------------------------------------------------------------
   // Versions
   // -------------------------------------------------------------------------
@@ -444,6 +484,14 @@ public class CatalogController {
       @NotBlank @Size(max = 16) String kind,
       UUID parentId,
       @Size(max = 64) String icon) {}
+
+  /**
+   * The categories a category is to take underneath it (REQ-CORE-047).
+   *
+   * @param permitted the categories, by id. Omitted or empty withdraws the restriction, so the
+   *     category takes everything again; the cap is the one every collection here carries
+   */
+  public record ChildCategoriesRequest(@Size(max = 200) List<UUID> permitted) {}
 
   /**
    * What to call a new location category.

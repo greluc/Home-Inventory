@@ -251,6 +251,30 @@ public class Location {
   }
 
   /**
+   * Re-parents the location (REQ-CORE-043).
+   *
+   * <p>Its own row only. Everything below it is rewritten in one statement by the query that owns
+   * the subtree, because a loop here would be the same writes and a hundred round trips — and
+   * because an entity has no business knowing how many descendants it has.
+   *
+   * <p>The checks that decide whether this may happen at all — the cycle, the category rule, the
+   * ceiling measured on the deepest descendant — are in the service. They need the tree, and the
+   * tree is not something this row can see.
+   *
+   * @param parent the new parent, or null to make it a root
+   * @param path its new materialised path
+   * @param actor the user making the change
+   * @param now the instant of the change
+   */
+  public void movedTo(Location parent, String path, UUID actor, Instant now) {
+    this.parentId = parent == null ? null : parent.id;
+    this.path = path;
+    this.depth = parent == null ? 0 : parent.depth + 1;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
    * Marks the location deleted, leaving a tombstone.
    *
    * @param actor the user deleting it
@@ -268,10 +292,13 @@ public class Location {
   /**
    * The {@code ltree} label for an id.
    *
+   * <p>Public because the move builds a path from it, and the alternative is a second copy of
+   * "what a label looks like" in the service — which is the copy that would drift.
+   *
    * @param id the location id
    * @return the id's hex digits without dashes, which is a valid label by construction
    */
-  private static String labelOf(UUID id) {
+  public static String labelOf(UUID id) {
     return id.toString().replace("-", "").toLowerCase(Locale.ROOT);
   }
 

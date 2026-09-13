@@ -88,6 +88,89 @@ public class LocationTreeQueries {
   }
 
   /**
+   * How deep the deepest place under this one sits, counted from the root of the tree.
+   *
+   * <p>A move is judged on the deepest descendant and not on the location itself: moving a box two
+   * levels down moves everything in it two levels down with it, and the ceiling is about the tree
+   * rather than about the thing being moved (REQ-CORE-040).
+   *
+   * @param tenantId the tenant
+   * @param rootId the location at the top of the subtree
+   * @return the greatest depth in the subtree, which is the location's own when nothing is below it
+   */
+  public int deepestBelow(UUID tenantId, UUID rootId) {
+    Integer depth =
+        jdbc.sql(
+                """
+                select max(descendant.depth)
+                from locations.location root
+                join locations.location descendant
+                  on descendant.tenant_id = root.tenant_id
+                 and descendant.path <@ root.path
+                where root.tenant_id = ?
+                  and root.id = ?
+                  and descendant.deleted_at is null
+                """)
+            .params(tenantId, rootId)
+            .query(Integer.class)
+            .optional()
+            .orElse(0);
+    return depth == null ? 0 : depth;
+  }
+
+  /**
+   * Rewrites the paths and depths of a subtree that has moved.
+   *
+   * <p>One statement, and that is the point of a materialised path: the location's own label stays
+   * what it was — the label is its id — so every descendant's new path is the new prefix plus
+   * whatever sat below the old one. A loop over the subtree would be the same writes and a hundred
+   * round trips, and would leave the tree inconsistent if it stopped half way.
+   *
+   * @param tenantId the tenant
+   * @param rootId the location that moved
+   * @param oldPath its path before the move
+   * @param newPath its path after it
+   * @param now the moment of the move
+   * @param actor who moved it
+   * @return how many places were rewritten, the moved location included
+   */
+  public int rewriteSubtree(
+      UUID tenantId,
+      UUID rootId,
+      String oldPath,
+      String newPath,
+      java.time.Instant now,
+      UUID actor) {
+    return jdbc
+        .sql(
+            """
+            update locations.location
+               set path = text2ltree(? || case
+                            when path = text2ltree(?) then ''
+                            else '.' || ltree2text(subpath(path, nlevel(text2ltree(?))))
+                          end),
+                   depth = depth + (nlevel(text2ltree(?)) - nlevel(text2ltree(?))),
+                   updated_at = ?,
+                   updated_by = ?,
+                   version = version + 1
+             where tenant_id = ?
+               and path <@ text2ltree(?)
+               and deleted_at is null
+            """)
+        .params(
+            newPath,
+            oldPath,
+            oldPath,
+            newPath,
+            oldPath,
+            java.sql.Timestamp.from(now),
+            actor,
+            tenantId,
+            oldPath)
+        .update();
+  }
+
+  /**
    * Whether a location has any live descendant other than itself.
    *
    * <p>Asked before a deletion: removing a location that still contains places would orphan them,

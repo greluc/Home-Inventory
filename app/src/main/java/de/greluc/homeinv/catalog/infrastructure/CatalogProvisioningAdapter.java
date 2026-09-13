@@ -39,9 +39,16 @@ public class CatalogProvisioningAdapter implements CatalogProvisioning {
    * so the choice was between this list and a different, invented one. Seeding the specified list
    * means stage 1 only has to make them editable, with no data to migrate.
    *
-   * <p>{@code is_mobile} is false for every one of them, including vehicle and moving box: mobile
-   * locations are stage 2 (REQ-CORE-041), and a category that claims to be mobile before anything
-   * honours the claim would be a lie in the data.
+   * <p>{@code is_mobile} is false for every one of them, including vehicle and moving box, and
+   * that is a default rather than a claim about what they are. 04 §4.5 describes a vehicle as
+   * mobile, and the move of REQ-CORE-043 honours the relocation case for every category — a
+   * location travels with its contents whatever its category says, because a tree built wrongly has
+   * to be repairable. What the flag decides is what a client <em>offers</em>: the {@code MOVE} scan
+   * flow belongs on a box, not on a building. Flipping the shipped default would divide tenants into
+   * two populations — a data migration cannot reach the existing ones, because {@code homeinv_app}
+   * and {@code homeinv_migrator} are both {@code NOBYPASSRLS} and the policy is {@code FORCE}d, so
+   * an {@code UPDATE} across tenants matches nothing — so the flag is a tenant's to set on its own
+   * categories, and on a shipped one once REQ-CORE-042's "editable" half lands.
    */
   private static final List<String> SHIPPED_CATEGORIES =
       List.of(

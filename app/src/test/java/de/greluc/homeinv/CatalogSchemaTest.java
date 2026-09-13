@@ -67,6 +67,19 @@ class CatalogSchemaTest {
           }
 
           @Override
+          public UUID categoryOfVersion(UUID categoryVersionId) {
+            return VERSION;
+          }
+
+          @Override
+          public boolean permitsChildCategory(UUID parentCategoryId, UUID childCategoryId) {
+            // Unrestricted, which is what a category with no rule is. Nothing in
+            // this test moves a location; the method is here because the port has
+            // it.
+            return true;
+          }
+
+          @Override
           public Map<UUID, UUID> categoriesOfVersions(Collection<UUID> ids) {
             return Map.of();
           }

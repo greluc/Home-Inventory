@@ -70,6 +70,52 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public UUID categoryOfVersion(UUID categoryVersionId) {
+    return jdbc
+        .sql(
+            """
+            select v.location_category_id
+            from catalog.location_category_version v
+            where v.tenant_id = ?
+              and v.id = ?
+            """)
+        .params(TenantContext.require(), categoryVersionId)
+        .query(UUID.class)
+        .optional()
+        .orElseThrow(
+            () ->
+                new de.greluc.homeinv.platform.NotFoundException(
+                    "location category version", categoryVersionId));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public boolean permitsChildCategory(UUID parentCategoryId, UUID childCategoryId) {
+    UUID tenantId = TenantContext.require();
+    // Two questions in one statement, and the order matters: a category with no
+    // rule at all takes everything (REQ-CORE-047's "optional"), so the absence of
+    // rows is a yes rather than a no. Asked the other way round, adding the
+    // feature would have closed every tree that had not been configured yet.
+    Boolean permitted =
+        jdbc.sql(
+                """
+                select not exists (
+                         select 1 from catalog.location_category_child
+                         where tenant_id = ? and parent_category_id = ?)
+                    or exists (
+                         select 1 from catalog.location_category_child
+                         where tenant_id = ? and parent_category_id = ?
+                           and child_category_id = ?)
+                """)
+            .params(
+                tenantId, parentCategoryId, tenantId, parentCategoryId, childCategoryId)
+            .query(Boolean.class)
+            .single();
+    return Boolean.TRUE.equals(permitted);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public UUID publishedCategoryVersion(UUID categoryId) {
     UUID tenantId = TenantContext.require();
     return jdbc

@@ -50,6 +50,33 @@ public interface TypeRegistry {
   UUID publishedCategoryVersion(UUID categoryId);
 
   /**
+   * Which category a category version belongs to.
+   *
+   * <p>A location stores the version it was written against (REQ-CORE-025); a rule about what goes
+   * where is about the category. Only this block can turn one into the other — the tables that
+   * answer it are its own (04 §4.5).
+   *
+   * @param categoryVersionId the version a location stores
+   * @return the category it is a version of
+   * @throws de.greluc.homeinv.platform.NotFoundException when this tenant has no such version
+   */
+  UUID categoryOfVersion(UUID categoryVersionId);
+
+  /**
+   * Whether a category takes another one underneath it (REQ-CORE-047).
+   *
+   * <p>The restriction is optional and is read as a whitelist that only exists once it has an
+   * entry: a category with no rule takes everything, and one with a rule takes exactly what it
+   * names. That is what makes the feature addable to a running tenant without breaking the tree it
+   * already has.
+   *
+   * @param parentCategoryId the category of the place underneath which something would go
+   * @param childCategoryId the category of the place that would go there
+   * @return true when the tree may have that shape
+   */
+  boolean permitsChildCategory(UUID parentCategoryId, UUID childCategoryId);
+
+  /**
    * The categories that a set of category versions belong to.
    *
    * <p>Batched because it serves a listing: a page of locations carries up to two hundred version

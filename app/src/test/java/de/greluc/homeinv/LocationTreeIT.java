@@ -323,8 +323,13 @@ class LocationTreeIT extends AbstractIntegrationTest {
             "warehouse",
             "outdoor-storage",
             "locker");
-    // Every shipped category is stationary: mobile locations are stage 2, and a
-    // category claiming otherwise before anything honours it would be a lie.
+    // Every shipped category is stationary, as a default rather than as a claim
+    // about what a vehicle is. The move of REQ-CORE-043 carries a location's
+    // contents whatever its category says, because a tree built wrongly has to be
+    // repairable; what the flag decides is what a client OFFERS. Flipping the
+    // shipped default would divide tenants in two, because a data migration
+    // cannot reach the ones already provisioned -- `homeinv_migrator` is
+    // NOBYPASSRLS and the policies are FORCEd -- so it stays a tenant's to set.
     assertThat(page.items()).noneMatch(LocationCategoryView::mobile);
   }
 

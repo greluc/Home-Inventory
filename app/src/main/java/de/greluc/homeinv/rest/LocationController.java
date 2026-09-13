@@ -150,6 +150,39 @@ public class LocationController {
   }
 
   /**
+   * Moves a location, with everything under it (REQ-CORE-043).
+   *
+   * <p>Its own sub-path rather than a {@code PATCH} on the location: what changes is one
+   * relationship, and a client that sends the whole location to move it is a client that can rename
+   * it by accident. {@code parentId} omitted or null makes it a root. 08 §8.1 names this endpoint,
+   * and the spelling follows every other verb in this API — {@code /archive}, {@code /publish},
+   * {@code /restore}.
+   *
+   * <p>{@code POST} and still idempotent: moving a place to where it already is answers {@code 200}
+   * and changes nothing, so a client retrying a request whose answer it never saw is not told it
+   * failed.
+   *
+   * @param id the location to move
+   * @param request where to put it
+   * @param user the authenticated caller
+   * @return the location as it now stands
+   */
+  @PostMapping(value = "/{id}/move", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.LOCATION_UPDATE)
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.NAME_TAKEN,
+    ProblemType.INVALID_MOVE,
+    ProblemType.VALIDATION_FAILED
+  })
+  public LocationView moveLocation(
+      @PathVariable UUID id,
+      @Valid @RequestBody MoveLocationRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return locations.move(id, request.parentId(), user.userId());
+  }
+
+  /**
    * The items in a location, optionally including everything below it (REQ-CORE-049).
    *
    * <p>This replaced a {@code /subtree} endpoint that returned a bare list of location ids. That
@@ -217,6 +250,15 @@ public class LocationController {
       UUID parentId,
       @NotBlank @Size(max = 300) String name,
       @Size(max = 65_536) String attributes) {}
+
+  /**
+   * Where a location is to be moved.
+   *
+   * @param parentId the new parent, or null to make it a root. A client that means "out of
+   *     everything" says so with null rather than with an absent field, and both are read the same
+   *     way
+   */
+  public record MoveLocationRequest(UUID parentId) {}
 
   /**
    * The body of a rename.

@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
+import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.catalog.api.InvalidAttributesException;
 import de.greluc.homeinv.catalog.api.TypeAdministration;
@@ -564,11 +565,27 @@ public class ApiExceptionHandler {
   }
 
   /**
-   * Answers a deletion refused because the location is not empty.
+   * Answers a move that would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
-   * @param exception the refusal, carrying why
-   * @param request the request
+   * <p>The detail says which of the two it was — a place moving into itself, or a category that
+   * does not take this kind of place — because the fix differs even though the token does not.
+   *
+   * @param exception the refusal, carrying which
+   * @param request the request, for the instance URI
    * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(InvalidMoveException.class)
+  public ProblemDetail handleInvalidMove(
+      InvalidMoveException exception, HttpServletRequest request) {
+    return problem(ProblemType.INVALID_MOVE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a location that cannot be deleted because something is inside it.
+   *
+   * @param exception the refusal, carrying how much is in there
+   * @param request the request, for the instance URI
+   * @return the problem
    */
   @ExceptionHandler(LocationNotEmptyException.class)
   public ProblemDetail handleLocationNotEmpty(

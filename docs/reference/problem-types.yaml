@@ -261,6 +261,25 @@ assigned:
       - "REQ-CORE-064: names are unique among siblings"
       - "07 §7.1: `location_sibling_name`, partial so a tombstone does not block re-use"
 
+  - token: invalid-move
+    status: 409
+    since: 1
+    summary: >
+      A location cannot be moved where the request asks: into itself or into
+      something it contains, or under a category that has said which categories it
+      takes and did not name this one.
+    notes: >
+      ONE token for both, because the caller does the same thing about either:
+      choose a different target. The depth ceiling is deliberately *not* here — it
+      stays `validation-failed` carrying `maxDepth`, which is what creating a
+      location too deep has always answered, and a client that already handles one
+      needs no second branch for the other. Registered with REQ-CORE-043's
+      implementation, when moving a subtree first became possible and the tree
+      stopped being acyclic by construction.
+    sources:
+      - "REQ-CORE-045: cycles in the tree are impossible"
+      - "REQ-CORE-047: a category may restrict its permitted child categories"
+
   - token: invitation-already-open
     status: 409
     since: 1

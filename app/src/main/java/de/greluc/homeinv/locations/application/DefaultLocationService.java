@@ -6,10 +6,13 @@ package de.greluc.homeinv.locations.application;
 
 import de.greluc.homeinv.catalog.api.TypeRegistry;
 import de.greluc.homeinv.inventory.api.ItemLocationUsage;
+import de.greluc.homeinv.locations.api.InvalidMoveException;
+import de.greluc.homeinv.locations.api.LocationMoved;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
 import de.greluc.homeinv.locations.api.LocationService;
-import de.greluc.homeinv.locations.api.NameTakenException;
 import de.greluc.homeinv.locations.api.LocationView;
+import de.greluc.homeinv.locations.api.NameTakenException;
+import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.locations.domain.Location;
 import de.greluc.homeinv.locations.infrastructure.LocationRepository;
 import de.greluc.homeinv.locations.infrastructure.LocationTreeQueries;
@@ -20,9 +23,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,16 +35,19 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The use cases for storage locations.
  *
- * <h2>Why there is no move operation at stage 0</h2>
+ * <h2>The move, and what it costs the tree</h2>
  *
- * <p>{@code REQ-CORE-045} requires cycles in the tree to be impossible, and at stage 0 they are —
- * provably, not by a check. A location's parent is fixed when it is created, and a child's path is
- * its parent's path plus one label, so the structure is a tree by construction. The only way to
- * create a cycle is to re-parent an existing subtree, and nothing here does that.
+ * <p>Stage 0 had none, and {@code REQ-CORE-045}'s "cycles are impossible" was structural: a
+ * location's parent was fixed at creation and a child's path was its parent's plus one label, so
+ * the shape was a tree by construction. Moving is exactly what ends that, so the guarantee is now a
+ * check — the target must not lie inside the subtree being moved, which is one {@code <@}
+ * comparison, written where the move is and nowhere else.
  *
- * <p>When moving arrives, the guarantee stops being structural and becomes a check: the target must
- * not be inside the subtree being moved, which is one {@code <@} comparison. That is a deliberate
- * note rather than an omission — the requirement is satisfied today for a reason that will expire.
+ * <p>Two more refuse a move. A category may say what it takes underneath it ({@code REQ-CORE-047}),
+ * and a category that has said anything at all has said all of it: an empty rule set permits
+ * everything, one entry permits that one. And the depth ceiling is measured on the <b>deepest
+ * descendant</b> ({@code REQ-CORE-040}), because moving a box two levels down takes everything in
+ * it two levels down as well.
  */
 @Service
 @Slf4j
@@ -48,6 +56,8 @@ public class DefaultLocationService implements LocationService {
 
   private final LocationRepository locations;
   private final LocationTreeQueries tree;
+  /** Where {@code LocationMoved} goes (REQ-CORE-043). */
+  private final ApplicationEventPublisher events;
   private final ItemLocationUsage itemUsage;
   // A location stores the category VERSION it was written against; a caller names
   // the category. Only `catalog` may turn one into the other, because the tables
@@ -186,6 +196,112 @@ public class DefaultLocationService implements LocationService {
   private void requireNameFree(UUID tenantId, UUID parentId, String name, UUID exclude) {
     if (name != null && locations.siblingNameTaken(tenantId, parentId, name, exclude)) {
       throw new NameTakenException(name, parentId);
+    }
+  }
+
+  /**
+   * Moves a location and everything under it.
+   *
+   * @param id the location to move
+   * @param newParentId where to put it, or null to make it a root
+   * @param actor the authenticated user
+   * @return the location as it now stands
+   */
+  @Transactional
+  @Override
+  public LocationView move(UUID id, UUID newParentId, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Instant now = Instant.now(clock);
+
+    Location location =
+        locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
+    // Both ends: somebody confined to a subtree may not move a place out of it,
+    // and may not move one in from outside (REQ-TEN-007).
+    requireInScope(id);
+    requireInScope(newParentId);
+
+    if (Objects.equals(location.getParentId(), newParentId)) {
+      // Already there. Not an error, for the reason deleting twice is not: a
+      // client retrying a request whose answer it never saw.
+      return toView(location, categoryOf(location));
+    }
+
+    Location target = null;
+    if (newParentId != null) {
+      target =
+          locations
+              .findLive(tenantId, newParentId)
+              .orElseThrow(() -> new NotFoundException("location", newParentId));
+      requireNotInsideItself(location, target);
+      requireCategoryPermitted(location, target);
+    }
+
+    requireNameFree(tenantId, newParentId, location.getName(), id);
+
+    // Measured on the deepest descendant, not on the location itself: moving a
+    // box two levels down takes everything in it two levels down as well.
+    int deepest = tree.deepestBelow(tenantId, id);
+    int levelsMoved = (target == null ? 0 : target.getDepth() + 1) - location.getDepth();
+    if (deepest + levelsMoved > Location.MAX_DEPTH) {
+      throw new TooDeepException(newParentId, Location.MAX_DEPTH);
+    }
+
+    UUID fromParentId = location.getParentId();
+    String oldPath = location.getPath();
+    String newPath =
+        target == null
+            ? Location.labelOf(id)
+            : target.getPath() + "." + Location.labelOf(id);
+
+    location.movedTo(target, newPath, actor, now);
+    // Flushed before the descendants are rewritten so that the two writes cannot
+    // be reordered: Hibernate does not see a native statement and would otherwise
+    // be free to hold this row until commit, leaving the subtree pointing at a
+    // path its root no longer has. It is also what takes the moved row out of the
+    // rewrite below, whose prefix it no longer matches.
+    locations.flush();
+    int followed = tree.rewriteSubtree(tenantId, id, oldPath, newPath, now, actor);
+
+    // One event for the lot (REQ-CORE-043). The items inside are untouched by
+    // construction: an item names the place it is in, and that place still is the
+    // same place -- which is why moving a box with 200 items in it is one event
+    // and not 201.
+    events.publishEvent(new LocationMoved(tenantId, id, fromParentId, newParentId, followed + 1));
+    log.info("Location {} moved in tenant {}; {} place(s) followed it.", id, tenantId, followed);
+    return toView(location, categoryOf(location));
+  }
+
+  /**
+   * Refuses a target that is the location itself or inside it.
+   *
+   * @param location the location being moved
+   * @param target where it would go
+   * @throws InvalidMoveException when that would be a cycle
+   */
+  private static void requireNotInsideItself(Location location, Location target) {
+    // On the paths and not on a walk up the parents: the path is what a cycle
+    // would corrupt, so the check is written in the same terms. The trailing
+    // separator matters -- without it "ab" reads as a descendant of "a".
+    String subtree = location.getPath() + ".";
+    if (target.getId().equals(location.getId()) || (target.getPath() + ".").startsWith(subtree)) {
+      throw new InvalidMoveException(
+          "A place cannot be moved into itself or into something it contains.");
+    }
+  }
+
+  /**
+   * Refuses a target whose category does not take this one (REQ-CORE-047).
+   *
+   * @param location the location being moved
+   * @param target where it would go
+   */
+  private void requireCategoryPermitted(Location location, Location target) {
+    UUID childCategory = types.categoryOfVersion(location.getCategoryVersionId());
+    UUID parentCategory = types.categoryOfVersion(target.getCategoryVersionId());
+    if (!types.permitsChildCategory(parentCategory, childCategory)) {
+      throw new InvalidMoveException(
+          "That place does not take this kind of place. Its category permits only the ones it"
+              + " names.");
     }
   }
 

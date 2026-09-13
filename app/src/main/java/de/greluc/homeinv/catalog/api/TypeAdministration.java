@@ -102,6 +102,37 @@ public interface TypeAdministration {
   CategoryView archiveCategory(UUID categoryId, UUID actor);
 
   /**
+   * What a category takes underneath it (REQ-CORE-047).
+   *
+   * @param categoryId the category
+   * @return the rule, whose list is empty when the category takes everything
+   * @throws TypeRegistry.UnknownTypeException when the tenant has no such category
+   */
+  ChildCategoryRuleView childCategories(UUID categoryId);
+
+  /**
+   * Replaces what a category takes underneath it (REQ-CORE-047).
+   *
+   * <p>The whole set at once, not one entry at a time. A restriction is read as a whitelist, so
+   * "which categories are permitted" has exactly one answer at any moment and a caller that sends it
+   * whole cannot leave the rule half-changed. Sending an empty list withdraws the restriction and
+   * the category takes everything again — that is the state a category starts in and the reason the
+   * feature can be switched on in a tenant whose tree already exists.
+   *
+   * <p>Nothing is applied retroactively: locations that already sit where a new rule would forbid
+   * stay there. The rule decides moves and new locations, and a tenant that tightens it is telling
+   * the system what it wants next, not asking it to take the shelves out of the cupboard.
+   *
+   * @param categoryId the category the rule belongs to
+   * @param permitted the categories it will take, in any order; duplicates are ignored
+   * @param actor the authenticated user
+   * @return the rule as it now stands
+   * @throws TypeRegistry.UnknownTypeException when the tenant has no such category, or when one of
+   *     the permitted ones is not a category of this tenant
+   */
+  ChildCategoryRuleView setChildCategories(UUID categoryId, List<UUID> permitted, UUID actor);
+
+  /**
    * Starts a new draft of a type or a category, copying what is published now.
    *
    * <p>A copy rather than an empty version: a new version of "book" that lost every field would be a
@@ -368,6 +399,20 @@ public interface TypeAdministration {
       boolean archived,
       UUID publishedVersionId,
       UUID draftVersionId) {}
+
+  /**
+   * What one category takes underneath it (REQ-CORE-047).
+   *
+   * <p>No cursor and no page, and that is deliberate: the list is the rule itself, and half a
+   * whitelist is not a smaller answer but a wrong one. It cannot outgrow the tenant's categories,
+   * which is a configuration surface a person maintains by hand — the write caps it at 200 anyway,
+   * for the reason every collection here is capped.
+   *
+   * @param categoryId the category the rule belongs to
+   * @param permitted the categories it takes, by id, ordered by when each was permitted. Empty
+   *     means no restriction at all and therefore everything, not nothing
+   */
+  record ChildCategoryRuleView(UUID categoryId, List<UUID> permitted) {}
 
   /**
    * One version and the fields it declares.
