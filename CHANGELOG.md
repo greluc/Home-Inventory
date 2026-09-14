@@ -424,7 +424,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 29 types in the shared
+- **The shared kernel is measured.** `platform` holds 30 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

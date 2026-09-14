@@ -74,6 +74,8 @@ public interface SearchIndex {
    *     cursor string: signing is the service's job, so that one mechanism covers both engines and
    *     an adapter cannot invent a cursor nobody verified (REQ-SEC-106, REQ-SRCH-009). It suits both
    *     — keyset pagination in PostgreSQL and {@code search_after} in OpenSearch are the same idea
+   * @param sort the order to return them in, or {@code null} for the default — oldest first, which
+   *     is the order the keyset cursor resumes in when nobody asked for another
    * @param limit how many at most
    */
   record Query(
@@ -81,7 +83,9 @@ public interface SearchIndex {
       String language,
       List<UUID> locationIds,
       java.util.Optional<de.greluc.homeinv.platform.CursorCodec.Position> after,
+      de.greluc.homeinv.platform.SortOrder sort,
       int limit) {}
+
 
   /**
    * What was found.

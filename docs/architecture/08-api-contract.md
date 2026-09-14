@@ -105,11 +105,28 @@ GET /api/v1/items
   &filter=attr.purchasePrice:gte:100
   &filter=location:subtree:{uuid}
   &filter=tag:in:broken,repair
-  &sort=-updatedAt,name                 minus = descending
+  &sort=-updatedAt                      minus = descending; one key
   &fields=id,name,primaryPhoto          sparse fields
   &cursor=eyJ2IjoxLCJrIjoi…             cursor, never an offset
   &limit=50                             max. 200
 ```
+
+**One sort key, and it is refused rather than reduced.** `REQ-SRCH-004` asks
+for "sorting over `sortable` fields, ascending and descending"; the example above
+showed two keys until 2026-09-14, and `sort=-updatedAt,name` now answers `422`. A
+caller who asks for two orderings and silently receives one holds a list that is
+wrong in a way nothing tells them about. Underneath whatever is chosen sits
+`(created_at, id)` as the tie-break, because a name is no more unique than a
+timestamp and a page boundary on a non-unique key is how keyset pagination
+repeats or loses a row.
+
+**Rows without the sorted value come last in both directions** — not the
+database's default, which puts them first when descending. Somebody who clicks a
+column heading twice should not be handed a page of items that do not have the
+field at all. And a **money or quantity field orders by its unit before its
+amount**: without that, 90 USD would precede 100 EUR and the list would assert a
+ranking that does not exist without an exchange rate, which ADR-0025 keeps out of
+the core.
 
 **Cursor pagination exclusively.** Offsets are wrong on mutable data (skipped and
 duplicated rows) and slow at large offsets. The cursor is opaque, signed, and

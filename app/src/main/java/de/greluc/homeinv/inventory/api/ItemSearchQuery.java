@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.CursorCodec;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,9 @@ public interface ItemSearchQuery {
    *     restriction. It is a list rather than a single id because "including the subtree"
    *     (REQ-CORE-049) resolves to a set of locations in the {@code locations} block, and
    *     {@code inventory} must not read that block's schema to work it out for itself
+   * @param sort the order to return them in, or {@code null} for the default. The field has already
+   *     been checked against the tenant's allowlist by the caller; this block resolves it to a
+   *     column and never to anything a caller typed
    * @param after where to resume, or empty for the first page
    * @param limit how many rows at most
    * @return the page, ordered by creation
@@ -37,6 +41,7 @@ public interface ItemSearchQuery {
       String language,
       List<UUID> locationIds,
       Optional<CursorCodec.Position> after,
+      de.greluc.homeinv.platform.SortOrder sort,
       int limit);
 
   /**

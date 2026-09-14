@@ -261,7 +261,7 @@ public class LocationController {
     // thing an access adapter is for.
     List<UUID> scope = includeSubtree ? locations.subtreeIds(id) : List.of(id);
 
-    return search.query(new SearchService.SearchRequest(null, "de", scope, cursor, limit));
+    return search.query(new SearchService.SearchRequest(null, "de", scope, cursor, null, limit));
   }
 
   /**

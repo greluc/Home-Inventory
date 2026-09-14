@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.search.api;
 
+import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.inventory.api.ItemView;
 import java.util.List;
@@ -36,9 +37,17 @@ public interface SearchService {
    *     means the whole tenant. The cursor is bound to this list as well as to the text, so a
    *     cursor from one location's page is refused on another's (REQ-SRCH-009)
    * @param cursor an opaque cursor from a previous result, or {@code null} for the first page
+   * @param sort the order to return them in, or {@code null} for the default. Refused when the
+   *     field is not one this tenant marked sortable — the allowlist of
+   *     {@code TypeRegistry.queryableFields}, never what a caller typed
    * @param limit how many rows at most
    */
   record SearchRequest(
-      String text, String language, List<UUID> locationIds, String cursor, int limit) {}
+      String text,
+      String language,
+      List<UUID> locationIds,
+      String cursor,
+      SortOrder sort,
+      int limit) {}
 
 }

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.search.application;
 
+import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.search.api.SearchIndex;
 import de.greluc.homeinv.platform.CursorCodec;
@@ -49,6 +50,15 @@ public class DefaultSearchService implements SearchService {
   /** Turns the ids the index answered with back into rows (REQ-SRCH-007). */
   private final de.greluc.homeinv.inventory.api.ItemService items;
 
+  /**
+   * The allowlist an ordering is checked against (REQ-SRCH-004).
+   *
+   * <p>Checked here rather than in the adapter, because "may this be sorted by" is a decision and an
+   * adapter decides nothing (ADR-0010). It is also the only place that can refuse before an engine
+   * is chosen, so the answer does not depend on which one answered.
+   */
+  private final de.greluc.homeinv.catalog.api.TypeRegistry types;
+
   private final CursorCodec cursors;
 
   @Override
@@ -61,7 +71,7 @@ public class DefaultSearchService implements SearchService {
     List<UUID> locationIds =
         request.locationIds() == null ? List.of() : List.copyOf(request.locationIds());
 
-    String fingerprint = fingerprintOf(text, language, locationIds);
+    String fingerprint = fingerprintOf(text, language, locationIds, request.sort());
     Optional<CursorCodec.Position> after =
         request.cursor() == null || request.cursor().isBlank()
             ? Optional.empty()
@@ -70,8 +80,10 @@ public class DefaultSearchService implements SearchService {
             // resumes somewhere else (REQ-SEC-106, REQ-SRCH-009).
             : Optional.of(cursors.decode(request.cursor(), fingerprint));
 
+    SortOrder sort = allowed(request.sort());
+
     SearchIndex.Hits hits =
-        index.find(new SearchIndex.Query(text, language, locationIds, after, limit));
+        index.find(new SearchIndex.Query(text, language, locationIds, after, sort, limit));
 
     // The ids become rows here, through the ordinary read: row-level security and
     // the field visibility rules apply on the way out, which is what makes a
@@ -97,7 +109,8 @@ public class DefaultSearchService implements SearchService {
    *     different order is recognised as the same query
    * @return a hex digest identifying this query
    */
-  private static String fingerprintOf(String text, String language, List<UUID> locationIds) {
+  private static String fingerprintOf(
+      String text, String language, List<UUID> locationIds, SortOrder sort) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       // The separator matters: without it, ("ab", "c") and ("a", "bc") would
@@ -109,10 +122,61 @@ public class DefaultSearchService implements SearchService {
           locationIds.stream().map(UUID::toString).sorted().collect(Collectors.joining(","));
       byte[] hash =
           digest.digest(
-              (text + " " + language + " " + filter).getBytes(StandardCharsets.UTF_8));
+              // The order is part of the query too. Resuming a list sorted by name
+              // with a cursor taken from one sorted by date would page through a
+              // sequence that never existed, which is what REQ-SRCH-009 refuses.
+              (text
+                      + " "
+                      + language
+                      + " "
+                      + filter
+                      + " "
+                      + (sort == null ? "" : sort.field() + (sort.descending() ? " desc" : " asc")))
+                  .getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(hash, 0, 16);
     } catch (NoSuchAlgorithmException impossible) {
       throw new IllegalStateException("SHA-256 is unavailable", impossible);
     }
+  }
+
+  /** What may be ordered by besides the tenant's own fields. A closed set, not a convention. */
+  private static final java.util.Set<String> SORTABLE_COLUMNS =
+      java.util.Set.of("name", "createdAt", "updatedAt");
+
+  /**
+   * Refuses an ordering the tenant did not allow (REQ-SRCH-004).
+   *
+   * <p>The allowlist CLAUDE.md requires: a sort name reaching SQL comes from {@code
+   * field_definition} or from the closed set above, and never from what a caller typed. An unknown
+   * field, or one the tenant has not marked sortable, is refused rather than ignored — a list
+   * silently returned in the wrong order is a list somebody will read as though it were right.
+   *
+   * @param sort what was asked for, or {@code null} for the default order
+   * @return the same ordering when it is allowed, or {@code null} when none was asked for
+   * @throws IllegalArgumentException when the field may not be ordered by
+   */
+  private SortOrder allowed(SortOrder sort) {
+    if (sort == null) {
+      return null;
+    }
+    if (!sort.isAttribute()) {
+      if (!SORTABLE_COLUMNS.contains(sort.field())) {
+        throw new IllegalArgumentException(
+            "Cannot sort by " + sort.field() + "; it is not a field of an item");
+      }
+      return sort;
+    }
+    String key = sort.attributeKey();
+    boolean sortable =
+        types.queryableFields().stream()
+            .anyMatch(field -> field.key().equals(key) && field.sortable());
+    if (!sortable) {
+      // Named rather than hidden: the tenant configures which fields are
+      // sortable, so somebody can act on this — either by marking the field or
+      // by correcting the request.
+      throw new IllegalArgumentException(
+          "Cannot sort by " + sort.field() + "; no published type marks it sortable");
+    }
+    return sort;
   }
 }

@@ -71,7 +71,12 @@ public class PostgresSearchIndex implements SearchIndex {
   public Hits find(Query query) {
     ItemSearchQuery.Rows rows =
         items.search(
-            query.text(), query.language(), query.locationIds(), query.after(), query.limit());
+            query.text(),
+            query.language(),
+            query.locationIds(),
+            query.after(),
+            query.sort(),
+            query.limit());
     return new Hits(rows.ids(), rows.last());
   }
 }

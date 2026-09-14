@@ -351,4 +351,24 @@
     <Class name="de.greluc.homeinv.rest.ProblemErrorController"/>
   </Match>
 
+  <!--
+    VA_FORMAT_STRING_USES_NEWLINE on the search statement. The rule wants `%n`
+    instead of a literal newline in a format string, and here the format string is
+    a SQL text block whose newlines are the statement's own layout. `%n` would
+    emit the platform separator into SQL, which PostgreSQL neither needs nor
+    notices.
+
+    More to the point, the alternative the rule pushes towards is forbidden here:
+    building the statement by concatenation trips
+    `ArchitectureRulesTest.sqlIsNeverConcatenated`, which enforces REQ-SEC-031 —
+    a SQL literal joined by `+` to an expression is the one shape a value can
+    enter a statement through. The two gates disagree and the project's own rule
+    wins; the text block keeps every variable part to `%s` placeholders whose
+    arguments come from closed sets.
+  -->
+  <Match>
+    <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+    <Class name="de.greluc.homeinv.inventory.infrastructure.ItemSearchAdapter"/>
+  </Match>
+
 </FindBugsFilter>

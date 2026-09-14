@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.inventory.api.BulkItemOperations;
@@ -360,10 +361,10 @@ public class ItemController {
    * gone rather than aliased: two paths for one question is the drift this chapter exists to
    * prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
    *
-   * <p>The grammar arrives in pieces. `q`, `cursor` and `limit` work; `filter`, `sort` and `fields`
-   * are REQ-SRCH-002/003/004 and are not here yet. A parameter that is not implemented is absent
-   * rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
-   * report over the wrong rows.
+   * <p>The grammar arrives in pieces. `q`, `sort`, `cursor` and `limit` work; `filter` and `fields`
+   * are REQ-SRCH-002/003 and are not here yet. A parameter that is not implemented is absent rather
+   * than accepted and ignored, because silently ignoring a filter is how somebody ships a report
+   * over the wrong rows.
    *
    * <p>{@code SEARCH_QUERY} and not {@code ITEM_READ}: a listing is an enumeration surface whether
    * or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -371,6 +372,9 @@ public class ItemController {
    *
    * @param q what to look for; omitted lists everything, paged the same way
    * @param language {@code de} or {@code en}, deciding which generated vector is searched
+   * @param sort what to order by, a leading minus for descending: {@code -updatedAt}, {@code name},
+   *     {@code attr.manufacturer}. One key only — several are refused rather than reduced to the
+   *     first (REQ-SRCH-004). Omitted returns the default order, oldest first
    * @param cursor an opaque cursor from a previous response, or omitted for the first page
    * @param limit how many at most
    * @return one page of items
@@ -381,9 +385,41 @@ public class ItemController {
   public Page<ItemView> listItems(
       @RequestParam(required = false) @Size(max = 500) String q,
       @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,
+      @RequestParam(required = false) @Size(max = 100) String sort,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
-    return search.query(new SearchService.SearchRequest(q, language, List.of(), cursor, limit));
+    return search.query(
+        new SearchService.SearchRequest(q, language, List.of(), cursor, sortOf(sort), limit));
+  }
+
+  /**
+   * Reads the {@code sort} parameter as the wire spells it.
+   *
+   * <p>Translation and not a decision: the leading minus is a convention of this API, and whether
+   * the field may be ordered by at all is the application layer's to answer against the tenant's
+   * own allowlist (ADR-0010).
+   *
+   * @param sort the parameter, or {@code null} when it was omitted
+   * @return the ordering, or {@code null} for the default
+   * @throws IllegalArgumentException when more than one key is given, or the key is empty
+   */
+  private static de.greluc.homeinv.platform.SortOrder sortOf(String sort) {
+    if (sort == null || sort.isBlank()) {
+      return null;
+    }
+    if (sort.indexOf(',') >= 0) {
+      // Refused rather than reduced to the first key: a caller who asked for two
+      // orders and silently got one has a list that is wrong in a way nothing
+      // tells them about (REQ-SRCH-004, decided 2026-09-14).
+      throw new IllegalArgumentException(
+          "Only one sort key is supported; " + sort + " names several");
+    }
+    boolean descending = sort.charAt(0) == '-';
+    String field = descending ? sort.substring(1) : sort;
+    if (field.isBlank()) {
+      throw new IllegalArgumentException("A sort needs a field, not just a direction");
+    }
+    return new de.greluc.homeinv.platform.SortOrder(field, descending);
   }
 
   /**
