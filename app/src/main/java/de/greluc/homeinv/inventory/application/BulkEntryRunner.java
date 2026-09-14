@@ -102,15 +102,11 @@ class BulkEntryRunner {
       // item's own version alone, so there is nothing an If-Match could protect.
       // The single-item endpoint takes no If-Match either, for the same reason.
       //
-      // The read before it is not redundant. `tagging` cannot check that an item
-      // exists -- it may not read `inventory`'s schema -- so an assignment naming
-      // one that is gone reaches the database as a foreign-key violation, and a
-      // caller is told 500 about something that is plainly a 404. Asking
-      // `inventory` first is what makes the status line say what happened.
-      case TAG -> {
-        items.get(entry.itemId());
-        tags.assign(command.tagId(), TagService.TagTarget.ITEM, entry.itemId(), actor);
-      }
+      // An item that is not there is this entry's 404, raised by `tagging` through
+      // the `TaggableTargets` port that `inventory` implements. This used to read
+      // the item here first, because without that port the assignment reached the
+      // database as a foreign-key violation.
+      case TAG -> tags.assign(command.tagId(), TagService.TagTarget.ITEM, entry.itemId(), actor);
       case CHANGE_TYPE ->
           items.changeType(entry.itemId(), command.itemTypeId(), entry.expectedVersion(), actor);
       case DELETE -> items.delete(entry.itemId(), entry.expectedVersion(), actor);

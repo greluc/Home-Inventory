@@ -15,6 +15,7 @@ import de.greluc.homeinv.tagging.api.TagMerged;
 import de.greluc.homeinv.tagging.api.TagService;
 import de.greluc.homeinv.tagging.api.TagUnassigned;
 import de.greluc.homeinv.tagging.api.TagView;
+import de.greluc.homeinv.tagging.api.TaggableTargets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
@@ -103,6 +104,15 @@ public class TagAdapter implements TagService {
   private final ObjectMapper mapper;
   private final CursorCodec cursors;
   private final ApplicationEventPublisher events;
+
+  /**
+   * Who answers whether a target is there, one implementation per kind.
+   *
+   * <p>A list rather than a map, built by Spring from whatever implements {@link TaggableTargets}.
+   * Two entries today, and the lookup is linear over them: a map assembled in a constructor would
+   * be a second thing to keep right for a collection that fits on one line.
+   */
+  private final List<TaggableTargets> targets;
 
   /** Where the last row read sat, for the next page's cursor. */
   // Where the last row of a page sat lives in a `LastRow` per call, not in a
@@ -235,6 +245,7 @@ public class TagAdapter implements TagService {
   public void assign(UUID tagId, TagTarget target, UUID targetId, UUID actor) {
     UUID tenantId = TenantContext.require();
     TagView tag = live(tagId);
+    requireVisible(target, targetId);
 
     // An exclusive group holds one tag per thing. Whatever else of this group is
     // on the target comes off first, and says so, so a consumer does not believe
@@ -273,6 +284,10 @@ public class TagAdapter implements TagService {
   @Transactional
   public void unassign(UUID tagId, TagTarget target, UUID targetId, UUID actor) {
     UUID tenantId = TenantContext.require();
+    requireVisible(target, targetId);
+    // Still idempotent about the *assignment*: taking off a tag that is not on is
+    // no error. What is refused is a target that is not there, which is a
+    // different question and the one the endpoint promises a 404 for.
     if (removeAssignment(tagId, target, targetId) > 0) {
       events.publishEvent(new TagUnassigned(tenantId, tagId, target, targetId));
     }
@@ -282,6 +297,7 @@ public class TagAdapter implements TagService {
   @Transactional(readOnly = true)
   public TagPage tagsOf(TagTarget target, UUID targetId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
+    requireVisible(target, targetId);
     int size = Math.clamp(limit, 1, MAX_PAGE);
     LastRow last = new LastRow();
 
@@ -476,6 +492,32 @@ public class TagAdapter implements TagService {
         .query((rs, rowNum) -> tagOf(rs, new LastRow()))
         .optional()
         .orElseThrow(() -> new NotFoundException("tag", tagId));
+  }
+
+  /**
+   * Refuses a target this tenant cannot see.
+   *
+   * <p>This block cannot answer it: the row belongs to {@code inventory} or {@code locations} and
+   * 04 §4.5 forbids reading a foreign schema. Without the question an assignment naming a missing
+   * item reached the database as a foreign-key violation and a caller was told {@code 500} about a
+   * plain {@code 404}; removing one or listing a target's tags said nothing at all, which is worse,
+   * because it looks like an answer.
+   *
+   * @param target which kind of thing
+   * @param targetId the item or place a caller named
+   * @throws NotFoundException when the owning block has no live row for it
+   * @throws IllegalStateException when no block answers for this kind, which is a wiring fault
+   */
+  private void requireVisible(TagTarget target, UUID targetId) {
+    targets.stream()
+        .filter(owner -> owner.kind() == target)
+        .findFirst()
+        .orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "No block answers whether a " + target + " exists; tagging one would write a "
+                        + "row nothing can be joined to."))
+        .requireVisible(targetId);
   }
 
   /**

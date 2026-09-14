@@ -49,7 +49,7 @@ to it are open.
 | REQ-SEC-022 | Authorization happens **exclusively in the application layer**; access adapters decide nothing. | 0 | ArchUnit forbids database and repository access in the access blocks |
 | REQ-SEC-023 | The default is **deny**. An endpoint without `@RequiresPermission` and without an explicit `@PublicEndpoint` marker fails the build. | 0 | A CI rule |
 | REQ-SEC-024 | The check runs against the **loaded** object, never against the ID alone. | 0 | Code review and a test per endpoint |
-| REQ-SEC-025 | Foreign or invisible objects return `404`, not `403`. | 0 | The responses are indistinguishable |
+| REQ-SEC-025 | Foreign or invisible objects return `404`, not `403`. **A sub-resource answers about its parent too**: an endpoint under `/items/{id}/...` given an id this tenant cannot see is a `404`, whether it reads, writes or removes. | 0 | The responses are indistinguishable. `TagTargetsIT` covers the six tag paths, where all three cases — never existed, in the trash, another tenant's — have to look alike; before `TaggableTargets` they answered `500`, `204` and an empty page instead |
 | REQ-SEC-026 | Every endpoint has negative tests for "no permission → 403" and "foreign tenant → 404". | 1 | A coverage check in CI |
 | REQ-SEC-027 | `sensitive` fields are **removed** per role, not masked — identically in REST and GraphQL. | 1 | A shared test for both surfaces |
 | REQ-SEC-028 | Nobody can grant permissions they do not hold themselves. | 1 | A test |

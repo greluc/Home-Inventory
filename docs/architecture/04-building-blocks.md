@@ -292,6 +292,7 @@ attributes, quantities, relations, lifecycle.
 | Schema | `tagging` |
 | Key notions | `Tag`, `TagGroup`, `TagAssignment` |
 | Publishes | `TagService` — creating, renaming, merging, assigning and reading what one thing carries — plus `TagView` and `TagGroupView` |
+| Outbound ports | `TaggableTargets` — whether an item or a place is one this tenant can see. Declared here and implemented by `inventory` and `locations`, because a tag goes on a row this block does not own and 4.5 forbids reading a foreign schema; asking those blocks directly would close a cycle, since both already depend on this one. Without it an assignment naming a missing row reached the database as a foreign-key violation and answered `500` where the endpoint declared `404`, and removing one or listing a target's tags said nothing at all (`REQ-SEC-025`, added 2026-09-14) |
 | Events | `TagCreated`, `TagMerged`, `TagAssigned`, `TagUnassigned` |
 | Properties | Tenant-wide, flat with optional groups (e.g. group "condition" with `new`/`used`/`broken`), colour and icon, merging two tags as an administrative operation, applies to items **and** locations |
 

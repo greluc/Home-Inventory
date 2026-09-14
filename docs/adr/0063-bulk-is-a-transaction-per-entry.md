@@ -110,13 +110,15 @@ tenants.
   response's own status. The tokens come from
   [`problem-types.yaml`](../reference/problem-types.yaml); there is no second
   vocabulary for bulk.
-- **A bulk tag asks `inventory` whether the item exists.** `tagging` may not read
-  `inventory`'s schema, so an assignment naming a missing item would arrive as a
-  foreign-key violation and be answered `500` where a `404` is plainly meant. The
-  read turns it into that entry's `404`. *The single-item endpoint
-  `PUT /api/v1/items/{id}/tags/{tagId}` still has the older behaviour and answers
-  `500` where it declares `404`; that is a defect of its own and not of this
-  decision.*
+- **A missing item in a bulk tag is that entry's `404`.** `tagging` may not read
+  `inventory`'s schema, so an assignment naming a missing item arrived as a
+  foreign-key violation and was answered `500` where a `404` is plainly meant.
+  This decision shipped with a read of the item in `BulkEntryRunner` to work
+  around it, and noted that the single-item endpoints had the same defect.
+  *Both are gone as of 2026-09-14: `tagging` declares `TaggableTargets` and the
+  blocks that own the rows answer it, so all six tag paths say `404` for a target
+  that is not there — `TagTargetsIT` holds them to it — and the workaround in
+  `BulkEntryRunner` has been removed.*
 - **`PROPAGATION_NESTED` is unusable in this application and should not be
   reached for.** The finding above is the reason, and it is recorded here rather
   than as a comment somebody deletes.

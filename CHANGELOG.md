@@ -41,6 +41,12 @@ commit".
 
 ### Fixed
 
+- **Putting a tag on something that is not there now says so.** Naming an item or
+  a place that has been deleted, never existed, or belongs to somebody else
+  answered "something went wrong" when assigning a tag, and answered nothing at
+  all when removing one or listing what a thing carries. All six of those paths
+  now say the thing is not there, in the same words as every other endpoint.
+
 - **Asking for the second page of a list failed.** Every listing that is served
   straight from SQL — item types, location categories, value lists, tags, tag
   groups, a thing's tags, tenant-owned roles, an item's relations — answered an
