@@ -303,6 +303,16 @@ tasks.withType<Test>().configureEach {
     // H2 is forbidden: JSONB, ltree and row-level security behave differently,
     // which is exactly where the bugs would be (CLAUDE.md, REQ-NFR-030).
     systemProperty("spring.profiles.active", "test")
+
+    // Gradle gives a test JVM 512 MB by default, and ArchUnit needs more than
+    // that on its own: it imports every class of the application into an object
+    // model, annotations and all, before a single rule runs. At 512 MB the suite
+    // died in `JavaAnnotation.getProperties` with a heap error rather than a test
+    // failure, which reads like a broken build and is a missing setting.
+    //
+    // 2 GB, the same ceiling the daemon has in `gradle.properties`, so a laptop
+    // running the container stack beside this still fits.
+    maxHeapSize = "2g"
 }
 
 

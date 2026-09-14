@@ -85,3 +85,4 @@ Date: YYYY-MM-DD
 | [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
 | [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |
+| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted |

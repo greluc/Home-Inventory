@@ -153,6 +153,15 @@ commit".
 
 ### Added
 
+- **The fourteen extension points a plugin can implement now exist.** Code
+  formats, scan sources, label renderers and print targets, metadata resolvers,
+  storage, search, notifications, federated login, image processing, virus
+  scanning, valuation and imports — each one an interface a plugin author can
+  build against, in the Apache-2.0 module, so a plugin stays theirs to license.
+  Six of them belong to features that arrive later and have nothing behind them
+  yet. *Plugin contract: adds `de.greluc.homeinv.plugin.api.port`. Not published
+  until the SDK is, and until then it may still change.*
+
 - **Administrators decide what a plugin may do in their household.** The plugin
   list now shows what each one asks for beside what the household has agreed to,
   and an administrator grants or withdraws each capability on its own. Nothing is
@@ -616,7 +625,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 64 architecture decision records, each with its alternatives and consequences —
+- 65 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
