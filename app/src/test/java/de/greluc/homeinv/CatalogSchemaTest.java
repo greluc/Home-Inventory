@@ -62,6 +62,13 @@ class CatalogSchemaTest {
           }
 
           @Override
+          public java.util.List<QueryableField> queryableFields() {
+            // This stub exists to answer one schema question; nothing here asks
+            // what may be filtered.
+            return java.util.List.of();
+          }
+
+          @Override
           public UUID publishedCategoryVersion(UUID categoryId) {
             return VERSION;
           }

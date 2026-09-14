@@ -113,6 +113,42 @@ public interface TypeRegistry {
   List<FieldDefinitionView> fields(UUID typeVersionId);
 
   /**
+   * Every attribute key this tenant may query by, with the type it holds (REQ-SRCH-003, 004, 002).
+   *
+   * <p>The allowlist CLAUDE.md requires: a field or sort name in a statement comes from
+   * {@code field_definition} and never from what a caller typed. A key that is not here cannot be
+   * filtered, sorted or counted by, and the request is refused rather than quietly ignored.
+   *
+   * <p>Across the tenant rather than per type version, because a query spans types: "everything
+   * over 100 euro" is asked of the whole inventory, not of one kind of thing.
+   *
+   * <p><b>A key whose types disagree is not queryable.</b> The same key may be declared by several
+   * types — {@code model} as text on one and as an integer on another — and {@code item_attr_index}
+   * keeps one column per storage class, so such a key would live in two columns at once. Ordering
+   * across those two is meaningless and filtering across them is worse, because it would look like
+   * it worked. Such a key is left out, which is rare and honest.
+   *
+   * @return the queryable keys, each with its data type and what may be done with it
+   */
+  List<QueryableField> queryableFields();
+
+  /**
+   * One attribute key a query may name.
+   *
+   * @param key the attribute key, as {@code item_attr_index.field_key} holds it
+   * @param dataType what it holds, which decides the column a predicate reads
+   * @param filterable whether any published version marks it {@code searchable}
+   * @param sortable whether any published version marks it {@code sortable}
+   * @param facetable whether any published version marks it {@code facetable}
+   */
+  record QueryableField(
+      String key,
+      de.greluc.homeinv.catalog.api.FieldDataType dataType,
+      boolean filterable,
+      boolean sortable,
+      boolean facetable) {}
+
+  /**
    * The generated JSON Schema of a version, as the document clients receive.
    *
    * <p>The same bytes the validator uses (ADR-0056). Returned as text rather than as a parsed tree

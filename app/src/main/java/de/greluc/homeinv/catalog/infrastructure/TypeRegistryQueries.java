@@ -215,6 +215,50 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public List<TypeRegistry.QueryableField> queryableFields() {
+    UUID tenantId = TenantContext.require();
+    // Grouped by key across every PUBLISHED version, because a query spans types.
+    // `count(distinct data_type) = 1` is the rule that keeps a key out when two
+    // types disagree about what it holds: `item_attr_index` keeps one column per
+    // storage class, so such a key lives in two at once and no single predicate
+    // over it means anything. Rare, and left out rather than guessed at.
+    //
+    // A draft's fields are not queryable: nothing references an unpublished
+    // version, so nothing is indexed under it either.
+    return jdbc
+        .sql(
+            """
+            select f.key                        as key,
+                   min(f.data_type)             as data_type,
+                   bool_or(f.searchable)        as filterable,
+                   bool_or(f.sortable)          as sortable,
+                   bool_or(f.facetable)         as facetable
+            from catalog.field_definition f
+            join catalog.item_type_version v
+              on v.tenant_id = f.tenant_id and v.id = f.item_type_version_id
+            where f.tenant_id = ?
+              and v.published_at is not null
+              and f.deprecated_at is null
+              and f.sensitive = false
+            group by f.key
+            having count(distinct f.data_type) = 1
+               and (bool_or(f.searchable) or bool_or(f.sortable) or bool_or(f.facetable))
+            order by f.key
+            """)
+        .param(tenantId)
+        .query(
+            (rs, rowNum) ->
+                new TypeRegistry.QueryableField(
+                    rs.getString("key"),
+                    FieldDataType.ofToken(rs.getString("data_type")),
+                    rs.getBoolean("filterable"),
+                    rs.getBoolean("sortable"),
+                    rs.getBoolean("facetable")))
+        .list();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public String jsonSchema(UUID typeVersionId) {
     UUID tenantId = TenantContext.require();
     return jdbc

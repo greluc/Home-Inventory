@@ -85,6 +85,71 @@ class TypeEditorIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("lists what may be queried, and leaves out a key two types disagree about")
+  void theQueryableAllowlist() {
+    Tenant tenant = newTenant("type-editor-queryable@example.org");
+    inTenant(
+        tenant,
+        () -> {
+          // `model` is text on the tool and an integer on the appliance. The same
+          // key in two storage classes lives in two columns of
+          // `item_attr_index`, so no single predicate over it means anything.
+          TypeAdministration.ItemTypeView tool = newType(tenant, "queryable-tool");
+          types.addField(
+              tool.draftVersionId(),
+              queryable("manufacturer", FieldDataType.TEXT, true, true, true),
+              tenant.userId());
+          types.addField(
+              tool.draftVersionId(),
+              queryable("model", FieldDataType.TEXT, true, false, false),
+              tenant.userId());
+          types.addField(
+              tool.draftVersionId(),
+              queryable("power", FieldDataType.QUANTITY, true, true, false),
+              tenant.userId());
+          types.publish(tool.draftVersionId(), tenant.userId());
+
+          TypeAdministration.ItemTypeView appliance = newType(tenant, "queryable-appliance");
+          types.addField(
+              appliance.draftVersionId(),
+              queryable("model", FieldDataType.INTEGER, true, false, false),
+              tenant.userId());
+          types.publish(appliance.draftVersionId(), tenant.userId());
+
+          var queryable = registry.queryableFields();
+          assertThat(queryable).extracting(TypeRegistry.QueryableField::key)
+              .as("a key its types disagree about is left out rather than guessed at")
+              .contains("manufacturer", "power")
+              .doesNotContain("model");
+
+          // The flags are the union across the published versions, because a
+          // query spans types: a key sortable anywhere is sortable.
+          assertThat(queryable)
+              .filteredOn(field -> field.key().equals("manufacturer"))
+              .singleElement()
+              .satisfies(
+                  field -> {
+                    assertThat(field.filterable()).isTrue();
+                    assertThat(field.sortable()).isTrue();
+                    assertThat(field.facetable()).isTrue();
+                  });
+
+          // And the data type comes with it, because it decides which column a
+          // predicate reads -- and whether a comparison has to name a unit.
+          assertThat(queryable)
+              .filteredOn(field -> field.key().equals("power"))
+              .singleElement()
+              .satisfies(
+                  field -> {
+                    assertThat(field.dataType()).isEqualTo(FieldDataType.QUANTITY);
+                    assertThat(field.dataType().carriesUnit())
+                        .as("a quantity is compared within its unit, never across")
+                        .isTrue();
+                  });
+        });
+  }
+
+  @Test
   @DisplayName("refuses a second type with the same key (REQ-CORE-020)")
   void keysAreUniquePerTenant() {
     Tenant tenant = newTenant("type-editor-keys@example.org");
@@ -506,6 +571,36 @@ class TypeEditorIT extends AbstractIntegrationTest {
    * @param constraints the declared limits
    * @return the command
    */
+  /**
+   * A field that may be queried, with the three flags set as given.
+   *
+   * @param key the attribute key
+   * @param type what it holds
+   * @param filterable whether it is mirrored for filtering
+   * @param sortable whether it is mirrored for ordering
+   * @param facetable whether it is mirrored for counting
+   * @return the command
+   */
+  private TypeAdministration.FieldCommand queryable(
+      String key, FieldDataType type, boolean filterable, boolean sortable, boolean facetable) {
+    return new TypeAdministration.FieldCommand(
+        key,
+        type,
+        Map.of("en", key),
+        Map.of(),
+        false,
+        null,
+        FieldConstraints.NONE,
+        null,
+        null,
+        null,
+        0,
+        filterable,
+        sortable,
+        facetable,
+        false);
+  }
+
   private TypeAdministration.FieldCommand field(
       String key, FieldDataType type, boolean required, FieldConstraints constraints) {
     return new TypeAdministration.FieldCommand(
