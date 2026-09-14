@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.util.UUID;
+import org.springframework.modulith.events.Externalized;
 
 /**
  * An item was moved to the trash (REQ-CORE-009, REQ-SRCH-005).
@@ -19,4 +20,5 @@ import java.util.UUID;
  * @param tenantId whose data changed
  * @param itemId the item
  */
+@Externalized("homeinv.inventory::item-deleted")
 public record ItemDeleted(UUID tenantId, UUID itemId) {}

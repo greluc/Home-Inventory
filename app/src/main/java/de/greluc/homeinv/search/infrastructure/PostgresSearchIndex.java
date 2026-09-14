@@ -103,6 +103,33 @@ public class PostgresSearchIndex implements SearchIndex {
     return new Hits(rows.ids(), rows.last());
   }
 
+  /**
+   * Does nothing, because this engine's index is the database.
+   *
+   * <p>Not a stub. The full-text match reads the two generated {@code tsvector} columns on
+   * {@code inventory.item} and the filters read {@code item_attr_index}, and both are written in
+   * the same transaction as the item (REQ-CORE-013). There is no second copy to bring up to date,
+   * which is also why this engine never reports {@code index-stale}.
+   *
+   * @param document ignored
+   */
+  @Override
+  public void index(de.greluc.homeinv.search.api.SearchDocument document) {
+    // Intentionally empty; see the Javadoc.
+  }
+
+  /**
+   * Does nothing, for the same reason as {@link #index}.
+   *
+   * @param tenantId ignored
+   * @param itemId ignored
+   */
+  @Override
+  public void remove(UUID tenantId, UUID itemId) {
+    // Intentionally empty; trashing an item already clears its projection in the
+    // same transaction (07 §7.3).
+  }
+
   @Override
   public Facet facet(Query query, String dimension, UUID locationRoot) {
     ItemSearchQuery.Criteria criteria = criteriaOf(query);

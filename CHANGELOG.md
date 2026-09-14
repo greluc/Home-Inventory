@@ -153,6 +153,16 @@ commit".
 
 ### Added
 
+- **Search can be answered by OpenSearch.** An installation that runs the
+  `standard` or `ha` profile can point the application at its OpenSearch, and
+  searches are then stemmed and ranked across everything an item carries — its
+  name, description, notes, attribute values, tags and where it is kept — rather
+  than across its name and description alone. The index keeps itself up to date
+  from what happens to an item, and if it is unavailable the answer comes from
+  the database instead and says so. An installation that never asked for
+  OpenSearch is unaffected and is not reported as degraded. *New settings:
+  `HOMEINV_SEARCH_ENGINE`, `HOMEINV_SEARCH_URL`, `HOMEINV_SEARCH_FINGERPRINT`.*
+
 - **An item now says what happened to it.** Creating, editing, moving, writing
   against another type, trashing and restoring each publish an event, so anything
   derived from the inventory — search first — can follow along instead of being
@@ -452,7 +462,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 32 types in the shared
+- **The shared kernel is measured.** `platform` holds 33 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

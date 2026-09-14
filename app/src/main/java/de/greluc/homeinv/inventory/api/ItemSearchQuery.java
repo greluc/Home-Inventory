@@ -127,6 +127,50 @@ public interface ItemSearchQuery {
   List<UUID> matchingIds(Criteria criteria);
 
   /**
+   * Everything about one item that a search engine may hold (REQ-SRCH-011).
+   *
+   * <p>Read whole and unredacted, because an index is a derived store that answers with ids and
+   * never with content: the rows are re-loaded through the ordinary path, where row-level security
+   * and the field visibility rules apply (REQ-SRCH-007). A document redacted for nobody in
+   * particular would make the search miss text its reader is allowed to see.
+   *
+   * <p><b>Sealed values are not here.</b> A {@code sensitive} field is stored as ciphertext
+   * (ADR-0019) and is never mirrored into {@code item_attr_index}, so it cannot reach a document
+   * through this method either — an index over ciphertext matches nothing and leaks the fact
+   * that there is something to match.
+   *
+   * @param itemId the item
+   * @return what to index, or empty when the tenant has no such live item — which is the answer
+   *     after a trashing, and is how an indexer learns to remove the document
+   */
+  Optional<SearchableItem> searchable(UUID itemId);
+
+  /**
+   * The searchable parts of one item.
+   *
+   * @param itemId the item
+   * @param itemTypeVersionId the version it is written against, which {@code catalog} turns into a
+   *     type and a category
+   * @param name what it is called
+   * @param description the prose, or {@code null}
+   * @param notes the notes, or {@code null} (REQ-CORE-014)
+   * @param locationId where it is, or {@code null}
+   * @param attributeValues every mirrored attribute value rendered as text, sealed ones excluded
+   * @param createdAt when it was created, which is the keyset order's first key
+   * @param updatedAt when it last changed
+   */
+  record SearchableItem(
+      UUID itemId,
+      UUID itemTypeVersionId,
+      String name,
+      String description,
+      String notes,
+      UUID locationId,
+      List<String> attributeValues,
+      java.time.Instant createdAt,
+      java.time.Instant updatedAt) {}
+
+  /**
    * What one search produced.
    *
    * <p><b>Identifiers, not rows.</b> The caller loads them through {@code ItemService.byIds}, which

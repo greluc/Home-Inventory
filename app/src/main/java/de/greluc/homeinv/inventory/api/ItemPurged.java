@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.util.UUID;
+import org.springframework.modulith.events.Externalized;
 
 /**
  * An item was finally removed — the second stage of REQ-CORE-009, and the irreversible one.
@@ -21,4 +22,5 @@ import java.util.UUID;
  * @param tenantId the tenant the item belonged to; a consumer establishes its context from here
  * @param itemId the item that no longer exists
  */
+@Externalized("homeinv.inventory::item-purged")
 public record ItemPurged(UUID tenantId, UUID itemId) {}

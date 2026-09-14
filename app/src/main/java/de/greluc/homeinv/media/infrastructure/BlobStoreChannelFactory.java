@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.media.infrastructure;
 
+import de.greluc.homeinv.platform.PinnedCertificate;
 import io.grpc.ChannelCredentials;
 import io.grpc.Grpc;
 import io.grpc.ManagedChannel;
@@ -72,7 +73,7 @@ public class BlobStoreChannelFactory {
       @Value("${HOMEINV_MTLS_CORE_FILE:}") String identityFile,
       @Value("${HOMEINV_BLOBSTORE_AUTHORITY:}") String authority) {
     this.endpoint = endpoint;
-    this.expectedFingerprint = normalise(fingerprint);
+    this.expectedFingerprint = PinnedCertificate.normalise(fingerprint);
     this.identityFile = identityFile == null || identityFile.isBlank() ? null : Path.of(identityFile);
     this.authority = authority == null ? "" : authority.trim();
   }
@@ -122,7 +123,8 @@ public class BlobStoreChannelFactory {
       ChannelCredentials credentials =
           TlsChannelCredentials.newBuilder()
               .keyManager(new ByteArrayInputStream(bundle), new ByteArrayInputStream(bundle))
-              .trustManager(new PinnedTrustManager(expectedFingerprint))
+              .trustManager(new PinnedCertificate(
+                      "The blob store", "HOMEINV_BLOBSTORE_FINGERPRINT", expectedFingerprint))
               .build();
       var builder = Grpc.newChannelBuilder(endpoint, credentials);
       if (!authority.isEmpty()) {
@@ -138,61 +140,6 @@ public class BlobStoreChannelFactory {
     } catch (IOException | RuntimeException unusable) {
       throw new IllegalStateException(
           "The channel to the blob store at " + endpoint + " could not be built", unusable);
-    }
-  }
-
-  private static String normalise(String fingerprint) {
-    return fingerprint == null
-        ? ""
-        : fingerprint.replace(":", "").trim().toLowerCase(Locale.ROOT);
-  }
-
-  /**
-   * Accepts exactly one server certificate, by its SHA-256 fingerprint.
-   *
-   * <p>It checks the leaf and nothing else — not the chain, not the hostname, not the validity
-   * dates. That is deliberate and is what pinning means: the question is "is this the certificate we
-   * were told to expect", and a chain that validates to a CA several services share does not answer
-   * it. Expiry is handled by reissuing the certificate and updating the pin together, which is one
-   * operation rather than two that can disagree.
-   */
-  private record PinnedTrustManager(String expected) implements X509TrustManager {
-
-    @Override
-    public void checkClientTrusted(X509Certificate[] chain, String authType)
-        throws CertificateException {
-      // This is a client. It is never asked to verify a client.
-      throw new CertificateException("This trust manager verifies servers only");
-    }
-
-    @Override
-    public void checkServerTrusted(X509Certificate[] chain, String authType)
-        throws CertificateException {
-      if (chain == null || chain.length == 0) {
-        throw new CertificateException("The blob store presented no certificate");
-      }
-      String presented = fingerprintOf(chain[0]);
-      if (!MessageDigest.isEqual(
-          presented.getBytes(StandardCharsets.US_ASCII),
-          expected.getBytes(StandardCharsets.US_ASCII))) {
-        throw new CertificateException(
-            "The blob store's certificate does not match HOMEINV_BLOBSTORE_FINGERPRINT");
-      }
-    }
-
-    @Override
-    public X509Certificate[] getAcceptedIssuers() {
-      // No issuer is accepted, because no issuer decides anything here.
-      return new X509Certificate[0];
-    }
-
-    private static String fingerprintOf(X509Certificate certificate) throws CertificateException {
-      try {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        return HexFormat.of().formatHex(digest.digest(certificate.getEncoded()));
-      } catch (NoSuchAlgorithmException | CertificateEncodingException impossible) {
-        throw new CertificateException("The presented certificate could not be hashed", impossible);
-      }
     }
   }
 

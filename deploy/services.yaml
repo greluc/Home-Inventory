@@ -308,6 +308,12 @@ services:
       # aborts startup rather than quietly answering from the other engine.
       HOMEINV_SEARCH_ENGINE: "${HOMEINV_SEARCH_ENGINE:-postgresql}"
       HOMEINV_SEARCH_URL: "https://opensearch:9200"
+      HOMEINV_SEARCH_FINGERPRINT: "${HOMEINV_SEARCH_FINGERPRINT}"
+                                                             # pinned like the blob store's
+                                                             # (REQ-SEC-056). The CA signs every
+                                                             # service and every plugin, so
+                                                             # trusting it alone would let any of
+                                                             # them answer as the index (ADR-0044)
     # NO db-migration-password. It is mounted into the one-shot `migrate` service
     # and nowhere else (ADR-0041, REQ-SEC-101): homeinv_migrator owns the tables
     # and can rewrite an RLS policy, and mounting it into a long-running,
@@ -392,6 +398,12 @@ services:
       # aborts startup rather than quietly answering from the other engine.
       HOMEINV_SEARCH_ENGINE: "${HOMEINV_SEARCH_ENGINE:-postgresql}"
       HOMEINV_SEARCH_URL: "https://opensearch:9200"
+      HOMEINV_SEARCH_FINGERPRINT: "${HOMEINV_SEARCH_FINGERPRINT}"
+                                                             # pinned like the blob store's
+                                                             # (REQ-SEC-056). The CA signs every
+                                                             # service and every plugin, so
+                                                             # trusting it alone would let any of
+                                                             # them answer as the index (ADR-0044)
     secrets:
       - db-password
       - data-encryption-master-key

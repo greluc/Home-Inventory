@@ -7,7 +7,7 @@ package de.greluc.homeinv;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.greluc.homeinv.search.infrastructure.SearchEngineProperties;
+import de.greluc.homeinv.search.application.SearchEngineProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -39,16 +39,22 @@ class SearchEngineSwitchTest {
    */
   private static final String MOUNTED = "mounted";
 
+  /**
+   * A SHA-256 fingerprint's worth of hex. Not a secret and not a credential: a fingerprint is
+   * published so that a client can insist on it.
+   */
+  private static final String PIN = "0".repeat(64);
+
   @Test
   @DisplayName("defaults to PostgreSQL, which every profile has")
   void theDefault() {
-    SearchEngineProperties properties = new SearchEngineProperties("postgresql", "", "", "");
+    SearchEngineProperties properties = new SearchEngineProperties("postgresql", "", "", "", "");
     assertThat(properties.usesOpenSearch()).isFalse();
     assertThat(properties.getUrl()).isNull();
 
     // `minimal` leaves the variable unset altogether, and the placeholder's own
     // default is what it lands on.
-    assertThat(new SearchEngineProperties("PostgreSQL", null, null, null).getEngine())
+    assertThat(new SearchEngineProperties("PostgreSQL", null, null, null, null).getEngine())
         .as("the name is read without regard to case, like HOMEINV_REGISTRATION_MODE")
         .isEqualTo(SearchEngineProperties.Engine.POSTGRESQL);
   }
@@ -57,7 +63,7 @@ class SearchEngineSwitchTest {
   @DisplayName("takes OpenSearch when it is given everything it needs")
   void openSearchConfigured() {
     SearchEngineProperties properties =
-        new SearchEngineProperties("opensearch", URL, USER, MOUNTED);
+        new SearchEngineProperties("opensearch", URL, USER, MOUNTED, PIN);
     assertThat(properties.usesOpenSearch()).isTrue();
     assertThat(properties.getUrl().toString()).isEqualTo(URL);
     assertThat(properties.getUsername()).isEqualTo(USER);
@@ -66,29 +72,37 @@ class SearchEngineSwitchTest {
   @Test
   @DisplayName("refuses to start on a half-configured OpenSearch rather than using the other engine")
   void halfConfigured() {
-    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", "", USER, MOUNTED))
+    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", "", USER, MOUNTED, PIN))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_SEARCH_URL");
 
-    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, "", MOUNTED))
+    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, "", MOUNTED, PIN))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_SEARCH_USER");
 
     // The password is named by its VARIABLE and never by its value, here as
     // everywhere else (REQ-SEC-050).
-    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, USER, ""))
+    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, USER, "", PIN))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_SEARCH_PASSWORD_FILE");
 
-    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", "not a url", USER, MOUNTED))
+    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", "not a url", USER, MOUNTED, PIN))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("not a URL");
+
+    // An https URL without a pin. The deployment's CA signs every service and
+    // every plugin, so trusting it alone would let any of them answer as the
+    // index (ADR-0044) - and a client that accepted that would be no worse off
+    // for having been configured carefully.
+    assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, USER, MOUNTED, ""))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("HOMEINV_SEARCH_FINGERPRINT");
   }
 
   @Test
   @DisplayName("refuses an engine nobody ships")
   void anUnknownEngine() {
-    assertThatThrownBy(() -> new SearchEngineProperties("elasticsearch", "", "", ""))
+    assertThatThrownBy(() -> new SearchEngineProperties("elasticsearch", "", "", "", ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("'postgresql' or 'opensearch'");
   }

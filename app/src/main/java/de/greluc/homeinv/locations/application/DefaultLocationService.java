@@ -408,6 +408,12 @@ public class DefaultLocationService implements LocationService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<UUID> ancestorIds(UUID id) {
+    return tree.ancestorIds(TenantContext.require(), id);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Map<UUID, Long> rollUp(Map<UUID, Long> countsByLocation, UUID root) {
     if (countsByLocation == null || countsByLocation.isEmpty()) {
       return Map.of();

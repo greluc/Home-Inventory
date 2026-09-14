@@ -111,16 +111,27 @@
   </Match>
 
   <!--
-    WEAK_TRUST_MANAGER on BlobStoreChannelFactory's pinned trust manager. The rule
-    assumes a custom trust manager is a weakened one; this one is STRICTER than
-    CA validation. The deployment's CA signs `api`, `worker`, `blobstore` and every
+    WEAK_TRUST_MANAGER on the pinned trust manager. The rule assumes a custom trust
+    manager is a weakened one; this one is STRICTER than CA validation. The
+    deployment's CA signs `api`, `worker`, `blobstore`, `opensearch` and every
     plugin, so accepting anything it signed would let a compromised plugin answer
-    as the blob store. Pinning the single certificate that may answer is the
+    as any of them. Pinning the single certificate that may answer is the
     mechanism REQ-SEC-056 asks for, and ADR-0044 is the reason.
+
+    Three classes, one decision: `PinnedCertificate` in `platform` IS the trust
+    manager — it moved there on 2026-09-14 when OpenSearch needed the same
+    mechanism the blob store already had, and a second copy of a trust decision
+    is how two clients come to disagree about what they trust. The other two are
+    the clients that install it, and each names its own fingerprint variable in
+    the refusal so an operator knows which pin to look at.
+
+    WEAK_HOSTNAME_VERIFIER comes with it: pinning has already answered a stricter
+    question than a hostname does, and the certificate is issued to a service name
+    a client may legitimately reach under another.
   -->
   <Match>
     <Bug pattern="WEAK_TRUST_MANAGER,WEAK_HOSTNAME_VERIFIER"/>
-    <Class name="~de\.greluc\.homeinv\.media\.infrastructure\.BlobStoreChannelFactory.*"/>
+    <Class name="~de\.greluc\.homeinv\.(media\.infrastructure\.BlobStoreChannelFactory|platform\.PinnedCertificate|search\.infrastructure\.OpenSearchClientFactory).*"/>
   </Match>
 
   <!--
@@ -249,6 +260,25 @@
   <Match>
     <Bug pattern="IMPROPER_UNICODE"/>
     <Class name="~de\.greluc\.homeinv\.platform\.TextInputModule.*"/>
+  </Match>
+
+  <!--
+    IMPROPER_UNICODE on `SearchEngineProperties`. The one case fold left in the
+    search configuration reads the URL's scheme, and it is written so that a fold
+    can only make the connection STRICTER: everything that is not plainly `http`
+    is treated as TLS and therefore as pinned, so a scheme this does not recognise
+    becomes a connection that refuses to be made rather than a plaintext one that
+    is quietly made.
+
+    The three other findings this class of rule raised on 2026-09-14 were fixed
+    rather than excluded, which is why only one entry is here: the engine name
+    became a constant on the enum instead of `name().toLowerCase()`, the language
+    is folded once where the request is read and compared exactly by every engine,
+    and the TLS decision is taken here once instead of in each client.
+  -->
+  <Match>
+    <Bug pattern="IMPROPER_UNICODE"/>
+    <Class name="de.greluc.homeinv.search.application.SearchEngineProperties"/>
   </Match>
 
   <!--

@@ -242,6 +242,21 @@ absent. Only `facets` is omitted when it has no value, for the reason given
 above. *This paragraph said the opposite until 2026-09-14, of an omission that
 was never configured; the code is right and the sentence was wrong.*
 
+**Which engine answers is configuration, not discovery.** `HOMEINV_SEARCH_ENGINE`
+picks between the two shipped engines and `minimal` leaves it unset, so an
+installation that never had OpenSearch is not reported as degraded — it is
+small. `meta.degraded` means the engine this installation asked for could not
+answer and the other one did, which is a different thing and the only one worth
+a token ([ADR-0008](../adr/0008-search.md), `REQ-SRCH-005`).
+
+**With OpenSearch, a query is answered in two steps.** OpenSearch matches the
+text — stemmed, ranked, across name, description, notes, attribute values, tags
+and the location path — and `item_attr_index` then narrows, sorts and pages
+within what it found. That split is [07 §7.3](07-data-model.md)'s, and
+`REQ-CORE-013` is why: filters and sorting are **transactionally exact**, and an
+index that lags by design cannot be. A caller sees no difference beyond the ranking, which is the point of a
+port.
+
 **`meta.degraded` is the contract for degradation**, not a header
 ([ADR-0039](../adr/0039-degraded-response-signalling.md)). `degradedReason` is a
 stable token from a documented set — clients branch on it the way they branch on

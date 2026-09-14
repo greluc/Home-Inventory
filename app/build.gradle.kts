@@ -36,6 +36,15 @@ plugins {
 extra["tomcat.version"] = "11.0.25"
 extra["rabbit-amqp-client.version"] = "5.35.0"
 
+// `opensearch-java` speaks its wire format through Jackson 2, which is a second
+// JSON library beside this project's Jackson 3 (`tools.jackson`). Accepted with
+// the owner on 2026-09-14: it is the supported way to talk to the server, and
+// hand-rolling one would be a query builder to maintain. The two do not collide
+// - different packages - but the second one has a CVE surface of its own, so the
+// version it resolves to is pinned here rather than left to a transitive, for
+// the same reason amqp-client above is.
+extra["jackson2.version"] = "2.21.5"
+
 dependencies {
     implementation(platform(libs.spring.modulith.bom))
 

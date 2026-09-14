@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: Lucas Greuloch
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-package de.greluc.homeinv.search.infrastructure;
+package de.greluc.homeinv.search.application;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -13,6 +13,11 @@ import org.springframework.stereotype.Component;
 
 /**
  * Which engine answers a search, and what it needs to be reached (REQ-SRCH-005, ADR-0008).
+ *
+ * <p>In {@code application} and not in {@code infrastructure}, although it reads environment
+ * variables: what it holds is a <b>decision</b> — which engine answers — and a decision is not an
+ * adapter's to take (ADR-0010). The client that reaches OpenSearch is infrastructure and depends
+ * on this, which is the direction that dependency goes in.
  *
  * <h2>A switch, not a probe</h2>
  *
@@ -50,9 +55,28 @@ public final class SearchEngineProperties {
    */
   public enum Engine {
     /** The shipped fallback, and the only search the {@code minimal} profile has. */
-    POSTGRESQL,
+    POSTGRESQL("postgresql"),
     /** The primary engine of ADR-0008, in the {@code standard} and {@code ha} profiles. */
-    OPENSEARCH
+    OPENSEARCH("opensearch");
+
+    private final String token;
+
+    Engine(String token) {
+      this.token = token;
+    }
+
+    /**
+     * What the engine calls itself, which is what {@code SearchIndex.name()} answers.
+     *
+     * <p>A constant rather than {@code name().toLowerCase()}: folding a name in order to compare it
+     * is what find-sec-bugs flags as {@code IMPROPER_UNICODE}, and it is right to — the fold is
+     * not needed when the spelling is written down once.
+     *
+     * @return the lower-case token
+     */
+    public String token() {
+      return token;
+    }
   }
 
   /** Which engine was chosen. */
@@ -68,12 +92,34 @@ public final class SearchEngineProperties {
   @Getter private final String password;
 
   /**
+   * The SHA-256 fingerprint of the one certificate OpenSearch may present, or {@code null}.
+   *
+   * <p>Pinned rather than CA-validated, for the reason {@code HOMEINV_BLOBSTORE_FINGERPRINT} is:
+   * the deployment's CA signs every service and every plugin, so trusting it alone would let any of
+   * them answer as the index (REQ-SEC-056, ADR-0044).
+   *
+   * <p>Empty is allowed and means "no TLS pin", which is only ever a test's shape — a URL that is
+   * not {@code https} does not reach a pinned connection at all.
+   */
+  @Getter private final String fingerprint;
+
+  /**
+   * Whether the connection to OpenSearch is TLS, and therefore pinned.
+   *
+   * <p>Decided once, here, from the URL's scheme. Everything that is not plainly {@code http} is
+   * treated as TLS: the one fold in this class can then only make the connection <b>stricter</b>,
+   * never weaker, which is the direction a mistake should go in.
+   */
+  @Getter private final boolean tls;
+
+  /**
    * Reads the choice and refuses one that cannot work.
    *
    * @param engine {@code postgresql} or {@code opensearch}
    * @param url where OpenSearch listens, required when it was chosen
    * @param username the search user, required when it was chosen
    * @param password that user's password, from a mounted file, required when it was chosen
+   * @param fingerprint the certificate OpenSearch must present, required for an {@code https} URL
    * @throws IllegalStateException when the engine is not one of the two, or when OpenSearch was
    *     chosen and something it needs is missing
    */
@@ -81,7 +127,8 @@ public final class SearchEngineProperties {
       @Value("${homeinv.search.engine:postgresql}") String engine,
       @Value("${homeinv.search.url:}") String url,
       @Value("${homeinv.search.username:}") String username,
-      @Value("${homeinv.search.password:}") String password) {
+      @Value("${homeinv.search.password:}") String password,
+      @Value("${homeinv.search.fingerprint:}") String fingerprint) {
     try {
       this.engine =
           Engine.valueOf(
@@ -99,6 +146,8 @@ public final class SearchEngineProperties {
       this.url = null;
       this.username = null;
       this.password = null;
+      this.fingerprint = null;
+      this.tls = false;
       log.info("Search is answered by PostgreSQL; no OpenSearch is configured.");
       return;
     }
@@ -116,6 +165,21 @@ public final class SearchEngineProperties {
     }
     this.username = username.trim();
     this.password = password;
+    this.fingerprint = de.greluc.homeinv.platform.PinnedCertificate.normalise(fingerprint);
+    // Anything that is not plainly `http` is TLS. Stated that way round on
+    // purpose: a scheme this does not recognise becomes a pinned connection that
+    // refuses to be made, rather than a plaintext one that is quietly made.
+    this.tls =
+        !"http".equals(
+            this.url.getScheme() == null
+                ? ""
+                : this.url.getScheme().toLowerCase(java.util.Locale.ROOT));
+    if (this.tls && this.fingerprint.isEmpty()) {
+      throw new IllegalStateException(
+          "HOMEINV_SEARCH_FINGERPRINT is required for an https OpenSearch URL. The deployment's CA"
+              + " signs every service and every plugin, so trusting it alone would let any of them"
+              + " answer as the index (ADR-0044).");
+    }
     log.info("Search is answered by OpenSearch at {}.", this.url);
   }
 

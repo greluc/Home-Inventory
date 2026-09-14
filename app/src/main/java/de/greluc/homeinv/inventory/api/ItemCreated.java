@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.util.UUID;
+import org.springframework.modulith.events.Externalized;
 
 /**
  * An item was created (REQ-SRCH-005).
@@ -29,5 +30,6 @@ import java.util.UUID;
  * @param name what it is called
  * @param locationId where it is, or {@code null} for a digital item, which is nowhere
  */
+@Externalized("homeinv.inventory::item-created")
 public record ItemCreated(
     UUID tenantId, UUID itemId, UUID itemTypeVersionId, String name, UUID locationId) {}

@@ -240,6 +240,14 @@ write_environment() {
     fingerprint=$(openssl x509 -in "$SECRETS/mtls-blobstore.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
     [ -n "$fingerprint" ] || die "the blob store certificate produced no fingerprint."
+    # The same for OpenSearch, for the same reason: the CA signs every service
+    # here, so the certificate that may answer as the index is named rather than
+    # accepted merely because something signed it (REQ-SEC-056, ADR-0044).
+    [ -f "$SECRETS/mtls-search.crt" ] \
+        || die "$SECRETS/mtls-search.crt is missing; the secrets step did not finish."
+    search_fingerprint=$(openssl x509 -in "$SECRETS/mtls-search.crt" -noout -fingerprint -sha256 \
+                  | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
+    [ -n "$search_fingerprint" ] || die "the OpenSearch certificate produced no fingerprint."
     cat > "$env_file" <<ENV
 # Written by deploy/setup.sh on first run. Edit freely; it is never overwritten.
 #
@@ -264,6 +272,11 @@ HOMEINV_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint
+
+# The same for OpenSearch. Unused in the minimal profile, which has none; the
+# variable is written regardless, because a profile switched on later must not
+# need a second run of this script to become reachable.
+HOMEINV_SEARCH_FINGERPRINT=$search_fingerprint
 
 # The first owner. The one-shot bootstrap service creates this account and the
 # tenant it owns, once, and does nothing on every run after that (ADR-0053). Its

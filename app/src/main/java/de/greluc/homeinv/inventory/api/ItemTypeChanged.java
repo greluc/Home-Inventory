@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.util.UUID;
+import org.springframework.modulith.events.Externalized;
 
 /**
  * An item was written against another type (REQ-CORE-011, REQ-SRCH-005).
@@ -20,5 +21,6 @@ import java.util.UUID;
  * @param fromItemTypeVersionId the version it was written against before
  * @param toItemTypeVersionId the version it is written against now
  */
+@Externalized("homeinv.inventory::item-type-changed")
 public record ItemTypeChanged(
     UUID tenantId, UUID itemId, UUID fromItemTypeVersionId, UUID toItemTypeVersionId) {}

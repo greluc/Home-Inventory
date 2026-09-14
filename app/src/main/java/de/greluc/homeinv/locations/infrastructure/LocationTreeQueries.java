@@ -63,6 +63,35 @@ public class LocationTreeQueries {
   }
 
   /**
+   * The ids of a location and everything above it, root first.
+   *
+   * <p>One index range on the GiST index over {@code path}, like the subtree below, because
+   * {@code @>} and {@code <@} are the same operator read the other way round.
+   *
+   * @param tenantId the tenant
+   * @param locationId the location
+   * @return the ids from the root down to this location, itself last
+   */
+  public List<UUID> ancestorIds(UUID tenantId, UUID locationId) {
+    return jdbc
+        .sql(
+            """
+            select ancestor.id
+            from locations.location target
+            join locations.location ancestor
+              on ancestor.tenant_id = target.tenant_id
+             and ancestor.path @> target.path
+            where target.tenant_id = ?
+              and target.id = ?
+              and ancestor.deleted_at is null
+            order by ancestor.depth
+            """)
+        .params(tenantId, locationId)
+        .query(UUID.class)
+        .list();
+  }
+
+  /**
    * The ids of a location and everything below it.
    *
    * <p>Used to list a subtree's contents. The subtree is one index range on the GiST index over

@@ -62,4 +62,21 @@ public interface TagQueries {
    * @return the count per tag name; empty when no item carries a tag
    */
   Map<String, Long> countByTag(Collection<UUID> itemIds);
+
+  /**
+   * What one item is tagged with (REQ-SRCH-011).
+   *
+   * <p>For an indexer building a search document: a tag is part of what an item can be found by,
+   * and the assignment lives here. Names rather than ids, because that is what somebody types and
+   * what a {@code tag} filter takes.
+   *
+   * <p>Unpaged, unlike {@link TagService#tagsOf}, and it checks no permission: it is asked in a
+   * background listener that acts for no one, about a tenant the event named. What is built from it
+   * answers with ids and never with content, so the ordinary read is still where visibility is
+   * decided (REQ-SRCH-007).
+   *
+   * @param itemId the item
+   * @return the names of the tags on it, in no particular order; empty when it carries none
+   */
+  List<String> tagNamesOf(UUID itemId);
 }

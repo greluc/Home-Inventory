@@ -108,6 +108,19 @@ public interface LocationService {
   List<UUID> subtreeIds(UUID id);
 
   /**
+   * The ids of a location and everything above it, root first (REQ-SRCH-011, REQ-CORE-044).
+   *
+   * <p>The other direction of {@link #subtreeIds}. An index holds it so that "everything in the
+   * cellar" is one term match on a document rather than a tree walk per hit, and so that the
+   * location path is part of what an item can be found by.
+   *
+   * @param id the location
+   * @return the ids from the root of the tree down to this location, itself last; empty when the
+   *     tenant has no such live location
+   */
+  List<UUID> ancestorIds(UUID id);
+
+  /**
    * Rolls counts per location up to the children of one place (REQ-SRCH-002).
    *
    * <p>The location facet. An item's {@code location_id} names the exact shelf it sits on, and a

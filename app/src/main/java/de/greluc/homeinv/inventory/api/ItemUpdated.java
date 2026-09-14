@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.util.UUID;
+import org.springframework.modulith.events.Externalized;
 
 /**
  * An item was edited (REQ-SRCH-005).
@@ -22,5 +23,6 @@ import java.util.UUID;
  *     mirrors attributes can skip a rename with this; one that mirrors the name cannot skip
  *     anything, which is why there is no flag for the other direction
  */
+@Externalized("homeinv.inventory::item-updated")
 public record ItemUpdated(
     UUID tenantId, UUID itemId, String name, boolean attributesChanged) {}

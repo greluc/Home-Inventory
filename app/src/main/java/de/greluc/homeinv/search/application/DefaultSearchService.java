@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  * (REQ-NFR-021). When OpenSearch arrives at stage 1 it becomes a second implementation behind the
  * same service, and callers do not change.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultSearchService implements SearchService {
@@ -45,13 +47,17 @@ public class DefaultSearchService implements SearchService {
       java.util.Set.of("type", "category", "tag", "location");
 
   /**
-   * Where the search is actually run (REQ-SRCH-005).
+   * Every engine this installation has (REQ-SRCH-005).
    *
-   * <p>One today. When OpenSearch joins it, this becomes the ordered list of engines to try and the
-   * fallback becomes a decision made here rather than in an adapter — which is why the service asks
-   * a port and not {@code ItemSearchQuery} directly, even while there is only one of them.
+   * <p>Always the PostgreSQL one, and the OpenSearch one when {@code HOMEINV_SEARCH_ENGINE} asked
+   * for it. Which of them answers is decided here and not in an adapter, because the fallback is a
+   * decision: an engine that quietly answered for another would make {@code meta.degraded}
+   * unreportable (ADR-0039).
    */
-  private final SearchIndex index;
+  private final java.util.List<SearchIndex> engines;
+
+  /** Which engine this installation asked for. */
+  private final SearchEngineProperties configured;
 
   /** Turns the ids the index answered with back into rows (REQ-SRCH-007). */
   private final de.greluc.homeinv.inventory.api.ItemService items;
@@ -87,7 +93,11 @@ public class DefaultSearchService implements SearchService {
   @Transactional(readOnly = true)
   public Page<de.greluc.homeinv.inventory.api.ItemView> query(SearchRequest request) {
     int limit = request.limit() <= 0 ? DEFAULT_LIMIT : Math.min(request.limit(), MAX_LIMIT);
-    String language = request.language() == null ? "de" : request.language();
+    // Folded once, here, so that every engine below can compare it exactly.
+    String language =
+        request.language() == null
+            ? "de"
+            : request.language().trim().toLowerCase(java.util.Locale.ROOT);
     String text = request.text() == null ? "" : request.text();
 
     List<UUID> locationIds =
@@ -115,6 +125,8 @@ public class DefaultSearchService implements SearchService {
 
     Scope scope = resolve(all, locationIds);
 
+    Chosen chosen = engine();
+
     Page<de.greluc.homeinv.inventory.api.ItemView> page;
     if (scope.empty()) {
       // A type nobody uses, a tag nothing carries, a subtree that is empty: the
@@ -124,18 +136,29 @@ public class DefaultSearchService implements SearchService {
       // somebody gets out of a combination that matched nothing.
       page = Page.of(List.of(), null);
     } else {
-      SearchIndex.Hits hits =
-          index.find(
-              new SearchIndex.Query(
-                  text,
-                  language,
-                  scope.locationIds(),
-                  scope.typeVersionIds(),
-                  scope.itemIds(),
-                  after,
-                  sort,
-                  filters,
-                  limit));
+      SearchIndex.Query engineQuery =
+          new SearchIndex.Query(
+              text,
+              language,
+              scope.locationIds(),
+              scope.typeVersionIds(),
+              scope.itemIds(),
+              after,
+              sort,
+              filters,
+              limit);
+
+      SearchIndex.Hits hits;
+      try {
+        hits = chosen.engine().find(engineQuery);
+      } catch (RuntimeException failed) {
+        // The chosen engine went down between the availability check and the
+        // query. Falling back here rather than failing: the results are correct
+        // either way and only the ranking is poorer (REQ-SRCH-006).
+        log.warn("The {} engine failed; answering from PostgreSQL", chosen.engine().name(), failed);
+        chosen = new Chosen(fallback(), true);
+        hits = chosen.engine().find(engineQuery);
+      }
 
       // The ids become rows here, through the ordinary read: row-level security
       // and the field visibility rules apply on the way out, which is what makes
@@ -149,10 +172,70 @@ public class DefaultSearchService implements SearchService {
       page = Page.of(rows, nextCursor);
     }
 
+    if (chosen.degraded()) {
+      // A stable token from docs/reference/degraded-reasons.yaml, never prose: a
+      // client branches on it the way it branches on a problem type
+      // (REQ-API-012, ADR-0039).
+      page = page.degraded("search-fallback");
+    }
+
     List<String> dimensions = counted(request.facets());
     return dimensions.isEmpty()
         ? page
-        : page.withFacets(facetsOf(dimensions, all, locationIds, text, language, limit));
+        : page.withFacets(facetsOf(chosen, dimensions, all, locationIds, text, language, limit));
+  }
+
+  /**
+   * Which engine answered, and whether that is the one the operator asked for.
+   *
+   * @param engine the engine to use
+   * @param degraded whether the configured engine was unavailable and this is the fallback
+   */
+  private record Chosen(SearchIndex engine, boolean degraded) {}
+
+  /**
+   * Picks the engine for this request (REQ-SRCH-005, REQ-SRCH-006).
+   *
+   * <p>The configured one when it is available, the PostgreSQL one otherwise — and the second case
+   * is a <b>degraded</b> answer, which the response says out loud. An installation that never asked
+   * for OpenSearch is not degraded; it is small, which is why this reads the configuration rather
+   * than "is OpenSearch answering".
+   *
+   * @return the engine and whether it is a fallback
+   */
+  private Chosen engine() {
+    if (!configured.usesOpenSearch()) {
+      return new Chosen(fallback(), false);
+    }
+    return engines.stream()
+        .filter(engine -> engine.name().equals(configured.getEngine().token()))
+        .filter(SearchIndex::available)
+        .findFirst()
+        .map(engine -> new Chosen(engine, false))
+        .orElseGet(
+            () -> {
+              log.debug("The configured search engine is unavailable; answering from PostgreSQL");
+              return new Chosen(fallback(), true);
+            });
+  }
+
+  /**
+   * The engine every installation has.
+   *
+   * @return the PostgreSQL adapter
+   * @throws IllegalStateException when it is missing, which would mean the application was built
+   *     without the one engine that is not optional
+   */
+  private SearchIndex fallback() {
+    return engines.stream()
+        .filter(
+            engine ->
+                SearchEngineProperties.Engine.POSTGRESQL
+                    .token()
+                    .equals(engine.name()))
+        .findFirst()
+        .orElseThrow(
+            () -> new IllegalStateException("The PostgreSQL search engine is not on the classpath"));
   }
 
   /**
@@ -212,6 +295,7 @@ public class DefaultSearchService implements SearchService {
    * tree is drilled into by descending: inside the shed one wants the shed's shelves, not the
    * neighbouring rooms.
    *
+   * @param chosen which engine answered the rows, so the counts come from the same one
    * @param dimensions what to count, already checked
    * @param all every filter the caller gave
    * @param scopedLocations the locations the caller is confined to, or empty
@@ -221,6 +305,7 @@ public class DefaultSearchService implements SearchService {
    * @return one facet per dimension, in the order asked for
    */
   private List<de.greluc.homeinv.platform.Facet> facetsOf(
+      Chosen chosen,
       List<String> dimensions,
       List<QueryFilter> all,
       List<UUID> scopedLocations,
@@ -238,7 +323,7 @@ public class DefaultSearchService implements SearchService {
         continue;
       }
       counted.add(
-          index.facet(
+          chosen.engine().facet(
               new SearchIndex.Query(
                   text,
                   language,

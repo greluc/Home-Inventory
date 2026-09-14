@@ -100,6 +100,35 @@ public interface SearchIndex {
 
 
   /**
+   * Writes one item into the index, replacing what was there (REQ-SRCH-005).
+   *
+   * <p>The document's id is the item's, so an at-least-once delivery replaces rather than
+   * duplicates — which is what makes a consumer of the outbox idempotent without keeping a ledger
+   * (04 §4.4).
+   *
+   * <p>An engine whose index <i>is</i> the database does nothing here, and that is not a stub: the
+   * PostgreSQL adapter searches the generated vectors on {@code inventory.item} and the rows of
+   * {@code item_attr_index}, both written in the same transaction as the item itself. There is
+   * nothing to project because there is no second copy.
+   *
+   * @param document what to hold
+   */
+  void index(de.greluc.homeinv.search.api.SearchDocument document);
+
+  /**
+   * Takes one item out of the index.
+   *
+   * <p>Called when an item is trashed as well as when it is purged: a trashed item must stop being
+   * findable at once, for the whole retention period, or the deletion did not happen as far as
+   * anybody can tell (REQ-CORE-013). Removing something that is not there is not an error — the
+   * delivery may be a repeat.
+   *
+   * @param tenantId whose item
+   * @param itemId the item
+   */
+  void remove(UUID tenantId, UUID itemId);
+
+  /**
    * Counts one dimension over the same query (REQ-SRCH-002).
    *
    * <p>One dimension per call rather than a list of them, because each is counted over a

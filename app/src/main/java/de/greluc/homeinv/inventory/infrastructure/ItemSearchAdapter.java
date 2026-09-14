@@ -234,6 +234,89 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     return counts;
   }
 
+  /**
+   * Its own read transaction, unlike every other method here.
+   *
+   * <p>The rest are called from {@code DefaultSearchService.query}, which already has one. This one
+   * is called by the indexer, from a broker listener that has none — and without a transaction
+   * there is no {@code SET LOCAL app.tenant_id}, so row-level security answers nothing and every
+   * item reads as gone. The indexer would then remove the document of an item that was just
+   * created, silently, because removing what is not there is not an error. It did, until this
+   * annotation was added on 2026-09-14.
+   *
+   * @param itemId the item
+   * @return what to index, or empty when the tenant has no such live item
+   */
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
+  @Override
+  public Optional<SearchableItem> searchable(UUID itemId) {
+    UUID tenantId = TenantContext.require();
+    // Two statements rather than one join: the attribute values multiply the row
+    // and a `string_agg` would hand back a delimiter nobody chose. The second is
+    // a lookup on `iai_item`, over the rows the first has just touched.
+    List<SearchableItem> rows =
+        jdbc.sql(
+                """
+                select i.id, i.item_type_version_id, i.name, i.description, i.notes,
+                       i.location_id, i.created_at, i.updated_at
+                from inventory.item i
+                where i.tenant_id = ? and i.id = ? and i.deleted_at is null
+                """)
+            .params(tenantId, itemId)
+            .query(
+                (rs, rowNum) ->
+                    new SearchableItem(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("item_type_version_id", UUID.class),
+                        rs.getString("name"),
+                        rs.getString("description"),
+                        rs.getString("notes"),
+                        rs.getObject("location_id", UUID.class),
+                        List.of(),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        rs.getObject("updated_at", OffsetDateTime.class).toInstant()))
+            .list();
+    if (rows.isEmpty()) {
+      return Optional.empty();
+    }
+
+    // From the side table and not from the JSONB: the projector has already
+    // dropped what may not be indexed - a `sensitive` field is ciphertext and is
+    // never mirrored (ADR-0019) - and rendered every value as something
+    // comparable. Reading the JSONB here would have to repeat both rules.
+    List<String> values =
+        jdbc.sql(
+                """
+                select coalesce(
+                         f.text_value,
+                         f.num_value::text,
+                         to_char(f.date_value at time zone 'UTC', 'YYYY-MM-DD'),
+                         f.bool_value::text,
+                         f.ref_value::text) as value
+                from inventory.item_attr_index f
+                where f.tenant_id = ? and f.item_id = ?
+                """)
+            .params(tenantId, itemId)
+            .query(String.class)
+            .list()
+            .stream()
+            .filter(value -> value != null && !value.isBlank())
+            .toList();
+
+    SearchableItem row = rows.getFirst();
+    return Optional.of(
+        new SearchableItem(
+            row.itemId(),
+            row.itemTypeVersionId(),
+            row.name(),
+            row.description(),
+            row.notes(),
+            row.locationId(),
+            values,
+            row.createdAt(),
+            row.updatedAt()));
+  }
+
   @Override
   public List<UUID> matchingIds(Criteria criteria) {
     Where where = whereFor(criteria);

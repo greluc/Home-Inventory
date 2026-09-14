@@ -695,6 +695,25 @@ public class TagAdapter implements TagService, TagQueries {
 
   @Override
   @Transactional(readOnly = true)
+  public List<String> tagNamesOf(UUID itemId) {
+    UUID tenantId = TenantContext.require();
+    return jdbc
+        .sql(
+            """
+            select t.name
+            from tagging.tag_assignment a
+            join tagging.tag t
+              on t.tenant_id = a.tenant_id and t.id = a.tag_id
+            where a.tenant_id = ? and a.item_id = ? and t.merged_into is null
+            order by t.name
+            """)
+        .params(tenantId, itemId)
+        .query(String.class)
+        .list();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Map<String, Long> countByTag(Collection<UUID> itemIds) {
     if (itemIds == null || itemIds.isEmpty()) {
       return Map.of();

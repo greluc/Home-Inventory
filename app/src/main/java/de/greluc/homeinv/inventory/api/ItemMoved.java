@@ -5,6 +5,7 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.util.UUID;
+import org.springframework.modulith.events.Externalized;
 
 /**
  * An item was put somewhere else (REQ-SRCH-005, REQ-CORE-049).
@@ -23,4 +24,5 @@ import java.util.UUID;
  * @param fromLocationId where it was, or {@code null} when it was nowhere
  * @param toLocationId where it is now, or {@code null} when it is now nowhere
  */
+@Externalized("homeinv.inventory::item-moved")
 public record ItemMoved(UUID tenantId, UUID itemId, UUID fromLocationId, UUID toLocationId) {}
