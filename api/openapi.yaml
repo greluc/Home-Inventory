@@ -6189,6 +6189,111 @@ paths:
           description: Internal error (`internal-error`)
       summary: Redeems an invitation
   /api/v1/items:
+    get:
+      description: |-
+        The tenant's items, filtered by a query (REQ-SRCH-001, 08 §8.2).
+
+        On the collection and not on a path of its own. A search is a view of the items, so it
+        answers where the items are — which is what the chapter has described since the first commit,
+        while the implementation answered at `/api/v1/search` until 2026-09-14. The old path is
+        gone rather than aliased: two paths for one question is the drift this chapter exists to
+        prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
+
+        The grammar arrives in pieces. `q`, `cursor` and `limit` work; `filter`, `sort` and `fields`
+        are REQ-SRCH-002/003/004 and are not here yet. A parameter that is not implemented is absent
+        rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
+        report over the wrong rows.
+
+        `SEARCH_QUERY` and not `ITEM_READ`: a listing is an enumeration surface whether
+        or not it carries a query, and reading one thing you were pointed at is a different capability
+        from finding out what exists. `GUEST` holds the first and not the second.
+      operationId: listItems
+      parameters:
+      - description: what to look for; omitted lists everything, paged the same way
+        in: query
+        name: q
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: '`de` or `en`, deciding which generated vector is searched'
+        in: query
+        name: language
+        required: false
+        schema:
+          default: de
+          maxLength: 5
+          minLength: 0
+          type: string
+      - description: an opaque cursor from a previous response, or omitted for the first page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageItemView'
+          description: one page of items
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tenant's items, filtered by a query (REQ-SRCH-001, 08 §8
     post:
       description: |-
         Creates an item, or returns the one that is already there.
@@ -9624,96 +9729,6 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces a definition's name, description and added permissions.
-  /api/v1/search:
-    get:
-      description: Searches items by name and description.
-      operationId: search
-      parameters:
-      - description: what to look for; omitted lists everything, paged the same way
-        in: query
-        name: q
-        required: false
-        schema:
-          maxLength: 500
-          minLength: 0
-          type: string
-      - description: '`de` or `en`, deciding which generated vector is searched'
-        in: query
-        name: language
-        required: false
-        schema:
-          default: de
-          maxLength: 5
-          minLength: 0
-          type: string
-      - description: an opaque cursor from a previous response, or omitted for the first page
-        in: query
-        name: cursor
-        required: false
-        schema:
-          maxLength: 500
-          minLength: 0
-          type: string
-      - description: how many rows at most
-        in: query
-        name: limit
-        required: false
-        schema:
-          default: 50
-          exclusiveMinimum: 0
-          format: int32
-          maximum: 200
-          type: integer
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PageItemView'
-          description: the matching items and a cursor for the next page, or none when this was the last
-        '400':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Malformed request (`malformed-request`)
-        '401':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Unauthenticated (`unauthenticated`)
-        '403':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Forbidden (`forbidden`)
-        '405':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Method not allowed (`method-not-allowed`)
-        '406':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Not acceptable (`not-acceptable`)
-        '422':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Validation failed (`validation-failed`)
-        '500':
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-          description: Internal error (`internal-error`)
-      summary: Searches items by name and description.
   /api/v1/tag-groups:
     get:
       description: One page of the tenant's tag groups.

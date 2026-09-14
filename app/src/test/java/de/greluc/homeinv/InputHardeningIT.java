@@ -132,7 +132,7 @@ class InputHardeningIT extends AbstractIntegrationTest {
     // without being told will page wrongly and never notice.
     mockMvc
         .perform(
-            get("/api/v1/search")
+            get("/api/v1/items")
                 .param("q", "")
                 .param("language", "de")
                 .param("limit", "5000")

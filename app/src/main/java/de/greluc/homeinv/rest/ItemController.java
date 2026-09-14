@@ -16,6 +16,7 @@ import de.greluc.homeinv.inventory.api.ItemView;
 import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.platform.Money;
 import de.greluc.homeinv.inventory.api.ItemService;
+import de.greluc.homeinv.search.api.SearchService;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -70,6 +71,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ItemController {
 
   private final ItemService items;
+  private final de.greluc.homeinv.search.api.SearchService search;
   private final ItemRelations relations;
   private final ItemBundles bundles;
   private final BulkItemOperations bulk;
@@ -348,6 +350,41 @@ public class ItemController {
    */
   public record BulkEntryStatus(
       UUID itemId, int status, String type, String title, String detail) {}
+
+  /**
+   * The tenant's items, filtered by a query (REQ-SRCH-001, 08 §8.2).
+   *
+   * <p>On the collection and not on a path of its own. A search is a view of the items, so it
+   * answers where the items are — which is what the chapter has described since the first commit,
+   * while the implementation answered at {@code /api/v1/search} until 2026-09-14. The old path is
+   * gone rather than aliased: two paths for one question is the drift this chapter exists to
+   * prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
+   *
+   * <p>The grammar arrives in pieces. `q`, `cursor` and `limit` work; `filter`, `sort` and `fields`
+   * are REQ-SRCH-002/003/004 and are not here yet. A parameter that is not implemented is absent
+   * rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
+   * report over the wrong rows.
+   *
+   * <p>{@code SEARCH_QUERY} and not {@code ITEM_READ}: a listing is an enumeration surface whether
+   * or not it carries a query, and reading one thing you were pointed at is a different capability
+   * from finding out what exists. `GUEST` holds the first and not the second.
+   *
+   * @param q what to look for; omitted lists everything, paged the same way
+   * @param language {@code de} or {@code en}, deciding which generated vector is searched
+   * @param cursor an opaque cursor from a previous response, or omitted for the first page
+   * @param limit how many at most
+   * @return one page of items
+   */
+  @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.SEARCH_QUERY)
+  @CanFail(ProblemType.MALFORMED_REQUEST)
+  public Page<ItemView> listItems(
+      @RequestParam(required = false) @Size(max = 500) String q,
+      @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,
+      @RequestParam(required = false) @Size(max = 500) String cursor,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return search.query(new SearchService.SearchRequest(q, language, List.of(), cursor, limit));
+  }
 
   /**
    * Reads one item.

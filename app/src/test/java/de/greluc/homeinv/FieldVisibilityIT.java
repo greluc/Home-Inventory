@@ -107,7 +107,7 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
 
     // The listing is the path that shows the most attributes at once.
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").session(member))
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").session(member))
         .andExpect(status().isOk())
         .andExpect(
             jsonPath("$.data[*].attributes")

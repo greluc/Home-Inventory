@@ -59,7 +59,7 @@ class TenantErasureIT extends AbstractIntegrationTest {
 
     // Before: ordinary work is possible.
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").session(owner))
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").session(owner))
         .andExpect(status().isOk());
 
     String requested =
@@ -75,7 +75,7 @@ class TenantErasureIT extends AbstractIntegrationTest {
 
     // "Access blocked immediately" — the same session, the next request.
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").session(owner))
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").session(owner))
         .andExpect(status().isForbidden())
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/tenant-inaccessible"));
@@ -103,7 +103,7 @@ class TenantErasureIT extends AbstractIntegrationTest {
 
     // And the tenant answers again.
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").session(owner))
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").session(owner))
         .andExpect(status().isOk());
 
     // The token is spent: a second use is answered like one that never existed.
@@ -167,7 +167,7 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .andExpect(status().isOk());
 
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").session(session))
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").session(session))
         .andExpect(status().isOk());
   }
 

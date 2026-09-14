@@ -336,7 +336,7 @@ rm -f "$stored"
 say "stored without its metadata"
 
 printf '\nFinding it again\n'
-status=$(api GET "/api/v1/search?q=$RUN&language=en&limit=10")
+status=$(api GET "/api/v1/items?q=$RUN&language=en&limit=10")
 [ "$status" = "200" ] || die "search answered $status"
 grep -q "$ITEM" "$OUT" || die "the item this journey created was not found by search"
 say "found by search"

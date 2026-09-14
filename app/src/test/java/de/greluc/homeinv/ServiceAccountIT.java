@@ -90,7 +90,7 @@ class ServiceAccountIT extends AbstractIntegrationTest {
 
     // The machine reads with its own token and no session at all.
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer " + token))
         .andExpect(status().isOk());
 
@@ -146,7 +146,7 @@ class ServiceAccountIT extends AbstractIntegrationTest {
     String token = json.readTree(created).get("token").asString();
 
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer " + token))
         .andExpect(status().isOk());
 
@@ -156,18 +156,18 @@ class ServiceAccountIT extends AbstractIntegrationTest {
     expire(tenant.tenantId());
 
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer " + token))
         .andExpect(status().isUnauthorized());
 
     // A token nobody issued is answered the same way, and one that is not even
     // shaped like one never reaches a lookup.
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer homeinv_sa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
         .andExpect(status().isUnauthorized());
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
+        .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer not-one-of-ours"))
         .andExpect(status().isUnauthorized());
 
@@ -194,7 +194,7 @@ class ServiceAccountIT extends AbstractIntegrationTest {
     String body =
         mockMvc
             .perform(
-                get("/api/v1/search")
+                get("/api/v1/items")
                     .param("q", "")
                     .param("language", "en")
                     .header("Authorization", "Bearer " + token))

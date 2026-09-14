@@ -56,7 +56,7 @@ class AuthorizationIT extends AbstractIntegrationTest {
     MockHttpSession session = login(viewer);
 
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "de").session(session))
+        .perform(get("/api/v1/items").param("q", "").param("language", "de").session(session))
         .andExpect(status().isOk());
   }
 
@@ -94,7 +94,7 @@ class AuthorizationIT extends AbstractIntegrationTest {
     MockHttpSession session = login(guest);
 
     mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "de").session(session))
+        .perform(get("/api/v1/items").param("q", "").param("language", "de").session(session))
         .andExpect(status().isForbidden());
   }
 

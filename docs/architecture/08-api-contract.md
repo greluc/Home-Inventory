@@ -67,7 +67,7 @@ forbids database and repository access from the access blocks.
 ├── /scans       scan sessions and individual scans
 ├── /label-templates  /label-media  /print-jobs
 ├── /enrichment  /proposals {id}/accept {id}/reject  /resolvers
-├── /search      /saved-searches
+├── /saved-searches    named queries usable as smart lists (REQ-SRCH-008)
 ├── /stocktakes  {id}/scans {id}/report
 ├── /sync        /pull /push /conflicts /devices
 ├── /notifications  /rules /subscriptions

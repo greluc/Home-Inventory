@@ -343,7 +343,7 @@ export const api = {
     if (cursor) {
       params.set("cursor", cursor);
     }
-    return request<Page<Item>>(`/api/v1/search?${params.toString()}`);
+    return request<Page<Item>>(`/api/v1/items?${params.toString()}`);
   },
 
   /**
