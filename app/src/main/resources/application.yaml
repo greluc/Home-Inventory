@@ -252,6 +252,21 @@ homeinv:
   # address and therefore plugin-smtp — an instance configured for it without one
   # refuses to start rather than offering a sign-up nobody can finish.
   registration-mode: ${HOMEINV_REGISTRATION_MODE:invite_only}
+  search:
+    # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` is the
+    # default because every profile has it; `minimal` never gets OpenSearch and
+    # says so by leaving this unset. Choosing `opensearch` without the three
+    # settings below aborts startup rather than quietly using the other engine.
+    engine: ${HOMEINV_SEARCH_ENGINE:postgresql}
+    # Where OpenSearch is, and as whom. Named the way the other stores are:
+    # HOMEINV_DB_URL, HOMEINV_VALKEY_USER, HOMEINV_MQ_USER — and
+    # HOMEINV_SEARCH_USER and the `search-password` secret were already declared
+    # in deploy/services.yaml before anything read them.
+    url: ${HOMEINV_SEARCH_URL:}
+    username: ${HOMEINV_SEARCH_USER:homeinv}
+    # A file like every other secret; the value is never an environment
+    # variable (06 §6.11, REQ-SEC-050).
+    password: ${homeinv.secret.search-password:}
   security:
     url-signing-key-file: ${HOMEINV_URL_SIGNING_KEY_FILE:}
     # Seals the TOTP secrets of REQ-AUTH-002. Its own key, because rotating the

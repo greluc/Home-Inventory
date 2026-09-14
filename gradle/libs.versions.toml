@@ -66,6 +66,11 @@ webauthn4j = "0.31.10.RELEASE"
 jetbrainsAnnotations = "26.1.0"
 
 # Test-only
+# The OpenSearch client, for the primary `SearchIndex` adapter (ADR-0008). The 3
+# line matches the image `deploy/services.yaml` pins, because a client one major
+# ahead of its server is a compatibility matrix nobody is reading.
+opensearch = "3.3.0"
+
 testcontainers = "2.0.5"
 archunit = "1.5.0"
 
@@ -130,6 +135,8 @@ javax-annotation-api = { module = "javax.annotation:javax.annotation-api", versi
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test" }
+
+opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
 
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 # Testcontainers 2.x renamed every module to a `testcontainers-` prefix; the old

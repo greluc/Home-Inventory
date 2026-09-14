@@ -42,6 +42,8 @@ Environment=HOMEINV_VALKEY_USER=homeinv
 Environment=HOMEINV_MQ_HOST=rabbitmq
 Environment=HOMEINV_MQ_USER=homeinv
 Environment=HOMEINV_SEARCH_USER=homeinv
+Environment=HOMEINV_SEARCH_ENGINE=${HOMEINV_SEARCH_ENGINE:-postgresql}
+Environment=HOMEINV_SEARCH_URL=https://opensearch:9200
 Environment=HOMEINV_DB_PASSWORD_FILE=/run/secrets/db-password
 Environment=HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE=/run/secrets/data-encryption-master-key
 Environment=HOMEINV_JWT_SIGNING_KEY_FILE=/run/secrets/jwt-signing-key

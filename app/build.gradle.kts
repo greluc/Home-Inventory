@@ -65,6 +65,12 @@ dependencies {
     implementation(libs.spring.boot.starter.data.redis)
     implementation(libs.spring.boot.session.data.redis)
 
+    // The primary `SearchIndex` adapter (ADR-0008, REQ-SRCH-005). Not a Spring
+    // Boot starter: there is none for OpenSearch, and the client is configured by
+    // hand against `HOMEINV_SEARCH_ENGINE` so that the `minimal` profile - which
+    // never gets OpenSearch - starts without one.
+    implementation(libs.opensearch.java)
+
     implementation(libs.spring.modulith.starter.core)
     implementation(libs.spring.modulith.starter.jpa)
     // The worker generates media derivatives from an event `api` publishes, and

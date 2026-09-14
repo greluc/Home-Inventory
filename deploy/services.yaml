@@ -301,6 +301,13 @@ services:
       HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
+      # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` by
+      # default, because `api` is in every profile and `opensearch` is in
+      # [standard, ha] only — an operator running one of those sets this, and
+      # `minimal` leaves it alone. Choosing `opensearch` without the URL below
+      # aborts startup rather than quietly answering from the other engine.
+      HOMEINV_SEARCH_ENGINE: "${HOMEINV_SEARCH_ENGINE:-postgresql}"
+      HOMEINV_SEARCH_URL: "https://opensearch:9200"
     # NO db-migration-password. It is mounted into the one-shot `migrate` service
     # and nowhere else (ADR-0041, REQ-SEC-101): homeinv_migrator owns the tables
     # and can rewrite an RLS policy, and mounting it into a long-running,
@@ -378,6 +385,13 @@ services:
       HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
+      # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` by
+      # default, because `api` is in every profile and `opensearch` is in
+      # [standard, ha] only — an operator running one of those sets this, and
+      # `minimal` leaves it alone. Choosing `opensearch` without the URL below
+      # aborts startup rather than quietly answering from the other engine.
+      HOMEINV_SEARCH_ENGINE: "${HOMEINV_SEARCH_ENGINE:-postgresql}"
+      HOMEINV_SEARCH_URL: "https://opensearch:9200"
     secrets:
       - db-password
       - data-encryption-master-key
