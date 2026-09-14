@@ -72,7 +72,8 @@ forbids database and repository access from the access blocks.
 ├── /sync        /pull /push /conflicts /devices
 ├── /notifications  /rules /subscriptions
 ├── /import-jobs /export-jobs /mapping-profiles
-├── /plugins     {id}/capabilities {id}/health {id}/enable {id}/disable
+├── /plugins     {id} {id}/capabilities/{capability}   (PUT to consent, DELETE to withdraw)
+│                {id}/health {id}/enable {id}/disable
 ├── /audit       log queries
 └── /webhooks    delivery targets and delivery attempts
 ```

@@ -94,6 +94,25 @@ permissions:
       tombstone would be retention without a reason, and the revision log answers
       who removed it.
 
+  - id: plugins:plugin:read
+    since: 1
+    description: >
+      See which plugins the operator installed and what this tenant has permitted
+      them (`REQ-PLG-005`). Reading, and a member's: what foreign code may reach
+      here is something anybody working in the tenant has an interest in knowing,
+      and a list of installed software is not a secret from the people whose data
+      it can reach.
+  - id: plugins:capability:consent
+    since: 1
+    description: >
+      Grant or withdraw one of a plugin's declared capabilities, for this tenant
+      (`REQ-PLG-005`, `REQ-PLG-006`). An administrator's: 09 §9.4 is explicit that
+      the decision is a tenant administrator seeing the capabilities in plain
+      language and agreeing to them, and it is the one act that lets foreign code
+      touch this tenant's data at all. Consent is per tenant even though
+      installation is instance-wide, so an installed plugin is active for one
+      tenant and invisible to the next.
+
   - id: media:object:read
     since: 0
     description: Read a media object's metadata and obtain a signed URL for it.
@@ -295,6 +314,7 @@ roles:
       - tagging:tag:update
       - tagging:tag:assign
       - search:saved-search:write
+      - plugins:plugin:read
       - tenancy:tenant:read
       - tenancy:member:read
 
@@ -331,6 +351,8 @@ roles:
       - tagging:tag:assign
       - search:saved-search:write
       - search:saved-search:delete
+      - plugins:plugin:read
+      - plugins:capability:consent
       - tenancy:tenant:read
       - tenancy:tenant:update
       - tenancy:member:read

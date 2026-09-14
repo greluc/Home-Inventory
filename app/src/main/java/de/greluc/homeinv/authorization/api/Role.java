@@ -125,6 +125,9 @@ public enum Role {
       // everybody sees; that is a member's to make. Taking one away from
       // everybody is not, and is ADMIN's (REQ-SRCH-008).
       Permission.SAVED_SEARCH_WRITE,
+      // What foreign code may reach here is something anybody working in the
+      // tenant has an interest in knowing; agreeing to it is ADMIN's.
+      Permission.PLUGIN_READ,
       Permission.TENANT_READ,
       // Who else is here. A person working in a shared inventory can see who
       // they are sharing it with; changing that list is ADMIN's.
@@ -158,6 +161,8 @@ public enum Role {
       Permission.TAG_ASSIGN,
       Permission.SAVED_SEARCH_WRITE,
       Permission.SAVED_SEARCH_DELETE,
+      Permission.PLUGIN_READ,
+      Permission.PLUGIN_CONSENT,
       Permission.TENANT_READ,
       Permission.TENANT_UPDATE,
       Permission.MEMBER_READ,

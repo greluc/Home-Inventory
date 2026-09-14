@@ -33,12 +33,13 @@ public class PluginRegistryQueries {
   private final JdbcClient jdbc;
 
   /**
-   * Every installed plugin, by id.
+   * The installed plugins, by id, at most {@code limit} of them.
    *
+   * @param limit how many at most, which the caller has already capped (REQ-NFR-010)
    * @return the registrations
    */
   @Transactional(readOnly = true)
-  public List<Registration> installed() {
+  public List<Registration> installed(int limit) {
     return jdbc
         .sql(
             """
@@ -46,7 +47,9 @@ public class PluginRegistryQueries {
                    runtime, signed, state, created_at
             from plugins.plugin_registration
             order by plugin_id
+            limit ?
             """)
+        .param(limit)
         .query(PluginRegistryQueries::toRegistration)
         .list();
   }

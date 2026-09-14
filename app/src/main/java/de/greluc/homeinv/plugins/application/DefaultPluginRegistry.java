@@ -38,8 +38,8 @@ public class DefaultPluginRegistry implements PluginRegistry {
 
   @Override
   @Transactional(readOnly = true)
-  public List<Registration> installed() {
-    return registry.installed().stream().map(this::named).toList();
+  public List<Registration> installed(int limit) {
+    return registry.installed(limit).stream().map(this::named).toList();
   }
 
   @Override
@@ -99,6 +99,12 @@ public class DefaultPluginRegistry implements PluginRegistry {
   @Override
   @Transactional
   public void revoke(String pluginId, String capability, UUID actor) {
+    // The plugin has to exist. Withdrawing a capability nobody granted is
+    // harmless and answers as though it worked, because the outcome the caller
+    // wants is already true -- but a plugin nobody installed is a resource that
+    // is not there, and saying 204 to that would be acting on something that
+    // does not exist (REQ-SEC-025).
+    registration(pluginId);
     int removed = registry.revoke(pluginId, capability);
     if (removed > 0) {
       log.info("Capability {} withdrawn from plugin {} by {}", capability, pluginId, actor);

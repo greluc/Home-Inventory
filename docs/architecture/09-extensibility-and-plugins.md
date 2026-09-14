@@ -156,9 +156,29 @@ stateDiagram-v2
 ```
 
 Capabilities are granted **per tenant**. An installed plugin is active for tenant
-A and invisible to tenant B until B's administrator consents. A manifest change
-(a new version with an additional capability) resets the consent — the plugin
-continues with the old capabilities or is paused; it never escalates silently.
+A and invisible to tenant B until B's administrator consents.
+
+A manifest change never escalates silently. When a new version asks for a
+capability the tenant has not agreed to, **what was granted stays granted and the
+new one is simply not granted** — the plugin carries on with the capabilities it
+has, and a call needing the new one fails visibly at that call. *This paragraph
+said the change "resets the consent — the plugin continues with the old
+capabilities or is paused" until 2026-09-14; the two readings were decided in
+favour of the first with the owner, because a typo-fix release must not disable a
+working plugin for every tenant while somebody finds time to look at it.* A grant
+also stops meaning anything once the capability leaves the manifest: `permits` is
+false for a capability the **current** manifest no longer declares, so a grant
+that outlived what it was for is a leftover rather than a permission.
+
+Consenting is a **tenant administrator's** act and reading is a member's, over
+`GET /api/v1/plugins`, `GET /api/v1/plugins/{id}` and
+`PUT`/`DELETE /api/v1/plugins/{id}/capabilities/{capability}`. The listing shows
+both halves at once — what the manifest asks for and what this tenant has agreed
+to — because "what it wants" without "what it has" is not a decision anybody can
+take. Consent to a capability the manifest does not declare is **refused** rather
+than recorded: it would otherwise be waiting as a permission if the plugin asked
+for it later. There is deliberately **no endpoint that installs anything** —
+installation is an operator's act outside the running system (REQ-PLG-013).
 
 ## 9.5 Out-of-process: the normal case
 

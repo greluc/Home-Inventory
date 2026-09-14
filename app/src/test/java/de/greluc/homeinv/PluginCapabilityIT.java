@@ -57,7 +57,7 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
         () -> {
           // Installed, and permitted nothing. There is no base entitlement and no
           // "read access, which is harmless anyway" (09 §9.4).
-          assertThat(registry.installed()).extracting(PluginRegistry.Registration::pluginId)
+          assertThat(registry.installed(200)).extracting(PluginRegistry.Registration::pluginId)
               .contains(PLUGIN);
           assertThat(registry.permits(PLUGIN, "core:item:read")).isFalse();
 

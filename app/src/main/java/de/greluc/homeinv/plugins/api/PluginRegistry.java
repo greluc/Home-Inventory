@@ -34,11 +34,16 @@ import java.util.UUID;
 public interface PluginRegistry {
 
   /**
-   * Everything the operator has installed on this instance.
+   * What the operator has installed on this instance, by plugin id.
    *
-   * @return the registrations, by plugin id
+   * <p>Bounded like every other collection (REQ-NFR-010), and without a cursor: this one grows with
+   * the deployment rather than with a tenant's data, so a page size of 200 is a ceiling an operator
+   * reaches by running two hundred plugin containers, not by using the system.
+   *
+   * @param limit how many at most
+   * @return the registrations
    */
-  List<Registration> installed();
+  List<Registration> installed(int limit);
 
   /**
    * One registration.

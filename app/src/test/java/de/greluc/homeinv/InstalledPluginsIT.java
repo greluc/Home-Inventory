@@ -41,7 +41,7 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
 
     run(list);
 
-    assertThat(registry.installed())
+    assertThat(registry.installed(200))
         .extracting(PluginRegistry.Registration::pluginId)
         .contains("de.greluc.homeinv.plugin.isbn");
   }
@@ -64,7 +64,7 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
     // another contract is not a reason to have none (09 §9.11).
     assertThatCode(() -> run(list)).doesNotThrowAnyException();
 
-    assertThat(registry.installed()).extracting(PluginRegistry.Registration::pluginId)
+    assertThat(registry.installed(200)).extracting(PluginRegistry.Registration::pluginId)
         .contains("de.greluc.homeinv.plugin.good")
         .doesNotContain("de.greluc.homeinv.plugin.future");
   }
@@ -80,7 +80,7 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
     Path list = list(directory, entry("de.greluc.homeinv.plugin.claimed", manifest));
     run(list);
 
-    assertThat(registry.installed()).extracting(PluginRegistry.Registration::pluginId)
+    assertThat(registry.installed(200)).extracting(PluginRegistry.Registration::pluginId)
         .doesNotContain("de.greluc.homeinv.plugin.claimed", "de.greluc.homeinv.plugin.actual");
   }
 

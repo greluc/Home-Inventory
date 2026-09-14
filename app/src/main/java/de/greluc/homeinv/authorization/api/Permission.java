@@ -58,6 +58,24 @@ public enum Permission {
   /** Delete a saved search. Its own permission, because it takes a list away from everybody. */
   SAVED_SEARCH_DELETE("search:saved-search:delete"),
 
+  /**
+   * See which plugins the operator installed, and what this tenant has permitted them
+   * (REQ-PLG-005).
+   *
+   * <p>Reading, and a member's: what a plugin may do here is something anybody working in the
+   * tenant has an interest in knowing, and a list of installed software is not a secret from the
+   * people whose data it can reach.
+   */
+  PLUGIN_READ("plugins:plugin:read"),
+  /**
+   * Grant or withdraw a capability, for this tenant (REQ-PLG-005, REQ-PLG-006).
+   *
+   * <p>An administrator's. 09 §9.4 is explicit that the decision is a <i>tenant administrator</i>
+   * seeing the capabilities in plain language and agreeing to them, and it is the one act that lets
+   * foreign code touch this tenant's data at all.
+   */
+  PLUGIN_CONSENT("plugins:capability:consent"),
+
   /** Read a media object's metadata and obtain a signed URL for it. */
   MEDIA_READ("media:object:read"),
   /** Upload a media object and attach it. */

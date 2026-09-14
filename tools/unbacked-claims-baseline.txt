@@ -80,15 +80,15 @@ docs/architecture/07-data-model.md:588:guaranteed
 docs/architecture/07-data-model.md:593:enforces
 docs/architecture/07-data-model.md:612:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:320:enforced
 docs/architecture/08-api-contract.md:321:enforced
-docs/architecture/08-api-contract.md:402:cannot
-docs/architecture/08-api-contract.md:480:fails the build
-docs/architecture/09-extensibility-and-plugins.md:183:cannot
-docs/architecture/09-extensibility-and-plugins.md:196:cannot
-docs/architecture/09-extensibility-and-plugins.md:219:cannot
+docs/architecture/08-api-contract.md:322:enforced
+docs/architecture/08-api-contract.md:403:cannot
+docs/architecture/08-api-contract.md:481:fails the build
+docs/architecture/09-extensibility-and-plugins.md:203:cannot
+docs/architecture/09-extensibility-and-plugins.md:216:cannot
+docs/architecture/09-extensibility-and-plugins.md:239:cannot
 docs/architecture/09-extensibility-and-plugins.md:22:must never
-docs/architecture/09-extensibility-and-plugins.md:296:must never
+docs/architecture/09-extensibility-and-plugins.md:316:must never
 docs/architecture/10-identification-and-labels.md:117:cannot
 docs/architecture/10-identification-and-labels.md:155:is impossible
 docs/architecture/10-identification-and-labels.md:21:cannot

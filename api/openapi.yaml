@@ -247,6 +247,18 @@ components:
           format: uuid
           type: string
       type: object
+    CapabilityView:
+      description: One capability a plugin asks for.
+      properties:
+        granted:
+          description: |-
+            whether this tenant has agreed to it. False is the state every capability starts
+            in: a plugin has no permissions until they are granted
+          type: boolean
+        id:
+          description: the capability, from the closed set of 09 §9.4
+          type: string
+      type: object
     CategoryView:
       description: A location category as an administrator sees it.
       properties:
@@ -2408,6 +2420,48 @@ components:
         registeredAt:
           description: when it was registered
           format: date-time
+          type: string
+      type: object
+    PluginView:
+      description: One installed plugin, as this tenant sees it.
+      properties:
+        capabilities:
+          description: |-
+            everything its manifest asks for, each with whether this tenant agreed.
+            Both halves together, because "what it wants" without "what it has" is not a decision
+            anybody can take
+          items:
+            $ref: '#/components/schemas/CapabilityView'
+          type: array
+        contract:
+          description: the contract range it supports
+          type: string
+        disabled:
+          description: whether it is out of service
+          type: boolean
+        id:
+          description: the reverse-domain id
+          type: string
+        name:
+          description: what a person sees
+          type: string
+        registeredAt:
+          description: when it was first seen
+          format: date-time
+          type: string
+        runtime:
+          description: '`out-of-process` or `in-process`'
+          type: string
+        signed:
+          description: |-
+            whether the operator verified its signature. An unsigned plugin runs only where
+            they allowed it, and a client shows that permanently (REQ-PLG-004)
+          type: boolean
+        vendor:
+          description: who publishes it
+          type: string
+        version:
+          description: the plugin's own version
           type: string
       type: object
     Problem:
@@ -9978,6 +10032,285 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Scan unavailable (`scan-unavailable`)
       summary: One file, by id — what an upload's `Location` header points at
+  /api/v1/plugins:
+    get:
+      description: |-
+        The plugins the operator installed, with what this tenant has permitted each.
+
+        Bounded at 200 like every list (REQ-NFR-010) and without a cursor, for the reason
+        {@link PluginRegistry#installed(int) PluginRegistry#installed(int)} gives: the collection grows with the deployment rather
+        than with a tenant's data, and an operator runs a handful of plugin containers, not a page of
+        them. The parameter is here so that a client asking for fewer gets fewer, and so that the bound
+        is part of the contract rather than only of the query.
+      operationId: installedPlugins
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PluginView'
+                type: array
+          description: what is installed
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The plugins the operator installed, with what this tenant has permitted each
+  /api/v1/plugins/{pluginId}:
+    get:
+      description: One plugin.
+      operationId: plugin
+      parameters:
+      - description: its reverse-domain id
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginView'
+          description: it, with what this tenant has permitted it
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One plugin.
+  /api/v1/plugins/{pluginId}/capabilities/{capability}:
+    delete:
+      description: |-
+        Withdraws one capability, for this tenant.
+
+        Withdrawing what was never granted is not an error: what a caller wants is "this plugin may
+        not do this here", and that is already true.
+      operationId: withdrawCapability
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: the capability
+        in: path
+        name: capability
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Withdraws one capability, for this tenant
+    put:
+      description: |-
+        Agrees to one capability, for this tenant.
+
+        Idempotent: agreeing twice is one grant. A capability the plugin's manifest does not declare
+        is refused rather than recorded — consent to something it never asked for is consent to
+        nothing, and would be waiting as a permission if it asked later.
+      operationId: grantCapability
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: the capability, spelled as 09 §9.4 spells it
+        in: path
+        name: capability
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Agrees to one capability, for this tenant
   /api/v1/roles:
     get:
       description: One page of the roles this tenant has defined.

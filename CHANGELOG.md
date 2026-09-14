@@ -153,6 +153,14 @@ commit".
 
 ### Added
 
+- **Administrators decide what a plugin may do in their household.** The plugin
+  list now shows what each one asks for beside what the household has agreed to,
+  and an administrator grants or withdraws each capability on its own. Nothing is
+  allowed to begin with, agreeing twice is the same as once, and a capability the
+  plugin never asked for is refused rather than stored. *REST API: adds
+  `GET /api/v1/plugins`, `GET /api/v1/plugins/{id}` and `PUT`/`DELETE
+  /api/v1/plugins/{id}/capabilities/{capability}`.*
+
 - **The system registers the plugins an operator installed.** On start it reads
   the list the deployment generated, checks each plugin's manifest and whether it
   was built for a contract this version speaks, and registers the ones that fit.
@@ -164,8 +172,7 @@ commit".
   keeps a register of what the operator has installed and, separately, what each
   household has allowed it to do. A plugin can do nothing at all until somebody
   says yes, and an update that asks for something new does not get it — what was
-  already allowed keeps working, and the new request waits. Nothing user-visible
-  yet: there is no plugin to install.
+  already allowed keeps working, and the new request waits.
 
 - **The plugin manifest format is readable.** `plugin-api` — the Apache-2.0
   module a plugin author compiles against — now holds the manifest model and its
