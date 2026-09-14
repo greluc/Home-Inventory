@@ -105,6 +105,10 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     List<QueryFilter> filters = criteria.filters() == null ? List.of() : criteria.filters();
 
     boolean filtered = text != null && !text.isBlank();
+    List<UUID> alsoMatched =
+        criteria.textMatchedItemIds() == null ? List.of() : criteria.textMatchedItemIds();
+    List<UUID> alsoHere =
+        criteria.textMatchedLocationIds() == null ? List.of() : criteria.textMatchedLocationIds();
     boolean byLocation = locationIds != null && !locationIds.isEmpty();
     boolean byType = typeVersionIds != null && !typeVersionIds.isEmpty();
     boolean byId = itemIds != null && !itemIds.isEmpty();
@@ -114,9 +118,30 @@ public class ItemSearchAdapter implements ItemSearchQuery {
         where i.tenant_id = ?
           and i.deleted_at is null
         """
+            // Four matches joined by "or", which is REQ-SRCH-011's list. The
+            // first two are this block's own: the generated vector over name,
+            // description and notes, and the mirrored attribute values. The other
+            // two arrived as ids from the blocks that own them, because a
+            // generated column can only read its own row.
             + (filtered
-                ? "  and i.%s @@ websearch_to_tsquery('%s', ?)%n"
-                    .formatted(vectorColumn(criteria.language()), regconfig(criteria.language()))
+                ? """
+                    and (
+                      i.%s @@ websearch_to_tsquery('%s', ?)
+                      or exists (select 1 from inventory.item_attr_index v
+                                  where v.tenant_id = i.tenant_id and v.item_id = i.id
+                                    and to_tsvector('%s', coalesce(v.text_value, ''))
+                                        @@ websearch_to_tsquery('%s', ?))%s%s
+                    )
+                    """
+                    .formatted(
+                        vectorColumn(criteria.language()),
+                        regconfig(criteria.language()),
+                        regconfig(criteria.language()),
+                        regconfig(criteria.language()),
+                        alsoMatched.isEmpty() ? "" : "%n                      or i.id = any(?)".formatted(),
+                        alsoHere.isEmpty()
+                            ? ""
+                            : "%n                      or i.location_id = any(?)".formatted())
                 : "")
             // `= any(?)` and not an IN list built from the ids: the number of
             // locations varies per request, and a generated IN list would be
@@ -138,7 +163,15 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     List<Object> values = new java.util.ArrayList<>();
     values.add(tenantId);
     if (filtered) {
+      // Twice: once for the row's vector and once for the attribute values.
       values.add(text);
+      values.add(text);
+      if (!alsoMatched.isEmpty()) {
+        values.add(alsoMatched.toArray(UUID[]::new));
+      }
+      if (!alsoHere.isEmpty()) {
+        values.add(alsoHere.toArray(UUID[]::new));
+      }
     }
     if (byLocation) {
       values.add(locationIds.toArray(UUID[]::new));

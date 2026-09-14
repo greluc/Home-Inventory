@@ -714,6 +714,35 @@ public class TagAdapter implements TagService, TagQueries {
 
   @Override
   @Transactional(readOnly = true)
+  public List<UUID> itemsTaggedMatching(String text, String language) {
+    if (text == null || text.isBlank()) {
+      return List.of();
+    }
+    UUID tenantId = TenantContext.require();
+    // The configuration is chosen from a closed set of two and never from the
+    // parameter, which is what keeps this a parameterised statement with a
+    // variable stemmer rather than SQL built from input (REQ-SEC-031).
+    String regconfig = "en".equals(language) ? "english" : "german";
+    return jdbc
+        .sql(
+            """
+            select distinct a.item_id
+            from tagging.tag_assignment a
+            join tagging.tag t
+              on t.tenant_id = a.tenant_id and t.id = a.tag_id
+            where a.tenant_id = ?
+              and a.item_id is not null
+              and t.merged_into is null
+              and to_tsvector('%s', t.name) @@ websearch_to_tsquery('%s', ?)
+            """
+                .formatted(regconfig, regconfig))
+        .params(tenantId, text)
+        .query((rs, rowNum) -> rs.getObject("item_id", UUID.class))
+        .list();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Map<String, Long> countByTag(Collection<UUID> itemIds) {
     if (itemIds == null || itemIds.isEmpty()) {
       return Map.of();

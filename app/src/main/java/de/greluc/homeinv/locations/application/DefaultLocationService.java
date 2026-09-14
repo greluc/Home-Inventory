@@ -408,6 +408,18 @@ public class DefaultLocationService implements LocationService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<UUID> locationsMatching(String text, String language) {
+    if (text == null || text.isBlank()) {
+      return List.of();
+    }
+    // From a closed set of two, never from the parameter: the configuration name
+    // goes into the statement and the text goes into a parameter (REQ-SEC-031).
+    return tree.matchingSubtrees(
+        TenantContext.require(), text, "en".equals(language) ? "english" : "german");
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<UUID> ancestorIds(UUID id) {
     return tree.ancestorIds(TenantContext.require(), id);
   }

@@ -121,6 +121,22 @@ public interface LocationService {
   List<UUID> ancestorIds(UUID id);
 
   /**
+   * The places whose name matches a piece of text, and everything below them (REQ-SRCH-011).
+   *
+   * <p>What lets a search find "everything in the cellar" by the word <i>cellar</i>. The subtree is
+   * included because a location path is what REQ-SRCH-011 names: a box on a shelf in the cellar is
+   * in the cellar, and a person searching for it does not know which shelf.
+   *
+   * <p>Matched as full text in the caller's language, so the stemming is the same as the rest of
+   * the query's.
+   *
+   * @param text what to look for; blank matches nothing
+   * @param language {@code de} or {@code en}, deciding the stemmer
+   * @return the ids of the matching places and of everything beneath them, without duplicates
+   */
+  List<UUID> locationsMatching(String text, String language);
+
+  /**
    * Rolls counts per location up to the children of one place (REQ-SRCH-002).
    *
    * <p>The location facet. An item's {@code location_id} names the exact shelf it sits on, and a

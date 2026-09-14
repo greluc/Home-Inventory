@@ -79,4 +79,21 @@ public interface TagQueries {
    * @return the names of the tags on it, in no particular order; empty when it carries none
    */
   List<String> tagNamesOf(UUID itemId);
+
+  /**
+   * The items whose tags match a piece of text (REQ-SRCH-011).
+   *
+   * <p>What lets the PostgreSQL engine find an item by a tag. Its full-text vectors are generated
+   * columns on {@code inventory.item} and a generated column can only read its own row, so a tag —
+   * which lives here — reaches a search no other way.
+   *
+   * <p>Matched as full text rather than as a prefix, in the language the caller is searching in, so
+   * that "defekte" finds the tag "defekt" the way the rest of the query stems. A tag that has been
+   * merged away does not match: its items now carry the tag it became, and that one does.
+   *
+   * @param text what to look for; blank matches nothing, because "everything" is not a text match
+   * @param language {@code de} or {@code en}, deciding the stemmer
+   * @return the ids of the items carrying a matching tag, without duplicates
+   */
+  List<UUID> itemsTaggedMatching(String text, String language);
 }

@@ -282,12 +282,14 @@ CREATE TABLE inventory.item (
     search_vector_de    tsvector
                         GENERATED ALWAYS AS (
                             to_tsvector('german',
-                                coalesce(name,'') || ' ' || coalesce(description,''))
+                                coalesce(name,'') || ' ' || coalesce(description,'')
+                                    || ' ' || coalesce(notes,''))
                         ) STORED,
     search_vector_en    tsvector
                         GENERATED ALWAYS AS (
                             to_tsvector('english',
-                                coalesce(name,'') || ' ' || coalesce(description,''))
+                                coalesce(name,'') || ' ' || coalesce(description,'')
+                                    || ' ' || coalesce(notes,''))
                         ) STORED,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),

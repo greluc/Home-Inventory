@@ -63,6 +63,38 @@ public class LocationTreeQueries {
   }
 
   /**
+   * The places whose name matches, and everything below each of them.
+   *
+   * <p>One statement: the match and the descent are the same {@code <@} range on the GiST index
+   * that {@link #subtreeIds} uses, so a word that matches three places costs one scan rather than
+   * one query per place.
+   *
+   * @param tenantId the tenant
+   * @param text what to look for
+   * @param regconfig the text search configuration, from a closed set
+   * @return the matching ids and their descendants
+   */
+  public List<UUID> matchingSubtrees(UUID tenantId, String text, String regconfig) {
+    return jdbc
+        .sql(
+            """
+            select distinct descendant.id
+            from locations.location matched
+            join locations.location descendant
+              on descendant.tenant_id = matched.tenant_id
+             and descendant.path <@ matched.path
+            where matched.tenant_id = ?
+              and matched.deleted_at is null
+              and descendant.deleted_at is null
+              and to_tsvector('%s', matched.name) @@ websearch_to_tsquery('%s', ?)
+            """
+                .formatted(regconfig, regconfig))
+        .params(tenantId, text)
+        .query(UUID.class)
+        .list();
+  }
+
+  /**
    * The ids of a location and everything above it, root first.
    *
    * <p>One index range on the GiST index over {@code path}, like the subtree below, because

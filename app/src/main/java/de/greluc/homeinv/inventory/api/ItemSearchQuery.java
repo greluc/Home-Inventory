@@ -48,6 +48,12 @@ public interface ItemSearchQuery {
    * @param filters conditions on attributes, all of which must hold. Each becomes an {@code exists}
    *     over {@code item_attr_index} rather than a join, so two filters cannot multiply the rows
    *     between them. Field keys have already been checked against the tenant's allowlist
+   * @param textMatchedItemIds items another block found by the same text — a matching tag today
+   *     (REQ-SRCH-011). <b>Widens</b> the text match rather than narrowing it: an item matches when
+   *     its own words match <i>or</i> it is in this list. A generated column reads its own row, so
+   *     a tag can reach a search no other way
+   * @param textMatchedLocationIds places another block found by the same text, their subtrees
+   *     included. Widens the text match likewise: an item in the cellar matches the word "cellar"
    */
   record Criteria(
       String text,
@@ -55,7 +61,32 @@ public interface ItemSearchQuery {
       List<UUID> locationIds,
       List<UUID> typeVersionIds,
       List<UUID> itemIds,
-      List<QueryFilter> filters) {}
+      List<QueryFilter> filters,
+      List<UUID> textMatchedItemIds,
+      List<UUID> textMatchedLocationIds) {
+
+    /**
+     * The criteria a caller has that match no text through another block.
+     *
+     * @param text what to search for
+     * @param language which vector to search
+     * @param locationIds the locations to restrict to, or empty
+     * @param typeVersionIds the type versions to restrict to, or empty
+     * @param itemIds the items to restrict to, or empty
+     * @param filters the attribute conditions
+     * @return the criteria, with no widening
+     */
+    public static Criteria of(
+        String text,
+        String language,
+        List<UUID> locationIds,
+        List<UUID> typeVersionIds,
+        List<UUID> itemIds,
+        List<QueryFilter> filters) {
+      return new Criteria(
+          text, language, locationIds, typeVersionIds, itemIds, filters, List.of(), List.of());
+    }
+  }
 
   /**
    * Which column a count is grouped by.

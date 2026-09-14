@@ -408,7 +408,8 @@
   </Match>
 
   <!--
-    VA_FORMAT_STRING_USES_NEWLINE on the search statement. The rule wants `%n`
+    VA_FORMAT_STRING_USES_NEWLINE on the three statements whose text search
+    configuration is chosen at runtime. The rule wants `%n`
     instead of a literal newline in a format string, and here the format string is
     a SQL text block whose newlines are the statement's own layout. `%n` would
     emit the platform separator into SQL, which PostgreSQL neither needs nor
@@ -421,10 +422,19 @@
     enter a statement through. The two gates disagree and the project's own rule
     wins; the text block keeps every variable part to `%s` placeholders whose
     arguments come from closed sets.
+
+    `TagAdapter` and `LocationTreeQueries` joined it on 2026-09-14 with the other
+    half of REQ-SRCH-011: a tag and a location name are matched as full text in
+    the caller's language, so the configuration goes into the statement while the
+    text itself stays a parameter. Two of them, `german` and `english`, chosen by
+    an `equals` on a value that arrived from a closed set - and it cannot be a
+    parameter for the same reason it cannot be one in `ItemSearchAdapter`:
+    `to_tsvector` is immutable only with a literal configuration, which is what
+    07 7.3 says beside the generated columns.
   -->
   <Match>
     <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
-    <Class name="de.greluc.homeinv.inventory.infrastructure.ItemSearchAdapter"/>
+    <Class name="~de[.]greluc[.]homeinv[.](inventory[.]infrastructure[.]ItemSearchAdapter|tagging[.]infrastructure[.]TagAdapter|locations[.]infrastructure[.]LocationTreeQueries)"/>
   </Match>
 
 </FindBugsFilter>

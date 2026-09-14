@@ -227,16 +227,26 @@ public class PostgresSearchIndex implements SearchIndex {
   /**
    * The part of a query that narrows it, in the shape {@code inventory} takes.
    *
+   * <p>Two of its members are answered by other blocks: an item matches the text when one of its
+   * tags does, or when the place it is in does. Neither can be a generated column on
+   * {@code inventory.item}, because a generated column reads its own row — which is why
+   * REQ-SRCH-011 needs this composition and not a wider vector.
+   *
    * @param query the engine's query
    * @return the criteria
    */
-  private static ItemSearchQuery.Criteria criteriaOf(Query query) {
+  private ItemSearchQuery.Criteria criteriaOf(Query query) {
+    boolean matching = query.text() != null && !query.text().isBlank();
     return new ItemSearchQuery.Criteria(
         query.text(),
         query.language(),
         query.locationIds(),
         query.typeVersionIds(),
         query.itemIds(),
-        query.filters());
+        query.filters(),
+        // The two halves of REQ-SRCH-011 that live in other blocks. Asked only
+        // when there is text to match, because each is a query of its own.
+        matching ? tags.itemsTaggedMatching(query.text(), query.language()) : List.of(),
+        matching ? locations.locationsMatching(query.text(), query.language()) : List.of());
   }
 }

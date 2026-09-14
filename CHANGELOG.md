@@ -153,6 +153,12 @@ commit".
 
 ### Added
 
+- **Notes, attribute values, tags and places are searchable.** A search used to
+  look at an item's name and description alone. It now also finds an item by
+  something written in its notes, by a value of one of its fields, by a tag on
+  it, and by the name of the place it is kept in — the room as well as the shelf.
+  This works without OpenSearch, so a small installation gets it too.
+
 - **Search can be answered by OpenSearch.** An installation that runs the
   `standard` or `ha` profile can point the application at its OpenSearch, and
   searches are then stemmed and ranked across everything an item carries — its

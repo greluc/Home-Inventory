@@ -49,14 +49,26 @@ decision.
 
 ```sql
 search_vector_de tsvector GENERATED ALWAYS AS (
-    to_tsvector('german',  coalesce(name,'') || ' ' || coalesce(description,''))
+    to_tsvector('german',
+        coalesce(name,'') || ' ' || coalesce(description,'') || ' ' || coalesce(notes,''))
 ) STORED,
 search_vector_en tsvector GENERATED ALWAYS AS (
-    to_tsvector('english', coalesce(name,'') || ' ' || coalesce(description,''))
+    to_tsvector('english',
+        coalesce(name,'') || ' ' || coalesce(description,'') || ' ' || coalesce(notes,''))
 ) STORED
 ```
 
 with a GIN index on each.
+
+*`notes` was added on 2026-09-14 (`V45`). It arrived at stage 1 with
+`REQ-CORE-014` and nothing widened these columns to take it in, so an item whose
+notes read "wobbly leg, glued 2024" was findable by neither word — in the one
+profile that has no OpenSearch at all. The other three fields `REQ-SRCH-011`
+names — attribute values, tags and the location path — are deliberately **not**
+here and cannot be: a generated column is a function of its own row, and those
+are rows of `item_attr_index`, `tagging` and `locations`. The PostgreSQL engine
+composes them through each block's published port instead, which is the same
+shape its facets already have (ADR-0002).*
 
 | Point | Rule |
 |---|---|
