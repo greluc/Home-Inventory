@@ -252,6 +252,13 @@ homeinv:
   # address and therefore plugin-smtp — an instance configured for it without one
   # refuses to start rather than offering a sign-up nobody can finish.
   registration-mode: ${HOMEINV_REGISTRATION_MODE:invite_only}
+  plugins:
+    # Where the generated list of installed plugins is (REQ-PLG-013). Generated
+    # from deploy/services.yaml beside the Quadlet units, the per-plugin network
+    # segment (ADR-0037) and the egress allowlist, so the topology and the
+    # registration cannot disagree. Unset - which is what `minimal` leaves it -
+    # means no plugins, which is a complete deployment and not a degraded one.
+    file: ${HOMEINV_PLUGINS_FILE:}
   search:
     # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` is the
     # default because every profile has it; `minimal` never gets OpenSearch and

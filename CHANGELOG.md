@@ -153,6 +153,13 @@ commit".
 
 ### Added
 
+- **The system registers the plugins an operator installed.** On start it reads
+  the list the deployment generated, checks each plugin's manifest and whether it
+  was built for a contract this version speaks, and registers the ones that fit.
+  A plugin whose files are wrong is skipped with a note in the log — it can never
+  stop the system from starting, and the plugins beside it are still registered.
+  An installation with no plugins is a complete installation.
+
 - **A plugin is installed once and permitted per household.** The system now
   keeps a register of what the operator has installed and, separately, what each
   household has allowed it to do. A plugin can do nothing at all until somebody
