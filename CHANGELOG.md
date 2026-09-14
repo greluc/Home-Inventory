@@ -41,6 +41,15 @@ commit".
 
 ### Fixed
 
+- **The application image builds again.** It stopped building when the
+  Apache-2.0 plugin module joined the build, because the image never copied that
+  module in. Nothing was released from it, and no installation was affected;
+  the build was simply broken from that moment until now.
+
+- **A TLS fix in the storage service.** `rustls` moves to 0.23.45, which rejects
+  TLS 1.3 handshake messages that the previous release accepted across
+  encryption level boundaries (RUSTSEC-2026-0285).
+
 - **"Something went wrong" was hiding "there is no such thing".** Asking about a
   field, a type, a version or a value list the tenant does not have answered an
   error that told nobody anything — twelve places in the type system did this.

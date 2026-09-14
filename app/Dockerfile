@@ -22,6 +22,11 @@ COPY gradlew gradlew.bat ./
 COPY gradle ./gradle
 COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY app/build.gradle.kts ./app/
+# `:app` depends on `:plugin-api`, and Gradle refuses to configure a project
+# whose directory is not there — so this is not an optimisation but the
+# difference between an image that builds and one that does not. Its build file
+# comes with the other declarations; its sources follow below.
+COPY plugin-api/build.gradle.kts ./plugin-api/
 RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /dev/null 2>&1 || true
 
 # The BlobStore contract. `app/build.gradle.kts` points the protobuf plugin at
@@ -30,6 +35,11 @@ RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /
 # is what this image did from the day the gRPC client was added until the first
 # time anybody built it.
 COPY proto/ ./proto/
+
+# The ports a plugin implements and the manifest model the core reads
+# (ADR-0064). Apache-2.0 and part of the same build, so the image needs its
+# sources as much as the core's.
+COPY plugin-api/src ./plugin-api/src
 COPY app/src ./app/src
 
 # The shipped item type templates (REQ-CORE-030). `TypeTemplates` reads them
