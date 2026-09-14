@@ -263,7 +263,7 @@ public class LocationController {
 
     return search.query(
         new SearchService.SearchRequest(
-            null, "de", scope, cursor, null, List.of(), limit));
+            null, "de", scope, cursor, null, List.of(), List.of(), limit));
   }
 
   /**

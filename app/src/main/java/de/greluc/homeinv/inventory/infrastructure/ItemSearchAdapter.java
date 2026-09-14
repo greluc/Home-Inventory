@@ -14,6 +14,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -72,42 +73,50 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   /** Where a sortable field's storage class comes from — the allowlist, never the caller. */
   private final TypeRegistry types;
 
-  @Override
-  public Rows search(
-      String text,
-      String language,
-      List<UUID> locationIds,
-      List<UUID> typeVersionIds,
-      List<UUID> itemIds,
-      Optional<CursorCodec.Position> after,
-      SortOrder sort,
-      List<QueryFilter> filters,
-      int limit) {
+  /**
+   * The {@code where} clause every question here shares, and the values it binds.
+   *
+   * <p>Written once because four methods ask the same question of the same rows and differ only in
+   * what they select: a page of ids, a count per column, a count per attribute value, or every id.
+   * A second copy of this clause is how a facet comes to count rows the list does not show.
+   *
+   * @param sql the fragment, beginning with {@code where}
+   * @param values what to bind, in the order the fragment names them
+   */
+  private record Where(String sql, List<Object> values) {}
+
+  /**
+   * Builds the shared {@code where} clause.
+   *
+   * <p>Assembled from fixed fragments, never from input. The variable parts are the vector column
+   * and the text search configuration, both from closed sets, and the attribute predicates, whose
+   * field keys the application layer has already checked against the tenant's allowlist
+   * (REQ-SEC-031).
+   *
+   * @param criteria what narrows the query
+   * @return the clause and its values
+   */
+  private Where whereFor(Criteria criteria) {
     UUID tenantId = TenantContext.require();
+    String text = criteria.text();
+    List<UUID> locationIds = criteria.locationIds();
+    List<UUID> typeVersionIds = criteria.typeVersionIds();
+    List<UUID> itemIds = criteria.itemIds();
+    List<QueryFilter> filters = criteria.filters() == null ? List.of() : criteria.filters();
+
     boolean filtered = text != null && !text.isBlank();
     boolean byLocation = locationIds != null && !locationIds.isEmpty();
     boolean byType = typeVersionIds != null && !typeVersionIds.isEmpty();
     boolean byId = itemIds != null && !itemIds.isEmpty();
-    boolean resuming = after.isPresent();
-    SortPlan plan = planFor(sort);
 
-    // Assembled from fixed fragments, never from input. The variable parts are
-    // the vector column, the text search configuration and the sort expression,
-    // and each of the three comes from a closed set: `vectorColumn`, `regconfig`
-    // and `planFor`, which resolves a field name that the application layer has
-    // already checked against the tenant's allowlist.
     String sql =
         """
-        select i.id, i.created_at%s
-        from inventory.item i
-        %s
         where i.tenant_id = ?
           and i.deleted_at is null
         """
-                .formatted(plan.selectSuffix(), plan.join())
             + (filtered
                 ? "  and i.%s @@ websearch_to_tsquery('%s', ?)%n"
-                    .formatted(vectorColumn(language), regconfig(language))
+                    .formatted(vectorColumn(criteria.language()), regconfig(criteria.language()))
                 : "")
             // `= any(?)` and not an IN list built from the ids: the number of
             // locations varies per request, and a generated IN list would be
@@ -124,7 +133,142 @@ public class ItemSearchAdapter implements ItemSearchQuery {
             // would multiply the rows when two filters match two different
             // attributes of the same item, and the fix for that is a `distinct`
             // that throws away the sort order with the duplicates.
-            + filters.stream().map(this::predicateFor).collect(Collectors.joining())
+            + filters.stream().map(this::predicateFor).collect(Collectors.joining());
+
+    List<Object> values = new java.util.ArrayList<>();
+    values.add(tenantId);
+    if (filtered) {
+      values.add(text);
+    }
+    if (byLocation) {
+      values.add(locationIds.toArray(UUID[]::new));
+    }
+    if (byType) {
+      values.add(typeVersionIds.toArray(UUID[]::new));
+    }
+    if (byId) {
+      values.add(itemIds.toArray(UUID[]::new));
+    }
+    for (QueryFilter filter : filters) {
+      values.add(filter.field());
+      if (filter.unit() != null) {
+        values.add(filter.unit());
+      }
+      values.addAll(filter.values());
+    }
+    return new Where(sql, values);
+  }
+
+  @Override
+  public Map<UUID, Long> countByColumn(Criteria criteria, CountColumn column) {
+    // From a closed set of two, which is what makes this a checked builder and
+    // not a column name from a request (REQ-SEC-031).
+    String grouped =
+        switch (column) {
+          case TYPE_VERSION -> "i.item_type_version_id";
+          case LOCATION -> "i.location_id";
+        };
+    Where where = whereFor(criteria);
+    String sql =
+        """
+        select %s as bucket, count(*) as total
+        from inventory.item i
+        %s  and %s is not null
+        group by 1
+        """
+            .formatted(grouped, where.sql(), grouped);
+
+    var spec = jdbc.sql(sql);
+    for (Object value : where.values()) {
+      spec = spec.param(value);
+    }
+    Map<UUID, Long> counts = new java.util.LinkedHashMap<>();
+    spec.query(
+            (rs, rowNum) ->
+                Map.entry(rs.getObject("bucket", UUID.class), rs.getLong("total")))
+        .list()
+        .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
+    return counts;
+  }
+
+  @Override
+  public Map<String, Long> countByAttribute(Criteria criteria, String fieldKey) {
+    Where where = whereFor(criteria);
+    // `coalesce` across the storage classes rather than a column chosen from the
+    // field's type: a facet's bucket is the token a filter takes back, and that
+    // is text whichever column the value lives in. Exactly one of them is
+    // non-null per row, because the projector writes one (AttributeProjector).
+    String sql =
+        """
+        select coalesce(
+                 f.text_value,
+                 f.num_value::text,
+                 to_char(f.date_value at time zone 'UTC', 'YYYY-MM-DD'),
+                 f.bool_value::text,
+                 f.ref_value::text) as bucket,
+               count(*) as total
+        from inventory.item i
+        join inventory.item_attr_index f
+          on f.tenant_id = i.tenant_id and f.item_id = i.id and f.field_key = ?
+        %s
+        group by 1
+        having coalesce(
+                 f.text_value,
+                 f.num_value::text,
+                 to_char(f.date_value at time zone 'UTC', 'YYYY-MM-DD'),
+                 f.bool_value::text,
+                 f.ref_value::text) is not null
+        """
+            .formatted(where.sql());
+
+    // The join's parameter comes first, because the join is written before the
+    // where clause.
+    var spec = jdbc.sql(sql).param(fieldKey);
+    for (Object value : where.values()) {
+      spec = spec.param(value);
+    }
+    Map<String, Long> counts = new java.util.LinkedHashMap<>();
+    spec.query((rs, rowNum) -> Map.entry(rs.getString("bucket"), rs.getLong("total")))
+        .list()
+        .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
+    return counts;
+  }
+
+  @Override
+  public List<UUID> matchingIds(Criteria criteria) {
+    Where where = whereFor(criteria);
+    String sql =
+        """
+        select i.id
+        from inventory.item i
+        %s
+        """
+            .formatted(where.sql());
+    var spec = jdbc.sql(sql);
+    for (Object value : where.values()) {
+      spec = spec.param(value);
+    }
+    return spec.query((rs, rowNum) -> rs.getObject("id", UUID.class)).list();
+  }
+
+  @Override
+  public Rows search(
+      Criteria criteria, Optional<CursorCodec.Position> after, SortOrder sort, int limit) {
+    boolean resuming = after.isPresent();
+    SortPlan plan = planFor(sort);
+    Where where = whereFor(criteria);
+
+    // Assembled from fixed fragments, never from input. The one variable part
+    // beyond the shared clause is the sort expression, which `planFor` resolves
+    // from a field the application layer has already checked against the
+    // tenant's allowlist.
+    String sql =
+        """
+        select i.id, i.created_at%s
+        from inventory.item i
+        %s
+        %s"""
+                .formatted(plan.selectSuffix(), plan.join(), where.sql())
             + (resuming ? "  and " + plan.resume(after.get().sortValue()) + "%n".formatted() : "")
             + "order by " + plan.orderBy() + "%n".formatted()
             + "limit ?%n".formatted();
@@ -135,27 +279,8 @@ public class ItemSearchAdapter implements ItemSearchQuery {
       // where clause.
       spec = spec.param(plan.attributeKey());
     }
-    spec = spec.param(tenantId);
-    if (filtered) {
-      spec = spec.param(text);
-    }
-    if (byLocation) {
-      spec = spec.param(locationIds.toArray(UUID[]::new));
-    }
-    if (byType) {
-      spec = spec.param(typeVersionIds.toArray(UUID[]::new));
-    }
-    if (byId) {
-      spec = spec.param(itemIds.toArray(UUID[]::new));
-    }
-    for (QueryFilter filter : filters) {
-      spec = spec.param(filter.field());
-      if (filter.unit() != null) {
-        spec = spec.param(filter.unit());
-      }
-      for (String value : filter.values()) {
-        spec = spec.param(value);
-      }
+    for (Object value : where.values()) {
+      spec = spec.param(value);
     }
     if (resuming) {
       for (String value : plan.split(after.get().sortValue())) {

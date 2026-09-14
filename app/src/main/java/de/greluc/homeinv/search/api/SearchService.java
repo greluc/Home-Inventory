@@ -41,6 +41,9 @@ public interface SearchService {
    * @param filters conditions on attributes, all of which must hold. Refused when a field is not one
    *     this tenant marked searchable, and refused when a range filter over a dimensioned field
    *     names no unit
+   * @param facets the dimensions to count beside the rows, or {@code null} for none. {@code type},
+   *     {@code category}, {@code tag}, {@code location} and {@code attr.<key>} for a field this
+   *     tenant marked facetable; anything else is refused rather than left out of the answer
    * @param sort the order to return them in, or {@code null} for the default. Refused when the
    *     field is not one this tenant marked sortable — the allowlist of
    *     {@code TypeRegistry.queryableFields}, never what a caller typed
@@ -53,6 +56,7 @@ public interface SearchService {
       String cursor,
       SortOrder sort,
       List<QueryFilter> filters,
+      List<String> facets,
       int limit) {}
 
 }

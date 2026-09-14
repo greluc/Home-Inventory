@@ -156,6 +156,31 @@ public interface TypeRegistry {
   List<UUID> itemTypeVersionsByKeys(Collection<String> keys);
 
   /**
+   * What type each of these versions belongs to, and what that type sits under.
+   *
+   * <p>The other direction of {@link #itemTypeVersionsByKeys}, and what turns a count per
+   * {@code item_type_version_id} into the {@code type} and {@code category} facets (REQ-SRCH-002).
+   * Both come from one query because they come from one row: a category here is the type's parent
+   * in the type tree, which is what {@code catalog.item_type.parent_id} holds (decided with the
+   * owner 2026-09-14 — there is no separate item category, and the only table called "category"
+   * describes a location).
+   *
+   * @param versionIds the version ids, possibly none
+   * @return the identity of each version's type, keyed by version id; a version this tenant cannot
+   *     see is simply absent
+   */
+  Map<UUID, TypeIdentity> typesOfVersions(Collection<UUID> versionIds);
+
+  /**
+   * What a type is called, and what it sits under.
+   *
+   * @param key the type's key, which is what a {@code type} filter names
+   * @param parentKey the key of the type above it, or {@code null} for a type at the root — which
+   *     therefore contributes no bucket to a {@code category} facet, because it is in none
+   */
+  record TypeIdentity(String key, String parentKey) {}
+
+  /**
    * One attribute key a query may name.
    *
    * @param key the attribute key, as {@code item_attr_index.field_key} holds it

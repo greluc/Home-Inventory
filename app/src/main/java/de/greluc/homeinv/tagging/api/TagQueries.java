@@ -6,6 +6,7 @@ package de.greluc.homeinv.tagging.api;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -43,4 +44,22 @@ public interface TagQueries {
    *     order; empty when no name matches anything
    */
   List<UUID> itemsTagged(Collection<String> names);
+
+  /**
+   * How many of these items carry each tag (REQ-SRCH-002).
+   *
+   * <p>The tag facet. The ids are the whole matching list rather than one page of it, because a
+   * facet counts the list and not the screen — and they are passed in rather than queried for,
+   * because which items match is {@code inventory}'s question and this block must not ask it
+   * (ADR-0002).
+   *
+   * <p>Keyed by the tag's name, because that is what a {@code tag} filter takes back and a facet's
+   * bucket is a token a client puts straight into one. A tag that has been merged away contributes
+   * nothing of its own: its assignments now belong to the tag it became, which is where the count
+   * belongs too.
+   *
+   * @param itemIds the items to count over, possibly none
+   * @return the count per tag name; empty when no item carries a tag
+   */
+  Map<String, Long> countByTag(Collection<UUID> itemIds);
 }

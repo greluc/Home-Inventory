@@ -105,6 +105,7 @@ GET /api/v1/items
   &filter=attr.purchasePrice:gte:100:EUR
   &filter=location:subtree:{uuid}
   &filter=tag:in:broken,repair
+  &facet=type,tag,location              counts beside the rows, comma-separated
   &sort=-updatedAt                      minus = descending; one key
   &fields=id,name,primaryPhoto          sparse fields
   &cursor=eyJ2IjoxLCJrIjoi…             cursor, never an offset
@@ -172,9 +173,56 @@ rejected instead of silently returning wrong results.
     "degraded": false,          // true when a derived store is unavailable
     "degradedReason": null,     // a stable token, e.g. "search-fallback"
     "took": 41
-  }
+  },
+  "facets": [                   // only when `facet=` asked for them
+    { "dimension": "tag",
+      "buckets": [ { "value": "defekt", "count": 4 }, { "value": "neu", "count": 12 } ] }
+  ]
 }
 ```
+
+**Facets are the fourth member, and usually absent.** Counts are neither rows,
+nor where the next rows are, nor how the answer was produced — `meta` says how a
+response came about and would stop meaning that if it also carried content. So
+`facet=type,tag,location` adds a `facets` array, and every listing that was not
+asked for counts omits the member entirely. `facets` is the **one** member this
+API leaves out when it is null; everywhere else a null member is written out as
+`null`. The difference carries meaning only here: absent is "nobody asked",
+`[]` is "counted, and nothing matched", and a client that cannot tell those apart
+shows an empty sidebar where there should be none — `ItemFacetIT` asserts both
+states, so the distinction is checked and not merely asserted here. *This section claimed until
+2026-09-14 that the serialiser omits every null member. It does not, and never
+did; the sentence has been corrected to what the API actually sends.*
+
+A bucket's `value` is the token a `filter` takes back — a type key, a tag name, a
+location id, an attribute's stored value — so a client turns a count into a
+narrower list without a round trip to learn what anything is called. Buckets come
+largest first, ties broken by value so the order is stable between two identical
+requests, and at most fifty per dimension: a tenant with four hundred tags would
+otherwise put four hundred numbers into a response for a sidebar showing a dozen.
+
+**A facet is counted without its own filter.** With `filter=tag:defekt` active
+the tag facet still counts every tag, because the sidebar exists to show where
+one could click next and a count of the thing already clicked is not that. Every
+*other* dimension's filters do narrow it, so the numbers still describe the list
+on the screen. That makes "facet counts agree with the results" true of a
+dimension nobody filtered by and deliberately untrue of one somebody did, which
+is what `REQ-SRCH-002`'s acceptance now says.
+
+**`location` is the exception**: a tree is drilled into by descending, not by
+looking at siblings. So the location facet keeps its own filter and uses it to
+set the level — without one it counts per root of the tree, and under
+`filter=location:subtree:X` it counts per direct child of X, each carrying its
+whole subtree. Items lying directly in X are in none of X's children and are in
+no bucket, because the counts must not add up to more than the list.
+
+**`category` is the type above the type** (`catalog.item_type.parent_id`). There
+is no separate item category — the only table called *category* describes a
+location — and a type at the root of the tree is in no category and contributes
+no bucket. **`condition` is a tag group**, not a dimension of its own: the tags
+carry the group, so the tag facet already counts it and a client renders that
+group as its own block. Both were settled on 2026-09-14; `REQ-SRCH-002` listed
+them without either being defined anywhere.
 
 **The envelope is every collection's, not the search's.** All seventeen paged
 responses carry it, through one `platform.Page<T>` rather than a record per
@@ -187,10 +235,12 @@ costs more than it is worth — and it is **absent rather than wrong** where nob
 counted, which today is everywhere. `took` is filled in at the edge, because no
 use case can see routing, deserialisation and authorisation time.
 
-**An absent member means `null`.** The example above spells `"degradedReason":
-null` out for clarity; the serialiser omits null members, so a client reads an
-absent `degradedReason`, `estimatedTotal` or `took` as null rather than expecting
-the key.
+**A null member is written out, and `facets` is the one exception.** The example
+above spells `"degradedReason": null` out because that is what the API sends —
+`degradedReason`, `estimatedTotal` and `took` are present and null rather than
+absent. Only `facets` is omitted when it has no value, for the reason given
+above. *This paragraph said the opposite until 2026-09-14, of an omission that
+was never configured; the code is right and the sentence was wrong.*
 
 **`meta.degraded` is the contract for degradation**, not a header
 ([ADR-0039](../adr/0039-degraded-response-signalling.md)). `degradedReason` is a

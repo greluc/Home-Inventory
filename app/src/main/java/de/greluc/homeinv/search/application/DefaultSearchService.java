@@ -40,6 +40,10 @@ public class DefaultSearchService implements SearchService {
 
   private static final int DEFAULT_LIMIT = 50;
 
+  /** The facet dimensions that are not an attribute. An attribute is checked against the tenant. */
+  private static final java.util.Set<String> COUNTABLE =
+      java.util.Set.of("type", "category", "tag", "location");
+
   /**
    * Where the search is actually run (REQ-SRCH-005).
    *
@@ -110,36 +114,182 @@ public class DefaultSearchService implements SearchService {
             .toList());
 
     Scope scope = resolve(all, locationIds);
+
+    Page<de.greluc.homeinv.inventory.api.ItemView> page;
     if (scope.empty()) {
       // A type nobody uses, a tag nothing carries, a subtree that is empty: the
       // answer is no rows, and asking an engine for the rows in an empty set of
-      // ids would be a query whose answer is already known.
-      return Page.of(List.of(), null);
+      // ids would be a query whose answer is already known. The facets below are
+      // still counted, because each drops its own filter and the sidebar is how
+      // somebody gets out of a combination that matched nothing.
+      page = Page.of(List.of(), null);
+    } else {
+      SearchIndex.Hits hits =
+          index.find(
+              new SearchIndex.Query(
+                  text,
+                  language,
+                  scope.locationIds(),
+                  scope.typeVersionIds(),
+                  scope.itemIds(),
+                  after,
+                  sort,
+                  filters,
+                  limit));
+
+      // The ids become rows here, through the ordinary read: row-level security
+      // and the field visibility rules apply on the way out, which is what makes
+      // a derived index safe to run at all (REQ-SRCH-007). An id that named a row
+      // this tenant cannot see is simply absent, so a stale index costs a shorter
+      // page and never somebody else's item.
+      List<de.greluc.homeinv.inventory.api.ItemView> rows = items.byIds(hits.itemIds());
+
+      String nextCursor =
+          hits.last().map(position -> cursors.encode(position, fingerprint)).orElse(null);
+      page = Page.of(rows, nextCursor);
     }
 
-    SearchIndex.Hits hits =
-        index.find(
-            new SearchIndex.Query(
-                text,
-                language,
-                scope.locationIds(),
-                scope.typeVersionIds(),
-                scope.itemIds(),
-                after,
-                sort,
-                filters,
-                limit));
+    List<String> dimensions = counted(request.facets());
+    return dimensions.isEmpty()
+        ? page
+        : page.withFacets(facetsOf(dimensions, all, locationIds, text, language, limit));
+  }
 
-    // The ids become rows here, through the ordinary read: row-level security and
-    // the field visibility rules apply on the way out, which is what makes a
-    // derived index safe to run at all (REQ-SRCH-007). An id that named a row
-    // this tenant cannot see is simply absent, so a stale index costs a shorter
-    // page and never somebody else's item.
-    List<de.greluc.homeinv.inventory.api.ItemView> rows = items.byIds(hits.itemIds());
+  /**
+   * Checks the dimensions a caller asked to have counted (REQ-SRCH-002).
+   *
+   * <p>Four are fixed and the fifth is an attribute, which has to be one some published type marks
+   * {@code facetable} — the tenant's own allowlist, never what a caller typed. A dimension that
+   * is not countable is refused rather than left out of the answer, for the same reason an unknown
+   * filter is: a sidebar silently missing a section looks like a sidebar with nothing in it.
+   *
+   * @param asked what the caller named, possibly none
+   * @return the dimensions to count, in the order they were asked for and without repeats
+   * @throws IllegalArgumentException when a dimension cannot be counted
+   */
+  private List<String> counted(List<String> asked) {
+    if (asked == null || asked.isEmpty()) {
+      return List.of();
+    }
+    var queryable = types.queryableFields();
+    List<String> dimensions = new ArrayList<>();
+    for (String dimension : asked) {
+      if (dimension == null || dimension.isBlank()) {
+        throw new IllegalArgumentException("An empty facet counts nothing");
+      }
+      String wanted = dimension.trim();
+      if (dimensions.contains(wanted)) {
+        continue;
+      }
+      if (wanted.startsWith(SortOrder.ATTRIBUTE_PREFIX)) {
+        String key = wanted.substring(SortOrder.ATTRIBUTE_PREFIX.length());
+        boolean facetable =
+            queryable.stream().anyMatch(field -> field.key().equals(key) && field.facetable());
+        if (!facetable) {
+          throw new IllegalArgumentException(
+              "Cannot count by " + wanted + "; no published type marks it facetable");
+        }
+      } else if (!COUNTABLE.contains(wanted)) {
+        throw new IllegalArgumentException(
+            "Not a facet dimension: "
+                + wanted
+                + "; expected type, category, tag, location or attr.<key>");
+      }
+      dimensions.add(wanted);
+    }
+    return dimensions;
+  }
 
-    String nextCursor =
-        hits.last().map(position -> cursors.encode(position, fingerprint)).orElse(null);
-    return Page.of(rows, nextCursor);
+  /**
+   * Counts each dimension, every one over a query of its own (REQ-SRCH-002).
+   *
+   * <p><b>Without its own filter.</b> With {@code filter=tag:broken} active the tag facet still
+   * counts every tag, because a sidebar exists to show where one could click next and a count of
+   * the thing already clicked is not that (decided with the owner 2026-09-14). Every other
+   * dimension's filters do narrow it, so the numbers still describe the list on the screen.
+   *
+   * <p><b>Except a location</b>, which keeps its filter and uses it to set the level instead. A
+   * tree is drilled into by descending: inside the shed one wants the shed's shelves, not the
+   * neighbouring rooms.
+   *
+   * @param dimensions what to count, already checked
+   * @param all every filter the caller gave
+   * @param scopedLocations the locations the caller is confined to, or empty
+   * @param text the query text
+   * @param language which vector to search
+   * @param limit the page size, which the engine needs for a well-formed query and ignores here
+   * @return one facet per dimension, in the order asked for
+   */
+  private List<de.greluc.homeinv.platform.Facet> facetsOf(
+      List<String> dimensions,
+      List<QueryFilter> all,
+      List<UUID> scopedLocations,
+      String text,
+      String language,
+      int limit) {
+    List<de.greluc.homeinv.platform.Facet> counted = new ArrayList<>();
+    for (String dimension : dimensions) {
+      boolean tree = "location".equals(dimension);
+      List<QueryFilter> others =
+          all.stream().filter(one -> tree || !narrows(one, dimension)).toList();
+      Scope scope = resolve(others, scopedLocations);
+      if (scope.empty()) {
+        counted.add(new de.greluc.homeinv.platform.Facet(dimension, List.of()));
+        continue;
+      }
+      counted.add(
+          index.facet(
+              new SearchIndex.Query(
+                  text,
+                  language,
+                  scope.locationIds(),
+                  scope.typeVersionIds(),
+                  scope.itemIds(),
+                  Optional.empty(),
+                  null,
+                  allowed(
+                      others.stream()
+                          .filter(one -> one.dimension() == QueryFilter.Dimension.ATTRIBUTE)
+                          .toList()),
+                  limit),
+              dimension,
+              tree ? treeRootOf(all) : null));
+    }
+    return counted;
+  }
+
+  /**
+   * Whether one filter narrows the dimension being counted.
+   *
+   * @param filter the filter
+   * @param dimension the dimension being counted
+   * @return true when dropping this filter is what the drill-down rule asks for
+   */
+  private static boolean narrows(QueryFilter filter, String dimension) {
+    return dimension.startsWith(SortOrder.ATTRIBUTE_PREFIX)
+        ? filter.dimension() == QueryFilter.Dimension.ATTRIBUTE
+            && dimension.equals(SortOrder.ATTRIBUTE_PREFIX + filter.field())
+        : filter.dimension().token().equals(dimension);
+  }
+
+  /**
+   * The place a location facet counts the children of.
+   *
+   * <p>The deepest subtree somebody asked for, because that is where they are looking. Without a
+   * subtree filter there is no root and the facet counts the roots of the tree.
+   *
+   * @param all every filter the caller gave
+   * @return the subtree root, or {@code null}
+   */
+  private static UUID treeRootOf(List<QueryFilter> all) {
+    UUID root = null;
+    for (QueryFilter filter : all) {
+      if (filter.dimension() == QueryFilter.Dimension.LOCATION
+          && filter.operator() == QueryFilter.Operator.SUBTREE) {
+        root = UUID.fromString(filter.values().get(filter.values().size() - 1).trim());
+      }
+    }
+    return root;
   }
 
   /**

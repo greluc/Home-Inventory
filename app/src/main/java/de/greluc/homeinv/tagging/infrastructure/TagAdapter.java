@@ -692,4 +692,34 @@ public class TagAdapter implements TagService, TagQueries {
         .query((rs, rowNum) -> rs.getObject("item_id", UUID.class))
         .list();
   }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Map<String, Long> countByTag(Collection<UUID> itemIds) {
+    if (itemIds == null || itemIds.isEmpty()) {
+      return Map.of();
+    }
+    UUID tenantId = TenantContext.require();
+    // `merged_into is null` here and deliberately not in `itemsTagged`: the two
+    // ask opposite questions. There, a name somebody saved has to keep working,
+    // so a tombstone is followed; here, a tombstone has no assignments left and
+    // would only contribute a bucket of zero that nobody can click.
+    Map<String, Long> counts = new LinkedHashMap<>();
+    jdbc.sql(
+            """
+            select t.name as name, count(*) as total
+            from tagging.tag_assignment a
+            join tagging.tag t
+              on t.tenant_id = a.tenant_id and t.id = a.tag_id
+            where a.tenant_id = ?
+              and a.item_id = any(?)
+              and t.merged_into is null
+            group by t.name
+            """)
+        .params(tenantId, itemIds.toArray(UUID[]::new))
+        .query((rs, rowNum) -> Map.entry(rs.getString("name"), rs.getLong("total")))
+        .list()
+        .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
+    return counts;
+  }
 }

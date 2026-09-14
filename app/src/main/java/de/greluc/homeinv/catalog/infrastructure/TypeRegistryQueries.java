@@ -240,6 +240,36 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public Map<UUID, TypeRegistry.TypeIdentity> typesOfVersions(Collection<UUID> versionIds) {
+    if (versionIds == null || versionIds.isEmpty()) {
+      return Map.of();
+    }
+    UUID tenantId = TenantContext.require();
+    Map<UUID, TypeRegistry.TypeIdentity> identities = new LinkedHashMap<>();
+    jdbc.sql(
+            """
+            select v.id as version_id, t.key as key, p.key as parent_key
+            from catalog.item_type_version v
+            join catalog.item_type t
+              on t.tenant_id = v.tenant_id and t.id = v.item_type_id
+            left join catalog.item_type p
+              on p.tenant_id = t.tenant_id and p.id = t.parent_id
+            where v.tenant_id = ? and v.id = any(?)
+            """)
+        .params(tenantId, versionIds.toArray(UUID[]::new))
+        .query(
+            (rs, rowNum) ->
+                Map.entry(
+                    rs.getObject("version_id", UUID.class),
+                    new TypeRegistry.TypeIdentity(
+                        rs.getString("key"), rs.getString("parent_key"))))
+        .list()
+        .forEach(entry -> identities.put(entry.getKey(), entry.getValue()));
+    return identities;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<TypeRegistry.QueryableField> queryableFields() {
     UUID tenantId = TenantContext.require();
     // Grouped by key across every PUBLISHED version, because a query spans types.

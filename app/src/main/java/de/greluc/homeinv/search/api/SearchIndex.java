@@ -100,6 +100,31 @@ public interface SearchIndex {
 
 
   /**
+   * Counts one dimension over the same query (REQ-SRCH-002).
+   *
+   * <p>One dimension per call rather than a list of them, because each is counted over a
+   * <i>different</i> query: a facet is taken without its own filter, so the caller hands over the
+   * query that dimension should be counted against and this port answers it. That keeps the
+   * drill-down rule where it is decided and not repeated in every engine.
+   *
+   * <p>On OpenSearch this becomes a terms aggregation; on PostgreSQL it is a {@code group by} in
+   * {@code inventory} plus a lookup in whichever block owns the names. Either way the buckets carry
+   * the token a {@code filter} takes back, so a client can turn a count into a narrower list
+   * without a second round trip to learn what anything is called.
+   *
+   * @param query what to count over, already narrowed by every dimension but this one
+   * @param dimension {@code type}, {@code category}, {@code tag}, {@code location} or
+   *     {@code attr.<key>}
+   * @param locationRoot for {@code location} only: the place whose children are being counted, or
+   *     {@code null} for the roots of the tree. A tree is drilled into by descending, so this is
+   *     the one dimension whose own filter sets the level rather than being dropped
+   * @return the counts, largest first and capped at {@link de.greluc.homeinv.platform.Facet#MAX_BUCKETS}
+   * @throws IllegalArgumentException when the dimension is not one this engine counts
+   */
+  de.greluc.homeinv.platform.Facet facet(
+      Query query, String dimension, UUID locationRoot);
+
+  /**
    * What was found.
    *
    * @param itemIds the matching items, in the order they are to be shown

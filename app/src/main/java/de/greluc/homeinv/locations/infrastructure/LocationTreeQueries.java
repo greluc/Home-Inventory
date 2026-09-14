@@ -5,6 +5,9 @@
 package de.greluc.homeinv.locations.infrastructure;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -85,6 +88,48 @@ public class LocationTreeQueries {
         .params(tenantId, rootId)
         .query(UUID.class)
         .list();
+  }
+
+  /**
+   * Which ancestor at a given level each of these locations falls under.
+   *
+   * <p>The path is built from ids, one label per level (`Location.labelOf`), so the ancestor at
+   * level <i>n</i> is the first <i>n</i> labels of the path — one index lookup rather than a walk
+   * up the tree per row.
+   *
+   * <p>A location whose path is shorter than that level falls under no such ancestor and is
+   * absent from the result: it <i>is</i> the level, or sits above it.
+   *
+   * @param tenantId the tenant
+   * @param ids the locations to place
+   * @param labels how many labels the ancestor's path has, which is its depth plus one
+   * @return the ancestor's id for each of the given ids that has one
+   */
+  public Map<UUID, UUID> ancestorsAtLevel(UUID tenantId, Collection<UUID> ids, int labels) {
+    if (ids == null || ids.isEmpty() || labels < 1) {
+      return Map.of();
+    }
+    Map<UUID, UUID> ancestors = new LinkedHashMap<>();
+    jdbc.sql(
+            """
+            select leaf.id as leaf_id, ancestor.id as ancestor_id
+            from locations.location leaf
+            join locations.location ancestor
+              on ancestor.tenant_id = leaf.tenant_id
+             and ancestor.path = subpath(leaf.path, 0, ?)
+            where leaf.tenant_id = ?
+              and leaf.id = any(?)
+              and nlevel(leaf.path) >= ?
+              and ancestor.deleted_at is null
+            """)
+        .params(labels, tenantId, ids.toArray(UUID[]::new), labels)
+        .query(
+            (rs, rowNum) ->
+                Map.entry(
+                    rs.getObject("leaf_id", UUID.class), rs.getObject("ancestor_id", UUID.class)))
+        .list()
+        .forEach(entry -> ancestors.put(entry.getKey(), entry.getValue()));
+    return ancestors;
   }
 
   /**

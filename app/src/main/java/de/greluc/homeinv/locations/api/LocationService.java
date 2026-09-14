@@ -7,6 +7,7 @@ package de.greluc.homeinv.locations.api;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.idempotency.api.RequestKey;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -105,6 +106,33 @@ public interface LocationService {
    * @return the ids, including the location itself
    */
   List<UUID> subtreeIds(UUID id);
+
+  /**
+   * Rolls counts per location up to the children of one place (REQ-SRCH-002).
+   *
+   * <p>The location facet. An item's {@code location_id} names the exact shelf it sits on, and a
+   * sidebar that listed every shelf in the house would be a list nobody can use — what somebody
+   * wants is "Schuppen 18, Küche 7", and then the same again one level down once they have clicked.
+   * So the counts come in per location and go out per <b>direct child of {@code root}</b>, each
+   * carrying everything beneath it.
+   *
+   * <p>This is the one facet that keeps its own filter rather than dropping it (decided with the
+   * owner 2026-09-14): a tree is drilled into by descending, not by looking at siblings, so
+   * {@code filter=location:subtree:X} sets the level the counts are taken at instead of being
+   * removed from them.
+   *
+   * <p>Counts for the root itself, and for anything above it, are dropped: an item lying directly
+   * in the shed is in none of the shed's children, and inventing a bucket for it would make the
+   * numbers add up to more than the list.
+   *
+   * @param countsByLocation how many items sit in each location, from whoever counted them
+   * @param root the place whose children are wanted, or {@code null} for the roots of the tree
+   * @return the count per child location, summed over each child's whole subtree; empty when
+   *     nothing falls under a child
+   * @throws de.greluc.homeinv.platform.NotFoundException when {@code root} is not a location this
+   *     tenant can see
+   */
+  Map<UUID, Long> rollUp(Map<UUID, Long> countsByLocation, UUID root);
 
   /**
    * What is needed to create a location.

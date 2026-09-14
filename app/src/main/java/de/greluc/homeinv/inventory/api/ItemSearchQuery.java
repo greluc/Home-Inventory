@@ -4,23 +4,35 @@
  */
 package de.greluc.homeinv.inventory.api;
 
-import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.CursorCodec;
+import de.greluc.homeinv.platform.QueryFilter;
+import de.greluc.homeinv.platform.SortOrder;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The full-text query {@code search} may ask of {@code inventory}.
+ * The queries {@code search} may ask of {@code inventory}.
  *
  * <p>A published port rather than a query in {@code search} against {@code inventory.item}: no block
  * touches another block's schema (REQ-NFR-021). The data belongs to {@code inventory} and so does
  * the statement that reads it; {@code search} owns the question, not the table.
+ *
+ * <p>Three shapes of question, all over the same {@link Criteria}: which items match and in what
+ * order ({@link #search}), how many match per value of a column this block owns
+ * ({@link #countByColumn}, {@link #countByAttribute}), and which items match at all
+ * ({@link #matchingIds}) — the last for the facets another block has to count, because
+ * {@code tagging} can only count tags over items it has been handed.
  */
 public interface ItemSearchQuery {
 
   /**
-   * Returns one page of items matching a full-text query.
+   * What narrows a query, other than the ordering and the page.
+   *
+   * <p>One record rather than six parameters repeated on four methods. Every member is already
+   * resolved: the ids come from the blocks that own them and the field keys have been checked
+   * against the tenant's allowlist, so nothing here is what a caller typed.
    *
    * @param text what to search for; blank means "everything", which is how an unfiltered list is
    *     paged through the same path rather than through a second one
@@ -36,23 +48,83 @@ public interface ItemSearchQuery {
    * @param filters conditions on attributes, all of which must hold. Each becomes an {@code exists}
    *     over {@code item_attr_index} rather than a join, so two filters cannot multiply the rows
    *     between them. Field keys have already been checked against the tenant's allowlist
-   * @param sort the order to return them in, or {@code null} for the default. The field has already
-   *     been checked against the tenant's allowlist by the caller; this block resolves it to a
-   *     column and never to anything a caller typed
-   * @param after where to resume, or empty for the first page
-   * @param limit how many rows at most
-   * @return the page, ordered by creation
    */
-  Rows search(
+  record Criteria(
       String text,
       String language,
       List<UUID> locationIds,
       List<UUID> typeVersionIds,
       List<UUID> itemIds,
-      Optional<CursorCodec.Position> after,
-      de.greluc.homeinv.platform.SortOrder sort,
-      List<de.greluc.homeinv.platform.QueryFilter> filters,
-      int limit);
+      List<QueryFilter> filters) {}
+
+  /**
+   * Which column a count is grouped by.
+   *
+   * <p>Two, and both are columns of {@code inventory.item}. What they <i>mean</i> — a type key, a
+   * place in a tree — is another block's to say, which is why this one answers with ids and counts
+   * and nothing else.
+   */
+  enum CountColumn {
+    /** {@code item_type_version_id}, which {@code catalog} turns into a type key. */
+    TYPE_VERSION,
+    /** {@code location_id}, which {@code locations} rolls up its tree. */
+    LOCATION
+  }
+
+  /**
+   * Returns one page of items matching a query.
+   *
+   * @param criteria what narrows it
+   * @param after where to resume, or empty for the first page
+   * @param sort the order to return them in, or {@code null} for the default. The field has already
+   *     been checked against the tenant's allowlist by the caller; this block resolves it to a
+   *     column and never to anything a caller typed
+   * @param limit how many rows at most
+   * @return the page, in the order asked for
+   */
+  Rows search(
+      Criteria criteria, Optional<CursorCodec.Position> after, SortOrder sort, int limit);
+
+  /**
+   * How many matching items carry each value of one column (REQ-SRCH-002).
+   *
+   * <p>Every matching item, not one page of them: a facet counts the list and not the screen.
+   * Items whose column is null — an item in no location — contribute no bucket, because "nowhere"
+   * is not a place somebody can click on.
+   *
+   * @param criteria what narrows it. The caller has already removed this dimension's own filters,
+   *     which is what makes the counts a control rather than an echo
+   * @param column what to group by
+   * @return the count per value, in no particular order; empty when nothing matches
+   */
+  Map<UUID, Long> countByColumn(Criteria criteria, CountColumn column);
+
+  /**
+   * How many matching items carry each value of one attribute (REQ-SRCH-002).
+   *
+   * <p>Read from {@code item_attr_index}, which is written in the same transaction as the item, so
+   * a count is exact rather than eventually right (REQ-CORE-013). The value is rendered as text
+   * whatever column it lives in — a facet's bucket is a token a filter takes back, and the filter
+   * grammar is text.
+   *
+   * @param criteria what narrows it, this attribute's own filters already removed
+   * @param fieldKey the attribute, already checked against the tenant's allowlist
+   * @return the count per value, in no particular order; empty when nothing matches
+   */
+  Map<String, Long> countByAttribute(Criteria criteria, String fieldKey);
+
+  /**
+   * The ids of every matching item.
+   *
+   * <p>For the one facet this block cannot count: a tag lives in {@code tagging}, which can group
+   * its assignments only over items it has been handed (ADR-0002). Unpaged and exact, decided with
+   * the owner on 2026-09-14 — a cap would make a count quietly wrong, and OpenSearch is the engine
+   * ADR-0008 appoints for large inventories.
+   *
+   * @param criteria what narrows it, the tag filters already removed
+   * @return every matching id, in no particular order
+   */
+  List<UUID> matchingIds(Criteria criteria);
 
   /**
    * What one search produced.

@@ -153,6 +153,14 @@ commit".
 
 ### Added
 
+- **A list can say how it would narrow.** `GET /api/v1/items?facet=type,tag,location`
+  answers with counts beside the rows — how many items each type, tag, place and
+  countable field would leave — which is the sidebar next to a list of results.
+  Each count is taken without its own filter, so after clicking "defekt" the tag
+  list still shows the other tags rather than only the one already chosen; places
+  descend into the tree one level at a time. *REST API: new `facet` parameter and
+  a `facets` member on the response.*
+
 - **Lists can be narrowed by type, tag or place.** Beside the attribute filters,
   `GET /api/v1/items` now takes `filter=type:power-tool`, `filter=tag:broken` and
   `filter=location:subtree:<id>`, which takes a place and everything under it.
@@ -439,7 +447,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 31 types in the shared
+- **The shared kernel is measured.** `platform` holds 32 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

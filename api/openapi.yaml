@@ -121,6 +121,19 @@ components:
           format: int64
           type: integer
       type: object
+    Bucket:
+      description: One value of the dimension, and how many rows carry it.
+      properties:
+        count:
+          description: how many rows
+          format: int64
+          type: integer
+        value:
+          description: |-
+            the token a `filter` takes for this bucket — a type key, a tag name, a
+            location id, an attribute value
+          type: string
+      type: object
     BulkEntryRequest:
       description: One item in a bulk call.
       properties:
@@ -612,6 +625,41 @@ components:
           maximum: 200
           minimum: 0
           type: integer
+      type: object
+    Facet:
+      description: |-
+        How many rows a list would still hold for each value of one dimension (REQ-SRCH-002).
+
+        The sidebar beside a list: "Werkzeug 41, Buch 12", "defekt 4", "Schuppen 18". A client renders
+        the buckets and puts a bucket's {@link Bucket#value Bucket#value()} straight back into a `filter`
+        parameter — which is why a bucket carries the token the filter grammar takes and not a display
+        name. A type is its key, a tag its name, a location its id, an attribute its stored value; the
+        names come from the endpoints that own them, because a count is not the place to learn what
+        something is called in a language.
+
+        ## A facet is counted without its own filter
+
+        Decided with the owner on 2026-09-14. With `filter=tag:broken` active, the tag facet
+        still counts every tag — "neu 12, gebraucht 30, defekt 4" — because the whole point of the
+        sidebar is to show where one could click next. Counted *with* its own filter it would show
+        one tag and the total, which is a number nobody needs and a control nobody can use. Every
+        *other* dimension's filters do narrow it, so the counts still describe the list somebody is
+        looking at.
+
+        That makes "facet counts agree with the results" true of a dimension nobody filtered by and
+        deliberately untrue of one somebody did. REQ-SRCH-002's acceptance says so since that decision.
+      properties:
+        buckets:
+          description: the values and their counts, most first
+          items:
+            $ref: '#/components/schemas/Bucket'
+          type: array
+        dimension:
+          description: |-
+            what was counted, spelled as the `facet` and `filter` parameters
+            spell it: `type`, `category`, `tag`, `location` or
+            `attr.<key>`
+          type: string
       type: object
     FieldConstraints:
       description: |-
@@ -1301,11 +1349,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/AccountView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1335,11 +1406,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/BundleMemberView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1369,11 +1463,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/CategoryView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1403,11 +1520,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/Certificate'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1458,11 +1598,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/InvitationView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1492,11 +1655,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/ItemTypeView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1526,11 +1712,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/ItemView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1560,11 +1769,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/LocationCategoryView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1594,11 +1826,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/LocationView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1628,11 +1883,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/MediaView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1662,11 +1940,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/MemberView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1696,11 +1997,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/RelationView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1730,11 +2054,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/RevisionView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1764,11 +2111,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/RoleView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1798,11 +2168,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/TagGroupView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1832,11 +2225,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/TagView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -1866,11 +2282,34 @@ components:
         search path knows whether it answered from the fallback. Both are therefore optional and are set
         by whoever does know — each through a method returning a new page, because this one is a record
         and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
       properties:
         data:
           description: the rows
           items:
             $ref: '#/components/schemas/ValueListView'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
           type: array
         meta:
           $ref: '#/components/schemas/Meta'
@@ -6199,10 +6638,10 @@ paths:
         gone rather than aliased: two paths for one question is the drift this chapter exists to
         prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
 
-        The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet`
-        and `fields` are not here yet. A parameter that is not implemented is absent rather than
-        accepted and ignored, because silently ignoring a filter is how somebody ships a report over
-        the wrong rows.
+        The grammar arrives in pieces. `q`, `filter`, `facet`, `sort`, `cursor` and `limit` work;
+        `fields` is not here yet. A parameter that is not implemented is absent rather than accepted
+        and ignored, because silently ignoring a filter is how somebody ships a report over the wrong
+        rows.
 
         `SEARCH_QUERY` and not `ITEM_READ`: a listing is an enumeration surface whether
         or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -6224,6 +6663,17 @@ paths:
         schema:
           default: de
           maxLength: 5
+          minLength: 0
+          type: string
+      - description: |-
+          which dimensions to count beside the rows, comma-separated:
+          `facet=tag,location`. Each is counted without its own filter, so a sidebar still
+          shows where one could click next (REQ-SRCH-002)
+        in: query
+        name: facet
+        required: false
+        schema:
+          maxLength: 500
           minLength: 0
           type: string
       - description: |-

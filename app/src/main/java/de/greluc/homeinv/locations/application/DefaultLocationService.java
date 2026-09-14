@@ -24,6 +24,7 @@ import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.platform.Versions;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -403,6 +404,38 @@ public class DefaultLocationService implements LocationService {
     UUID tenantId = TenantContext.require();
     locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
     return tree.subtreeIds(tenantId, id);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Map<UUID, Long> rollUp(Map<UUID, Long> countsByLocation, UUID root) {
+    if (countsByLocation == null || countsByLocation.isEmpty()) {
+      return Map.of();
+    }
+    UUID tenantId = TenantContext.require();
+
+    // How many labels an answer's path has. A root of the tree has one; a child
+    // of `root` has one more than `root` does. Reading the root also checks that
+    // this tenant can see it, which is why it is read rather than assumed.
+    int labels = 1;
+    if (root != null) {
+      Location place =
+          locations.findLive(tenantId, root).orElseThrow(() -> new NotFoundException("location", root));
+      labels = place.getDepth() + 2;
+    }
+
+    Map<UUID, UUID> ancestors =
+        tree.ancestorsAtLevel(tenantId, countsByLocation.keySet(), labels);
+
+    Map<UUID, Long> rolled = new LinkedHashMap<>();
+    countsByLocation.forEach(
+        (place, count) -> {
+          UUID bucket = ancestors.get(place);
+          if (bucket != null) {
+            rolled.merge(bucket, count, Long::sum);
+          }
+        });
+    return rolled;
   }
 
   @Override

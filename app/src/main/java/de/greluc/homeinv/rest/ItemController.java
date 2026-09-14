@@ -372,10 +372,10 @@ public class ItemController {
    * gone rather than aliased: two paths for one question is the drift this chapter exists to
    * prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
    *
-   * <p>The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet`
-   * and `fields` are not here yet. A parameter that is not implemented is absent rather than
-   * accepted and ignored, because silently ignoring a filter is how somebody ships a report over
-   * the wrong rows.
+   * <p>The grammar arrives in pieces. `q`, `filter`, `facet`, `sort`, `cursor` and `limit` work;
+   * `fields` is not here yet. A parameter that is not implemented is absent rather than accepted
+   * and ignored, because silently ignoring a filter is how somebody ships a report over the wrong
+   * rows.
    *
    * <p>{@code SEARCH_QUERY} and not {@code ITEM_READ}: a listing is an enumeration surface whether
    * or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -386,6 +386,9 @@ public class ItemController {
    * @param sort what to order by, a leading minus for descending: {@code -updatedAt}, {@code name},
    *     {@code attr.manufacturer}. One key only — several are refused rather than reduced to the
    *     first (REQ-SRCH-004). Omitted returns the default order, oldest first
+   * @param facet which dimensions to count beside the rows, comma-separated:
+   *     {@code facet=tag,location}. Each is counted without its own filter, so a sidebar still
+   *     shows where one could click next (REQ-SRCH-002)
    * @param cursor an opaque cursor from a previous response, or omitted for the first page
    * @param limit how many at most
    * @param http the request, read only for the repeatable {@code filter} parameter
@@ -413,6 +416,7 @@ public class ItemController {
   public Page<ItemView> listItems(
       @RequestParam(required = false) @Size(max = 500) String q,
       @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,
+      @RequestParam(required = false) @Size(max = 500) String facet,
       @RequestParam(required = false) @Size(max = 100) String sort,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit,
@@ -425,7 +429,29 @@ public class ItemController {
             cursor,
             sortOf(sort),
             filtersOf(http.getParameterValues("filter")),
+            dimensionsOf(facet),
             limit));
+  }
+
+  /**
+   * Reads the {@code facet} parameter as the wire spells it.
+   *
+   * <p>One parameter with commas rather than a repeatable one, which is how 05 §5.6 has written it
+   * since before any of this existed: {@code facet=tag,location}. A dimension is a token from a
+   * closed set or an {@code attr.<key>}, so a comma can separate them without the ambiguity that
+   * made {@code filter} repeatable instead.
+   *
+   * <p>Translation only. Whether a dimension may be counted at all is the application layer's to
+   * answer against the tenant's allowlist (ADR-0010).
+   *
+   * @param facet the parameter, or {@code null} when it was omitted
+   * @return the dimensions, in the order they were named; empty when none were
+   */
+  private static List<String> dimensionsOf(String facet) {
+    if (facet == null || facet.isBlank()) {
+      return List.of();
+    }
+    return Arrays.stream(facet.split(",")).map(String::trim).filter(one -> !one.isEmpty()).toList();
   }
 
   /**
