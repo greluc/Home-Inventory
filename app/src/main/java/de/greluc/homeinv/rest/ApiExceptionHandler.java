@@ -439,7 +439,7 @@ public class ApiExceptionHandler {
    *
    * <p>One answer for every reason: unknown address, wrong password, locked account. Not logged
    * here — the service already logged the actual reason, which an operator needs and a caller
-   * must not have (REQ-SEC-016).
+   * must not have (REQ-SEC-110).
    *
    * @param exception the failure
    * @param request the request

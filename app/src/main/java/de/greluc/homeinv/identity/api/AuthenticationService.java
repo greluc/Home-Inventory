@@ -17,7 +17,7 @@ public interface AuthenticationService {
    * Verifies credentials and returns the principal for the session.
    *
    * <p>Every failure a caller may learn about is the same failure: unknown address, wrong password,
-   * locked account (REQ-SEC-016). The real reason is logged, where an operator can use it and a
+   * locked account (REQ-SEC-110). The real reason is logged, where an operator can use it and a
    * caller cannot.
    *
    * @param email the address entered

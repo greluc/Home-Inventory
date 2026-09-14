@@ -35,7 +35,7 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
    * @param id the item
    * @return the item, or empty when it does not exist, is deleted, or belongs to another tenant —
    *     the three cases are deliberately indistinguishable to the caller, so a foreign id cannot be
-   *     told apart from an unknown one (REQ-SEC-016)
+   *     told apart from an unknown one (REQ-SEC-025)
    */
   @Query("select i from Item i where i.tenantId = :tenantId and i.id = :id and i.deletedAt is null")
   Optional<Item> findLive(@Param("tenantId") UUID tenantId, @Param("id") UUID id);

@@ -314,7 +314,7 @@ public class DefaultItemService implements ItemService {
    * @return the item as the published view
    * @throws NotFoundException when the tenant has no such live item. An item of another tenant
    *     produces the same failure as one that never existed — telling them apart would let a caller
-   *     confirm the existence of a foreign id (REQ-SEC-016).
+   *     confirm the existence of a foreign id (REQ-SEC-025).
    */
   @Transactional(readOnly = true)
   @Override
@@ -667,7 +667,7 @@ public class DefaultItemService implements ItemService {
     // and deliberately keeps the record (REQ-CORE-009), so a check for the row
     // alone would make the last thing a person can learn about a removed item
     // unreachable. Both halves are tenant-scoped, so neither says anything about
-    // a foreign id (REQ-SEC-016) — and an id this tenant never had is a 404
+    // a foreign id (REQ-SEC-025) — and an id this tenant never had is a 404
     // rather than an empty page.
     boolean known =
         items.findAny(tenantId, id).isPresent()

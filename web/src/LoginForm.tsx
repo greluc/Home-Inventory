@@ -14,7 +14,7 @@ import { ThemeToggle } from "./ThemeToggle";
  *
  * The error message is the same for every failure, because the server answers the
  * same way for every failure: unknown address, wrong password, locked account
- * (REQ-SEC-016). Showing a more specific message here would defeat the point of
+ * (REQ-SEC-110). Showing a more specific message here would defeat the point of
  * the server being careful about it.
  *
  * A 429 is the one that is told apart, and it has to be: the caller needs to know

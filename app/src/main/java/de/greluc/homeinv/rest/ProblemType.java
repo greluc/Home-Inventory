@@ -139,7 +139,7 @@ public enum ProblemType {
    * The resource does not exist, <em>or</em> exists and is not visible to this caller.
    *
    * <p>The two are deliberately one token. Separating them would let a caller confirm that a foreign
-   * id exists, which is the enumeration answered identically either way (REQ-SEC-016).
+   * id exists, which is the enumeration answered identically either way (REQ-SEC-025).
    */
   NOT_FOUND("not-found", HttpStatus.NOT_FOUND, "Not found"),
 

@@ -47,7 +47,7 @@ public interface ItemService {
    * @param id the item
    * @return the item as the published view
    * @throws de.greluc.homeinv.platform.NotFoundException when the tenant has no such live item. An
-   *     item of another tenant fails the same way as one that never existed (REQ-SEC-016)
+   *     item of another tenant fails the same way as one that never existed (REQ-SEC-025)
    */
   ItemView get(UUID id);
 

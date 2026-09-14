@@ -13,7 +13,7 @@
 -- anything but their own session or a membership row of the caller's tenant, so
 -- the table is reachable only through `tenancy.membership`, which is
 -- RLS-protected. Enumeration is answered identically for a known and an unknown
--- address (REQ-SEC-016).
+-- address (REQ-SEC-110).
 
 CREATE TABLE identity.app_user (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),

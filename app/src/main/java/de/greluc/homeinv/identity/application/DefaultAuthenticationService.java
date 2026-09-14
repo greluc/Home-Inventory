@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Unknown address, wrong password, locked account: one {@link InvalidCredentialsException}, one
  * message, and the password is verified even when no user was found. Returning early on an unknown
  * address would make that case measurably faster than a wrong password, and the difference is an
- * oracle for whether an address has an account here — which {@code REQ-SEC-016} exists to close.
+ * oracle for whether an address has an account here — which {@code REQ-SEC-110} exists to close.
  * The dummy hash below is what keeps the work comparable (REQ-SEC-013: the comparison runs in
  * constant time, and an unknown account still costs one Argon2id verification).
  *

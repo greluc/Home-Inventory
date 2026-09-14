@@ -42,7 +42,7 @@ acceptance *creates* the account (`REQ-TEN-004`, proved by
 - **Granting sensitive field visibility** to a role whose live members have no
   factor is refused with the same type, at the point the grant is written rather
   than in the controller, so a second caller cannot reach the write without it.
-  The message says how many members, never which — the reasoning `REQ-SEC-016`
+  The message says how many members, never which — the reasoning `REQ-SEC-110`
   applies to addresses, applied to credentials.
 
 `REQ-AUTH-003`'s acceptance is amended to say this, because the implementation

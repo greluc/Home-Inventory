@@ -61,7 +61,7 @@ class TenantIsolationIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.name").value("Bohrmaschine"));
 
     // Bob does not. A 404 rather than a 403: telling him it exists but is not his
-    // would confirm the id, which is what REQ-SEC-016 closes.
+    // would confirm the id, which is what REQ-SEC-025 closes.
     MockHttpSession bobSession = login(bob.email());
     mockMvc
         .perform(get("/api/v1/items/" + itemId).session(bobSession))

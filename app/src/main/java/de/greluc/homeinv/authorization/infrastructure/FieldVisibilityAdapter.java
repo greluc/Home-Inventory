@@ -165,7 +165,7 @@ public class FieldVisibilityAdapter implements FieldVisibility {
    * Refuses a grant that would let somebody read a sensitive field with a password alone.
    *
    * <p>The count and never the names: an administrator needs to know that somebody has to act, and
-   * which colleague has an authenticator is not their business — the reasoning REQ-SEC-016 applies
+   * which colleague has an authenticator is not their business — the reasoning REQ-SEC-110 applies
    * to addresses, applied to credentials.
    *
    * @param role the role being granted the field

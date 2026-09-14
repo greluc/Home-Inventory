@@ -121,7 +121,7 @@ computed:
 
   - id: requirementTotal
     compute: "count of lines matching ^| REQ-<AREA>-<nnn> across docs/requirements/0[123]-*.md"
-    value: 426
+    value: 427
     pattern: '(\d+)\s+(?:numbered|testable)[^.\n]{0,48}requirements?'
     notes: >
       Withdrawn requirements stay in place and keep counting (requirements/README.md:
@@ -147,7 +147,7 @@ computed:
       PORT: 8
       NFR: 79
       CON: 15
-      SEC: 109
+      SEC: 110
       PRIV: 15
     pattern: '\b([A-Z]{3,6})\s+(\d+)\b'
     appliesTo: [docs/requirements/README.md]

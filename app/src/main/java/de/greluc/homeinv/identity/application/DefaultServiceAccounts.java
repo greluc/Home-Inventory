@@ -127,7 +127,7 @@ public class DefaultServiceAccounts implements ServiceAccounts {
     Optional<ServiceAccountTokens.TokenHolder> holder = tokens.byToken(hash(token));
     if (holder.isEmpty() || !holder.get().isUsable(now)) {
       // One answer for unknown, revoked and expired. Telling them apart says
-      // which tokens once existed, which is the same reasoning REQ-SEC-016
+      // which tokens once existed, which is the same reasoning REQ-SEC-110
       // applies to addresses.
       return Optional.empty();
     }

@@ -65,7 +65,7 @@ touches.
 Docs-as-code, exactly like the Basetool repos:
 
 - **Requirements** live in [`docs/requirements/`](docs/requirements/README.md) as
-  `REQ-<AREA>-NNN` (425 of them). IDs are stable and never reused; a dropped requirement
+  `REQ-<AREA>-NNN` (427 of them). IDs are stable and never reused; a dropped requirement
   is marked `Withdrawn`, not deleted. The count is kept current in
   [`docs/requirements/README.md`](docs/requirements/README.md) — that table is the
   source, this line follows it.

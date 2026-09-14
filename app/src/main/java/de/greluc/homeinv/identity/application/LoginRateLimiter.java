@@ -79,7 +79,7 @@ public class LoginRateLimiter {
    *
    * <p>Called for every failure, including one against an address that has no account. Skipping the
    * unknown-address case would make the response time differ between a known and an unknown
-   * address, which is the enumeration {@code REQ-SEC-016} closes.
+   * address, which is the enumeration {@code REQ-SEC-110} closes.
    *
    * @param email the address that was tried
    * @param clientIp the caller's address

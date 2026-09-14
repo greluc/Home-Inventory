@@ -112,11 +112,12 @@ class ServiceAccountIT extends AbstractIntegrationTest {
                 .with(csrf()))
         .andExpect(status().isNoContent());
 
-    // The next request the machine makes has no credential.
-    mockMvc
-        .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
-            "Authorization", "Bearer " + token))
-        .andExpect(status().isUnauthorized());
+    // The next request the machine makes has no credential, and the refusal is
+    // the same document a token nobody ever issued gets (REQ-SEC-110): telling
+    // the two apart would say which tokens this instance once had.
+    org.assertj.core.api.Assertions.assertThat(refusal(token))
+        .as("a revoked token and one nobody issued are one answer")
+        .isEqualTo(refusal("homeinv_sa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
   }
 
   @Test
@@ -169,6 +170,42 @@ class ServiceAccountIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/search").param("q", "").param("language", "en").header(
             "Authorization", "Bearer not-one-of-ours"))
         .andExpect(status().isUnauthorized());
+
+    // The same status is not the same answer. REQ-SEC-110 is about the content:
+    // a token that has expired and one that was never issued must produce the
+    // same document, or the difference says which tokens this instance once had.
+    org.assertj.core.api.Assertions.assertThat(refusal(token))
+        .as("an expired token and one nobody issued are one answer")
+        .isEqualTo(
+            refusal("homeinv_sa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
+  }
+
+  /**
+   * The problem document a refused bearer token answered, with {@code traceId} removed.
+   *
+   * <p>The trace id identifies the request rather than its outcome (REQ-NFR-042), so it is the one
+   * field two refusals are allowed to differ in.
+   *
+   * @param token what was presented
+   * @return the document, ready to be compared with another
+   * @throws Exception when the request itself fails, which is the test failing
+   */
+  private tools.jackson.databind.node.ObjectNode refusal(String token) throws Exception {
+    String body =
+        mockMvc
+            .perform(
+                get("/api/v1/search")
+                    .param("q", "")
+                    .param("language", "en")
+                    .header("Authorization", "Bearer " + token))
+            .andExpect(status().isUnauthorized())
+            .andReturn()
+            .getResponse()
+            .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+    tools.jackson.databind.node.ObjectNode document =
+        (tools.jackson.databind.node.ObjectNode) json.readTree(body);
+    document.remove("traceId");
+    return document;
   }
 
   @Test

@@ -10,7 +10,7 @@ package de.greluc.homeinv.identity.api;
  * <p>One exception for every failure a caller is allowed to learn about: unknown address, wrong
  * password, locked account, a user with no tenant. Carrying which one would answer the question
  * "does this address have an account here", and the reason is logged instead so an operator can
- * still tell them apart (REQ-SEC-016).
+ * still tell them apart (REQ-SEC-110).
  *
  * <p>Carries no message of its own, so nothing can accidentally be echoed back to the caller.
  *
