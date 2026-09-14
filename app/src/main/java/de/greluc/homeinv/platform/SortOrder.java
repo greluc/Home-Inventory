@@ -46,6 +46,40 @@ public record SortOrder(String field, boolean descending) {
   public static final String ATTRIBUTE_PREFIX = "attr.";
 
   /**
+   * Reads the {@code sort} parameter as the wire spells it (08 §8.2).
+   *
+   * <p>A leading minus is descending, and it is the only punctuation the grammar has. Several keys
+   * are <b>refused</b> rather than reduced to the first: a caller who asked for two orderings and
+   * silently received one holds a list that is wrong in a way nothing tells them about
+   * (REQ-SRCH-004, decided with the owner 2026-09-14).
+   *
+   * <p>Here and not in the REST adapter, although that is where a parameter arrives: a saved search
+   * stores its sort key in this same grammar and replays it (REQ-SRCH-008), so two callers read it.
+   *
+   * <p>Translation and not a decision. Whether the field may be ordered by at all is the
+   * application layer's to answer against the tenant's own allowlist (ADR-0010).
+   *
+   * @param sort the parameter, or {@code null} when it was omitted
+   * @return the ordering, or {@code null} for the default
+   * @throws IllegalArgumentException when more than one key is given, or the key is empty
+   */
+  public static SortOrder parse(String sort) {
+    if (sort == null || sort.isBlank()) {
+      return null;
+    }
+    if (sort.indexOf(',') >= 0) {
+      throw new IllegalArgumentException(
+          "Only one sort key is supported; " + sort + " names several");
+    }
+    boolean descending = sort.charAt(0) == '-';
+    String field = descending ? sort.substring(1) : sort;
+    if (field.isBlank()) {
+      throw new IllegalArgumentException("A sort needs a field, not just a direction");
+    }
+    return new SortOrder(field, descending);
+  }
+
+  /**
    * Whether this orders by an attribute rather than by a column of the row.
    *
    * @return true when the field names an attribute

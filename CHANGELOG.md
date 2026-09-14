@@ -153,6 +153,13 @@ commit".
 
 ### Added
 
+- **A search can be saved and reused.** Give a query a name and it becomes a
+  smart list everybody in the household sees — "everything that needs mending",
+  "the tools in the shed". Opening one runs the query again, so what it shows is
+  what matches today rather than what matched when it was saved. A list can be
+  renamed, changed and removed; who removed it is recorded. *REST API: new
+  `/api/v1/saved-searches` resource.*
+
 - **Notes, attribute values, tags and places are searchable.** A search used to
   look at an item's name and description alone. It now also finds an item by
   something written in its notes, by a value of one of its fields, by a tag on

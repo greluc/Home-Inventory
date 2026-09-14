@@ -456,6 +456,26 @@ public class ApiExceptionHandler {
    * @param request the request
    * @return a {@code 409} problem detail naming the name
    */
+  /**
+   * Answers a saved search whose name the tenant already uses (REQ-SRCH-008).
+   *
+   * <p>A {@code 409} naming the name, because that is what the caller has to change. The name is
+   * the tenant's own text and reaches the response as it was sent, which is what makes the message
+   * actionable; it is not a credential and nothing is looked up with it.
+   *
+   * @param exception the refusal, carrying the name
+   * @param request the request
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(de.greluc.homeinv.search.api.SavedSearches.SavedSearchNameTakenException.class)
+  public ProblemDetail handleSavedSearchNameTaken(
+      de.greluc.homeinv.search.api.SavedSearches.SavedSearchNameTakenException exception,
+      HttpServletRequest request) {
+    ProblemDetail problem = problem(ProblemType.NAME_TAKEN, exception.getMessage(), request);
+    problem.setProperty("name", exception.getName());
+    return problem;
+  }
+
   @ExceptionHandler(TagService.TagNameTakenException.class)
   public ProblemDetail handleTagNameTaken(
       TagService.TagNameTakenException exception, HttpServletRequest request) {

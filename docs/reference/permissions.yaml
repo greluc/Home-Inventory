@@ -76,6 +76,24 @@ permissions:
       anything in the tenant are different capabilities, because a search surface
       is also an enumeration surface.
 
+  - id: search:saved-search:write
+    since: 1
+    description: >
+      Create or change a saved search (`REQ-SRCH-008`). Separate from
+      `search:index:query`, which is reading: a saved search belongs to the
+      tenant and everybody in it sees the same list, so adding one is a change to
+      what everybody sees. Reading them needs only the query permission — a list
+      of questions is not more sensitive than the answers.
+
+  - id: search:saved-search:delete
+    since: 1
+    description: >
+      Delete a saved search (`REQ-SRCH-008`). Its own permission because it takes
+      a list away from everybody, which is an administrator's to do and not a
+      member's. Removal is outright: nothing points at a saved search, so a
+      tombstone would be retention without a reason, and the revision log answers
+      who removed it.
+
   - id: media:object:read
     since: 0
     description: Read a media object's metadata and obtain a signed URL for it.
@@ -276,6 +294,7 @@ roles:
       - tagging:tag:create
       - tagging:tag:update
       - tagging:tag:assign
+      - search:saved-search:write
       - tenancy:tenant:read
       - tenancy:member:read
 
@@ -310,6 +329,8 @@ roles:
       - tagging:tag:create
       - tagging:tag:update
       - tagging:tag:assign
+      - search:saved-search:write
+      - search:saved-search:delete
       - tenancy:tenant:read
       - tenancy:tenant:update
       - tenancy:member:read

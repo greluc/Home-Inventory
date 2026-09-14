@@ -2147,6 +2147,63 @@ components:
           $ref: '#/components/schemas/PageInfo'
           description: where the next ones are, and roughly how many there are in total
       type: object
+    PageSavedSearchResponse:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+
+        ## Facets are a fourth member, and usually absent
+
+        Counts are neither rows, nor where the next rows are, nor how the answer was produced, so they
+        are none of the three members that exist — `meta` says how a response came about and would
+        stop meaning that if it also carried content. A fourth member is additive, and it stays
+        `null` on every listing that was not asked for counts. Decided with the owner on
+        2026-09-14.
+
+        `facets` is the **one** member this API omits when it is null, and it is annotated
+        for it rather than relying on a global setting — the rest of the API writes its nulls out. The
+        reason is that here the difference carries meaning: absent is "nobody asked", `[]` is
+        "counted, and nothing matched", and a client that cannot tell those apart shows an empty sidebar
+        where there should be none. Twenty listings that can never carry counts also have no business
+        carrying an empty field for them. Decided with the owner on 2026-09-14; 08 §8.2 says the same.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/SavedSearchResponse'
+          type: array
+        facets:
+          description: |-
+            how many rows each value of a counted dimension holds, or `null` when none
+            were asked for — which is every listing but a search that carried `facet`. Omitted
+            from the JSON when null, which is what tells "nobody asked" from "nothing matched"
+          items:
+            $ref: '#/components/schemas/Facet'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
     PageTagGroupView:
       description: |-
         One page of anything, in the shape 08 §8.2 specifies for every collection.
@@ -2577,6 +2634,71 @@ components:
           items:
             type: string
           type: array
+      type: object
+    SavedSearchRequest:
+      properties:
+        filters:
+          items:
+            maxLength: 200
+            minLength: 0
+            type: string
+          maxItems: 20
+          minItems: 0
+          type: array
+        name:
+          maxLength: 200
+          minLength: 0
+          type: string
+        q:
+          maxLength: 500
+          minLength: 0
+          type: string
+        sort:
+          maxLength: 100
+          minLength: 0
+          type: string
+      required:
+      - name
+      type: object
+    SavedSearchResponse:
+      description: |-
+        A saved search as the wire spells it.
+
+        The same names a query takes: `q`, `filters`, `sort`. The port's view
+        calls the first one `text`, which is what it is; here it is what a client typed, and a
+        client that sends `q` and is answered `text` cannot put a saved search back into
+        the query bar without translating it.
+      properties:
+        createdAt:
+          description: when it was saved
+          format: date-time
+          type: string
+        filters:
+          description: the `filter` parameters verbatim
+          items:
+            type: string
+          type: array
+        id:
+          description: its identifier
+          format: uuid
+          type: string
+        name:
+          description: what it is called
+          type: string
+        q:
+          description: the text to search for, or `null`
+          type: string
+        sort:
+          description: the sort key, or `null`
+          type: string
+        updatedAt:
+          description: when it last changed
+          format: date-time
+          type: string
+        version:
+          description: the optimistic-lock version, which is also its ETag
+          format: int64
+          type: integer
       type: object
     SecondFactorRequest:
       description: |-
@@ -6636,7 +6758,7 @@ paths:
         answers where the items are — which is what the chapter has described since the first commit,
         while the implementation answered at `/api/v1/search` until 2026-09-14. The old path is
         gone rather than aliased: two paths for one question is the drift this chapter exists to
-        prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
+        prevent, and a saved search lives at `/saved-searches`, where 08 §8.1 has always put it.
 
         The grammar arrives in pieces. `q`, `filter`, `facet`, `sort`, `cursor` and `limit` work;
         `fields` is not here yet. A parameter that is not implemented is absent rather than accepted
@@ -10205,6 +10327,470 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces a definition's name, description and added permissions.
+  /api/v1/saved-searches:
+    get:
+      description: The tenant's saved searches, oldest first.
+      operationId: listSavedSearches
+      parameters:
+      - description: an opaque cursor from a previous response, or omitted for the first page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageSavedSearchResponse'
+          description: one page
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tenant's saved searches, oldest first.
+    post:
+      description: Saves a query under a name.
+      operationId: createSavedSearch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedSearchRequest'
+        description: the name and the query
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearchResponse'
+          description: the saved search, with a `Location` naming it
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Name taken (`name-taken`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Saves a query under a name.
+  /api/v1/saved-searches/{id}:
+    delete:
+      description: Removes a saved search.
+      operationId: deleteSavedSearch
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes a saved search.
+    get:
+      description: One saved search.
+      operationId: savedSearch
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearchResponse'
+          description: it
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One saved search.
+    put:
+      description: Changes a saved search.
+      operationId: updateSavedSearch
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedSearchRequest'
+        description: the new name and query
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearchResponse'
+          description: the changed search
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Name taken (`name-taken`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Changes a saved search.
+  /api/v1/saved-searches/{id}/items:
+    get:
+      description: |-
+        Runs a saved search.
+
+        The ordinary search envelope: a smart list is the list the same query typed by hand would
+        produce, so a client renders it with the code it already has.
+      operationId: savedSearchItems
+      parameters:
+      - description: which saved search
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: an opaque cursor from a previous response, or omitted for the first page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          maxLength: 500
+          minLength: 0
+          type: string
+      - description: how many at most
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageItemView'
+          description: one page of the items it matches
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Runs a saved search
   /api/v1/tag-groups:
     get:
       description: One page of the tenant's tag groups.

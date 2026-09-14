@@ -80,7 +80,16 @@ public interface RevisionLog {
     /** An item. */
     ITEM,
     /** A place in the location tree. */
-    LOCATION
+    LOCATION,
+    /**
+     * A named query that appears as a smart list (REQ-SRCH-008).
+     *
+     * <p>The one kind here that is configuration rather than content, and the one that is removed
+     * outright rather than trashed: nothing points at a saved search, so a tombstone would be
+     * retention without a reason. Its history is what answers "who took away the list called
+     * Repairs", which is what {@link ChangeKind#PURGED} means for it.
+     */
+    SAVED_SEARCH
   }
 
   /** What happened to produce a revision. */

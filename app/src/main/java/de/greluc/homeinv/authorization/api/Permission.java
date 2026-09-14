@@ -47,6 +47,16 @@ public enum Permission {
 
   /** Search across the tenant's items. */
   SEARCH_QUERY("search:index:query"),
+  /**
+   * Create or change a saved search (REQ-SRCH-008).
+   *
+   * <p>Separate from {@link #SEARCH_QUERY}, which is reading: a saved search is the tenant's and
+   * everybody sees it, so adding one is a change to what everybody sees. Reading them needs only
+   * {@code SEARCH_QUERY} — a list of questions is not more sensitive than the answers.
+   */
+  SAVED_SEARCH_WRITE("search:saved-search:write"),
+  /** Delete a saved search. Its own permission, because it takes a list away from everybody. */
+  SAVED_SEARCH_DELETE("search:saved-search:delete"),
 
   /** Read a media object's metadata and obtain a signed URL for it. */
   MEDIA_READ("media:object:read"),

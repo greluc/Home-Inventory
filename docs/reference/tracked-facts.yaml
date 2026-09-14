@@ -215,7 +215,7 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 32
+    value: 34
     pattern: '(?:(\d+)|thirty-two)\s+(?:named\s+)?permissions?\b'
     notes: >
       Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on

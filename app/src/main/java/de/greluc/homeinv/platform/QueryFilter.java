@@ -160,6 +160,106 @@ public record QueryFilter(
   }
 
   /**
+   * Reads one {@code filter} parameter as the wire spells it (08 §8.2).
+   *
+   * <p>{@code <dimension>:<op>:<value>}, where the dimension is {@code attr.<key>}, {@code type},
+   * {@code tag} or {@code location}. The operator may be left out for equality, which is what makes
+   * {@code type:power-tool} read the way it does. Told apart by whether the second part <i>is</i> an
+   * operator rather than by counting the parts, so that a tag actually called {@code lt} cannot
+   * change what its own filter means.
+   *
+   * <p>An attribute value is one part and anything after it is the unit. Every other dimension
+   * takes the rest of the parameter as its value, colons included: a tag is named as a person wrote
+   * it, and a person may well have written {@code Kitchen: top shelf}. A comma still separates the
+   * values of an {@code in}, so a tag whose name contains one cannot be filtered by name — the
+   * grammar spends the comma there, and that is the price.
+   *
+   * <p>Here and not in the REST adapter, although that is where a parameter arrives: a saved search
+   * stores its filters in this same grammar and replays them (REQ-SRCH-008), so two callers read
+   * it. One grammar in one place; the adapter keeps only the part that is about HTTP, which is that
+   * the parameter repeats.
+   *
+   * <p>Translation and not a decision. Whether a field may be filtered at all, and whether this one
+   * needed a unit, is the application layer's to answer against the tenant's own allowlist
+   * (ADR-0010).
+   *
+   * @param filter one parameter
+   * @return the condition it spells
+   * @throws IllegalArgumentException when it names no dimension, or carries no value
+   */
+  public static QueryFilter parse(String filter) {
+    if (filter == null || filter.isBlank()) {
+      throw new IllegalArgumentException("An empty filter narrows nothing");
+    }
+    String[] parts = filter.split(":");
+
+    Dimension dimension;
+    String field = null;
+    if (parts[0].startsWith(SortOrder.ATTRIBUTE_PREFIX)) {
+      dimension = Dimension.ATTRIBUTE;
+      field = parts[0].substring(SortOrder.ATTRIBUTE_PREFIX.length());
+      if (field.isBlank()) {
+        throw new IllegalArgumentException("A filter needs a field and a value: " + filter);
+      }
+    } else {
+      dimension = Dimension.ofToken(parts[0]);
+      if (dimension == null || dimension == Dimension.ATTRIBUTE) {
+        throw new IllegalArgumentException(
+            "Not a filter dimension: " + parts[0] + "; expected attr.<key>, type, tag or location");
+      }
+    }
+
+    boolean named = parts.length >= 3 && Operator.isToken(parts[1]);
+    Operator operator = named ? Operator.ofToken(parts[1]) : Operator.EQ;
+    int valueAt = named ? 2 : 1;
+    if (parts.length <= valueAt) {
+      throw new IllegalArgumentException("A filter needs a value: " + filter);
+    }
+
+    String value;
+    String unit = null;
+    if (dimension == Dimension.ATTRIBUTE) {
+      value = parts[valueAt];
+      unit = parts.length > valueAt + 1 ? parts[valueAt + 1] : null;
+    } else {
+      value = String.join(":", java.util.Arrays.copyOfRange(parts, valueAt, parts.length));
+    }
+    if (value.isBlank()) {
+      throw new IllegalArgumentException("A filter needs a value: " + filter);
+    }
+
+    List<String> values = operator == Operator.IN ? List.of(value.split(",")) : List.of(value);
+    return new QueryFilter(dimension, field, operator, values, unit);
+  }
+
+  /**
+   * Reads several {@code filter} parameters, refusing too many and one that is too long.
+   *
+   * @param filters the parameters as they arrived, possibly {@code null}
+   * @param maxFilters how many are allowed
+   * @param maxLength how long one may be
+   * @return one condition per parameter, all of which must hold; empty when none was given
+   * @throws IllegalArgumentException when there are too many, one is too long, or one is not of
+   *     the shape {@link #parse} takes
+   */
+  public static List<QueryFilter> parseAll(
+      java.util.Collection<String> filters, int maxFilters, int maxLength) {
+    if (filters == null || filters.isEmpty()) {
+      return List.of();
+    }
+    if (filters.size() > maxFilters) {
+      throw new IllegalArgumentException(
+          "At most " + maxFilters + " filters, not " + filters.size());
+    }
+    for (String filter : filters) {
+      if (filter != null && filter.length() > maxLength) {
+        throw new IllegalArgumentException("A filter is at most " + maxLength + " characters");
+      }
+    }
+    return filters.stream().map(QueryFilter::parse).toList();
+  }
+
+  /**
    * Whether this asks for an ordering between values rather than for equality.
    *
    * <p>What decides whether a unit is required: "is it 100" is answerable across currencies — no
