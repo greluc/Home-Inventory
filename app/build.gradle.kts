@@ -78,6 +78,12 @@ dependencies {
     // Boot starter: there is none for OpenSearch, and the client is configured by
     // hand against `HOMEINV_SEARCH_ENGINE` so that the `minimal` profile - which
     // never gets OpenSearch - starts without one.
+    // The manifest model and its reader, which the core and a plugin author's SDK
+    // both read (REQ-PLG-004). AGPL depending on Apache-2.0, which is the
+    // direction that works; the reverse is what ADR-0018 forbids and what
+    // `:plugin-api:noCoreOnTheClasspath` checks.
+    implementation(project(":plugin-api"))
+
     implementation(libs.opensearch.java)
 
     implementation(libs.spring.modulith.starter.core)

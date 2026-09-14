@@ -153,6 +153,13 @@ commit".
 
 ### Added
 
+- **A plugin is installed once and permitted per household.** The system now
+  keeps a register of what the operator has installed and, separately, what each
+  household has allowed it to do. A plugin can do nothing at all until somebody
+  says yes, and an update that asks for something new does not get it — what was
+  already allowed keeps working, and the new request waits. Nothing user-visible
+  yet: there is no plugin to install.
+
 - **The plugin manifest format is readable.** `plugin-api` — the Apache-2.0
   module a plugin author compiles against — now holds the manifest model and its
   reader, so the same code that the system uses to register a plugin can tell an

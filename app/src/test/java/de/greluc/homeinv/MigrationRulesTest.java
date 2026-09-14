@@ -49,6 +49,13 @@ class MigrationRulesTest {
   private static final List<String> INSTANCE_WIDE =
       List.of(
           "identity.app_user",
+          // What the operator installed. A plugin is installed for the instance
+          // and consented to per tenant (09 §9.4), so the registration describes
+          // the deployment and the GRANT beside it carries the tenant id and the
+          // policy. A tenant-scoped registration would mean installing a plugin
+          // once per tenant, which is the thing REQ-PLG-013 says an operator
+          // does once.
+          "plugins.plugin_registration",
           "identification.public_code",
           "identification.label_base_url_usage",
           "audit.chain_anchor",

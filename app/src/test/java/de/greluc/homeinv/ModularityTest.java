@@ -45,9 +45,19 @@ class ModularityTest {
    * the Rust service and, from stage 3, with third-party plugin authors. It has no internals to
    * protect and no dependencies to police — every one of its classes is public by definition,
    * because that is what a generated contract is.
+   *
+   * <p>Widened from {@code plugin.v1..} to {@code plugin..} on 2026-09-14, when
+   * {@code de.greluc.homeinv.plugin.api} arrived with the manifest model. That package is a
+   * <b>separate Gradle project</b> — Apache-2.0, depending on nothing in the core (ADR-0018) — and
+   * therefore not a building block of this modulith at all. Its own boundary is checked by
+   * {@code :plugin-api:noCoreOnTheClasspath}, which is a stricter rule than this one: the core may
+   * not appear on its classpath by any route, transitive ones included.
+   *
+   * <p>The name still says {@code GENERATED_CONTRACT} because both halves are contracts shared with
+   * plugin authors, one generated and one written.
    */
   private static final DescribedPredicate<JavaClass> GENERATED_CONTRACT =
-      JavaClass.Predicates.resideInAPackage("de.greluc.homeinv.plugin.v1..");
+      JavaClass.Predicates.resideInAPackage("de.greluc.homeinv.plugin..");
 
   private final ApplicationModules modules =
       ApplicationModules.of(HomeInvApplication.class, GENERATED_CONTRACT);

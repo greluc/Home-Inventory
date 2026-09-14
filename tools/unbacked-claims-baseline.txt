@@ -71,14 +71,14 @@ docs/architecture/06-deployment-view.md:722:cannot
 docs/architecture/06-deployment-view.md:793:cannot
 docs/architecture/06-deployment-view.md:83:cannot
 docs/architecture/06-deployment-view.md:913:fails the build
-docs/architecture/07-data-model.md:410:cannot
-docs/architecture/07-data-model.md:531:enforces
-docs/architecture/07-data-model.md:558:cannot
-docs/architecture/07-data-model.md:566:enforced
-docs/architecture/07-data-model.md:568:cannot
-docs/architecture/07-data-model.md:587:guaranteed
-docs/architecture/07-data-model.md:592:enforces
-docs/architecture/07-data-model.md:611:enforced
+docs/architecture/07-data-model.md:411:cannot
+docs/architecture/07-data-model.md:532:enforces
+docs/architecture/07-data-model.md:559:cannot
+docs/architecture/07-data-model.md:567:enforced
+docs/architecture/07-data-model.md:569:cannot
+docs/architecture/07-data-model.md:588:guaranteed
+docs/architecture/07-data-model.md:593:enforces
+docs/architecture/07-data-model.md:612:enforced
 docs/architecture/08-api-contract.md:13:cannot
 docs/architecture/08-api-contract.md:320:enforced
 docs/architecture/08-api-contract.md:321:enforced
