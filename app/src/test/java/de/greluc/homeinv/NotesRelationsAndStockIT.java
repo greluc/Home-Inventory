@@ -124,7 +124,25 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                             lens, lens, ItemRelations.RelationType.PART_OF, tenant.userId()))
                 .isInstanceOf(IllegalArgumentException.class);
 
-            relations.unrelate(relation.id(), tenant.userId());
+            // A relation comes off the item it is named with, and only that one.
+            // Until 2026-09-14 `unrelate` took the relation's id alone: the item
+            // in the path was decoration, so any item at all could remove any
+            // relation the tenant had. Naming a different item now changes
+            // nothing.
+            UUID tripod = anItem(tenant, "Tripod");
+            relations.unrelate(tripod, relation.id(), tenant.userId());
+            assertThat(relations.relationsOf(camera, null, 50).items())
+                .as("a relation that does not join the named item is left alone")
+                .hasSize(1);
+
+            // And an item this tenant cannot see is not a quiet success.
+            assertThatThrownBy(
+                    () ->
+                        relations.unrelate(
+                            UUID.randomUUID(), relation.id(), tenant.userId()))
+                .isInstanceOf(de.greluc.homeinv.platform.NotFoundException.class);
+
+            relations.unrelate(relation.sourceId(), relation.id(), tenant.userId());
             assertThat(relations.relationsOf(camera, null, 50).items()).isEmpty();
           });
     }

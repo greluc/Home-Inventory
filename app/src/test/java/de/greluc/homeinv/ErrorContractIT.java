@@ -93,6 +93,50 @@ class ErrorContractIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("is a 404 when the catalogue has no such row, not a 500 (REQ-SEC-025)")
+  void anUnknownCatalogueReferenceIsNotFound() throws Exception {
+    MockHttpSession session = tenantSession("unknown-catalogue");
+
+    // `catalog` raises `UnknownTypeException` rather than `NotFoundException`,
+    // and nothing in the advice named it until 2026-09-14: twelve endpoints
+    // declared NOT_FOUND and answered 500. Found by driving every endpoint with
+    // an id nothing has -- see `EndpointNegativeCoverageIT`.
+    MvcResult result =
+        mockMvc
+            .perform(get("/api/v1/catalog/versions/" + java.util.UUID.randomUUID()).session(session))
+            .andExpect(status().isNotFound())
+            .andReturn();
+
+    JsonNode problem = problemOf(result);
+    assertThat(problem.get("type").asString())
+        .isEqualTo("https://home-inv.example/problems/not-found");
+  }
+
+  @Test
+  @DisplayName("is a 400 when a path variable is not of the declared type (REQ-API-003)")
+  void anUnconvertiblePathVariableIsAMalformedRequest() throws Exception {
+    MockHttpSession session = tenantSession("unconvertible");
+
+    // A mistyped id is the caller's mistake and not this application's. It was a
+    // 500 until 2026-09-14, logged at ERROR with a stack trace, which put every
+    // typo in the world into the channel an operator watches for real faults.
+    MvcResult result =
+        mockMvc
+            .perform(get("/api/v1/items/not-a-uuid").session(session))
+            .andExpect(status().isBadRequest())
+            .andReturn();
+
+    JsonNode problem = problemOf(result);
+    assertThat(problem.get("type").asString())
+        .isEqualTo("https://home-inv.example/problems/malformed-request");
+    // The framework's own detail quotes the value and names the converter it
+    // tried; neither belongs in an answer (08 §8.2).
+    assertThat(problem.get("detail").asString())
+        .doesNotContain("not-a-uuid")
+        .doesNotContain("UUID");
+  }
+
+  @Test
   @DisplayName("is problem+json for a method the path does not support (REQ-API-003)")
   void aWrongMethodIsAProblemDocument() throws Exception {
     MockHttpSession session = tenantSession("wrong-method");

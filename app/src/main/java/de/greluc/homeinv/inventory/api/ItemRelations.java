@@ -35,14 +35,23 @@ public interface ItemRelations {
   RelationView relate(UUID sourceId, UUID targetId, RelationType type, UUID actor);
 
   /**
-   * Removes a relation.
+   * Removes a relation from one of the two items it joins.
    *
-   * <p>Idempotent for the same reason {@link #relate} is.
+   * <p>Idempotent about the <em>relation</em>, for the same reason {@link #relate} is: removing one
+   * that is not there succeeds. It is not idempotent about the <b>item</b> — an item this tenant
+   * cannot see is a {@code 404}, because the endpoint that calls this names the item in its path and
+   * has to answer about it (REQ-SEC-025).
    *
+   * <p>{@code itemId} is checked rather than ignored, which it was until 2026-09-14: the relation's
+   * own id was enough to find the row, so the item in the path said nothing and a caller could name
+   * any item at all. A relation that does not join this item is left alone.
+   *
+   * @param itemId the item the relation is being removed from
    * @param relationId the relation
    * @param actor the authenticated user
+   * @throws de.greluc.homeinv.platform.NotFoundException when this tenant has no such item
    */
-  void unrelate(UUID relationId, UUID actor);
+  void unrelate(UUID itemId, UUID relationId, UUID actor);
 
   /**
    * Every relation one item takes part in, from either end.

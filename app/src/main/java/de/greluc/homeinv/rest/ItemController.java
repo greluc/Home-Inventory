@@ -483,7 +483,7 @@ public class ItemController {
       @PathVariable UUID id,
       @PathVariable UUID relationId,
       @AuthenticationPrincipal AuthenticatedUser user) {
-    relations.unrelate(relationId, user.userId());
+    relations.unrelate(id, relationId, user.userId());
   }
 
   /**

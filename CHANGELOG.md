@@ -41,6 +41,20 @@ commit".
 
 ### Fixed
 
+- **"Something went wrong" was hiding "there is no such thing".** Asking about a
+  field, a type, a version or a value list the tenant does not have answered an
+  error that told nobody anything — twelve places in the type system did this.
+  They now say the thing is not there, in the same words as everywhere else. A
+  mistyped id in an address says the request is malformed rather than blaming the
+  server.
+
+- **Two more endpoints now answer about the thing in their path.** Taking a
+  relation or a bundle entry off an item that has been deleted said nothing at
+  all, and asking what is in a place that does not exist answered "nothing is
+  here" rather than "there is no such place". *Removing a relation also now
+  requires the item it belongs to: the address always named one and the server
+  used to ignore it.*
+
 - **Putting a tag on something that is not there now says so.** Naming an item or
   a place that has been deleted, never existed, or belongs to somebody else
   answered "something went wrong" when assigning a tag, and answered nothing at

@@ -93,6 +93,63 @@ public class ApiExceptionHandler {
   }
 
   /**
+   * Answers a catalogue lookup that resolved nothing.
+   *
+   * <p>{@code catalog} raises its own {@link de.greluc.homeinv.catalog.api.TypeRegistry
+   * .UnknownTypeException} rather than {@link NotFoundException} — a type, a version, a field or a
+   * value list that this tenant does not have, or that is archived. It means exactly what a
+   * {@code NotFoundException} means and was answered {@code 500} until 2026-09-14, because nothing
+   * here named it: twelve catalogue endpoints declared {@code NOT_FOUND} and could not produce it.
+   * {@code EndpointNegativeCoverageIT} found them by calling every endpoint with an id nothing has.
+   *
+   * <p>The exception's own message is the detail. It names what was looked for and never what was
+   * found, which is the rule its Javadoc states, so it discloses nothing a caller did not already
+   * send.
+   *
+   * @param exception the failure
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 404} problem detail
+   */
+  @ExceptionHandler(de.greluc.homeinv.catalog.api.TypeRegistry.UnknownTypeException.class)
+  public ProblemDetail handleUnknownType(
+      de.greluc.homeinv.catalog.api.TypeRegistry.UnknownTypeException exception,
+      HttpServletRequest request) {
+    // DEBUG for the same reason a NotFoundException is: an id that resolves to
+    // nothing is an ordinary answer, and anybody could otherwise fill the log.
+    log.debug("Unknown catalogue reference: {}", exception.getMessage());
+    return problem(ProblemType.NOT_FOUND, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a path variable or parameter the framework could not convert.
+   *
+   * <p>{@code /api/v1/items/not-a-uuid} is a malformed request and not a server fault, and it was
+   * answered {@code 500} until 2026-09-14 — logged at {@code ERROR}, with a stack trace, by the
+   * catch-all below. Spring's own {@code MethodArgumentTypeMismatchException} is not an {@code
+   * ErrorResponse}, so the catch-all's {@code ErrorResponse} branch never saw it and every mistyped
+   * id in the world looked, in the log, like a bug in this application.
+   *
+   * <p>Nothing of the exception reaches the caller. Its message quotes the value that failed to
+   * convert, and a value is the caller's own input echoed back — harmless here, and a habit worth
+   * not forming (08 §8.2).
+   *
+   * @param exception the conversion failure
+   * @param request the request, for the {@code instance} member
+   * @return a {@code 400} problem detail
+   */
+  @ExceptionHandler(
+      org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+  public ProblemDetail handleUnconvertible(
+      org.springframework.web.method.annotation.MethodArgumentTypeMismatchException exception,
+      HttpServletRequest request) {
+    log.debug("Not convertible: {}", exception.getName());
+    return problem(
+        ProblemType.MALFORMED_REQUEST,
+        "One of the values in the path or query string is not of the expected type.",
+        request);
+  }
+
+  /**
    * Answers a caller whose role does not hold the permission the operation needs.
    *
    * <p>A {@code 403} here is only ever about a permission, never about a resource the caller cannot

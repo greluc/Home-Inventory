@@ -171,13 +171,21 @@ public class ItemBundleAdapter implements ItemBundles {
   @Override
   @Transactional
   public void remove(UUID bundleId, UUID memberId, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    // The same check `contentsOf` has made all along, on the path that had none.
+    // `findAny`, not `findLive`: a thing may be taken out of a bundle after
+    // either of them has gone to the trash, which is often exactly when somebody
+    // wants to.
+    items.findAny(tenantId, bundleId).orElseThrow(() -> new NotFoundException("item", bundleId));
+    items.findAny(tenantId, memberId).orElseThrow(() -> new NotFoundException("item", memberId));
+
     int removed =
         jdbc.sql(
                 """
                 delete from inventory.item_bundle
                 where tenant_id = ? and bundle_item_id = ? and member_item_id = ?
                 """)
-            .params(TenantContext.require(), bundleId, memberId)
+            .params(tenantId, bundleId, memberId)
             .update();
     if (removed > 0) {
       log.debug("Item {} taken out of bundle {} by {}", memberId, bundleId, actor);

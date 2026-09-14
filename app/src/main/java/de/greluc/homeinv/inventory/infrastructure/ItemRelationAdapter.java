@@ -117,9 +117,24 @@ public class ItemRelationAdapter implements ItemRelations {
 
   @Override
   @Transactional
-  public void unrelate(UUID relationId, UUID actor) {
-    jdbc.sql("delete from inventory.item_relation where tenant_id = ? and id = ?")
-        .params(TenantContext.require(), relationId)
+  public void unrelate(UUID itemId, UUID relationId, UUID actor) {
+    UUID tenantId = TenantContext.require();
+    // The same check the read path has made all along, on the path that had
+    // none: an item this tenant cannot see is a 404, not a quiet 204.
+    // `findAny`, not `findLive`, because a relation may be taken off something
+    // that is already in the trash.
+    items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
+
+    // And the relation has to be one of this item's. Without the condition the
+    // item in the path is decoration, and any item id would delete any relation
+    // the tenant has.
+    jdbc.sql(
+            """
+            delete from inventory.item_relation
+            where tenant_id = ? and id = ?
+              and (source_id = ? or target_id = ?)
+            """)
+        .params(tenantId, relationId, itemId, itemId)
         .update();
   }
 
