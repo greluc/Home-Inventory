@@ -77,6 +77,8 @@ public class ItemSearchAdapter implements ItemSearchQuery {
       String text,
       String language,
       List<UUID> locationIds,
+      List<UUID> typeVersionIds,
+      List<UUID> itemIds,
       Optional<CursorCodec.Position> after,
       SortOrder sort,
       List<QueryFilter> filters,
@@ -84,6 +86,8 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     UUID tenantId = TenantContext.require();
     boolean filtered = text != null && !text.isBlank();
     boolean byLocation = locationIds != null && !locationIds.isEmpty();
+    boolean byType = typeVersionIds != null && !typeVersionIds.isEmpty();
+    boolean byId = itemIds != null && !itemIds.isEmpty();
     boolean resuming = after.isPresent();
     SortPlan plan = planFor(sort);
 
@@ -110,6 +114,12 @@ public class ItemSearchAdapter implements ItemSearchQuery {
             // both a new prepared statement each time and the one place in this
             // query where a value shapes the SQL.
             + (byLocation ? "  and i.location_id = any(?)%n".formatted() : "")
+            // The two restrictions another block resolved. Both are `= any(?)`
+            // for the same reason as the locations above: the count varies per
+            // request, and a generated IN list would be the one place a value
+            // shapes the statement.
+            + (byType ? "  and i.item_type_version_id = any(?)%n".formatted() : "")
+            + (byId ? "  and i.id = any(?)%n".formatted() : "")
             // One `exists` per filter rather than one join per filter. A join
             // would multiply the rows when two filters match two different
             // attributes of the same item, and the fix for that is a `distinct`
@@ -131,6 +141,12 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     }
     if (byLocation) {
       spec = spec.param(locationIds.toArray(UUID[]::new));
+    }
+    if (byType) {
+      spec = spec.param(typeVersionIds.toArray(UUID[]::new));
+    }
+    if (byId) {
+      spec = spec.param(itemIds.toArray(UUID[]::new));
     }
     for (QueryFilter filter : filters) {
       spec = spec.param(filter.field());
@@ -397,6 +413,12 @@ public class ItemSearchAdapter implements ItemSearchQuery {
           case GTE -> column + " >= " + cast;
           case LT -> column + " < " + cast;
           case LTE -> column + " <= " + cast;
+          // Never reached: `subtree` walks the location tree, `search` resolves
+          // it to ids through `locations`, and only attribute conditions get
+          // this far. Named rather than defaulted, so that adding an operator
+          // fails here instead of silently choosing one.
+          case SUBTREE ->
+              throw new IllegalArgumentException("An attribute has no subtree to walk");
         };
     // One template with two holes, never a query joined to an expression: the
     // holes hold a column name from the switch above and an operator, and

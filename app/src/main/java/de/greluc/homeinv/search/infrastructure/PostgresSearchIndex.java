@@ -74,6 +74,8 @@ public class PostgresSearchIndex implements SearchIndex {
             query.text(),
             query.language(),
             query.locationIds(),
+            query.typeVersionIds(),
+            query.itemIds(),
             query.after(),
             query.sort(),
             query.filters(),

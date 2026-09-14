@@ -62,6 +62,12 @@ class CatalogSchemaTest {
           }
 
           @Override
+          public java.util.List<UUID> itemTypeVersionsByKeys(java.util.Collection<String> keys) {
+            // Nor what a type key resolves to.
+            return java.util.List.of();
+          }
+
+          @Override
           public java.util.List<QueryableField> queryableFields() {
             // This stub exists to answer one schema question; nothing here asks
             // what may be filtered.

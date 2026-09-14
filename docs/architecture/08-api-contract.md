@@ -122,12 +122,25 @@ equals an amount of dollars either — and a unit on a field that has no dimensi
 is refused too, rather than dropped. All four refusals answer `422`, naming the
 field.
 
-**`attr.` is the prefix that answers today.** `REQ-SRCH-003` is filters over
-`searchable` fields, and that is what is implemented (2026-09-14). The three
-other forms above — `type:`, `location:subtree:` and `tag:in:` — are the filter
-half of `REQ-SRCH-002`'s facets, because a facet you can see and not filter by is
-a count with nothing behind it; they arrive with it, and until they do they are
-refused with `422` rather than accepted and ignored.
+**`in` widens, a second filter narrows.** Within one filter the values are an
+"or" — `tag:in:broken,repair` is either — and across filters they are an "and",
+so `filter=tag:broken&filter=tag:heavy` is both. That distinction is what makes a
+multi-select facet behave the way people expect it to, and it is why the two
+spellings are not interchangeable.
+
+**Three of the four dimensions belong to other building blocks**, and none of
+them is read by joining a foreign schema. A type key is `catalog`'s, a tag
+assignment is `tagging`'s and the tree is `locations`'; `search` resolves each
+through that block's published port and hands the engine nothing but ids
+([ADR-0002](../adr/0002-modular-monolith.md)). `type:` names the key rather than
+an id because that is what a person writes, and it matches items written against
+**every** version of that type — an item written last year is still a power tool.
+`tag:` names the tag the way a person wrote it, case-insensitively, and follows a
+merge: once "broken" has been merged into "heavy", a saved filter for `broken`
+still finds the items rather than returning an empty list that looks like an
+answer (`REQ-CORE-063`). A value nothing matches — a type key nobody used, a tag
+nobody created — returns no rows rather than an error, because that is the true
+answer to the question.
 
 **One sort key, and it is refused rather than reduced.** `REQ-SRCH-004` asks
 for "sorting over `sortable` fields, ascending and descending"; the example above

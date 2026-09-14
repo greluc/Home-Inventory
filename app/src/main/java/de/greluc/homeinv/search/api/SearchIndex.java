@@ -76,14 +76,23 @@ public interface SearchIndex {
    *     — keyset pagination in PostgreSQL and {@code search_after} in OpenSearch are the same idea
    * @param sort the order to return them in, or {@code null} for the default — oldest first, which
    *     is the order the keyset cursor resumes in when nobody asked for another
+   * @param typeVersionIds the item-type versions to restrict to, or empty for no restriction.
+   *     Resolved from the keys a caller wrote by {@code catalog}, which owns both the key and the
+   *     version chain — an item is written against a version, not against a type
+   * @param itemIds the items to restrict to, or empty for no restriction. This is how a tag filter
+   *     arrives: {@code tagging} owns the assignment and answers with ids, so an engine narrowing
+   *     by tag never has to know what a tag is
    * @param filters conditions on attributes, all of which must hold. Already checked against the
-   *     tenant's allowlist by the caller
+   *     tenant's allowlist by the caller, and holding attribute conditions only — every other
+   *     dimension has been resolved to one of the id lists above
    * @param limit how many at most
    */
   record Query(
       String text,
       String language,
       List<UUID> locationIds,
+      List<UUID> typeVersionIds,
+      List<UUID> itemIds,
       java.util.Optional<de.greluc.homeinv.platform.CursorCodec.Position> after,
       de.greluc.homeinv.platform.SortOrder sort,
       List<de.greluc.homeinv.platform.QueryFilter> filters,

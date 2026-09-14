@@ -6199,10 +6199,10 @@ paths:
         gone rather than aliased: two paths for one question is the drift this chapter exists to
         prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
 
-        The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet` and
-        `fields` are REQ-SRCH-002 and are not here yet. A parameter that is not implemented is absent
-        rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
-        report over the wrong rows.
+        The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet`
+        and `fields` are not here yet. A parameter that is not implemented is absent rather than
+        accepted and ignored, because silently ignoring a filter is how somebody ships a report over
+        the wrong rows.
 
         `SEARCH_QUERY` and not `ITEM_READ`: a listing is an enumeration surface whether
         or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -6255,10 +6255,13 @@ paths:
           format: int32
           maximum: 200
           type: integer
-      - description: A condition on an attribute, repeatable and conjunctive - every one given must hold.
-          `attr.<key>:<op>:<value>` with `eq`, `in`, `gt`, `gte`, `lt` or `lte`, or `attr.<key>:<value>`
-          for equality; `in` separates its values with commas. A range over a field that carries a unit
-          names it last, `attr.purchasePrice:gte:100:EUR`, and is refused without it.
+      - description: 'A condition, repeatable and conjunctive - every one given must hold, while `in`
+          widens within a single one. Four dimensions: `attr.<key>` for a field the type marks searchable,
+          `type` for a type key, `tag` for a tag name and `location` for a location id. The operator may
+          be left out for equality, so `type:power-tool` and `tag:in:broken,repair` read as they look;
+          `location:subtree:<uuid>` takes a place and everything under it. An attribute additionally takes
+          `gt`, `gte`, `lt` and `lte`, and a range over a field that carries a unit names it last - `attr.purchasePrice:gte:100:EUR`
+          - and is refused without it.'
         in: query
         name: filter
         schema:

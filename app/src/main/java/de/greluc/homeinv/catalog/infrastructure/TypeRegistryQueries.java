@@ -215,6 +215,31 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public List<UUID> itemTypeVersionsByKeys(Collection<String> keys) {
+    if (keys == null || keys.isEmpty()) {
+      return List.of();
+    }
+    UUID tenantId = TenantContext.require();
+    // Every version of every named type. `published_at` is deliberately not in
+    // the predicate: an item is written against the version that was current
+    // when it was written, so restricting to the newest one would hide most of
+    // a type's items rather than narrow to them.
+    return jdbc
+        .sql(
+            """
+            select v.id
+            from catalog.item_type_version v
+            join catalog.item_type t
+              on t.tenant_id = v.tenant_id and t.id = v.item_type_id
+            where v.tenant_id = ? and t.key = any(?)
+            """)
+        .params(tenantId, keys.toArray(String[]::new))
+        .query((rs, rowNum) -> rs.getObject("id", UUID.class))
+        .list();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<TypeRegistry.QueryableField> queryableFields() {
     UUID tenantId = TenantContext.require();
     // Grouped by key across every PUBLISHED version, because a query spans types.

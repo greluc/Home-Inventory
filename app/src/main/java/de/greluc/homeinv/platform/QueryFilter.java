@@ -10,9 +10,10 @@ import java.util.Objects;
 /**
  * One condition a query puts on an attribute (REQ-SRCH-003).
  *
- * <p>The wire spells it {@code filter=attr.<key>:<op>:<value>}, repeatable, and every filter given
- * has to hold — they are joined by "and", because a person narrowing a list expects each click to
- * narrow it further.
+ * <p>The wire spells it {@code filter=<dimension>:<op>:<value>}, repeatable, and every filter
+ * given has to hold — they are joined by "and", because a person narrowing a list expects each
+ * click to narrow it further. Within one filter {@link Operator#IN} is an "or", which is what makes
+ * a multi-select facet work: two ticked tags widen, two separate filters narrow.
  *
  * <h2>Why it is in the shared kernel</h2>
  *
@@ -30,13 +31,17 @@ import java.util.Objects;
  * unit and is refused without one (decided with the owner, 2026-09-14). 08 §8.2 showed
  * {@code attr.purchasePrice:gte:100} without one, and that example was wrong.
  *
- * @param field the attribute key, without the {@code attr.} prefix the wire uses
+ * @param dimension what is being narrowed
+ * @param field the attribute key, without the {@code attr.} prefix the wire uses — {@code null}
+ *     for every dimension but {@link Dimension#ATTRIBUTE}, which is the only one with more than one
+ *     field to name
  * @param operator how to compare
  * @param values what to compare against — one value, or several for {@link Operator#IN}
  * @param unit the currency or unit the comparison happens in, or {@code null} for a field that
  *     carries no dimension
  */
-public record QueryFilter(String field, Operator operator, List<String> values, String unit) {
+public record QueryFilter(
+    Dimension dimension, String field, Operator operator, List<String> values, String unit) {
 
   /**
    * Copies the values and refuses a filter that cannot mean anything.
@@ -46,15 +51,111 @@ public record QueryFilter(String field, Operator operator, List<String> values, 
    *     that compares against one
    */
   public QueryFilter {
-    Objects.requireNonNull(field, "A filter names a field");
+    Objects.requireNonNull(dimension, "A filter names what it narrows");
     Objects.requireNonNull(operator, "A filter names how to compare");
     values = List.copyOf(Objects.requireNonNull(values, "A filter names what to compare against"));
     if (values.isEmpty()) {
-      throw new IllegalArgumentException("A filter on " + field + " names no value");
+      throw new IllegalArgumentException("A filter on " + dimension.token() + " names no value");
     }
     if (values.size() > 1 && operator != Operator.IN) {
       throw new IllegalArgumentException(
           operator.token() + " compares against one value, not " + values.size());
+    }
+    if (dimension == Dimension.ATTRIBUTE && field == null) {
+      throw new IllegalArgumentException("An attribute filter names which attribute");
+    }
+    if (dimension != Dimension.ATTRIBUTE && field != null) {
+      throw new IllegalArgumentException(
+          dimension.token() + " is one dimension and takes no field name");
+    }
+    if (dimension != Dimension.ATTRIBUTE && unit != null) {
+      throw new IllegalArgumentException(dimension.token() + " carries no unit");
+    }
+    if (operator == Operator.SUBTREE && dimension != Dimension.LOCATION) {
+      // The one operator that is not a comparison but a walk, and only the
+      // location tree has anything to walk.
+      throw new IllegalArgumentException("Only a location filter can ask for a subtree");
+    }
+    if (dimension != Dimension.ATTRIBUTE
+        && operator != Operator.EQ
+        && operator != Operator.IN
+        && operator != Operator.SUBTREE) {
+      throw new IllegalArgumentException(
+          dimension.token() + " is a set and not an ordering; " + operator.token() + " is not one");
+    }
+  }
+
+  /**
+   * A convenience for the common case, an attribute compared without a unit.
+   *
+   * @param field the attribute key
+   * @param operator how to compare
+   * @param values what to compare against
+   * @return the condition
+   */
+  public static QueryFilter onAttribute(String field, Operator operator, List<String> values) {
+    return new QueryFilter(Dimension.ATTRIBUTE, field, operator, values, null);
+  }
+
+  /**
+   * A filter on one of the dimensions that is not an attribute.
+   *
+   * @param dimension what to narrow
+   * @param operator how to compare
+   * @param values what to compare against
+   * @return the condition
+   */
+  public static QueryFilter onScope(
+      Dimension dimension, Operator operator, List<String> values) {
+    return new QueryFilter(dimension, null, operator, values, null);
+  }
+
+  /**
+   * What a filter narrows.
+   *
+   * <p>Four of them, and three belong to other building blocks: a type is {@code catalog}'s, a tag
+   * is {@code tagging}'s and a location is {@code locations}'. {@code search} resolves each through
+   * that block's published port and hands {@code inventory} nothing but ids — which is the whole
+   * reason this type names the dimension rather than a column (ADR-0002).
+   */
+  public enum Dimension {
+    /** A field of the item's type, mirrored into {@code item_attr_index}. */
+    ATTRIBUTE("attr"),
+    /** The item's type, named by its key. */
+    TYPE("type"),
+    /** A tag assigned to the item, named as a person writes it. */
+    TAG("tag"),
+    /** Where the item is, named by id. */
+    LOCATION("location");
+
+    private final String token;
+
+    Dimension(String token) {
+      this.token = token;
+    }
+
+    /**
+     * The token the wire uses, which is the part before the first colon.
+     *
+     * @return the lower-case token
+     */
+    public String token() {
+      return token;
+    }
+
+    /**
+     * The dimension a token names.
+     *
+     * @param token as it arrived
+     * @return the dimension, or {@code null} when no dimension has that token
+     */
+    public static Dimension ofToken(String token) {
+      for (Dimension dimension : values()) {
+        if (dimension.token.equals(token)) {
+          return dimension;
+        }
+      }
+      return null;
     }
   }
 
@@ -92,7 +193,14 @@ public record QueryFilter(String field, Operator operator, List<String> values, 
     /** Less than. */
     LT("lt"),
     /** Less than or equal to. */
-    LTE("lte");
+    LTE("lte"),
+    /**
+     * At this node of the location tree or anywhere beneath it.
+     *
+     * <p>Not a comparison: {@code locations} resolves it to the set of ids in that subtree, and
+     * what reaches a statement is that set. Only {@link Dimension#LOCATION} accepts it.
+     */
+    SUBTREE("subtree");
 
     private final String token;
 

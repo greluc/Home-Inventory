@@ -366,7 +366,7 @@ attributes, quantities, relations, lifecycle.
 | Publishes | `SearchService.query(SearchRequest) → SearchResult`, `SavedSearchService` |
 | Outbound ports | `SearchIndex` (adapters: OpenSearch primary, PostgreSQL as fallback) |
 | Events | `IndexingLagged`, `ReindexStarted`, `ReindexCompleted` |
-| Query capabilities | Full text across name, description, notes, attribute values, tags, location path · facets over type, category, tag, location subtree, condition, price range · filters over any field marked `facetable` · sorting over `sortable` fields |
+| Query capabilities | Full text across name, description, notes, attribute values, tags, location path · facets over type, category, tag, location subtree, condition, price range · filters over type, tag and location subtree and over any field marked `searchable` · sorting over `sortable` fields |
 | Consistency | Eventually consistent with a target lag < 2 s. Immediately after a write the detail view **always** reads from PostgreSQL, never from the index. Index lag is monitored as a metric. |
 | Saved searches | A saved search is a named query with filters that appears as a "smart list" — also usable as the source for bulk label printing and stocktake runs. |
 

@@ -13,14 +13,17 @@ import de.greluc.homeinv.tagging.api.TagAssigned;
 import de.greluc.homeinv.tagging.api.TagCreated;
 import de.greluc.homeinv.tagging.api.TagGroupView;
 import de.greluc.homeinv.tagging.api.TagMerged;
+import de.greluc.homeinv.tagging.api.TagQueries;
 import de.greluc.homeinv.tagging.api.TagService;
 import de.greluc.homeinv.tagging.api.TagUnassigned;
 import de.greluc.homeinv.tagging.api.TagView;
 import de.greluc.homeinv.tagging.api.TaggableTargets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @Slf4j
 @RequiredArgsConstructor
-public class TagAdapter implements TagService {
+public class TagAdapter implements TagService, TagQueries {
 
   /** The cap REQ-NFR-010 puts on every page of every collection. */
   private static final int MAX_PAGE = 200;
@@ -636,5 +639,57 @@ public class TagAdapter implements TagService {
     return read == size && last.position() != null
         ? cursors.encode(last.position(), fingerprint)
         : null;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<UUID> itemsTagged(Collection<String> names) {
+    if (names == null || names.isEmpty()) {
+      return List.of();
+    }
+    UUID tenantId = TenantContext.require();
+    // `lower(name)` on both sides, because `tag_name_unique` is on `lower(name)`
+    // and "Fragile" and "fragile" are one tag (V17__tags.sql). The names arrive
+    // as a person wrote them, and a filter that only matched the casing the tag
+    // happens to be stored in would be wrong for half of them.
+    //
+    // The recursion follows `merged_into`. `merge` repoints the assignments to
+    // the surviving tag and leaves the old one as a tombstone pointing at what
+    // it became, so a name that was merged away has no assignments of its own
+    // any more. Following the pointer is the same redirect REQ-CORE-063 gives a
+    // client holding the old id: somebody who saved the filter "broken" still
+    // finds the items, rather than an empty list that looks like an answer. The
+    // chain can be longer than one hop, because a tag that absorbed another can
+    // itself be merged later.
+    return jdbc
+        .sql(
+            """
+            with recursive named as (
+                select t.id, t.merged_into
+                from tagging.tag t
+                where t.tenant_id = ? and lower(t.name) = any(?)
+              union
+                select t.id, t.merged_into
+                from tagging.tag t
+                join named n on n.merged_into = t.id
+                where t.tenant_id = ?
+            )
+            select distinct a.item_id
+            from tagging.tag_assignment a
+            where a.tenant_id = ?
+              and a.item_id is not null
+              and a.tag_id in (select id from named)
+            """)
+        .params(
+            tenantId,
+            names.stream()
+                .filter(name -> name != null && !name.isBlank())
+                .map(name -> name.trim().toLowerCase(Locale.ROOT))
+                .distinct()
+                .toArray(String[]::new),
+            tenantId,
+            tenantId)
+        .query((rs, rowNum) -> rs.getObject("item_id", UUID.class))
+        .list();
   }
 }

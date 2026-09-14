@@ -133,6 +133,29 @@ public interface TypeRegistry {
   List<QueryableField> queryableFields();
 
   /**
+   * The item-type <b>version</b> ids belonging to the types a tenant knows by these keys.
+   *
+   * <p>What {@code filter=type:power-tool} resolves to. A key is what a person writes, and what an
+   * item holds is {@code item_type_version_id} — an item is written against the version of the
+   * type that was published when it was written (ADR-0004). Narrowing by type therefore means
+   * naming every version of it, and the translation belongs here because both the key and the
+   * version chain are {@code catalog}'s to own: {@code search} composes the query and never reads
+   * this schema (ADR-0002).
+   *
+   * <p><b>Every</b> version, drafts and superseded ones included. An item written last year against
+   * version 2 is still a power tool today, and a list that showed only the current version's items
+   * would be missing most of them.
+   *
+   * <p>A key nothing is called yields nothing rather than a refusal: it matches no item, which is a
+   * true answer to "show me the power tools" in a tenant that has none. An archived type still
+   * answers, because the items written against it still exist.
+   *
+   * @param keys the type keys, possibly none
+   * @return the version ids, in no particular order; empty when no key matches
+   */
+  List<UUID> itemTypeVersionsByKeys(Collection<String> keys);
+
+  /**
    * One attribute key a query may name.
    *
    * @param key the attribute key, as {@code item_attr_index.field_key} holds it

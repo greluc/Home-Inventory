@@ -70,7 +70,9 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
             tenant,
             () ->
                 index.find(
-                    new SearchIndex.Query("", "de", List.of(), java.util.Optional.empty(), null, List.of(), 50)));
+                    new SearchIndex.Query(
+                        "", "de", List.of(), List.of(), List.of(),
+                        java.util.Optional.empty(), null, List.of(), 50)));
     assertThat(hits.itemIds())
         .as("the index names the items and hands over nothing else")
         .containsExactly(first, second, third);

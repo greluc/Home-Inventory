@@ -372,10 +372,10 @@ public class ItemController {
    * gone rather than aliased: two paths for one question is the drift this chapter exists to
    * prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
    *
-   * <p>The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet` and
-   * `fields` are REQ-SRCH-002 and are not here yet. A parameter that is not implemented is absent
-   * rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
-   * report over the wrong rows.
+   * <p>The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet`
+   * and `fields` are not here yet. A parameter that is not implemented is absent rather than
+   * accepted and ignored, because silently ignoring a filter is how somebody ships a report over
+   * the wrong rows.
    *
    * <p>{@code SEARCH_QUERY} and not {@code ITEM_READ}: a listing is an enumeration surface whether
    * or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -401,11 +401,14 @@ public class ItemController {
       name = "filter",
       in = ParameterIn.QUERY,
       description =
-          "A condition on an attribute, repeatable and conjunctive - every one given must hold. "
-              + "`attr.<key>:<op>:<value>` with `eq`, `in`, `gt`, `gte`, `lt` or `lte`, or "
-              + "`attr.<key>:<value>` for equality; `in` separates its values with commas. A range "
-              + "over a field that carries a unit names it last, "
-              + "`attr.purchasePrice:gte:100:EUR`, and is refused without it.",
+          "A condition, repeatable and conjunctive - every one given must hold, while `in` widens "
+              + "within a single one. Four dimensions: `attr.<key>` for a field the type marks "
+              + "searchable, `type` for a type key, `tag` for a tag name and `location` for a "
+              + "location id. The operator may be left out for equality, so `type:power-tool` and "
+              + "`tag:in:broken,repair` read as they look; `location:subtree:<uuid>` takes a place "
+              + "and everything under it. An attribute additionally takes `gt`, `gte`, `lt` and "
+              + "`lte`, and a range over a field that carries a unit names it last - "
+              + "`attr.purchasePrice:gte:100:EUR` - and is refused without it.",
       array = @ArraySchema(schema = @Schema(type = "string", maxLength = 200), maxItems = 20))
   public Page<ItemView> listItems(
       @RequestParam(required = false) @Size(max = 500) String q,
@@ -466,34 +469,67 @@ public class ItemController {
   /**
    * Reads one {@code filter} parameter.
    *
-   * <p>Two shapes, told apart by whether the second part names an operator: {@code key:value} is
-   * equality and {@code key:op:value} names the comparison. Told apart that way rather than by
-   * counting the parts, so that a value which happens to read like {@code lt} cannot change what
-   * the filter means. A trailing part after the value is the unit.
+   * <p>{@code <dimension>:<op>:<value>}, where the dimension is {@code attr.<key>}, {@code type},
+   * {@code tag} or {@code location}. The operator may be left out for equality, which is what makes
+   * {@code type:power-tool} read the way it does. Told apart by whether the second part <i>is</i> an
+   * operator rather than by counting the parts, so that a tag actually called {@code lt} cannot
+   * change what its own filter means.
+   *
+   * <p>An attribute value is one part and anything after it is the unit. Every other dimension
+   * takes the rest of the parameter as its value, colons included: a tag is named as a person wrote
+   * it, and a person may well have written {@code Kitchen: top shelf}. A comma still separates the
+   * values of an {@code in}, so a tag whose name contains one cannot be filtered by name — the
+   * grammar of 08 §8.2 spends the comma there, and that is the price.
    *
    * @param filter one parameter
    * @return the condition it spells
-   * @throws IllegalArgumentException when it names no attribute, or carries no value
+   * @throws IllegalArgumentException when it names no dimension, or carries no value
    */
   private static QueryFilter filterOf(String filter) {
-    if (filter == null || !filter.startsWith(SortOrder.ATTRIBUTE_PREFIX)) {
-      throw new IllegalArgumentException(
-          "A filter names an attribute, attr.<key>:<op>:<value>, not " + filter);
+    if (filter == null || filter.isBlank()) {
+      throw new IllegalArgumentException("An empty filter narrows nothing");
     }
-    String[] parts = filter.substring(SortOrder.ATTRIBUTE_PREFIX.length()).split(":");
+    String[] parts = filter.split(":");
+
+    QueryFilter.Dimension dimension;
+    String field = null;
+    if (parts[0].startsWith(SortOrder.ATTRIBUTE_PREFIX)) {
+      dimension = QueryFilter.Dimension.ATTRIBUTE;
+      field = parts[0].substring(SortOrder.ATTRIBUTE_PREFIX.length());
+      if (field.isBlank()) {
+        throw new IllegalArgumentException("A filter needs a field and a value: " + filter);
+      }
+    } else {
+      dimension = QueryFilter.Dimension.ofToken(parts[0]);
+      if (dimension == null || dimension == QueryFilter.Dimension.ATTRIBUTE) {
+        throw new IllegalArgumentException(
+            "Not a filter dimension: " + parts[0] + "; expected attr.<key>, type, tag or location");
+      }
+    }
+
     boolean named = parts.length >= 3 && QueryFilter.Operator.isToken(parts[1]);
     QueryFilter.Operator operator =
         named ? QueryFilter.Operator.ofToken(parts[1]) : QueryFilter.Operator.EQ;
     int valueAt = named ? 2 : 1;
-    if (parts.length <= valueAt || parts[0].isBlank() || parts[valueAt].isBlank()) {
-      throw new IllegalArgumentException("A filter needs a field and a value: " + filter);
+    if (parts.length <= valueAt) {
+      throw new IllegalArgumentException("A filter needs a value: " + filter);
     }
+
+    String value;
+    String unit = null;
+    if (dimension == QueryFilter.Dimension.ATTRIBUTE) {
+      value = parts[valueAt];
+      unit = parts.length > valueAt + 1 ? parts[valueAt + 1] : null;
+    } else {
+      value = String.join(":", Arrays.copyOfRange(parts, valueAt, parts.length));
+    }
+    if (value.isBlank()) {
+      throw new IllegalArgumentException("A filter needs a value: " + filter);
+    }
+
     List<String> values =
-        operator == QueryFilter.Operator.IN
-            ? List.of(parts[valueAt].split(","))
-            : List.of(parts[valueAt]);
-    String unit = parts.length > valueAt + 1 ? parts[valueAt + 1] : null;
-    return new QueryFilter(parts[0], operator, values, unit);
+        operator == QueryFilter.Operator.IN ? List.of(value.split(",")) : List.of(value);
+    return new QueryFilter(dimension, field, operator, values, unit);
   }
 
   /**

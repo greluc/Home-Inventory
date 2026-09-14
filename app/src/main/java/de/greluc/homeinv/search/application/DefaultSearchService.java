@@ -17,6 +17,7 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.UUID;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,22 @@ public class DefaultSearchService implements SearchService {
    */
   private final de.greluc.homeinv.catalog.api.TypeRegistry types;
 
+  /**
+   * Where a tag filter is answered (REQ-SRCH-002).
+   *
+   * <p>{@code tagging} owns the assignment and answers with item ids, so no other block joins its
+   * tables and no engine has to know what a tag is (ADR-0002).
+   */
+  private final de.greluc.homeinv.tagging.api.TagQueries tags;
+
+  /**
+   * Where {@code location:subtree:} is answered.
+   *
+   * <p>The tree is {@code locations}' and the walk is its {@code ltree}'s. What comes back is a set
+   * of ids, which is what {@code inventory} already narrows by.
+   */
+  private final de.greluc.homeinv.locations.api.LocationService locations;
+
   private final CursorCodec cursors;
 
   @Override
@@ -84,11 +101,34 @@ public class DefaultSearchService implements SearchService {
 
     SortOrder sort = allowed(request.sort());
 
-    List<QueryFilter> filters = allowed(request.filters());
+    // Attributes are the only dimension an engine answers itself. Every other one
+    // belongs to another block, is resolved here through that block's port, and
+    // reaches the engine as a set of ids.
+    List<QueryFilter> all = request.filters() == null ? List.of() : request.filters();
+    List<QueryFilter> filters =
+        allowed(all.stream().filter(one -> one.dimension() == QueryFilter.Dimension.ATTRIBUTE)
+            .toList());
+
+    Scope scope = resolve(all, locationIds);
+    if (scope.empty()) {
+      // A type nobody uses, a tag nothing carries, a subtree that is empty: the
+      // answer is no rows, and asking an engine for the rows in an empty set of
+      // ids would be a query whose answer is already known.
+      return Page.of(List.of(), null);
+    }
 
     SearchIndex.Hits hits =
         index.find(
-            new SearchIndex.Query(text, language, locationIds, after, sort, filters, limit));
+            new SearchIndex.Query(
+                text,
+                language,
+                scope.locationIds(),
+                scope.typeVersionIds(),
+                scope.itemIds(),
+                after,
+                sort,
+                filters,
+                limit));
 
     // The ids become rows here, through the ordinary read: row-level security and
     // the field visibility rules apply on the way out, which is what makes a
@@ -151,7 +191,9 @@ public class DefaultSearchService implements SearchService {
                           : filters.stream()
                               .map(
                                   one ->
-                                      one.field()
+                                      one.dimension().token()
+                                          + ":"
+                                          + (one.field() == null ? "" : one.field())
                                           + ":"
                                           + one.operator().token()
                                           + ":"
@@ -209,6 +251,115 @@ public class DefaultSearchService implements SearchService {
   }
 
   /**
+   * What the scope filters narrow to, as sets of ids.
+   *
+   * @param locationIds the locations, or empty for no restriction
+   * @param typeVersionIds the item-type versions, or empty for no restriction
+   * @param itemIds the items, or empty for no restriction
+   * @param empty whether some filter resolved to nothing at all, which means no row can match
+   */
+  private record Scope(
+      List<UUID> locationIds, List<UUID> typeVersionIds, List<UUID> itemIds, boolean empty) {}
+
+  /**
+   * Resolves every filter that is not an attribute, through the block that owns it (REQ-SRCH-002).
+   *
+   * <p>Three dimensions and three owners: {@code type} is a key {@code catalog} translates,
+   * {@code tag} is an assignment {@code tagging} answers with item ids, and
+   * {@code location:subtree:} is a walk of {@code locations}' tree. Nothing here reads another
+   * block's tables, which is the whole reason a filter carries a dimension rather than a column.
+   *
+   * <p>Several filters on one dimension <b>intersect</b>, because every filter given has to hold —
+   * {@code tag:broken} and {@code tag:heavy} together mean both, while {@code tag:in:broken,heavy}
+   * means either. That is the distinction that makes a multi-select facet behave the way people
+   * expect.
+   *
+   * <p>A value nothing matches resolves to the empty set, and the whole query is then known to have
+   * no answer. That is reported rather than refused: a tag nobody has used matches no item, which
+   * is a true answer to the question and not a malformed request.
+   *
+   * @param filters every filter the caller gave, attributes included
+   * @param scopedLocations the locations the caller was already confined to, or empty
+   * @return the resolved sets
+   * @throws IllegalArgumentException when a location filter does not name a uuid
+   */
+  private Scope resolve(List<QueryFilter> filters, List<UUID> scopedLocations) {
+    List<UUID> locationIds = scopedLocations;
+    List<UUID> typeVersionIds = List.of();
+    List<UUID> itemIds = List.of();
+    boolean empty = false;
+
+    for (QueryFilter filter : filters) {
+      switch (filter.dimension()) {
+        case ATTRIBUTE -> {
+          // Answered by the engine, not here.
+        }
+        case TYPE -> {
+          List<UUID> resolved = types.itemTypeVersionsByKeys(filter.values());
+          empty |= resolved.isEmpty();
+          typeVersionIds =
+              typeVersionIds.isEmpty() ? resolved : intersect(typeVersionIds, resolved);
+          empty |= typeVersionIds.isEmpty();
+        }
+        case TAG -> {
+          List<UUID> resolved = tags.itemsTagged(filter.values());
+          empty |= resolved.isEmpty();
+          itemIds = itemIds.isEmpty() ? resolved : intersect(itemIds, resolved);
+          empty |= itemIds.isEmpty();
+        }
+        case LOCATION -> {
+          List<UUID> resolved = placesOf(filter);
+          empty |= resolved.isEmpty();
+          locationIds = locationIds.isEmpty() ? resolved : intersect(locationIds, resolved);
+          empty |= locationIds.isEmpty();
+        }
+      }
+    }
+    return new Scope(locationIds, typeVersionIds, itemIds, empty);
+  }
+
+  /**
+   * The locations one {@code location} filter names.
+   *
+   * @param filter the filter, with {@code subtree} or without it
+   * @return the location ids, the subtree included where it was asked for
+   * @throws IllegalArgumentException when a value is not a uuid
+   */
+  private List<UUID> placesOf(QueryFilter filter) {
+    List<UUID> named = new ArrayList<>();
+    for (String value : filter.values()) {
+      try {
+        named.add(UUID.fromString(value.trim()));
+      } catch (IllegalArgumentException notAnId) {
+        throw new IllegalArgumentException(
+            "A location filter names a location by id, not " + value);
+      }
+    }
+    if (filter.operator() != QueryFilter.Operator.SUBTREE) {
+      return named;
+    }
+    // `subtreeIds` includes the node itself, and a location this tenant cannot
+    // see raises the ordinary not-found rather than quietly widening the answer.
+    List<UUID> withDescendants = new ArrayList<>();
+    for (UUID place : named) {
+      withDescendants.addAll(locations.subtreeIds(place));
+    }
+    return withDescendants;
+  }
+
+  /**
+   * The ids both sets hold.
+   *
+   * @param first one set
+   * @param second the other
+   * @return their intersection, in the order of the first
+   */
+  private static List<UUID> intersect(List<UUID> first, List<UUID> second) {
+    var keep = new java.util.HashSet<>(second);
+    return first.stream().filter(keep::contains).toList();
+  }
+
+  /**
    * Refuses a filter the tenant did not allow, or one that cannot mean anything (REQ-SRCH-003).
    *
    * <p>Two checks, and the second is the one that is easy to leave out. The field has to be one some
@@ -221,7 +372,8 @@ public class DefaultSearchService implements SearchService {
    * <p>Equality needs no unit. "Is it exactly 100" is answerable across currencies, because no
    * amount of euros equals an amount of dollars either.
    *
-   * @param filters what was asked for, possibly none
+   * @param filters the attribute conditions asked for, possibly none. Every other dimension has
+   *     already been resolved to ids and is not the allowlist's business
    * @return the same filters when every one of them is allowed
    * @throws IllegalArgumentException when a field may not be filtered, or a range over a
    *     dimensioned field names no unit

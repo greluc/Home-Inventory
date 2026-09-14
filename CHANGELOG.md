@@ -153,6 +153,14 @@ commit".
 
 ### Added
 
+- **Lists can be narrowed by type, tag or place.** Beside the attribute filters,
+  `GET /api/v1/items` now takes `filter=type:power-tool`, `filter=tag:broken` and
+  `filter=location:subtree:<id>`, which takes a place and everything under it.
+  Several values in one filter widen it — `tag:in:broken,repair` is either — and
+  a second filter narrows, which is what ticking two boxes in a sidebar means. A
+  tag that has since been merged into another still finds the items it was on.
+  *REST API: new filter dimensions.*
+
 - **Lists can be narrowed by an item's own fields.** `GET /api/v1/items` takes
   repeatable `filter=attr.<key>:<op>:<value>` conditions over any field a type
   marks searchable, ranges included, and every condition given has to hold. A
