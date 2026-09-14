@@ -102,7 +102,7 @@ in a path.
 GET /api/v1/items
   ?q=drill                              full text
   &filter=type:power-tool               structured filter, repeatable
-  &filter=attr.purchasePrice:gte:100
+  &filter=attr.purchasePrice:gte:100:EUR
   &filter=location:subtree:{uuid}
   &filter=tag:in:broken,repair
   &sort=-updatedAt                      minus = descending; one key
@@ -110,6 +110,24 @@ GET /api/v1/items
   &cursor=eyJ2IjoxLCJrIjoi…             cursor, never an offset
   &limit=50                             max. 200
 ```
+
+**A range over a dimensioned field names its unit, and is refused without
+one.** `item_attr_index` keeps `unit_value` beside `num_value` precisely so that
+a total never adds euros to dollars ([ADR-0025](../adr/0025-money-representation.md));
+a comparison is a subtraction with the sign thrown away, so it inherits the rule.
+The example above read `filter=attr.purchasePrice:gte:100` until 2026-09-14 and
+was wrong: "over 100" across currencies is a number nobody asked for, and the
+answer it would return looks right. Equality needs no unit — no amount of euros
+equals an amount of dollars either — and a unit on a field that has no dimension
+is refused too, rather than dropped. All four refusals answer `422`, naming the
+field.
+
+**`attr.` is the prefix that answers today.** `REQ-SRCH-003` is filters over
+`searchable` fields, and that is what is implemented (2026-09-14). The three
+other forms above — `type:`, `location:subtree:` and `tag:in:` — are the filter
+half of `REQ-SRCH-002`'s facets, because a facet you can see and not filter by is
+a count with nothing behind it; they arrive with it, and until they do they are
+refused with `422` rather than accepted and ignored.
 
 **One sort key, and it is refused rather than reduced.** `REQ-SRCH-004` asks
 for "sorting over `sortable` fields, ascending and descending"; the example above

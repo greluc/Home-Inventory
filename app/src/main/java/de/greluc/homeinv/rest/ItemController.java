@@ -6,6 +6,7 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
+import de.greluc.homeinv.platform.QueryFilter;
 import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.inventory.api.BulkItemOperations;
 import de.greluc.homeinv.inventory.api.ItemBundles;
@@ -19,6 +20,9 @@ import de.greluc.homeinv.platform.Money;
 import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.search.api.SearchService;
 import de.greluc.homeinv.inventory.api.ItemKind;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -34,6 +38,7 @@ import jakarta.validation.constraints.NotEmpty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -70,6 +75,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/items")
 @RequiredArgsConstructor
 public class ItemController {
+
+  /** How many {@code filter} parameters one request may carry. */
+  private static final int MAX_FILTERS = 20;
+
+  /** How long one {@code filter} parameter may be. */
+  private static final int MAX_FILTER_LENGTH = 200;
 
   private final ItemService items;
   private final de.greluc.homeinv.search.api.SearchService search;
@@ -361,10 +372,10 @@ public class ItemController {
    * gone rather than aliased: two paths for one question is the drift this chapter exists to
    * prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
    *
-   * <p>The grammar arrives in pieces. `q`, `sort`, `cursor` and `limit` work; `filter` and `fields`
-   * are REQ-SRCH-002/003 and are not here yet. A parameter that is not implemented is absent rather
-   * than accepted and ignored, because silently ignoring a filter is how somebody ships a report
-   * over the wrong rows.
+   * <p>The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet` and
+   * `fields` are REQ-SRCH-002 and are not here yet. A parameter that is not implemented is absent
+   * rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
+   * report over the wrong rows.
    *
    * <p>{@code SEARCH_QUERY} and not {@code ITEM_READ}: a listing is an enumeration surface whether
    * or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -377,19 +388,112 @@ public class ItemController {
    *     first (REQ-SRCH-004). Omitted returns the default order, oldest first
    * @param cursor an opaque cursor from a previous response, or omitted for the first page
    * @param limit how many at most
+   * @param http the request, read only for the repeatable {@code filter} parameter
    * @return one page of items
    */
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.SEARCH_QUERY)
   @CanFail(ProblemType.MALFORMED_REQUEST)
+  // Declared by hand because `filter` is not in the signature. It cannot be: a
+  // `List<String>` parameter is converted from a single value by splitting it on
+  // commas, and the comma is this grammar's own `in` separator.
+  @Parameter(
+      name = "filter",
+      in = ParameterIn.QUERY,
+      description =
+          "A condition on an attribute, repeatable and conjunctive - every one given must hold. "
+              + "`attr.<key>:<op>:<value>` with `eq`, `in`, `gt`, `gte`, `lt` or `lte`, or "
+              + "`attr.<key>:<value>` for equality; `in` separates its values with commas. A range "
+              + "over a field that carries a unit names it last, "
+              + "`attr.purchasePrice:gte:100:EUR`, and is refused without it.",
+      array = @ArraySchema(schema = @Schema(type = "string", maxLength = 200), maxItems = 20))
   public Page<ItemView> listItems(
       @RequestParam(required = false) @Size(max = 500) String q,
       @RequestParam(required = false, defaultValue = "de") @Size(max = 5) String language,
       @RequestParam(required = false) @Size(max = 100) String sort,
       @RequestParam(required = false) @Size(max = 500) String cursor,
-      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit,
+      HttpServletRequest http) {
     return search.query(
-        new SearchService.SearchRequest(q, language, List.of(), cursor, sortOf(sort), limit));
+        new SearchService.SearchRequest(
+            q,
+            language,
+            List.of(),
+            cursor,
+            sortOf(sort),
+            filtersOf(http.getParameterValues("filter")),
+            limit));
+  }
+
+  /**
+   * Reads the repeatable {@code filter} parameter as the wire spells it.
+   *
+   * <p>Translation and not a decision, the same split as {@link #sortOf(String)}: the grammar is a
+   * convention of this API, and whether a field may be filtered at all — and whether this one
+   * needed a unit — is the application layer's to answer against the tenant's own allowlist
+   * (ADR-0010).
+   *
+   * <p>Read from the raw request rather than bound as a {@code List<String>} parameter, because
+   * Spring converts a single value to a list by splitting it on commas — and the comma is this
+   * grammar's own separator for {@code in}. One {@code filter=a:in:x,y} would arrive as two
+   * filters, while two {@code filter=} parameters would not, which is a difference nothing in the
+   * contract predicts.
+   *
+   * @param filters the parameters as they arrived, or {@code null} when none was given
+   * @return one condition per parameter, all of which must hold; empty when none was given
+   * @throws IllegalArgumentException when there are too many, one is too long, or one is not of
+   *     that shape
+   */
+  private static List<QueryFilter> filtersOf(String[] filters) {
+    if (filters == null || filters.length == 0) {
+      return List.of();
+    }
+    // The bound `@Size` would have said this; saying it here keeps the limit in
+    // the same place as the parsing now that the parameter is read by hand.
+    if (filters.length > MAX_FILTERS) {
+      throw new IllegalArgumentException(
+          "At most " + MAX_FILTERS + " filters, not " + filters.length);
+    }
+    for (String filter : filters) {
+      if (filter != null && filter.length() > MAX_FILTER_LENGTH) {
+        throw new IllegalArgumentException(
+            "A filter is at most " + MAX_FILTER_LENGTH + " characters");
+      }
+    }
+    return Arrays.stream(filters).map(ItemController::filterOf).toList();
+  }
+
+  /**
+   * Reads one {@code filter} parameter.
+   *
+   * <p>Two shapes, told apart by whether the second part names an operator: {@code key:value} is
+   * equality and {@code key:op:value} names the comparison. Told apart that way rather than by
+   * counting the parts, so that a value which happens to read like {@code lt} cannot change what
+   * the filter means. A trailing part after the value is the unit.
+   *
+   * @param filter one parameter
+   * @return the condition it spells
+   * @throws IllegalArgumentException when it names no attribute, or carries no value
+   */
+  private static QueryFilter filterOf(String filter) {
+    if (filter == null || !filter.startsWith(SortOrder.ATTRIBUTE_PREFIX)) {
+      throw new IllegalArgumentException(
+          "A filter names an attribute, attr.<key>:<op>:<value>, not " + filter);
+    }
+    String[] parts = filter.substring(SortOrder.ATTRIBUTE_PREFIX.length()).split(":");
+    boolean named = parts.length >= 3 && QueryFilter.Operator.isToken(parts[1]);
+    QueryFilter.Operator operator =
+        named ? QueryFilter.Operator.ofToken(parts[1]) : QueryFilter.Operator.EQ;
+    int valueAt = named ? 2 : 1;
+    if (parts.length <= valueAt || parts[0].isBlank() || parts[valueAt].isBlank()) {
+      throw new IllegalArgumentException("A filter needs a field and a value: " + filter);
+    }
+    List<String> values =
+        operator == QueryFilter.Operator.IN
+            ? List.of(parts[valueAt].split(","))
+            : List.of(parts[valueAt]);
+    String unit = parts.length > valueAt + 1 ? parts[valueAt + 1] : null;
+    return new QueryFilter(parts[0], operator, values, unit);
   }
 
   /**

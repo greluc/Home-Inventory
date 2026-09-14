@@ -6199,10 +6199,10 @@ paths:
         gone rather than aliased: two paths for one question is the drift this chapter exists to
         prevent, and `/search` is reserved for saved searches (REQ-SRCH-008).
 
-        The grammar arrives in pieces. `q`, `sort`, `cursor` and `limit` work; `filter` and `fields`
-        are REQ-SRCH-002/003 and are not here yet. A parameter that is not implemented is absent rather
-        than accepted and ignored, because silently ignoring a filter is how somebody ships a report
-        over the wrong rows.
+        The grammar arrives in pieces. `q`, `filter`, `sort`, `cursor` and `limit` work; `facet` and
+        `fields` are REQ-SRCH-002 and are not here yet. A parameter that is not implemented is absent
+        rather than accepted and ignored, because silently ignoring a filter is how somebody ships a
+        report over the wrong rows.
 
         `SEARCH_QUERY` and not `ITEM_READ`: a listing is an enumeration surface whether
         or not it carries a query, and reading one thing you were pointed at is a different capability
@@ -6255,6 +6255,18 @@ paths:
           format: int32
           maximum: 200
           type: integer
+      - description: A condition on an attribute, repeatable and conjunctive - every one given must hold.
+          `attr.<key>:<op>:<value>` with `eq`, `in`, `gt`, `gte`, `lt` or `lte`, or `attr.<key>:<value>`
+          for equality; `in` separates its values with commas. A range over a field that carries a unit
+          names it last, `attr.purchasePrice:gte:100:EUR`, and is refused without it.
+        in: query
+        name: filter
+        schema:
+          items:
+            maxLength: 200
+            type: string
+          maxItems: 20
+          type: array
       responses:
         '200':
           content:

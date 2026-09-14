@@ -36,7 +36,13 @@ package de.greluc.homeinv.platform;
  */
 public record SortOrder(String field, boolean descending) {
 
-  /** How an attribute is named on the wire, to tell it from a column of the thing itself. */
+  /**
+   * How an attribute is named on the wire, to tell it from a column of the thing itself.
+   *
+   * <p>Shared with {@link QueryFilter}: {@code sort=attr.manufacturer} and
+   * {@code filter=attr.manufacturer:Stanley} mean the same {@code attr.} and would drift apart
+   * as two constants.
+   */
   public static final String ATTRIBUTE_PREFIX = "attr.";
 
   /**

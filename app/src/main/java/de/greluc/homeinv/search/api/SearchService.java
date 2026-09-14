@@ -6,6 +6,7 @@ package de.greluc.homeinv.search.api;
 
 import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
+import de.greluc.homeinv.platform.QueryFilter;
 import de.greluc.homeinv.inventory.api.ItemView;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +38,9 @@ public interface SearchService {
    *     means the whole tenant. The cursor is bound to this list as well as to the text, so a
    *     cursor from one location's page is refused on another's (REQ-SRCH-009)
    * @param cursor an opaque cursor from a previous result, or {@code null} for the first page
+   * @param filters conditions on attributes, all of which must hold. Refused when a field is not one
+   *     this tenant marked searchable, and refused when a range filter over a dimensioned field
+   *     names no unit
    * @param sort the order to return them in, or {@code null} for the default. Refused when the
    *     field is not one this tenant marked sortable — the allowlist of
    *     {@code TypeRegistry.queryableFields}, never what a caller typed
@@ -48,6 +52,7 @@ public interface SearchService {
       List<UUID> locationIds,
       String cursor,
       SortOrder sort,
+      List<QueryFilter> filters,
       int limit) {}
 
 }

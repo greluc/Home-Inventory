@@ -29,6 +29,9 @@ public interface ItemSearchQuery {
    *     restriction. It is a list rather than a single id because "including the subtree"
    *     (REQ-CORE-049) resolves to a set of locations in the {@code locations} block, and
    *     {@code inventory} must not read that block's schema to work it out for itself
+   * @param filters conditions on attributes, all of which must hold. Each becomes an {@code exists}
+   *     over {@code item_attr_index} rather than a join, so two filters cannot multiply the rows
+   *     between them. Field keys have already been checked against the tenant's allowlist
    * @param sort the order to return them in, or {@code null} for the default. The field has already
    *     been checked against the tenant's allowlist by the caller; this block resolves it to a
    *     column and never to anything a caller typed
@@ -42,6 +45,7 @@ public interface ItemSearchQuery {
       List<UUID> locationIds,
       Optional<CursorCodec.Position> after,
       de.greluc.homeinv.platform.SortOrder sort,
+      List<de.greluc.homeinv.platform.QueryFilter> filters,
       int limit);
 
   /**

@@ -153,6 +153,13 @@ commit".
 
 ### Added
 
+- **Lists can be narrowed by an item's own fields.** `GET /api/v1/items` takes
+  repeatable `filter=attr.<key>:<op>:<value>` conditions over any field a type
+  marks searchable, ranges included, and every condition given has to hold. A
+  price or a weight has to say which unit it is asking about —
+  `attr.purchasePrice:gte:100:EUR` — and a range without one is refused rather
+  than answered across every currency at once. *REST API: new query parameter.*
+
 - **Every list now answers in one shape.** Where each kind of list used to return
   its own slightly different wrapper, all of them now carry the rows under `data`,
   where the next page starts under `page`, and how the answer was produced under
@@ -424,7 +431,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 30 types in the shared
+- **The shared kernel is measured.** `platform` holds 31 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

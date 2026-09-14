@@ -76,6 +76,7 @@ public class PostgresSearchIndex implements SearchIndex {
             query.locationIds(),
             query.after(),
             query.sort(),
+            query.filters(),
             query.limit());
     return new Hits(rows.ids(), rows.last());
   }

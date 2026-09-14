@@ -76,6 +76,8 @@ public interface SearchIndex {
    *     — keyset pagination in PostgreSQL and {@code search_after} in OpenSearch are the same idea
    * @param sort the order to return them in, or {@code null} for the default — oldest first, which
    *     is the order the keyset cursor resumes in when nobody asked for another
+   * @param filters conditions on attributes, all of which must hold. Already checked against the
+   *     tenant's allowlist by the caller
    * @param limit how many at most
    */
   record Query(
@@ -84,6 +86,7 @@ public interface SearchIndex {
       List<UUID> locationIds,
       java.util.Optional<de.greluc.homeinv.platform.CursorCodec.Position> after,
       de.greluc.homeinv.platform.SortOrder sort,
+      List<de.greluc.homeinv.platform.QueryFilter> filters,
       int limit) {}
 
 

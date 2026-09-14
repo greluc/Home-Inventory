@@ -4,15 +4,19 @@
  */
 package de.greluc.homeinv.inventory.infrastructure;
 
+import de.greluc.homeinv.catalog.api.FieldDataType;
+import de.greluc.homeinv.catalog.api.TypeRegistry;
 import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.inventory.api.ItemSearchQuery;
 import de.greluc.homeinv.platform.CursorCodec;
+import de.greluc.homeinv.platform.QueryFilter;
 import de.greluc.homeinv.platform.TenantContext;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -66,7 +70,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   private final JdbcClient jdbc;
 
   /** Where a sortable field's storage class comes from — the allowlist, never the caller. */
-  private final de.greluc.homeinv.catalog.api.TypeRegistry types;
+  private final TypeRegistry types;
 
   @Override
   public Rows search(
@@ -74,7 +78,8 @@ public class ItemSearchAdapter implements ItemSearchQuery {
       String language,
       List<UUID> locationIds,
       Optional<CursorCodec.Position> after,
-      de.greluc.homeinv.platform.SortOrder sort,
+      SortOrder sort,
+      List<QueryFilter> filters,
       int limit) {
     UUID tenantId = TenantContext.require();
     boolean filtered = text != null && !text.isBlank();
@@ -105,6 +110,11 @@ public class ItemSearchAdapter implements ItemSearchQuery {
             // both a new prepared statement each time and the one place in this
             // query where a value shapes the SQL.
             + (byLocation ? "  and i.location_id = any(?)%n".formatted() : "")
+            // One `exists` per filter rather than one join per filter. A join
+            // would multiply the rows when two filters match two different
+            // attributes of the same item, and the fix for that is a `distinct`
+            // that throws away the sort order with the duplicates.
+            + filters.stream().map(this::predicateFor).collect(Collectors.joining())
             + (resuming ? "  and " + plan.resume(after.get().sortValue()) + "%n".formatted() : "")
             + "order by " + plan.orderBy() + "%n".formatted()
             + "limit ?%n".formatted();
@@ -121,6 +131,15 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     }
     if (byLocation) {
       spec = spec.param(locationIds.toArray(UUID[]::new));
+    }
+    for (QueryFilter filter : filters) {
+      spec = spec.param(filter.field());
+      if (filter.unit() != null) {
+        spec = spec.param(filter.unit());
+      }
+      for (String value : filter.values()) {
+        spec = spec.param(value);
+      }
     }
     if (resuming) {
       for (String value : plan.split(after.get().sortValue())) {
@@ -318,6 +337,81 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   }
 
   /**
+   * One filter, as an {@code exists} over the side table.
+   *
+   * <p>Exactly one column, resolved from the field's declared type, because
+   * {@code item_attr_index} keeps one column per storage class and a value lives in one of them.
+   * Comparing in all of them and hoping one matches would bind the value once per column and match
+   * a row whose value is in another. The comparison carries a cast so PostgreSQL reads the
+   * parameter as the column's type rather than as text — {@code '90' > '100'} is true of
+   * strings and false of numbers.
+   *
+   * <p>A unit, where one is given, is part of the predicate and not an afterthought: without it the
+   * comparison would range over every currency at once, which is the plausible wrong answer
+   * {@code unit_value} exists to prevent.
+   *
+   * @param filter one condition, already checked against the allowlist
+   * @return the SQL fragment, with its parameters in the order they are bound
+   */
+  private String predicateFor(QueryFilter filter) {
+    FieldDataType type =
+        types.queryableFields().stream()
+            .filter(field -> field.key().equals(filter.field()) && field.filterable())
+            .findFirst()
+            .map(TypeRegistry.QueryableField::dataType)
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "Cannot filter by " + filter.field() + "; it is not filterable"));
+
+    String column =
+        switch (type.storageClass()) {
+          case NUMBER -> "f.num_value";
+          case TEXT -> "f.text_value";
+          case DATE -> "f.date_value";
+          case BOOLEAN -> "f.bool_value";
+          case REFERENCE -> "f.ref_value";
+          case NONE ->
+              throw new IllegalArgumentException(
+                  "Cannot filter by " + filter.field() + "; it is not mirrored for filtering");
+        };
+    String cast =
+        switch (type.storageClass()) {
+          case NUMBER -> "?::numeric";
+          case DATE -> "?::timestamptz";
+          case BOOLEAN -> "?::boolean";
+          case REFERENCE -> "?::uuid";
+          default -> "?";
+        };
+
+    String unit = filter.unit() == null ? "" : " and f.unit_value = ?";
+    String comparison =
+        switch (filter.operator()) {
+          case EQ -> column + " = " + cast;
+          case IN ->
+              column
+                  + " in ("
+                  + String.join(", ", java.util.Collections.nCopies(filter.values().size(), cast))
+                  + ")";
+          case GT -> column + " > " + cast;
+          case GTE -> column + " >= " + cast;
+          case LT -> column + " < " + cast;
+          case LTE -> column + " <= " + cast;
+        };
+    // One template with two holes, never a query joined to an expression: the
+    // holes hold a column name from the switch above and an operator, and
+    // REQ-SEC-031 is that the difference is visible in the source rather than
+    // argued for in a comment.
+    return """
+             and exists (select 1 from inventory.item_attr_index f
+                          where f.tenant_id = i.tenant_id
+                            and f.item_id = i.id
+                            and f.field_key = ?%s
+                            and %s)%n"""
+        .formatted(unit, comparison);
+  }
+
+  /**
    * Resolves an ordering to the columns that express it.
    *
    * <p>The field name has already been checked against the tenant's allowlist by the application
@@ -328,7 +422,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
    * @param sort what was asked for, or {@code null}
    * @return the plan
    */
-  private SortPlan planFor(de.greluc.homeinv.platform.SortOrder sort) {
+  private SortPlan planFor(SortOrder sort) {
     if (sort == null) {
       return SortPlan.none();
     }
@@ -346,11 +440,11 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     }
 
     String key = sort.attributeKey();
-    de.greluc.homeinv.catalog.api.FieldDataType type =
+    FieldDataType type =
         types.queryableFields().stream()
             .filter(field -> field.key().equals(key) && field.sortable())
             .findFirst()
-            .map(de.greluc.homeinv.catalog.api.TypeRegistry.QueryableField::dataType)
+            .map(TypeRegistry.QueryableField::dataType)
             .orElseThrow(
                 () ->
                     new IllegalArgumentException(

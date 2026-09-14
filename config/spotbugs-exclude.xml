@@ -352,6 +352,32 @@
   </Match>
 
   <!--
+    SERVLET_PARAMETER on `ItemController.listItems`. It is the one place in the
+    application that reads a query parameter through the servlet API rather than
+    through `@RequestParam`, and it has to be: Spring converts a single value into
+    a `List<String>` by splitting it on commas, and the comma is the `in`
+    separator of this API's own filter grammar (08 8.2). One
+    `filter=attr.tag:in:a,b` would arrive as two filters while two `filter=`
+    parameters would not.
+
+    The value is treated as untrusted, which is what the rule is really asking:
+    it is bounded in count and length, then parsed by a grammar that refuses
+    anything not of the shape `attr.<key>:<op>:<value>`, and the field it names is
+    checked against `TypeRegistry.queryableFields` — the tenant's own allowlist —
+    before any statement sees it. Every value ends up as a bound parameter, never
+    as SQL (REQ-SEC-031). What a caller typed decides which rows come back and
+    nothing else.
+
+    Every other endpoint reads untrusted parameters too; the rule cannot see them
+    because Spring binds those.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_PARAMETER"/>
+    <Class name="de.greluc.homeinv.rest.ItemController"/>
+    <Method name="listItems"/>
+  </Match>
+
+  <!--
     VA_FORMAT_STRING_USES_NEWLINE on the search statement. The rule wants `%n`
     instead of a literal newline in a format string, and here the format string is
     a SQL text block whose newlines are the statement's own layout. `%n` would
