@@ -153,6 +153,11 @@ commit".
 
 ### Added
 
+- **An item now says what happened to it.** Creating, editing, moving, writing
+  against another type, trashing and restoring each publish an event, so anything
+  derived from the inventory — search first — can follow along instead of being
+  rebuilt. Nothing user-visible changes yet. *Event schemas: six new ones.*
+
 - **A list can say how it would narrow.** `GET /api/v1/items?facet=type,tag,location`
   answers with counts beside the rows — how many items each type, tag, place and
   countable field would leave — which is the sidebar next to a list of results.

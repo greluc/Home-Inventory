@@ -221,6 +221,13 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.CREATED,
         snapshot(item),
         actor);
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemCreated(
+            tenantId,
+            id,
+            item.getItemTypeVersionId(),
+            item.getName(),
+            item.getLocationId()));
     // A consumable that starts below its own minimum is already low; nothing
     // "fell", but the thing a reminder is for is true from the first moment.
     if (item.isBelowMinimum()) {
@@ -364,6 +371,9 @@ public class DefaultItemService implements ItemService {
     // Read before the change, so the event below reports a CROSSING rather than a
     // state: an edit to something already known to be low is not news.
     boolean wasBelow = item.isBelowMinimum();
+    // Likewise: `ItemUpdated` says whether the attributes are not the ones the
+    // item had, and after `item.update` there is nothing left to compare against.
+    String attributesBefore = item.getAttributes();
 
     item.update(
         command.name(),
@@ -389,6 +399,9 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
         snapshot(item),
         actor);
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemUpdated(
+            tenantId, id, item.getName(), !attributes.equals(attributesBefore)));
     if (!wasBelow && item.isBelowMinimum()) {
       events.publishEvent(
           new de.greluc.homeinv.inventory.api.StockBelowMinimum(
@@ -439,6 +452,7 @@ public class DefaultItemService implements ItemService {
     Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
     requireInScope(locationId);
 
+    UUID from = item.getLocationId();
     item.movedTo(locationId, actor, Instant.now(clock));
     items.flush();
     // No projection: the side table mirrors attribute values, and a move changes
@@ -450,6 +464,8 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
         snapshot(item),
         actor);
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemMoved(tenantId, id, from, locationId));
     log.debug("Item {} moved to location {} in tenant {}", id, locationId, tenantId);
     return toView(item);
   }
@@ -494,6 +510,7 @@ public class DefaultItemService implements ItemService {
                     carriedOver(item.getItemTypeVersionId(), target, item.getAttributes()),
                     item.getAttributes())));
 
+    UUID previous = item.getItemTypeVersionId();
     item.changedType(target, attributes, actor, Instant.now(clock));
     items.flush();
     projector.project(id, target, attributes);
@@ -503,6 +520,8 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
         snapshot(item),
         actor);
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemTypeChanged(tenantId, id, previous, target));
     log.debug("Item {} written against type version {} in tenant {}", id, target, tenantId);
     return toView(item);
   }
@@ -598,6 +617,7 @@ public class DefaultItemService implements ItemService {
     // kept answering attribute filters would be a deleted thing that is still
     // findable, for the whole retention period (07 §7.3, REQ-CORE-013).
     projector.clear(id);
+    events.publishEvent(new de.greluc.homeinv.inventory.api.ItemDeleted(tenantId, id));
   }
 
   @Transactional
@@ -621,6 +641,7 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.RESTORED,
         snapshot(item),
         actor);
+    events.publishEvent(new de.greluc.homeinv.inventory.api.ItemRestored(tenantId, id));
     log.debug("Item {} restored in tenant {}", id, tenantId);
     return toView(item);
   }
