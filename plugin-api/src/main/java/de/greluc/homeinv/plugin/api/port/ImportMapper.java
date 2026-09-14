@@ -28,9 +28,10 @@ public interface ImportMapper {
   /**
    * What this mapper reads.
    *
+   * @param context who is asking
    * @return its description, which the core shows in the list of importable formats
    */
-  Descriptor describe();
+  Descriptor describe(CallContext context);
 
   /**
    * Reads the beginning of a file and shows what it would make of it.

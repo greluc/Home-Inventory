@@ -86,3 +86,4 @@ Date: YYYY-MM-DD
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
 | [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |
 | [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted |
+| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted |

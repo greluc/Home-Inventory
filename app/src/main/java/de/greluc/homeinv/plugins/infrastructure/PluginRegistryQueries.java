@@ -76,6 +76,40 @@ public class PluginRegistryQueries {
   }
 
   /**
+   * Where a plugin listens and which certificate may answer there.
+   *
+   * <p>Read separately from the registration because it is needed only when a call is about to be
+   * made, and because it is the one part of a registration that is about reaching the plugin rather
+   * than about what it is.
+   *
+   * @param pluginId which plugin
+   * @return its endpoint and fingerprint, or empty when nothing is installed under that id
+   */
+  @Transactional(readOnly = true)
+  public Optional<Connection> connection(String pluginId) {
+    return jdbc
+        .sql(
+            """
+            select endpoint, fingerprint
+            from plugins.plugin_registration
+            where plugin_id = ?
+            """)
+        .param(pluginId)
+        .query((rs, row) -> new Connection(rs.getString("endpoint"), rs.getString("fingerprint")))
+        .optional();
+  }
+
+  /**
+   * How to reach one plugin.
+   *
+   * @param endpoint {@code host:port}, or {@code null} for an in-process plugin, which is reached
+   *     by not reaching anywhere
+   * @param fingerprint the SHA-256 of the certificate that may answer there, or {@code null}. A
+   *     plugin registered without one is not called (REQ-SEC-056)
+   */
+  public record Connection(String endpoint, String fingerprint) {}
+
+  /**
    * Writes a registration, or brings an existing one up to date.
    *
    * <p>An upsert on the plugin id, because an operator restarting the stack with the same plugin is

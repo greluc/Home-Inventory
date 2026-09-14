@@ -27,11 +27,12 @@ public interface LabelRenderer {
   /**
    * What this renderer can produce.
    *
+   * @param context who is asking
    * @return the media types, for example {@code application/pdf} or {@code
    *     application/vnd.zebra.zpl}. The core offers a renderer only for outputs a {@link
    *     PrintTarget} accepts, so the two sets are compared rather than assumed to fit
    */
-  Set<String> outputMediaTypes();
+  Set<String> outputMediaTypes(CallContext context);
 
   /**
    * Renders one job.
@@ -57,7 +58,7 @@ public interface LabelRenderer {
    *     and an empty map is a deliberately blank label rather than an error
    * @param startOffset how many label positions to skip on the first sheet, so that a part-used
    *     sheet can be finished. Zero for roll media, where it has no meaning
-   * @param outputMediaType which of {@link #outputMediaTypes()} to produce
+   * @param outputMediaType which of {@link #outputMediaTypes(CallContext)} to produce
    */
   record Request(
       String templateKey,

@@ -27,9 +27,10 @@ public interface NotificationChannel {
   /**
    * What this channel is.
    *
+   * @param context who is asking
    * @return its description, which the core shows when somebody chooses where a notification goes
    */
-  Descriptor describe();
+  Descriptor describe(CallContext context);
 
   /**
    * Delivers one message.

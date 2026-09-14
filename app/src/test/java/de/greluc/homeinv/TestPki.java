@@ -108,6 +108,24 @@ final class TestPki {
     return new Identity(bundle, fingerprintOf(certificate));
   }
 
+  /**
+   * The CA certificate alone, as PEM.
+   *
+   * <p>What a server needs to verify a client's certificate. An {@link Identity#bundle()} cannot be
+   * used for that: it begins with a private key, and a trust store that accepts one would be a
+   * trust store nobody should build.
+   *
+   * @return the CA certificate in PEM form
+   * @throws Exception when it cannot be written
+   */
+  String caPem() throws Exception {
+    StringWriter out = new StringWriter();
+    try (JcaPEMWriter writer = new JcaPEMWriter(out)) {
+      writer.writeObject(caCertificate);
+    }
+    return out.toString();
+  }
+
   private static KeyPair keyPair() throws Exception {
     // RSA rather than Ed25519: `grpc-netty-shaded` negotiates it everywhere, and
     // what is under test is the pinning, not the signature algorithm. 2048 bits

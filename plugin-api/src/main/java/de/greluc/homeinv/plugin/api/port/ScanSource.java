@@ -22,9 +22,10 @@ public interface ScanSource {
   /**
    * What this source is.
    *
+   * @param context who is asking
    * @return its description, which the core shows in the list of places a scan can come from
    */
-  Descriptor describe();
+  Descriptor describe(CallContext context);
 
   /**
    * Opens the source and delivers scans until the subscription is closed.

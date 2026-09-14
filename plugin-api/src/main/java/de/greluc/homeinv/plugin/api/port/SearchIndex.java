@@ -27,9 +27,10 @@ public interface SearchIndex {
   /**
    * The key this engine is known by, lowercase and stable — {@code opensearch}, {@code postgres}.
    *
+   * @param context who is asking
    * @return the key
    */
-  String engineKey();
+  String engineKey(CallContext context);
 
   /**
    * Whether the engine is answering right now.

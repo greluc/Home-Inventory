@@ -31,9 +31,10 @@ public interface ValuationProvider {
    * The key this provider is known by, lowercase and stable — {@code straight-line}, {@code
    * declining-balance}.
    *
+   * @param context who is asking
    * @return the key
    */
-  String providerKey();
+  String providerKey(CallContext context);
 
   /**
    * Estimates an item's value.

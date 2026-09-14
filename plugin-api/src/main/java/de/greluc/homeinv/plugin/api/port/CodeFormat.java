@@ -29,9 +29,10 @@ public interface CodeFormat {
    * <p>It is stored beside every code this format produced, so changing it orphans them. {@code
    * qr}, {@code datamatrix}, {@code ean13}, {@code gs1-digital-link}.
    *
+   * @param context who is asking
    * @return the key
    */
-  String formatKey();
+  String formatKey(CallContext context);
 
   /**
    * Claims a raw scan and says what it means, or declines it.

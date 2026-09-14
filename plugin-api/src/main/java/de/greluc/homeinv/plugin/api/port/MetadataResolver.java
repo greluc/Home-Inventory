@@ -32,15 +32,16 @@ public interface MetadataResolver {
    * asks only the resolvers that named the scheme in hand, so a resolver that lists a scheme it
    * cannot really answer buys itself calls it will decline.
    *
+   * @param context who is asking
    * @return the schemes
    */
-  Set<String> schemes();
+  Set<String> schemes(CallContext context);
 
   /**
    * Looks a code up.
    *
    * @param context who is asking. A resolver with a per-tenant API key finds it by this
-   * @param scheme which scheme the code is in, one of {@link #schemes()}
+   * @param scheme which scheme the code is in, one of {@link #schemes(CallContext)}
    * @param code the code itself, normalised by the caller — no separators, no check-digit
    *     variations
    * @return what is known, or empty when the source simply has no entry. Empty is an answer and not

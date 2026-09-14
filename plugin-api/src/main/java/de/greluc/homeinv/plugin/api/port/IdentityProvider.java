@@ -30,9 +30,10 @@ public interface IdentityProvider {
   /**
    * What this provider is.
    *
+   * @param context who is asking
    * @return its description, which the core shows on the sign-in page
    */
-  Descriptor describe();
+  Descriptor describe(CallContext context);
 
   /**
    * Starts a sign-in and says where to send the browser.

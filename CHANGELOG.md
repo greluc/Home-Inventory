@@ -162,6 +162,15 @@ commit".
 
 ### Added
 
+- **The system can call a plugin.** It connects to one over a mutually
+  authenticated connection and checks that the certificate answering is the one
+  the operator registered — a different one is refused even when this
+  installation's own authority issued it. Every call is bounded: it gives up
+  rather than waiting, one plugin can occupy only so much of the system at once,
+  and one that keeps failing is left alone for a while instead of being asked
+  again. A plugin nobody in a household has agreed to is not reachable there at
+  all.
+
 - **The fourteen extension points a plugin can implement now exist.** Code
   formats, scan sources, label renderers and print targets, metadata resolvers,
   storage, search, notifications, federated login, image processing, virus
@@ -636,7 +645,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 65 architecture decision records, each with its alternatives and consequences —
+- 66 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -71,6 +71,12 @@ jetbrainsAnnotations = "26.1.0"
 # ahead of its server is a compatibility matrix nobody is reading.
 opensearch = "3.3.0"
 
+# The resilience envelope around every plugin call (REQ-PLG-007, ADR-0065).
+# Apache-2.0. The core libraries, not the Spring Boot starter: the starter binds
+# to a Boot version and annotates beans, and what this needs is an instance PER
+# PLUGIN, which is a registry lookup and not an annotation.
+resilience4j = "2.4.0"
+
 # What `plugin-api` is built and tested with. It is Apache-2.0 and depends on
 # nothing in the core (ADR-0018), so it cannot reach the versions Spring Boot's
 # platform pins for `:app` - it names its own, and they are the same ones the
@@ -146,6 +152,10 @@ spring-security-test = { module = "org.springframework.security:spring-security-
 spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test" }
 
 opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
+
+resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
+resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
+resilience4j-micrometer = { module = "io.github.resilience4j:resilience4j-micrometer", version.ref = "resilience4j" }
 
 # `plugin-api`'s own three. Apache-2.0 (SnakeYAML, AssertJ) and EPL-2.0 (JUnit,
 # a test dependency that ships with nothing).

@@ -108,6 +108,16 @@ dependencies {
     // left the JDK in 11. Without it the generated sources do not compile.
     compileOnly(libs.javax.annotation.api)
 
+    // The envelope around every plugin call: a bounded pool per plugin and a
+    // breaker that stops calling one that is failing (REQ-PLG-007, ADR-0065).
+    // The deadline and the payload limit are gRPC's own and need no library.
+    implementation(libs.resilience4j.circuitbreaker)
+    implementation(libs.resilience4j.bulkhead)
+    // The same numbers in the metrics endpoint an operator already reads
+    // (13 §13.7). Without it the breaker's state would be visible only in a log
+    // line, which is not where anybody looks for it.
+    implementation(libs.resilience4j.micrometer)
+
     // Generates the OpenAPI document from the running application (ADR-0049).
     // `implementation` rather than a test dependency: the document is produced
     // from the real context, and a version that existed only in tests would be a
