@@ -54,7 +54,7 @@ public class DefaultOperatorDirectory implements OperatorDirectory {
     String next = null;
     if (rows.size() == size) {
       AppUser last = rows.getLast();
-      next = cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), CURSOR);
+      next = cursors.encode(CursorCodec.Position.of(last.getCreatedAt(), last.getId()), CURSOR);
     }
     return Page.of(rows.stream().map(DefaultOperatorDirectory::viewOf).toList(), next);
   }

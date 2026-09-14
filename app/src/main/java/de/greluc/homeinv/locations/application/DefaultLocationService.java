@@ -435,7 +435,7 @@ public class DefaultLocationService implements LocationService {
       Location last = rows.get(rows.size() - 1);
       nextCursor =
           cursors.encode(
-              new CursorCodec.Position(last.getCreatedAt(), last.getId()), CURSOR_FINGERPRINT);
+              CursorCodec.Position.of(last.getCreatedAt(), last.getId()), CURSOR_FINGERPRINT);
     }
     return Page.of(views, nextCursor);
   }

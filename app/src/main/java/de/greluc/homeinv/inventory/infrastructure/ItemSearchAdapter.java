@@ -141,7 +141,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     Optional<CursorCodec.Position> last =
         hasMore
             ? Optional.of(
-                new CursorCodec.Position(
+                CursorCodec.Position.of(
                     page.get(page.size() - 1).createdAt(), page.get(page.size() - 1).id()))
             : Optional.empty();
 

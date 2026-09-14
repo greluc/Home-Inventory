@@ -99,7 +99,7 @@ public class LocationCategoryQueries implements LocationCategories {
     if (rows.size() == size) {
       Row last = rows.get(rows.size() - 1);
       nextCursor =
-          cursors.encode(new CursorCodec.Position(last.createdAt(), last.id()), CURSOR_FINGERPRINT);
+          cursors.encode(CursorCodec.Position.of(last.createdAt(), last.id()), CURSOR_FINGERPRINT);
     }
     return Page.of(views, nextCursor);
   }

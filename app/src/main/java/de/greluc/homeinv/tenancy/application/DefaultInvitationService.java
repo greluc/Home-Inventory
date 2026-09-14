@@ -148,7 +148,7 @@ public class DefaultInvitationService implements InvitationService {
     String next =
         rows.size() == size
             ? cursors.encode(
-                new CursorCodec.Position(rows.getLast().getCreatedAt(), rows.getLast().getId()),
+                CursorCodec.Position.of(rows.getLast().getCreatedAt(), rows.getLast().getId()),
                 CURSOR)
             : null;
     return Page.of(rows.stream().map(row -> viewOf(row, now)).toList(), next);

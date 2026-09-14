@@ -134,7 +134,7 @@ public class RoleDefinitionAdapter implements RoleAdministration {
                   rs.getString("base_role"),
                   grants.getOrDefault(id, Set.of())));
           positions.add(
-              new CursorCodec.Position(rs.getTimestamp("created_at").toInstant(), id));
+              CursorCodec.Position.of(rs.getTimestamp("created_at").toInstant(), id));
         };
 
     if (cursor == null || cursor.isBlank()) {

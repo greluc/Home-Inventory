@@ -24,7 +24,7 @@ public final class LastRow {
    * @param id the row's id, which breaks a tie between two of the same instant
    */
   public void at(java.time.Instant createdAt, java.util.UUID id) {
-    this.position = new CursorCodec.Position(createdAt, id);
+    this.position = CursorCodec.Position.of(createdAt, id);
   }
 
   /**

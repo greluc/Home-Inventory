@@ -677,7 +677,7 @@ public class DefaultItemService implements ItemService {
     String next = null;
     if (rows.size() == size) {
       Item last = rows.get(rows.size() - 1);
-      next = cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), TRASH_CURSOR);
+      next = cursors.encode(CursorCodec.Position.of(last.getCreatedAt(), last.getId()), TRASH_CURSOR);
     }
     return Page.of(views, next);
   }

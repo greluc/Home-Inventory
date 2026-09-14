@@ -266,7 +266,7 @@ public class DefaultMediaService implements MediaService {
     if (rows.size() == size) {
       Attachment last = rows.get(rows.size() - 1);
       nextCursor =
-          cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), fingerprint);
+          cursors.encode(CursorCodec.Position.of(last.getCreatedAt(), last.getId()), fingerprint);
     }
     return Page.of(views, nextCursor);
   }

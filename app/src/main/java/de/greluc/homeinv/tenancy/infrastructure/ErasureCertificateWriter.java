@@ -176,7 +176,7 @@ public class ErasureCertificateWriter implements ErasureCertificates {
     String next =
         rows.size() == size
             ? cursors.encode(
-                new CursorCodec.Position(rows.getLast().completedAt(), rows.getLast().tenantId()),
+                CursorCodec.Position.of(rows.getLast().completedAt(), rows.getLast().tenantId()),
                 CURSOR)
             : null;
     return Page.of(rows, next);

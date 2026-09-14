@@ -88,7 +88,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
     String next =
         rows.size() == size
             ? cursors.encode(
-                new CursorCodec.Position(rows.getLast().getCreatedAt(), rows.getLast().getId()),
+                CursorCodec.Position.of(rows.getLast().getCreatedAt(), rows.getLast().getId()),
                 CURSOR)
             : null;
     return Page.of(items, next);

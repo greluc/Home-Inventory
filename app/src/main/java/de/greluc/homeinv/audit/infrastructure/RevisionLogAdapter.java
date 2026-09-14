@@ -120,7 +120,7 @@ public class RevisionLogAdapter implements RevisionLog {
     String next =
         rows.size() == size
             ? cursors.encode(
-                new CursorCodec.Position(
+                CursorCodec.Position.of(
                     java.time.Instant.ofEpochMilli(rows.getLast().revision()), entityId),
                 CURSOR)
             : null;

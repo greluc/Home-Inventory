@@ -281,7 +281,7 @@ public class ItemBundleAdapter implements ItemBundles {
       Row last = rows.getLast();
       next =
           cursors.encode(
-              new CursorCodec.Position(last.createdAt(), last.id()), fingerprint);
+              CursorCodec.Position.of(last.createdAt(), last.id()), fingerprint);
     }
     return Page.of(
         rows.stream()
