@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: Apache-2.0
+#
+# HOW THE PLUGIN CONTRACT IS CHECKED.
+#
+# `buf` lints this module and compares it against the previous commit on every
+# build (`.github/workflows/ci.yml`, job `contract`). It does NOT generate
+# anything: the Java stubs come from Gradle's protobuf plugin and the Rust ones
+# from `tonic-build`, each in the project that needs them, so there is no
+# `buf.gen.yaml` here to drift from what is actually run.
+#
+# Written as a v1 configuration, which the current CLI reads unchanged.
+
+version: v1
+
+lint:
+  use:
+    - DEFAULT
+
+  except:
+    # A SERVICE HERE IS A PORT, AND THE PORT NAMES ARE REQ-PLG-001's.
+    #
+    # `home_inv.plugin.v1.BlobStore` is what a plugin author looks up, and it is
+    # what this file has been called since the contract's first line. Appending
+    # `Service` to fourteen of them to satisfy a naming rule would put a second
+    # spelling of every port into the system — and the requirement's spelling is
+    # the one `PortCatalogueTest` checks against.
+    - SERVICE_SUFFIX
+
+    # ONE PACKAGE HOLDS FIFTEEN SERVICES, so a message called `DescribeRequest`
+    # could exist exactly once.
+    #
+    # These three rules assume a package per service: they want `Describe` to
+    # take a `DescribeRequest` and each RPC to have request and response types of
+    # its own. The first is impossible here and the messages are prefixed with
+    # their port instead (`CodeFormatDescribeRequest`), which is the same
+    # information in a name that can be unique. The third would forbid
+    # `LabelRenderer` from returning the `LabelMedium` its own request carried.
+    #
+    # Splitting the contract into fifteen packages was the alternative and was
+    # not taken: `home_inv.plugin.v1` is named in CLAUDE.md, in the manifest's
+    # `apiVersion` and in every ADR about the contract, and a version suffix per
+    # port would mean fifteen versions to keep in step.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+
+breaking:
+  use:
+    # Wire AND generated-source compatibility. `WIRE` alone would allow renaming
+    # a field, which keeps the bytes valid and breaks every compiled plugin —
+    # and a plugin author's build failing is exactly the outcome ADR-0011's
+    # six-month rule exists to prevent.
+    - FILE

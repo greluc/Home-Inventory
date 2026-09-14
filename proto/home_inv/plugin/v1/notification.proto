@@ -1,0 +1,131 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// DELIVERING A MESSAGE TO A PERSON.
+//
+// EVERY implementation is a plugin, e-mail and webhook included, because every
+// one of them talks to a host outside the deployment (ADR-0026). There is no
+// in-core channel and there cannot be one: the core has no outbound route.
+//
+// A stage 1 installation without `plugin-smtp` is a valid but reduced
+// deployment — no invitations by mail, no password reset by mail, no
+// notifications. The core says so plainly rather than failing silently
+// (ADR-0028).
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "NotificationProto";
+
+// Delivers messages over one channel.
+service NotificationChannel {
+  // What this channel is.
+  rpc Describe(NotificationDescribeRequest) returns (NotificationChannelDescriptor);
+
+  // Delivers one message.
+  //
+  // AT-LEAST-ONCE, SO THIS MUST BE IDEMPOTENT ON `idempotency_key`. A worker
+  // that crashed after the mail went out and before the outbox was marked will
+  // call again with the same key, and a channel that sends twice has sent twice.
+  // An implementation that cannot deduplicate says so in its documentation; the
+  // core cannot make it safe from outside.
+  rpc Deliver(NotificationDeliverRequest) returns (NotificationDeliverResponse);
+}
+
+// Asks what a channel is.
+message NotificationDescribeRequest {
+  CallContext context = 1;
+}
+
+// What a channel is.
+message NotificationChannelDescriptor {
+  // The stable key: "email", "webhook", "webpush", "fcm", "apns".
+  string channel_key = 1;
+
+  // What a person sees.
+  string name = 2;
+
+  // What an address looks like here: "mailto", "https", "token".
+  //
+  // The core validates a subscription's address against this before storing it.
+  repeated string address_schemes = 3;
+
+  // Whether the HTML body is used or ignored.
+  bool supports_html = 4;
+}
+
+// One message to deliver.
+message NotificationDeliverRequest {
+  CallContext context = 1;
+
+  // Where it goes, in one of the channel's address schemes.
+  string recipient = 2;
+
+  // The subject line, or empty for channels without one.
+  string subject = 3;
+
+  // The body as plain text.
+  //
+  // Always present: it is the fallback every channel can show.
+  string text = 4;
+
+  // The body as HTML, or empty. Ignored by a channel that does not support it.
+  string html = 5;
+
+  // The recipient's language as an IETF tag.
+  //
+  // The text is ALREADY in it — a channel translates nothing — but a mail
+  // channel puts it in `Content-Language`.
+  string language = 6;
+
+  // Channel-specific extras: SMTP headers, webhook headers.
+  //
+  // A channel ignores what it does not know rather than failing, because the
+  // core does not know which channel a rule will reach when the rule is written.
+  map<string, string> headers = 7;
+
+  // The key to deduplicate on, stable across retries of the same message.
+  string idempotency_key = 8;
+
+  // What travels with it, usually empty.
+  //
+  // Kept small: a channel is not a file transfer, and a caller with a large file
+  // sends a link to it instead.
+  repeated NotificationAttachment attachments = 9;
+}
+
+// Something sent with a message.
+message NotificationAttachment {
+  // What to call it.
+  string file_name = 1;
+
+  // What it is.
+  string media_type = 2;
+
+  // The bytes.
+  bytes content = 3;
+}
+
+// What the far side said.
+message NotificationDeliverResponse {
+  // The id the provider gave it, for tracing a delivery afterwards. Empty when
+  // the provider gives none.
+  string provider_message_id = 1;
+
+  // Anything worth recording beside it, in English and fit for a log line: an
+  // SMTP response line, an HTTP status.
+  //
+  // NEVER A CREDENTIAL, and never the message body.
+  string detail = 2;
+
+  // True when the channel recognised the idempotency key and did NOT send again.
+  //
+  // The core counts these separately: a delivery log where every retry looks
+  // like a send is a log that cannot answer "did this person get two mails".
+  bool deduplicated = 3;
+}

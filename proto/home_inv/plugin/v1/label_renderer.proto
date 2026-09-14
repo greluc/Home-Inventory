@@ -1,0 +1,102 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// TURNING A TEMPLATE AND ITS DATA INTO SOMETHING PRINTABLE.
+//
+// The PDF sheet renderer is in the core image. ZPL, EPL, Brother raster and PNG
+// are plugins, because each of them is a printer language somebody else
+// maintains.
+//
+// A TEMPLATE IS DATA, NOT A PROGRAM (ADR-0020, REQ-CORE-031). An implementation
+// receives the template source and the values to put in it, and must not
+// evaluate anything in the template beyond substituting placeholders. A renderer
+// with a scripting engine in it turns the type system into a programming
+// language through the back door.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+import "home_inv/plugin/v1/label_media.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "LabelRendererProto";
+
+// Lays labels out on a medium.
+service LabelRenderer {
+  // What this renderer can produce.
+  rpc OutputFormats(LabelRendererFormatsRequest) returns (LabelRendererFormatsResponse);
+
+  // Renders one job.
+  rpc Render(LabelRendererRenderRequest) returns (LabelRendererRenderResponse);
+}
+
+// Asks what a renderer writes.
+message LabelRendererFormatsRequest {
+  CallContext context = 1;
+}
+
+// What a renderer writes.
+message LabelRendererFormatsResponse {
+  // For example "application/pdf" or "application/vnd.zebra.zpl".
+  //
+  // The core offers a renderer only for outputs a print target accepts, so the
+  // two sets are compared rather than assumed to fit.
+  repeated string output_media_types = 1;
+}
+
+// One rendering job.
+message LabelRendererRenderRequest {
+  CallContext context = 1;
+
+  // Which template, for the plugin's own logging and caching.
+  string template_key = 2;
+
+  // The template itself, as text.
+  //
+  // Passed WITH the call rather than fetched by the plugin: the core hands out
+  // no URL for a plugin to fetch (REQ-SEC-034), and a template is small.
+  string template_source = 3;
+
+  // The geometry to lay out on. Every distance in it is in micrometres.
+  LabelMedium medium = 4;
+
+  // One row per label, in the order they print.
+  repeated LabelRendererRow rows = 5;
+
+  // How many label positions to skip on the first sheet, so that a part-used
+  // sheet can be finished. Zero for roll media, where it has no meaning.
+  uint32 start_offset = 6;
+
+  // Which of the renderer's output formats to produce.
+  string output_media_type = 7;
+}
+
+// The values for one label.
+message LabelRendererRow {
+  // Placeholder to value.
+  //
+  // An empty map is a deliberately blank label and not an error: a person
+  // finishing a part-used sheet may want gaps in it.
+  map<string, string> values = 1;
+}
+
+// A printable artifact.
+message LabelRendererRenderResponse {
+  // What it is.
+  string media_type = 1;
+
+  // The bytes, whole.
+  //
+  // This port does not stream and `BlobStore` does, because a label job is small
+  // enough to fit in one message and a blob is not.
+  bytes content = 2;
+
+  // How many pages or labels came out.
+  //
+  // The caller shows it before printing: "this will use three sheets" is the
+  // last chance to notice a mistake.
+  uint32 page_count = 3;
+}

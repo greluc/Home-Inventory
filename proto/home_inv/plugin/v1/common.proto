@@ -1,0 +1,101 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// WHAT EVERY PORT SHARES.
+//
+// The messages in here are the ones more than one service needs. Everything
+// else stays in its own port's file, because a shared file that grows with
+// every port becomes a file every plugin author has to read.
+//
+// Apache-2.0 like everything in `proto/`: a plugin author compiles against this
+// and must stay free to license their own work as they wish (ADR-0018).
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "CommonProto";
+
+// WHO A CALL IS FOR.
+//
+// The first field of every request in this contract, with one exception named
+// below. A plugin is installed once for the instance and granted PER TENANT
+// (09 §9.4), so "which tenant" is the question that decides whether a call is
+// allowed at all — and the core has already answered it before the call was
+// made. A plugin receives the answer so that it can keep its own per-tenant
+// state apart.
+//
+// THE TENANT HERE IS NOT AN AUTHORISATION. A plugin that used this field to
+// decide what it may reach would be trusting its caller. When a plugin calls
+// BACK into the core, it is re-authorised there against the token it carries and
+// never against a field it filled in itself (09 §9.6, REQ-SEC-057).
+//
+// WHAT IS DELIBERATELY NOT IN HERE:
+//
+//   * The deadline. gRPC has one of its own, it is enforced by both runtimes
+//     without anybody remembering to check it, and a second one in the payload
+//     would be a second answer to the same question (REQ-PLG-007).
+//   * Any credential. A plugin's credentials are the operator's to configure;
+//     nothing in this contract passes one.
+//
+// THE EXCEPTION: `BlobStore` carries no context. Its `BlobRef` already names the
+// tenant, because a blob is content-addressed WITHIN a tenant and the tenant is
+// therefore part of the address rather than of the call (ADR-0032). Trace
+// context there travels as gRPC metadata, like it does everywhere else.
+message CallContext {
+  // The tenant the call is made for, as a UUID in canonical hyphenated text.
+  //
+  // Never empty. A call for no tenant is a call the capability model cannot
+  // answer.
+  string tenant_id = 1;
+
+  // The W3C `traceparent` of the call, so that a plugin's own log lines join the
+  // core's trace instead of sitting beside it. Empty when tracing is off.
+  //
+  // Carried in the payload AND as metadata: the metadata is what an
+  // instrumentation library reads automatically, this is what a plugin without
+  // one can read by hand.
+  string trace_id = 2;
+
+  // The caller's language as an IETF tag (`de`, `en`), for text a plugin
+  // composes itself. Empty when the call has no human reader.
+  string language = 3;
+}
+
+// AN AMOUNT AND THE CURRENCY IT IS IN.
+//
+// Decimal as text, never a float. A valuation that arrives as a binary fraction
+// has already lost the cents, and `double` on a money path is forbidden
+// throughout this system (ADR-0025).
+message Money {
+  // The amount in decimal notation, for example "129.99". Unrounded: the core
+  // rounds to the currency's own number of digits, because that is the
+  // currency's statement rather than the plugin's.
+  string amount = 1;
+
+  // The ISO 4217 code, for example "EUR". A bare number is not money.
+  string currency = 2;
+}
+
+// ONE THING A HEALTH CHECK VERIFIED.
+//
+// Shared because `PluginHealth` returns a list of these and because an outbound
+// port may report them beside a refusal: REQ-PLG-015 requires an outbound plugin
+// to verify its target COMPLETELY and to refuse service on a partial state, and
+// "it is broken" is the diagnosis an operator can do least with.
+message Check {
+  // What was checked, as a short stable key: "folder-exists",
+  // "folder-writable", "prefix-reachable", "envelope-sender-accepted".
+  string name = 1;
+
+  // Whether it held.
+  bool passed = 2;
+
+  // What was found when it did not, in English. Empty when it passed.
+  //
+  // Never a credential and never a tenant's data: this text reaches the
+  // operator UI and the core's log.
+  string detail = 3;
+}

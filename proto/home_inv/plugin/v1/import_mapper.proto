@@ -1,0 +1,133 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// READING SOMEBODY ELSE'S EXPORT AND SAYING WHAT IT CONTAINS.
+//
+// The CSV profile is in the core image. Homebox, InvenTree and Snipe-IT are
+// plugins, because each is a foreign format somebody else keeps changing.
+//
+// A MAPPER PROPOSES AND NEVER WRITES. It turns a file into rows of key and
+// value; the core validates them against the tenant's own type definitions,
+// refuses what does not fit and writes what does. A mapper that could create
+// fields would be a foreign file changing the type system (ADR-0020).
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "ImportMapperProto";
+
+// Reads a foreign export format.
+service ImportMapper {
+  // What this mapper reads.
+  rpc Describe(ImportMapperDescribeRequest) returns (ImportMapperDescriptor);
+
+  // Reads the beginning of a file and shows what it would make of it.
+  //
+  // Shown to a person before the import runs, so that the wrong file is noticed
+  // while nothing has been written yet. It is also how the core picks the right
+  // mapper when the person did not say: a mapper that cannot read the file fails
+  // this call.
+  rpc Preview(stream ImportMapperPreviewRequest) returns (ImportMapperPreviewResponse);
+
+  // Reads the whole file, handing over each row as it is read.
+  //
+  // STREAMED IN BOTH DIRECTIONS. An export of thirty thousand items must not be
+  // held in memory by either side, and the core writes rows as they arrive
+  // rather than at the end.
+  //
+  // Rows already handed over stay handed over when the stream then fails: the
+  // core has written them, and an import is resumable rather than transactional
+  // over thirty thousand rows.
+  rpc Read(stream ImportMapperReadRequest) returns (stream ImportMapperRow);
+}
+
+// Asks what a mapper reads.
+message ImportMapperDescribeRequest {
+  CallContext context = 1;
+}
+
+// What a mapper reads.
+message ImportMapperDescriptor {
+  // The stable key, for example "homebox".
+  string format_key = 1;
+
+  // What a person sees.
+  string name = 2;
+
+  // What the file may be, for example "text/csv" or "application/zip".
+  repeated string media_types = 3;
+
+  // The options `Read` understands, so that the core can offer them without
+  // knowing the format.
+  repeated string option_keys = 4;
+}
+
+// One frame of a preview.
+//
+// The first message carries `context` and `max_rows` and no `chunk`; every later
+// one carries `chunk`. Only the beginning of the file is sent, and the
+// implementation must not require the whole of it.
+message ImportMapperPreviewRequest {
+  // Present on the first message only.
+  CallContext context = 1;
+
+  // Present on the first message only. How many rows at most to return.
+  uint32 max_rows = 2;
+
+  // Present on every message after the first.
+  bytes chunk = 3;
+}
+
+// What a mapper would make of a file.
+message ImportMapperPreviewResponse {
+  // The source's own column names, in the order they appear, so that a person
+  // can map them by eye.
+  repeated string columns = 1;
+
+  // The first rows, already mapped.
+  repeated ImportMapperRow rows = 2;
+
+  // How many rows the file has, or -1 when that cannot be known without reading
+  // all of it.
+  //
+  // NEVER A GUESS PRESENTED AS A COUNT.
+  int64 total_rows = 3;
+}
+
+// One frame of a read.
+//
+// The first message carries `context` and `options` and no `chunk`.
+message ImportMapperReadRequest {
+  // Present on the first message only.
+  CallContext context = 1;
+
+  // Present on the first message only. What the person chose in the preview:
+  // which columns map to which fields, which to ignore.
+  //
+  // Keys are the mapper's own, and it ignores what it does not know.
+  map<string, string> options = 2;
+
+  // Present on every message after the first.
+  bytes chunk = 3;
+}
+
+// One row of a foreign export.
+message ImportMapperRow {
+  // The fields, keyed by the core's own field key where the mapper knows it and
+  // by the source's column name where it does not.
+  //
+  // The core resolves the rest against the tenant's type definition and reports
+  // what it could not place, rather than dropping it silently.
+  map<string, string> values = 1;
+
+  // What the row was called in the source — a line number, an id.
+  //
+  // Recorded with the imported item so that a person can find the original
+  // again.
+  string source_reference = 2;
+}

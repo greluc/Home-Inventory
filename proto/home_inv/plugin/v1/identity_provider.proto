@@ -1,0 +1,145 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// SIGNING SOMEBODY IN AGAINST A FOREIGN DIRECTORY.
+//
+// OIDC is a first-party plugin; LDAP and SAML are plugins too. There is no
+// in-core implementation, because every one of them talks to a host outside the
+// deployment (ADR-0026).
+//
+// WHAT THIS PORT MUST NEVER DO:
+//
+// It does not link accounts. A verified e-mail address that matches an existing
+// local account is NOT permission to sign in as that account — that is the
+// account takeover this project refuses by design (REQ-AUTH-005, REQ-AUTH-006,
+// REQ-SEC-020). This port reports who the far side says the person is; whether
+// that becomes a session, and against which account, is the core's decision and
+// a person's confirmation.
+//
+// It also issues no session and no token of the core's. It returns claims.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "IdentityProviderProto";
+
+// Runs a federated sign-in.
+service IdentityProvider {
+  // What this provider is.
+  rpc Describe(IdentityProviderDescribeRequest) returns (IdentityProviderDescriptor);
+
+  // Starts a sign-in and says where to send the browser.
+  rpc Begin(IdentityProviderBeginRequest) returns (IdentityProviderBeginResponse);
+
+  // Finishes a sign-in and reports who the far side says this is.
+  //
+  // The implementation verifies the token's signature, issuer, audience, expiry
+  // and nonce before returning. A provider that hands back UNVERIFIED claims has
+  // turned a redirect into an authentication, and the core has no way to tell
+  // the difference.
+  rpc Complete(IdentityProviderCompleteRequest) returns (IdentityProviderIdentity);
+}
+
+// Asks what a provider is.
+message IdentityProviderDescribeRequest {
+  CallContext context = 1;
+}
+
+// What a provider is.
+message IdentityProviderDescriptor {
+  // The stable key, for example "oidc-main".
+  string provider_key = 1;
+
+  // What the sign-in button says.
+  string display_name = 2;
+
+  // Whether the provider insists on PKCE.
+  //
+  // The core always sends a challenge; this says whether the far side requires
+  // one, which an operator wants to see.
+  bool pkce_required = 3;
+}
+
+// The start of a sign-in.
+//
+// The state and the nonce are the CORE's and are passed in rather than minted
+// here: the core is what has to recognise them coming back, and a value only the
+// plugin knows is a value the core cannot check.
+message IdentityProviderBeginRequest {
+  CallContext context = 1;
+
+  // Where the provider sends the browser back to.
+  //
+  // The core's own URL, registered with the provider. A plugin does not get to
+  // choose it.
+  string redirect_uri = 2;
+
+  // The core's one-time value, returned unchanged and checked by the core.
+  string state = 3;
+
+  // The core's one-time value for the token, checked by the plugin when it
+  // verifies.
+  string nonce = 4;
+
+  // The PKCE challenge, S256.
+  string code_challenge = 5;
+
+  // What to prefill, or empty. Passed on as the protocol allows, never invented.
+  string login_hint = 6;
+}
+
+// Where to send the browser.
+message IdentityProviderBeginResponse {
+  // The provider's URL with the parameters already on it.
+  string authorization_url = 1;
+}
+
+// The end of a sign-in.
+message IdentityProviderCompleteRequest {
+  CallContext context = 1;
+
+  // What the provider handed the browser.
+  string code = 2;
+
+  // The PKCE verifier matching the challenge.
+  string code_verifier = 3;
+
+  // The same redirect as before, which the provider checks again.
+  string redirect_uri = 4;
+
+  // The same nonce as before, which the plugin checks in the token.
+  string nonce = 5;
+}
+
+// Who the far side says this is.
+message IdentityProviderIdentity {
+  // The provider's own stable id for the person.
+  //
+  // THIS, WITH THE ISSUER, IS WHAT AN ACCOUNT IS LINKED BY — never the e-mail
+  // address, which people change and providers reuse.
+  string subject = 1;
+
+  // Which provider said so.
+  string issuer = 2;
+
+  // The address, or empty.
+  string email = 3;
+
+  // Whether the provider says it verified that address.
+  //
+  // The core treats an unverified address as ABSENT, because an unverified
+  // address is a claim about somebody else.
+  bool email_verified = 4;
+
+  // The name, or empty.
+  string display_name = 5;
+
+  // Everything else the token carried, for an operator to map onto roles. The
+  // core maps nothing by itself.
+  map<string, string> claims = 6;
+}

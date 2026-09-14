@@ -102,7 +102,10 @@ public interface SearchIndex {
    *     analysed, so {@code Bosch} and {@code bosch} are two keywords unless the caller folded them
    * @param paths hierarchical values, one string per level chain, for subtree queries — a location
    *     path is one of these
-   * @param numbers numeric fields for range queries and sorting, keyed by field name
+   * @param numbers numeric fields for range queries and sorting, keyed by field name, as decimal
+   *     text. Not {@code Double}, for the reason {@link de.greluc.homeinv.plugin.api.MoneyValue}
+   *     gives: one of these fields is a price, and a binary fraction has lost the cents before the
+   *     engine sees it. An engine maps the text to its own numeric type at its own boundary
    */
   record Document(
       String documentId,
@@ -110,7 +113,7 @@ public interface SearchIndex {
       Map<String, String> text,
       Map<String, List<String>> keywords,
       List<String> paths,
-      Map<String, Double> numbers) {}
+      Map<String, String> numbers) {}
 
   /**
    * One query.

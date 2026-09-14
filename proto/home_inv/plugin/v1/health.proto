@@ -1,0 +1,130 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// WHAT A PLUGIN SAYS ABOUT ITSELF.
+//
+// Every plugin serves this, whatever ports it implements. The core asks once a
+// minute (13 §13.7) and shows the answer in the operator's plugin list
+// (13 §13.11).
+//
+// NOT gRPC's own health checking protocol. That one answers SERVING or
+// NOT_SERVING about a service, which is the question "is the process up" — and
+// the process being up is exactly the case where an integration is silently
+// broken: the plugin is running, its credentials were revoked yesterday, and the
+// next upload is accepted and lost.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "HealthProto";
+
+// Reports the plugin's own state and that of the target it talks to.
+service PluginHealth {
+  // Checks the plugin and its target.
+  //
+  // Called on a schedule and not per request, so it may cost one round trip to
+  // the target. It must not cost several: a check that takes ten seconds is a
+  // check that is still running when the next one starts.
+  //
+  // THIS RPC DOES NOT FAIL. An unreachable target is a STATE and not an error —
+  // a health check that can fail is one whose failure needs interpreting, and it
+  // would be interpreted as "unknown" exactly when it mattered.
+  rpc Check(HealthRequest) returns (HealthResponse);
+}
+
+// Whose configuration to check.
+message HealthRequest {
+  // A plugin configured once for the instance ignores the tenant and answers the
+  // same for everybody.
+  CallContext context = 1;
+}
+
+// What a plugin reports about itself.
+message HealthResponse {
+  // The state, from the closed set below.
+  HealthState state = 1;
+
+  // One short English sentence for the operator, naming what is wrong and where.
+  //
+  // Never a credential, never a tenant's data.
+  string detail = 2;
+
+  // What was verified to arrive at the state.
+  //
+  // Empty for a plugin with no outbound target. For one that has, EVERY check
+  // REQ-PLG-015 requires is in here, passing or not, so that an operator sees
+  // which half is missing rather than that something is.
+  repeated Check checks = 3;
+}
+
+// WHAT IS WRONG WITH AN INTEGRATION, IN THE OPERATOR'S TERMS.
+//
+// The set is fixed by `docs/reference/plugin-health-states.yaml`, which is its
+// source of truth, and `HealthStateRegistryTest` compares the two on every
+// build.
+//
+// NOT a `degradedReason`. That one is for the CLIENT and says an answer is
+// poorer than usual (ADR-0039); these are for the OPERATOR and say what to go
+// and fix. Several of these collapse to the same client-visible symptom, which
+// is the point.
+enum HealthState {
+  // Unset. A plugin that leaves this unset has not answered the question.
+  HEALTH_STATE_UNSPECIFIED = 0;
+
+  // Reachable, authenticated, and the last call in the window succeeded.
+  HEALTH_STATE_OK = 1;
+
+  // Installed, with no target or no credentials yet. It has never worked, as
+  // opposed to having stopped working.
+  //
+  // Not a fault: a `minimal` installation runs without `plugin-smtp` BY DESIGN
+  // (ADR-0028), so this is a steady state there and must raise no alert.
+  HEALTH_STATE_NOT_CONFIGURED = 2;
+
+  // The remote target exists only in part — the folder is there but cannot be
+  // written to, the bucket exists but not the agreed prefix, the mailbox
+  // authenticates but refuses the envelope sender.
+  //
+  // THE PLUGIN REFUSES SERVICE IN THIS STATE rather than working partially
+  // (REQ-PLG-015). The failure this prevents is the expensive one: writes are
+  // accepted by the half that works, and the half that does not is discovered
+  // when somebody tries to read them back.
+  HEALTH_STATE_PROVISIONING_INCOMPLETE = 3;
+
+  // Authentication failed: the app password was revoked, the key rotated out of
+  // band, the token expired. Here the remote does not know who we are.
+  HEALTH_STATE_CREDENTIALS_REJECTED = 4;
+
+  // Authenticated, and the operation was refused. Here the remote knows who we
+  // are and says no.
+  HEALTH_STATE_INSUFFICIENT_PRIVILEGES = 5;
+
+  // The host did not answer: DNS, routing, a closed port, or a TLS chain the
+  // plugin does not trust.
+  HEALTH_STATE_DESTINATION_UNREACHABLE = 6;
+
+  // The egress proxy refused the destination: the host is not on the manifest's
+  // allowlist, or the capability was never granted for this tenant.
+  //
+  // The state most likely to be misdiagnosed. It presents as a connection
+  // failure and is an authorisation decision — the fix is in our own
+  // configuration, not at the remote and not in the network (ADR-0027).
+  HEALTH_STATE_EGRESS_DENIED = 7;
+
+  // A name at the destination is taken by something that is not ours. The plugin
+  // never overwrites a target it did not create.
+  HEALTH_STATE_TARGET_CONFLICT = 8;
+
+  // The remote accepted the request and has no room. A different limit from our
+  // own per-tenant quota, which reports separately.
+  HEALTH_STATE_QUOTA_EXHAUSTED = 9;
+
+  // The plugin speaks a major version of this contract the core does not serve
+  // (REQ-PLG-008).
+  HEALTH_STATE_CONTRACT_MISMATCH = 10;
+}

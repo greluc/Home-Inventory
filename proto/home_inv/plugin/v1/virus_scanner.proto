@@ -1,0 +1,56 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// CHECKING AN UPLOAD BEFORE ANYBODY CAN DOWNLOAD IT AGAIN.
+//
+// ClamAV is in the core image and mandatory: `clamd` is part of the deployment,
+// so the adapter opens no connection outside it. Other scanners are
+// interchangeable; "NO SCANNER" IS NOT A SUPPORTED CONFIGURATION.
+//
+// A file whose verdict is not yet in is PENDING_SCAN and is not served. That is
+// the behaviour a caller preserves when this port is unavailable: an unscanned
+// file is withheld, never released on the grounds that the scanner was down.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "VirusScannerProto";
+
+// Examines uploaded content.
+service VirusScanner {
+  // Scans one stream.
+  //
+  // The stream is read once, forwards, and the implementation must not need it
+  // twice.
+  rpc Scan(stream VirusScannerScanRequest) returns (VirusScannerVerdict);
+}
+
+// One frame of a scan.
+//
+// The first message carries `context` and no `chunk`; every later one carries
+// `chunk`.
+message VirusScannerScanRequest {
+  // Present on the first message only.
+  CallContext context = 1;
+
+  // Present on every message after the first.
+  bytes chunk = 2;
+}
+
+// What a scanner found.
+message VirusScannerVerdict {
+  // True when the scanner EXAMINED the content and found nothing.
+  //
+  // NEVER true because a scan could not be performed: that case is an error
+  // status, so that "not scanned" can never be mistaken for "scanned and fine".
+  bool clean = 1;
+
+  // What was found, as the scanner names it, for the log and for the person
+  // whose upload was refused. Empty when clean.
+  string signature = 2;
+}

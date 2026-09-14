@@ -1,0 +1,131 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// SENDING A RENDERED ARTIFACT TO A PRINTER.
+//
+// Download is in the core image and opens nothing — it writes to the blob store
+// and hands back a link. CUPS/IPP, Brother QL over the network, Zebra over TCP
+// 9100 and Dymo are plugins, because each of them opens a connection to a device
+// the deployment does not contain.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "PrintTargetProto";
+
+// Hands print jobs to physical printers.
+service PrintTarget {
+  // The printers this target can currently reach.
+  //
+  // Asked when a person is choosing where to print and not on every job:
+  // discovery may take seconds, and a printer list is worth caching for the
+  // length of a dialogue.
+  rpc Printers(PrintTargetPrintersRequest) returns (PrintTargetPrintersResponse);
+
+  // Hands a job to a printer.
+  //
+  // Returns as soon as the printer has ACCEPTED it, not when the paper comes
+  // out: a caller waiting for the second would hold a request open for a minute.
+  rpc Print(PrintTargetPrintRequest) returns (PrintTargetPrintResponse);
+
+  // How a job is getting on.
+  rpc JobState(PrintTargetJobStateRequest) returns (PrintTargetJobStateResponse);
+}
+
+// Asks which printers are reachable.
+message PrintTargetPrintersRequest {
+  // A target may hold a different printer list per tenant; one that does not
+  // ignores the tenant.
+  CallContext context = 1;
+}
+
+// Which printers are reachable.
+message PrintTargetPrintersResponse {
+  // Possibly empty, when none answered. Finding nothing is a different answer
+  // from failing to look, which is an error status.
+  repeated PrintTargetPrinter printers = 1;
+}
+
+// One printer.
+message PrintTargetPrinter {
+  // The stable id this target knows it by.
+  string printer_id = 1;
+
+  // What a person sees.
+  string name = 2;
+
+  // What it accepts, compared against a renderer's outputs.
+  repeated string media_types = 3;
+
+  // Where it is, when the target knows — a CUPS location string, a room name.
+  // Empty otherwise.
+  string location = 4;
+}
+
+// One print job.
+message PrintTargetPrintRequest {
+  CallContext context = 1;
+
+  // Which printer.
+  string printer_id = 2;
+
+  // What the content is.
+  string media_type = 3;
+
+  // The artifact, as a renderer produced it.
+  bytes content = 4;
+
+  // How many, at least one.
+  uint32 copies = 5;
+
+  // What to call it in the printer's queue, so that a person standing at the
+  // device can tell which job is theirs.
+  string job_name = 6;
+}
+
+// A job the printer took.
+message PrintTargetPrintResponse {
+  // The id to ask about it with.
+  string job_id = 1;
+}
+
+// Asks after a job.
+message PrintTargetJobStateRequest {
+  CallContext context = 1;
+
+  // What `Print` returned.
+  string job_id = 2;
+}
+
+// Where a job has got to.
+message PrintTargetJobStateResponse {
+  PrintJobState state = 1;
+}
+
+// The states a print job can be in.
+enum PrintJobState {
+  // Unset.
+  PRINT_JOB_STATE_UNSPECIFIED = 0;
+
+  // Accepted and waiting.
+  PRINT_JOB_STATE_QUEUED = 1;
+
+  // On the device now.
+  PRINT_JOB_STATE_PRINTING = 2;
+
+  // Finished, as far as the target can tell.
+  PRINT_JOB_STATE_DONE = 3;
+
+  // Failed, and the target will not retry it.
+  PRINT_JOB_STATE_FAILED = 4;
+
+  // The target does not know this job.
+  //
+  // Not an error: printers forget finished jobs, and so may an implementation.
+  PRINT_JOB_STATE_UNKNOWN = 5;
+}

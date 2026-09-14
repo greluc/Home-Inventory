@@ -1,0 +1,130 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// GENERATING A CODE, AND CLAIMING A RAW SCAN AS ONE'S OWN.
+//
+// QR is in the core image. DataMatrix, Code128, EAN-13, ITF-14, Aztec, GS1
+// Digital Link and NFC are the plugins this port exists for, and REQ-PLG-010
+// requires a new one of them to run WITHOUT A SINGLE LINE OF CORE CHANGE. That
+// requirement is what `Claim` is shaped by: the core hands a raw string to every
+// registered format in priority order and the first that claims it wins, so the
+// core never learns what a DataMatrix looks like.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "CodeFormatProto";
+
+// Generates and recognises one machine-readable code format.
+service CodeFormat {
+  // What this format is called.
+  rpc Describe(CodeFormatDescribeRequest) returns (CodeFormatDescribeResponse);
+
+  // Claims a raw scan and says what it means, or declines it.
+  //
+  // ONE RPC AND NOT TWO. A `Claims` followed by a `Parse` would cost a second
+  // round trip to learn something the first call already knew, and the core asks
+  // every registered format in turn until one claims.
+  //
+  // Declining is `claimed = false` and NOT an error. It is the normal answer for
+  // every format but one, and an error per format per scan would make the
+  // resolution chain expensive and noisy.
+  rpc Claim(CodeFormatClaimRequest) returns (CodeFormatClaimResponse);
+
+  // Renders the symbol for a payload.
+  rpc Render(CodeFormatRenderRequest) returns (CodeFormatRenderResponse);
+}
+
+// Asks what this format is called.
+message CodeFormatDescribeRequest {
+  CallContext context = 1;
+}
+
+// What this format is called.
+message CodeFormatDescribeResponse {
+  // Lowercase and stable: "qr", "datamatrix", "ean13", "gs1-digital-link".
+  //
+  // Stored beside every code this format produced, so changing it orphans them.
+  string format_key = 1;
+}
+
+// A raw scan, for whoever recognises it.
+message CodeFormatClaimRequest {
+  CallContext context = 1;
+
+  // Exactly what the scanner delivered, unmodified.
+  //
+  // Trimming or case-folding it is the implementation's business and not the
+  // caller's: what counts as insignificant differs per format.
+  string raw = 2;
+}
+
+// Whether this format recognised the scan, and what it means.
+message CodeFormatClaimResponse {
+  // False when this format does not recognise the scan. Every field below is
+  // then unset.
+  bool claimed = 1;
+
+  // Which format claimed it, so that the caller need not remember which one it
+  // was asking.
+  string format_key = 2;
+
+  // The content, decoded — for a GS1 Digital Link the URL, for an EAN the
+  // digits.
+  string payload = 3;
+
+  // What the format could read beyond the payload: a GS1 application
+  // identifier, a batch number. Empty for formats that carry nothing but their
+  // payload.
+  map<string, string> attributes = 4;
+}
+
+// A payload to render, and how.
+message CodeFormatRenderRequest {
+  CallContext context = 1;
+
+  // What the symbol encodes.
+  string payload = 2;
+
+  // The size of one module, in micrometres.
+  //
+  // NOT in pixels. The symbol goes onto a physical label whose geometry is
+  // measured in millimetres (10 §10.5), and a pixel is a property of a rendering
+  // rather than of a label.
+  uint32 module_size_micrometres = 3;
+
+  // How many modules of clear space the symbol needs around it. Zero lets the
+  // implementation use its specification's own minimum, which is what a caller
+  // who does not know the format should ask for.
+  uint32 quiet_zone_modules = 4;
+
+  // What to produce, for example "image/png" or "image/svg+xml".
+  string media_type = 5;
+
+  // The level, spelled as the format spells it ("L", "M", "Q", "H" for QR).
+  // Empty for formats without the notion.
+  string error_correction = 6;
+}
+
+// A rendered symbol.
+message CodeFormatRenderResponse {
+  // What it is, which may differ from what was asked for only when the request
+  // left the media type empty.
+  string media_type = 1;
+
+  // The bytes.
+  bytes content = 2;
+
+  // How wide it is ON THE MEDIUM, quiet zone included, in micrometres. The
+  // caller places it on a label and needs the physical size, not the pixel
+  // count.
+  uint32 width_micrometres = 3;
+
+  // How tall it is on the medium, in micrometres.
+  uint32 height_micrometres = 4;
+}

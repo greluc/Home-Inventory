@@ -1,0 +1,112 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// ESTIMATING WHAT AN ITEM IS WORTH NOW, AND WHAT REPLACING IT WOULD COST.
+//
+// Straight-line depreciation is in the core image — it is arithmetic and opens
+// nothing. Declining balance is the same. Market-price and dealer services are
+// plugins, because they call out.
+//
+// Both numbers are ESTIMATES and the core presents them as estimates. A current
+// value is what the thing is worth today; a replacement value is what buying it
+// again would cost, and an insurance conversation needs the second. `basis` is
+// what makes that visible rather than implied.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "google/protobuf/timestamp.proto";
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "ValuationProto";
+
+// Estimates the value of an item.
+service ValuationProvider {
+  // What this provider is called.
+  rpc Describe(ValuationDescribeRequest) returns (ValuationDescriptor);
+
+  // Estimates an item's value.
+  rpc Value(ValuationValueRequest) returns (ValuationValueResponse);
+}
+
+// Asks what a provider is called.
+message ValuationDescribeRequest {
+  CallContext context = 1;
+}
+
+// What a provider is called.
+message ValuationDescriptor {
+  // Lowercase and stable: "straight-line", "declining-balance".
+  string provider_key = 1;
+}
+
+// What is known about the item being valued.
+message ValuationValueRequest {
+  CallContext context = 1;
+
+  // The core's id, so that a provider can cache by it. It identifies nothing
+  // outside this instance.
+  string item_id = 2;
+
+  // The item type's key, for example "tool" or "book".
+  string type_key = 3;
+
+  // What it cost, or unset when nobody recorded it.
+  Money purchase_price = 4;
+
+  // When it was bought, as an ISO-8601 date ("2024-03-05"), or empty.
+  //
+  // A date and not a timestamp: nobody knows the hour a thing was bought, and a
+  // timestamp would invent a time zone for it.
+  string purchased_on = 5;
+
+  // The condition as the tenant's own vocabulary spells it, or empty.
+  //
+  // A provider that does not know a tenant's vocabulary ignores it rather than
+  // guessing.
+  string condition_key = 6;
+
+  // The item's attributes, so that a market-price provider can find the model.
+  //
+  // Only the fields the tenant made visible to plugins are in here: a
+  // `sensitive` field never leaves the core (REQ-SEC-011).
+  map<string, string> attributes = 7;
+}
+
+// What an item is estimated to be worth.
+message ValuationValueResponse {
+  // False when this provider has nothing to say about this item — a
+  // market-price provider that has never seen the model, a depreciation provider
+  // with no purchase price to depreciate.
+  //
+  // AN ANSWER AND NOT A FAILURE.
+  bool valued = 1;
+
+  // What it is worth today.
+  Money current_value = 2;
+
+  // What buying it again would cost, or unset when the provider has no basis for
+  // one.
+  //
+  // NOT SILENTLY EQUAL TO THE CURRENT VALUE: for anything second-hand the two
+  // differ, and quietly reporting the same number twice would be a made-up
+  // figure in an insurance claim.
+  Money replacement_value = 3;
+
+  // How it was arrived at, in one short English phrase: "straight-line over 5
+  // years", "median of 14 completed sales".
+  //
+  // Shown next to the number, because an estimate whose basis is invisible reads
+  // as a fact.
+  string basis = 4;
+
+  // What moment the estimate speaks for. A market estimate ages; a depreciation
+  // does not.
+  google.protobuf.Timestamp as_of = 5;
+
+  // How sure the provider is, 0 to 100. A deterministic calculation says 100.
+  uint32 confidence = 6;
+}

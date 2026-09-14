@@ -159,8 +159,10 @@ commit".
   scanning, valuation and imports — each one an interface a plugin author can
   build against, in the Apache-2.0 module, so a plugin stays theirs to license.
   Six of them belong to features that arrive later and have nothing behind them
-  yet. *Plugin contract: adds `de.greluc.homeinv.plugin.api.port`. Not published
-  until the SDK is, and until then it may still change.*
+  yet. *Plugin contract: adds `de.greluc.homeinv.plugin.api.port` and a protobuf
+  service per port in `home_inv.plugin.v1`, plus the health check every plugin
+  serves. Not published until the SDK is, and until then it may still change —
+  `buf breaking` now gates every change to it.*
 
 - **Administrators decide what a plugin may do in their household.** The plugin
   list now shows what each one asks for beside what the household has agreed to,

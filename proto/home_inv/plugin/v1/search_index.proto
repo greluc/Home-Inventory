@@ -1,0 +1,227 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// INDEXING DOCUMENTS AND ANSWERING QUERIES OVER THEM.
+//
+// OpenSearch and PostgreSQL are both in the core image — both are part of the
+// deployment and neither leaves it. Meilisearch and Typesense are the plugins
+// this port exists for.
+//
+// AN INDEX MAY FAIL BUT MUST NEVER LIE. What comes back here is a list of
+// document ids and nothing else: the core re-loads every hit from PostgreSQL
+// under row-level security before showing it, so a stale or poisoned index can
+// cost a result but cannot leak one across a tenant boundary. That is why this
+// contract carries no content, and it is not an oversight to be optimised away.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "SearchIndexProto";
+
+// Keeps a search index and answers queries against it.
+service SearchIndex {
+  // What this engine is called, and whether it is answering.
+  rpc Status(SearchIndexStatusRequest) returns (SearchIndexStatusResponse);
+
+  // Adds a document or replaces the one with the same id.
+  //
+  // IDEMPOTENT, because delivery is at-least-once: indexing the same document
+  // twice must leave the index as one write would.
+  rpc Index(SearchIndexIndexRequest) returns (SearchIndexIndexResponse);
+
+  // Removes a document. Removing one that is not there succeeds.
+  rpc Remove(SearchIndexRemoveRequest) returns (SearchIndexRemoveResponse);
+
+  // Answers a query.
+  rpc Search(SearchIndexSearchRequest) returns (SearchIndexSearchResponse);
+
+  // Counts how the matches of a query distribute over one dimension.
+  rpc Facet(SearchIndexFacetRequest) returns (SearchIndexFacetResponse);
+}
+
+// Asks after the engine.
+message SearchIndexStatusRequest {
+  CallContext context = 1;
+}
+
+// What the engine is, and whether it is answering.
+message SearchIndexStatusResponse {
+  // Lowercase and stable: "opensearch", "postgres", "meilisearch".
+  string engine_key = 1;
+
+  // False sends the core to its fallback, which is a DEGRADED ANSWER and not an
+  // error (REQ-SRCH-007).
+  //
+  // Cheap by contract: a call that takes a second to say "yes" has already cost
+  // more than the query it was protecting, so an implementation caches its own
+  // answer.
+  bool available = 2;
+}
+
+// A document to index.
+message SearchIndexIndexRequest {
+  CallContext context = 1;
+  SearchIndexDocument document = 2;
+}
+
+// The result of indexing.
+message SearchIndexIndexResponse {}
+
+// A document to remove.
+message SearchIndexRemoveRequest {
+  CallContext context = 1;
+  string document_id = 2;
+}
+
+// The result of a removal.
+message SearchIndexRemoveResponse {}
+
+// One indexable document.
+message SearchIndexDocument {
+  // The id the core knows it by, and the id hits come back as.
+  string document_id = 1;
+
+  // The document's language as an IETF tag, which decides the analyser.
+  //
+  // Empty lets the engine choose, which is worse than saying.
+  string language = 2;
+
+  // The free-text fields, keyed by field name: the name, the notes, the
+  // attribute values as text.
+  map<string, string> text = 3;
+
+  // The exact-match fields, keyed by field name: tag keys, type keys, states.
+  //
+  // Not analysed, so "Bosch" and "bosch" are two keywords unless the caller
+  // folded them.
+  map<string, SearchIndexKeywords> keywords = 4;
+
+  // Hierarchical values, one string per level chain, for subtree queries. A
+  // location path is one of these.
+  repeated string paths = 5;
+
+  // Numeric fields for range queries and sorting, keyed by field name.
+  //
+  // DECIMAL TEXT AND NOT A `double`, for the reason `Money` in `common.proto`
+  // gives: one of these fields is a price, and a binary fraction has lost the
+  // cents before the engine ever sees it. An engine maps the string to whatever
+  // its own numeric type is, at its own boundary, where a rounding decision
+  // belongs.
+  map<string, string> numbers = 6;
+}
+
+// Several values of one keyword field.
+//
+// Its own message because protobuf maps cannot hold a repeated value directly.
+message SearchIndexKeywords {
+  repeated string values = 1;
+}
+
+// One query.
+message SearchIndexQuery {
+  // The free text, or empty for a query that filters without searching.
+  string text = 1;
+
+  // The searcher's language, for the analyser.
+  string language = 2;
+
+  // The narrowings, all of which must hold.
+  repeated SearchIndexFilter filters = 3;
+
+  // An opaque position from a previous answer, or empty for the first page.
+  //
+  // Opaque to the core too: it is the engine's to mint and to read.
+  string cursor = 4;
+
+  // How many at most.
+  uint32 limit = 5;
+
+  // What to sort by, as the core names it, or empty for relevance.
+  string sort_field = 6;
+
+  // The direction, ignored when sorting by relevance.
+  bool ascending = 7;
+}
+
+// One narrowing.
+message SearchIndexFilter {
+  // Which field, as a document names it.
+  string field = 1;
+
+  // What to do with the values: "eq", "ne", "lt", "lte", "gt", "gte",
+  // "contains", "subtree".
+  //
+  // A CLOSED SET. An engine that meets an operator it does not know REFUSES the
+  // query rather than ignoring the filter, which would answer with more than was
+  // asked for.
+  string operator = 2;
+
+  // The values: one for most operators, two for a range.
+  repeated string values = 3;
+}
+
+// A query to answer.
+message SearchIndexSearchRequest {
+  // An implementation partitions by the tenant and must never answer across two,
+  // even though the core checks again afterwards.
+  CallContext context = 1;
+  SearchIndexQuery query = 2;
+}
+
+// What a query matched.
+message SearchIndexSearchResponse {
+  // The ids, in the order asked for.
+  repeated string document_ids = 1;
+
+  // How many matched altogether, or -1 when the engine does not count cheaply.
+  //
+  // NEVER AN ESTIMATE PRESENTED AS A COUNT.
+  int64 total = 2;
+
+  // The position to continue from, or empty when this was the last page.
+  string cursor = 3;
+}
+
+// A query to count over.
+message SearchIndexFacetRequest {
+  CallContext context = 1;
+
+  // The same query the hits came from, so that the counts belong to the list on
+  // screen.
+  SearchIndexQuery query = 2;
+
+  // What to count over, as the core names it.
+  string dimension = 3;
+
+  // How many buckets at most. The rest are not returned, and their absence is
+  // why a facet is a hint rather than a census.
+  uint32 max_buckets = 4;
+}
+
+// How matches distribute over one dimension.
+message SearchIndexFacetResponse {
+  // What was counted over.
+  string dimension = 1;
+
+  // The counts, largest first.
+  repeated SearchIndexBucket buckets = 2;
+
+  // False when the tail was cut at `max_buckets`.
+  //
+  // The core says so rather than showing a partial list as a whole one.
+  bool complete = 3;
+}
+
+// One value and how often it occurs.
+message SearchIndexBucket {
+  // The value, exactly as it is indexed.
+  string key = 1;
+
+  // How many of the query's matches carry it.
+  int64 count = 2;
+}

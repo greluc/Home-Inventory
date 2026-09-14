@@ -1,0 +1,116 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// TURNING A CODE INTO WHAT IS KNOWN ABOUT THE THING IT IDENTIFIES.
+//
+// ISBN through Open Library or the DNB, EAN and GTIN through Open Food Facts or
+// GS1, MPN, Discogs, TMDB, IGDB. EVERY implementation is a plugin, without
+// exception: each calls a host outside the deployment, and the core has no
+// outbound route at all (ADR-0026).
+//
+// What comes back is a PROPOSAL and never a change. The core records it, a
+// person accepts or rejects it, and only then does an item change. A resolver
+// that could write would be foreign data entering the inventory unseen.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "MetadataResolverProto";
+
+// Looks a code up in a foreign catalogue.
+service MetadataResolver {
+  // Which code schemes this resolver answers for.
+  rpc Schemes(MetadataResolverSchemesRequest) returns (MetadataResolverSchemesResponse);
+
+  // Looks a code up.
+  rpc Resolve(MetadataResolverResolveRequest) returns (MetadataResolverResolveResponse);
+}
+
+// Asks which schemes a resolver answers for.
+message MetadataResolverSchemesRequest {
+  CallContext context = 1;
+}
+
+// Which schemes a resolver answers for.
+message MetadataResolverSchemesResponse {
+  // Uppercase and stable: "ISBN13", "EAN13", "GTIN14", "MPN".
+  //
+  // The core asks only the resolvers that named the scheme in hand, so a
+  // resolver listing a scheme it cannot really answer buys itself calls it will
+  // decline.
+  repeated string schemes = 1;
+}
+
+// A code to look up.
+message MetadataResolverResolveRequest {
+  // A resolver with a per-tenant API key finds it by the tenant.
+  CallContext context = 1;
+
+  // Which scheme the code is in.
+  string scheme = 2;
+
+  // The code itself, normalised by the caller: no separators, no check-digit
+  // variations.
+  string code = 3;
+}
+
+// What a source knows about a code.
+message MetadataResolverResolveResponse {
+  // False when the source simply has no entry.
+  //
+  // AN ANSWER AND NOT A FAILURE: most codes are in no catalogue, and a resolver
+  // that returned an error for every unknown code would open its own circuit
+  // breaker doing its job correctly.
+  bool found = 1;
+
+  // The name of the thing, as the source gives it.
+  string title = 2;
+
+  // Everything else, keyed by the attribute key the resolver claims it maps to.
+  //
+  // The core maps these onto the tenant's own type definition and drops what
+  // does not fit: a resolver cannot create fields (ADR-0020).
+  map<string, string> attributes = 3;
+
+  // The pictures, as bytes.
+  repeated MetadataResolverImage images = 4;
+
+  // Where this came from, shown beside the proposal so that a person can weigh
+  // it: "Open Library", "Open Food Facts".
+  string source = 5;
+
+  // The page a person can read to check it, or empty.
+  //
+  // Displayed as a link with rel="noopener noreferrer" and NEVER FETCHED BY THE
+  // CORE (REQ-SEC-034).
+  string source_url = 6;
+
+  // How sure the resolver is, 0 to 100.
+  //
+  // A resolver that cannot tell says 100 rather than inventing a spread; the
+  // core sorts proposals by this.
+  uint32 confidence = 7;
+}
+
+// One picture belonging to a proposal.
+//
+// THE BYTES TRAVEL, NOT A URL. A URL would mean the core fetching something a
+// foreign source named, which is what REQ-SEC-034 forbids — and the plugin is
+// the one that already has the network capability and the egress allowlist for
+// it.
+message MetadataResolverImage {
+  // What it is, which the core checks against what it accepts rather than
+  // trusts.
+  string media_type = 1;
+
+  // The bytes.
+  bytes content = 2;
+
+  // What it shows, when the source says. Empty otherwise.
+  string caption = 3;
+}

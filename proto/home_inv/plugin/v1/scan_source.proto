@@ -1,0 +1,82 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// WHERE A SCAN COMES FROM.
+//
+// The browser camera is in the core image; app cameras, HID handheld scanners,
+// Bluetooth ring scanners and clipboard readers are what this port is for.
+//
+// A source PUSHES rather than answers. Nobody polls a scanner, and a scan that
+// arrived two seconds ago is not worth returning to a caller who asked a second
+// ago — so `Open` is a server stream and not a `Poll`.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "google/protobuf/timestamp.proto";
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "ScanSourceProto";
+
+// Delivers scans as they are read.
+service ScanSource {
+  // What this source is.
+  rpc Describe(ScanSourceDescribeRequest) returns (ScanSourceDescriptor);
+
+  // Opens the source and delivers scans until the stream is cancelled.
+  //
+  // THE END OF THE STREAM IS THE ANSWER TO "WHY DID IT STOP". A source that
+  // failed ends the stream with a gRPC status carrying the reason; one that was
+  // asked to stop sees the cancellation and ends cleanly. There is no "closed"
+  // message, because a message after the last one is a message the transport has
+  // no place for.
+  rpc Open(ScanSourceOpenRequest) returns (stream ScanSourceScan);
+}
+
+// Asks what this source is.
+message ScanSourceDescribeRequest {
+  CallContext context = 1;
+}
+
+// What a source is.
+message ScanSourceDescriptor {
+  // The stable key, for example "hid-keyboard-wedge".
+  string source_key = 1;
+
+  // What a person sees.
+  string name = 2;
+
+  // True when it delivers until stopped (a connected scanner), false when it
+  // delivers a bounded number of scans and then ends (an uploaded image).
+  //
+  // The core shows a stop button only for the first kind.
+  bool continuous = 3;
+}
+
+// Opens a source.
+message ScanSourceOpenRequest {
+  CallContext context = 1;
+}
+
+// One scan.
+message ScanSourceScan {
+  // Exactly what was read, undecoded.
+  //
+  // Which format it is in is a `CodeFormat`'s question and not this
+  // port's.
+  string raw = 1;
+
+  // When it was read, as the source knows it.
+  //
+  // The core does not ORDER by this — a device clock is a device's — but records
+  // it beside its own timestamp, because the difference between the two is what
+  // shows a scanner whose clock is wrong.
+  google.protobuf.Timestamp scanned_at = 2;
+
+  // Which physical device, when the source can tell several apart. Empty
+  // otherwise.
+  string device_id = 3;
+}

@@ -66,6 +66,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Two commits, because `buf breaking` compares against the one before.
+          # On a pull request `HEAD~1` is the base branch's tip, on a push to
+          # main it is the previous commit, and both are the right thing to ask
+          # "did this change break the contract".
+          fetch-depth: 2
 
       - uses: actions/setup-node@v7
         with:
@@ -90,6 +96,24 @@ jobs:
         run: |
           pip install --quiet pyyaml
           python tools/render_problems.py --check
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+
+      # REQ-PLG-001 and ADR-0064. The plugin contract is what a third party
+      # compiles against, and `proto/buf.yaml` says which rules it is held to and
+      # why three of them are excepted.
+      - name: The plugin contract lints
+        run: buf lint proto
+
+      # ADR-0011: a new major version keeps the previous one served for at least
+      # six months, and a break that reaches an operator's site is a plugin that
+      # stops working there. The contract is exercised by first-party plugins at
+      # stage 1 and published at stage 3 (ADR-0028); until then this gate is what
+      # makes a break deliberate rather than accidental.
+      - name: The plugin contract does not break
+        run: buf breaking proto --against '.git#ref=HEAD~1,subdir=proto'
 
   deployment:
     name: Deployment descriptions

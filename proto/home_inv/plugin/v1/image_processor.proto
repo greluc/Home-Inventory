@@ -1,0 +1,118 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// MAKING THE DERIVATIVES OF AN UPLOADED IMAGE.
+//
+// libvips is in the core image; ImageMagick and anything else is a plugin.
+//
+// BYTES RATHER THAN FILE PATHS. A plugin is a separate container and shares no
+// filesystem with the core, so a path would name a file that is not there. The
+// in-core implementation keeps its path form because it has the file.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "ImageProcessorProto";
+
+// Reads and rewrites images.
+service ImageProcessor {
+  // Reads an image's dimensions without decoding all of it.
+  //
+  // Called BEFORE deriving, so that an image whose pixel count is beyond what
+  // the instance allows is refused before anything decodes it: a decompression
+  // bomb costs its memory at decode time, not at upload time.
+  rpc Probe(stream ImageProcessorProbeRequest) returns (ImageProcessorDimensions);
+
+  // Produces one derivative.
+  //
+  // METADATA DOES NOT SURVIVE: EXIF, XMP and IPTC are dropped, GPS coordinates
+  // among them. A thumbnail carrying the location of somebody's house would be a
+  // privacy leak through a derived file, and derived files are the ones that get
+  // shared (REQ-PRIV-006).
+  //
+  // Orientation IS applied before the metadata goes — a picture that came out
+  // sideways because the EXIF rotation was dropped is a bug, not a privacy
+  // measure.
+  rpc Derive(stream ImageProcessorDeriveRequest) returns (stream ImageProcessorDeriveResponse);
+}
+
+// One frame of an image being probed.
+//
+// The first message carries `context` and no `chunk`; every later one carries
+// `chunk` and no `context`. The same shape the blob store uses, for the same
+// reason: an obvious wire format at the cost of a rule the server enforces.
+message ImageProcessorProbeRequest {
+  // Present on the first message only.
+  CallContext context = 1;
+
+  // Present on every message after the first.
+  bytes chunk = 2;
+}
+
+// An image's size in pixels.
+message ImageProcessorDimensions {
+  uint32 width = 1;
+  uint32 height = 2;
+}
+
+// One frame of a derivation.
+//
+// The first message carries `context` and `request` and no `chunk`.
+message ImageProcessorDeriveRequest {
+  // Present on the first message only.
+  CallContext context = 1;
+
+  // Present on the first message only.
+  ImageProcessorDeriveOptions options = 2;
+
+  // Present on every message after the first.
+  bytes chunk = 3;
+}
+
+// How a derivative should come out.
+message ImageProcessorDeriveOptions {
+  // The longest edge in pixels.
+  //
+  // The aspect ratio is kept and the image is NEVER ENLARGED: a 300-pixel
+  // original asked for 1024 comes back at 300.
+  uint32 max_edge = 1;
+
+  // What to write.
+  ImageOutputFormat format = 2;
+
+  // 1 to 100, the encoder's own scale. Zero means the implementation's default,
+  // which is what a caller without an opinion should send.
+  uint32 quality = 3;
+}
+
+// One frame of a produced derivative.
+//
+// The first message carries `media_type` and `dimensions` and no `chunk`; every
+// later one carries `chunk`.
+message ImageProcessorDeriveResponse {
+  // Present on the first message only.
+  string media_type = 1;
+
+  // Present on the first message only. What the core stores beside the file.
+  ImageProcessorDimensions dimensions = 2;
+
+  // Present on every message after the first.
+  bytes chunk = 3;
+}
+
+// What a derivative can be written as.
+enum ImageOutputFormat {
+  // Unset.
+  IMAGE_OUTPUT_FORMAT_UNSPECIFIED = 0;
+
+  // AVIF, the smaller of the two and the default.
+  IMAGE_OUTPUT_FORMAT_AVIF = 1;
+
+  // WebP, for clients that do not decode AVIF.
+  IMAGE_OUTPUT_FORMAT_WEBP = 2;
+}

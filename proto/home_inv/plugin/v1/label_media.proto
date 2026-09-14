@@ -1,0 +1,142 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// CONTRIBUTING LABEL GEOMETRIES.
+//
+// The Avery Zweckform catalogue is in the core image, because it is data rather
+// than behaviour. Herma, continuous rolls and a manufacturer's own catalogue are
+// plugins.
+//
+// `verified` IS THE LOAD-BEARING FIELD OF THIS WHOLE FILE. Size and count do not
+// determine where the leftover space sits: 64 labels of 48.5 mm across 210 mm
+// leave 16 mm that could be side margins, column gaps, or both — and all three
+// look identical on the first label and diverge from the fourth column. A
+// geometry that was calculated rather than measured is `false` here, and the
+// core then makes a person print a calibration sheet before a bulk run
+// (REQ-LBL-004, REQ-LBL-007). ONE UNSOURCED VALUE MAKES THE WHOLE ENTRY
+// UNVERIFIED.
+//
+// EVERY DISTANCE IS IN MICROMETRES. The reference catalogue is written in
+// millimetres to one decimal; micrometres carry that exactly, integers compare
+// and add without surprises, and nothing on a path that ends at a physical
+// object is a floating-point number.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "LabelMediaProto";
+
+// Publishes the label geometries a deployment can print on.
+service LabelMediaProvider {
+  // The geometries this provider contributes.
+  //
+  // Read at registration and when an administrator asks for a refresh, never per
+  // print job.
+  rpc Media(LabelMediaRequest) returns (LabelMediaResponse);
+}
+
+// Asks for a provider's catalogue.
+message LabelMediaRequest {
+  CallContext context = 1;
+}
+
+// A provider's catalogue.
+message LabelMediaResponse {
+  repeated LabelMedium media = 1;
+}
+
+// One label geometry.
+message LabelMedium {
+  // The stable key, for example "herma-4387", prefixed by the provider so that
+  // two catalogues cannot collide.
+  string medium_key = 1;
+
+  // Who makes it.
+  string vendor = 2;
+
+  // Their article number, as printed on the box.
+  string article_number = 3;
+
+  // What a person sees.
+  string name = 4;
+
+  // Sheet or roll, which decides whether the grid or the printable window
+  // applies.
+  LabelMediumKind kind = 5;
+
+  // The sheet width in micrometres, or the roll width.
+  uint32 page_width = 6;
+
+  // The sheet height in micrometres, or zero for a continuous roll.
+  uint32 page_height = 7;
+
+  // Labels across; one for a roll.
+  uint32 columns = 8;
+
+  // Labels down; one for a roll.
+  uint32 rows = 9;
+
+  // One label's width in micrometres.
+  uint32 label_width = 10;
+
+  // One label's height in micrometres.
+  uint32 label_height = 11;
+
+  // The corner radius in micrometres, zero for square corners.
+  uint32 corner_radius = 12;
+
+  // The unused space at the left edge, in micrometres.
+  uint32 margin_left = 13;
+
+  // The unused space at the top edge, in micrometres.
+  uint32 margin_top = 14;
+
+  // The distance from one label's left edge to the next one's — the label width
+  // plus any gap.
+  //
+  // NOT DERIVABLE from the other fields, which is this message's whole point.
+  uint32 pitch_x = 15;
+
+  // The same downwards.
+  uint32 pitch_y = 16;
+
+  // What the printer can actually put on the medium, in micrometres, or zero
+  // when it equals the label width.
+  //
+  // Never assume it does: a 29 mm Brother label offers 25.9 mm.
+  uint32 printable_width = 17;
+
+  // Where that print window starts, measured from the medium's left edge.
+  //
+  // Not derivable from the width either — the window is not centred on the head.
+  uint32 printable_offset_x = 18;
+
+  // True only when EVERY value above came from a data sheet or a verified
+  // template; false when even one was derived.
+  //
+  // Binary, and it stays binary: a third state would have to be interpreted by
+  // the renderer, and it would be interpreted as "good enough".
+  bool verified = 19;
+
+  // Where the numbers came from, so that a reader can check them. Required when
+  // `verified` is true.
+  string source = 20;
+}
+
+// What the medium physically is.
+enum LabelMediumKind {
+  // Unset.
+  LABEL_MEDIUM_KIND_UNSPECIFIED = 0;
+
+  // A sheet with a grid of labels on it.
+  LABEL_MEDIUM_KIND_SHEET = 1;
+
+  // A continuous roll, where the height is the cut length and there is one
+  // column.
+  LABEL_MEDIUM_KIND_ROLL = 2;
+}
