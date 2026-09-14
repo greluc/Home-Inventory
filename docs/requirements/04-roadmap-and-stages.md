@@ -101,6 +101,45 @@ tags and roles themselves — without a developer and without a restart.
 
 ---
 
+### Where stage 1 stands (2026-09-14)
+
+Surveyed against the code rather than against memory: 219 requirements carry
+stage 1. The table above says what stage 1 *is*; this one says what of it exists,
+and it is dated because a status is true on a day and not for ever. Re-derive it
+rather than trust it once the date is old.
+
+| Area | Stands | Evidence, or what is missing |
+|---|---|---|
+| Type system | **Built** | Types and categories with inheritance, versioning, the generated JSON Schema, value lists and the eight shipped templates. `TypeTemplateIT`, `JsonSchemaGenerator` |
+| Attribute storage | **Partly** | JSONB and `item_attr_index` are built and projected on every write. The **consistency reconciliation and the rebuild run are not** (`REQ-NFR-073`) |
+| Tenants | **Built** | Creation, memberships, invitations, roles, subtree scoping, field visibility, quotas, deletion with a grace period |
+| Login | **Built** | TOTP and passkeys, re-confirmation, the session overview, service accounts. `SecondFactorIT`, `PasskeyIT`, `SessionOverviewIT`, `ServiceAccountIT` |
+| Tags | **Built** | Tags, groups, merging. `TagsIT`, and `TagTargetsIT` for what a tag endpoint says about a target that is not there |
+| Lifecycle | **Partly** | Purchase, warranty, replacement and current value are built (`REQ-LIFE-001/002/014`, `ItemValuationIT`). The **maintenance log, lending, sale, disposal and the insurance report are not** (`REQ-LIFE-003`…`009`, `013`, `015`…`017`) |
+| Search | **Stage 0 only** | PostgreSQL full text over the two generated vectors. **OpenSearch, facets, filters, sorting, saved searches and the wider full-text coverage are all outstanding** (`REQ-SRCH-002`…`008`, `011`). The response envelope they need landed on 2026-09-14 |
+| Events | **Partly** | The outbox, RabbitMQ and the `worker` role are stage 0 and built ([ADR-0051](../adr/0051-broker-in-stage-0.md)). **Replay and dead-letter handling are not** |
+| Plugin runtime | **Not built** | `plugin-api/` and `plugin-sdk/` hold nothing but their `README.md`. Everything in the row below waits on this one |
+| First-party plugins | **Not built** | `plugin-smtp`, `plugin-blobstore-s3`, `plugin-blobstore-nextcloud`, `plugin-webhook`, `plugin-oidc` |
+| Media | **Partly** | Resumable upload, reference counting and the fail-closed scan are built. The **S3 and Nextcloud adapters are plugins** and wait on the runtime |
+| API | **Partly** | `ETag`/`If-Match`, `Idempotency-Key`, the bulk surface and the response envelope are built. **GraphQL and server-sent events are not** |
+| Audit | **Partly** | The revision history with restore is built, and `homeinv_housekeeping` exists in the role script. The **hash-chained `change_log` and the hourly anchor are not** (`REQ-SEC-070`, [ADR-0031](../adr/0031-audit-chain-per-tenant.md), [ADR-0046](../adr/0046-truncatable-audit-chain.md)) |
+| Notifications | **Not built** | Waits on the plugin runtime: `REQ-NOTI-002` makes **every** channel a plugin, e-mail included |
+| Import/export | **Not built** | `REQ-PORT-001`…`008`, including the Homebox and InvenTree mapping profiles and the GDPR access export |
+
+**Cross-cutting, and each one its own piece of work:** there is no load suite, so
+the four latency budgets and the migration lock budget are unmeasured
+(`REQ-NFR-001`/`002`/`003`/`005`/`057`); OpenTelemetry is not wired
+(`REQ-NFR-044`); JaCoCo covers `Money` alone rather than the domain thresholds
+(`REQ-NFR-025`); the operator view does not exist (`REQ-NFR-072`); the smoke
+matrix runs rootless Podman and Docker but not `kind`, SELinux `enforcing` or a
+RHEL-family distribution (`REQ-NFR-064`); there is no N−1 migration test
+(`REQ-NFR-056`); `deploy/` carries no backup or restore tooling, so the recovery
+objectives and the weekly restore check are unverified
+(`REQ-NFR-014`/`015`/`066`); and no accessibility check runs in CI
+(`REQ-NFR-038`).
+
+---
+
 ## Stage 2 — Identification: "label, scan, stocktake"
 
 **Done when:** a label sheet is printed, stuck on, scanned, and leads to the item
