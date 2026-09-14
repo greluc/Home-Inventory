@@ -75,7 +75,7 @@ export function App(): React.JSX.Element {
     async (text: string, language: string): Promise<void> => {
       try {
         const result = await api.search(text, language);
-        setItems(result.items);
+        setItems(result.data);
         setError(null);
       } catch (cause) {
         if (!noteLock(cause)) {
@@ -89,8 +89,8 @@ export function App(): React.JSX.Element {
   const reloadPlaces = useCallback((): Promise<void> => {
     return Promise.all([api.locations(), api.locationCategories()])
       .then(([tree, kinds]) => {
-        setLocations(tree.items);
-        setCategories(kinds.items);
+        setLocations(tree.data);
+        setCategories(kinds.data);
         return undefined;
       })
       .catch((cause: unknown) => {

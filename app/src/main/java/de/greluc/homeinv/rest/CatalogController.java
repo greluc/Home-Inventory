@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.catalog.api.FieldConstraints;
@@ -71,7 +72,7 @@ public class CatalogController {
   @GetMapping(path = "/item-types", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TYPE_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public TypeAdministration.ItemTypePage itemTypes(
+  public Page<TypeAdministration.ItemTypeView> itemTypes(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return types.itemTypes(cursor, limit);
@@ -190,7 +191,7 @@ public class CatalogController {
   @GetMapping(path = "/location-categories", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TYPE_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public TypeAdministration.CategoryPage categories(
+  public Page<TypeAdministration.CategoryView> categories(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return types.categories(cursor, limit);
@@ -475,7 +476,7 @@ public class CatalogController {
   @GetMapping(path = "/value-lists", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.VALUE_LIST_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public TypeAdministration.ValueListPage valueLists(
+  public Page<TypeAdministration.ValueListView> valueLists(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return types.valueLists(cursor, limit);

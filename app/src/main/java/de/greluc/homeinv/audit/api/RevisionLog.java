@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.audit.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -61,7 +62,7 @@ public interface RevisionLog {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  RevisionPage history(EntityType entityType, UUID entityId, String cursor, int limit);
+  Page<RevisionLog.RevisionView> history(EntityType entityType, UUID entityId, String cursor, int limit);
 
   /**
    * One revision of one thing.
@@ -113,11 +114,4 @@ public interface RevisionLog {
    */
   record RevisionView(long revision, ChangeKind kind, String snapshot, Instant changedAt, UUID changedBy) {}
 
-  /**
-   * One page of history.
-   *
-   * @param items the revisions on this page, newest first
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record RevisionPage(List<RevisionView> items, String nextCursor) {}
 }

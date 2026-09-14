@@ -208,18 +208,6 @@ components:
             $ref: '#/components/schemas/BulkEntryStatus'
           type: array
       type: object
-    BundleMemberPage:
-      description: One page of memberships.
-      properties:
-        items:
-          description: the memberships on this page
-          items:
-            $ref: '#/components/schemas/BundleMemberView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
     BundleMemberRequest:
       description: The body that puts an item into a bundle.
       properties:
@@ -244,18 +232,6 @@ components:
         memberId:
           description: the item in it
           format: uuid
-          type: string
-      type: object
-    CategoryPage:
-      description: One page of location categories.
-      properties:
-        items:
-          description: the categories on this page
-          items:
-            $ref: '#/components/schemas/CategoryView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
           type: string
       type: object
     CategoryView:
@@ -334,18 +310,6 @@ components:
           type: string
         tenantName:
           description: what it was called, as it stood when the erasure began
-          type: string
-      type: object
-    CertificatePage:
-      description: One page of certificates, newest first.
-      properties:
-        items:
-          description: the certificates
-          items:
-            $ref: '#/components/schemas/Certificate'
-          type: array
-        nextCursor:
-          description: where the next page starts, or null when this was the last
           type: string
       type: object
     ChildCategoriesRequest:
@@ -880,18 +844,6 @@ components:
       required:
       - dataType
       type: object
-    InvitationPage:
-      description: One page of invitations.
-      properties:
-        items:
-          description: the invitations
-          items:
-            $ref: '#/components/schemas/InvitationView'
-          type: array
-        nextCursor:
-          description: where the next page starts, or null when this was the last
-          type: string
-      type: object
     InvitationView:
       description: |-
         An invitation, as the tenant that issued it sees it.
@@ -961,30 +913,6 @@ components:
           description: the account
         token:
           description: the token, in clear, for the only time it is readable
-          type: string
-      type: object
-    ItemPage:
-      description: One page of items.
-      properties:
-        items:
-          description: the items on this page
-          items:
-            $ref: '#/components/schemas/ItemView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
-    ItemTypePage:
-      description: One page of item types.
-      properties:
-        items:
-          description: the types on this page
-          items:
-            $ref: '#/components/schemas/ItemTypeView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
           type: string
       type: object
     ItemTypeView:
@@ -1091,18 +1019,6 @@ components:
           format: int64
           type: integer
       type: object
-    LocationCategoryPage:
-      description: One page of categories.
-      properties:
-        items:
-          description: the categories on this page
-          items:
-            $ref: '#/components/schemas/LocationCategoryView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
     LocationCategoryView:
       description: |-
         A kind of place a location can be: a room, a shelf, a box.
@@ -1146,18 +1062,6 @@ components:
             whether locations of this category travel with their contents. Every shipped one is
             stationary; the flag marks the relocation case a client offers, not a restriction on moving
           type: boolean
-      type: object
-    LocationPage:
-      description: One page of locations.
-      properties:
-        items:
-          description: the locations on this page
-          items:
-            $ref: '#/components/schemas/LocationView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
       type: object
     LocationView:
       description: |-
@@ -1218,18 +1122,6 @@ components:
       - email
       - password
       type: object
-    MediaPage:
-      description: One page of attachments.
-      properties:
-        items:
-          description: the attachments on this page
-          items:
-            $ref: '#/components/schemas/MediaView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
     MediaView:
       description: |-
         What a client learns about a stored file.
@@ -1276,18 +1168,6 @@ components:
           format: int32
           type: integer
       type: object
-    MemberPage:
-      description: One page of members.
-      properties:
-        items:
-          description: the members
-          items:
-            $ref: '#/components/schemas/MemberView'
-          type: array
-        nextCursor:
-          description: where the next page starts, or null when this was the last
-          type: string
-      type: object
     MemberView:
       description: A member of the tenant.
       properties:
@@ -1323,6 +1203,24 @@ components:
           description: the account
           format: uuid
           type: string
+      type: object
+    Meta:
+      description: What was true of the answer rather than of the rows.
+      properties:
+        degraded:
+          description: |-
+            whether a derived store was unavailable and something else answered
+            (ADR-0039). Never a header: `Warning: 199` was obsoleted by RFC 9111 §5.5
+          type: boolean
+        degradedReason:
+          description: |-
+            a stable token from `docs/reference/degraded-reasons.yaml`, or
+            `null` when nothing is degraded
+          type: string
+        took:
+          description: how many milliseconds the request took, or `null` before the edge fills it in
+          format: int64
+          type: integer
       type: object
     MoneyJson:
       description: |-
@@ -1382,17 +1280,604 @@ components:
           format: date-time
           type: string
       type: object
-    OperatorPage:
-      description: One page of operators.
+    PageAccountView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
       properties:
-        items:
-          description: the accounts
+        data:
+          description: the rows
           items:
             $ref: '#/components/schemas/AccountView'
           type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageBundleMemberView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/BundleMemberView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageCategoryView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/CategoryView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageCertificate:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/Certificate'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageInfo:
+      description: Where the rest of the collection is.
+      properties:
+        estimatedTotal:
+          description: |-
+            how many rows the whole collection holds, or `null` when nobody
+            counted. Explicitly an estimate — an exact total over a million rows costs more than it is
+            worth (08 §8.2) — and absent rather than wrong where counting is not cheap
+          format: int64
+          type: integer
+        hasMore:
+          description: |-
+            whether a following page exists. Derived from the cursor rather than passed, so
+            the two cannot disagree
+          type: boolean
         nextCursor:
-          description: where the next page starts, or null when this was the last
+          description: |-
+            an opaque, signed cursor for the following page, or `null` when this was
+            the last. Never an offset: offsets skip and duplicate rows on data that changes under them
           type: string
+      type: object
+    PageInvitationView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/InvitationView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageItemTypeView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/ItemTypeView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageItemView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/ItemView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageLocationCategoryView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/LocationCategoryView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageLocationView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/LocationView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageMediaView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/MediaView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageMemberView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/MemberView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageRelationView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/RelationView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageRevisionView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/RevisionView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageRoleView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/RoleView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageTagGroupView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/TagGroupView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageTagView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/TagView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
+      type: object
+    PageValueListView:
+      description: |-
+        One page of anything, in the shape 08 §8.2 specifies for every collection.
+
+        `{"data": […], "page": {…`, "meta": {…}}}. Twenty listings each had a record of their
+        own carrying `items` and `nextCursor`, which was the same shape written twenty times
+        and none of them could say that a derived store had gone down.
+
+        ## Why one type rather than twenty
+
+        The envelope is a property of the API and not of any one block, so it belongs where every block
+        can reach it. The alternative — adding `meta` to the one listing that can degrade — was
+        considered and rejected with the owner on 2026-09-14: the document has described one shape since
+        the first commit, and two shapes in one API is the drift that document exists to prevent.
+
+        ## The parts that are filled in later
+
+        A block knows its rows and its cursor. It does not know how long the request took, and only the
+        search path knows whether it answered from the fallback. Both are therefore optional and are set
+        by whoever does know — each through a method returning a new page, because this one is a record
+        and stays one.
+      properties:
+        data:
+          description: the rows
+          items:
+            $ref: '#/components/schemas/ValueListView'
+          type: array
+        meta:
+          $ref: '#/components/schemas/Meta'
+          description: what was true of the answer itself rather than of the rows
+        page:
+          $ref: '#/components/schemas/PageInfo'
+          description: where the next ones are, and roughly how many there are in total
       type: object
     PasskeyRegistrationRequest:
       description: What finishes a passkey registration.
@@ -1493,18 +1978,6 @@ components:
             type: string
           type: array
       type: object
-    RelationPage:
-      description: One page of relations.
-      properties:
-        items:
-          description: the relations on this page
-          items:
-            $ref: '#/components/schemas/RelationView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
     RelationRequest:
       description: The body of a relation.
       properties:
@@ -1561,18 +2034,6 @@ components:
       required:
       - name
       type: object
-    RevisionPage:
-      description: One page of history.
-      properties:
-        items:
-          description: the revisions on this page, newest first
-          items:
-            $ref: '#/components/schemas/RevisionView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
     RevisionView:
       description: One entry of a history.
       properties:
@@ -1610,18 +2071,6 @@ components:
           type: string
         state:
           description: its state, which is `ACTIVE` by the time this is returned
-          type: string
-      type: object
-    RolePage:
-      description: One page of roles.
-      properties:
-        items:
-          description: the definitions
-          items:
-            $ref: '#/components/schemas/RoleView'
-          type: array
-        nextCursor:
-          description: where the next page starts, or null when this was the last
           type: string
       type: object
     RoleReference:
@@ -1689,18 +2138,6 @@ components:
           items:
             type: string
           type: array
-      type: object
-    SearchResult:
-      description: What was found.
-      properties:
-        items:
-          description: the matching items
-          items:
-            $ref: '#/components/schemas/ItemView'
-          type: array
-        nextCursor:
-          description: the cursor for the following page, or `null` when this was the last
-          type: string
       type: object
     SecondFactorRequest:
       description: |-
@@ -1829,18 +2266,6 @@ components:
       required:
       - tenantId
       type: object
-    TagGroupPage:
-      description: One page of tag groups.
-      properties:
-        items:
-          description: the groups on this page
-          items:
-            $ref: '#/components/schemas/TagGroupView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
-      type: object
     TagGroupRequest:
       description: The body of a group creation.
       properties:
@@ -1890,18 +2315,6 @@ components:
             the group's name per language tag, as the tenant wrote it. Multilingual data rather
             than interface text: the server cannot translate a word a tenant invented (REQ-NFR-032)
           type: object
-      type: object
-    TagPage:
-      description: One page of tags.
-      properties:
-        items:
-          description: the tags on this page
-          items:
-            $ref: '#/components/schemas/TagView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
-          type: string
       type: object
     TagRequest:
       description: The body of a tag creation or change.
@@ -2258,18 +2671,6 @@ components:
           type: object
         value:
           description: what is stored in an item's attributes
-          type: string
-      type: object
-    ValueListPage:
-      description: One page of value lists.
-      properties:
-        items:
-          description: the lists on this page, each with its entries
-          items:
-            $ref: '#/components/schemas/ValueListView'
-          type: array
-        nextCursor:
-          description: the cursor for the next page, or `null` when this was the last
           type: string
       type: object
     ValueListView:
@@ -3427,7 +3828,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemTypePage'
+                $ref: '#/components/schemas/PageItemTypeView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -3737,7 +4138,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CategoryPage'
+                $ref: '#/components/schemas/PageCategoryView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -4406,7 +4807,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValueListPage'
+                $ref: '#/components/schemas/PageValueListView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -5363,7 +5764,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CertificatePage'
+                $ref: '#/components/schemas/PageCertificate'
           description: the certificates
         '400':
           content:
@@ -5496,7 +5897,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperatorPage'
+                $ref: '#/components/schemas/PageAccountView'
           description: the operators, oldest account first
         '400':
           content:
@@ -5997,7 +6398,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemPage'
+                $ref: '#/components/schemas/PageItemView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -6308,7 +6709,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BundleMemberPage'
+                $ref: '#/components/schemas/PageBundleMemberView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -6557,7 +6958,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BundleMemberPage'
+                $ref: '#/components/schemas/PageBundleMemberView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -6717,7 +7118,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RelationPage'
+                $ref: '#/components/schemas/PageRelationView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -7022,7 +7423,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RevisionPage'
+                $ref: '#/components/schemas/PageRevisionView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -7193,7 +7594,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TagPage'
+                $ref: '#/components/schemas/PageTagView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -7397,7 +7798,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationPage'
+                $ref: '#/components/schemas/PageLocationView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -7563,7 +7964,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocationCategoryPage'
+                $ref: '#/components/schemas/PageLocationCategoryView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -7896,7 +8297,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchResult'
+                $ref: '#/components/schemas/PageItemView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -8101,7 +8502,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TagPage'
+                $ref: '#/components/schemas/PageTagView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -8591,7 +8992,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MediaPage'
+                $ref: '#/components/schemas/PageMediaView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -8902,7 +9303,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RolePage'
+                $ref: '#/components/schemas/PageRoleView'
           description: the definitions, oldest first
         '400':
           content:
@@ -9268,7 +9669,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchResult'
+                $ref: '#/components/schemas/PageItemView'
           description: the matching items and a cursor for the next page, or none when this was the last
         '400':
           content:
@@ -9341,7 +9742,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TagGroupPage'
+                $ref: '#/components/schemas/PageTagGroupView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -9492,7 +9893,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TagPage'
+                $ref: '#/components/schemas/PageTagView'
           description: the page and a cursor for the next one
         '400':
           content:
@@ -10087,7 +10488,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InvitationPage'
+                $ref: '#/components/schemas/PageInvitationView'
           description: the page, without any tokens
         '400':
           content:
@@ -10330,7 +10731,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemberPage'
+                $ref: '#/components/schemas/PageMemberView'
           description: the page
         '400':
           content:

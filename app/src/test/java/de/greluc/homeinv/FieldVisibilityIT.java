@@ -110,7 +110,7 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/search").param("q", "").param("language", "en").session(member))
         .andExpect(status().isOk())
         .andExpect(
-            jsonPath("$.items[*].attributes")
+            jsonPath("$.data[*].attributes")
                 .value(
                     org.hamcrest.Matchers.everyItem(
                         org.hamcrest.Matchers.not(
@@ -121,7 +121,7 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/items/" + itemId + "/revisions").session(member))
         .andExpect(status().isOk())
         .andExpect(
-            jsonPath("$.items[*].snapshot")
+            jsonPath("$.data[*].snapshot")
                 .value(
                     org.hamcrest.Matchers.everyItem(
                         org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("249.00")))));
@@ -131,7 +131,7 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/items/" + itemId + "/revisions").session(owner))
         .andExpect(
-            jsonPath("$.items[0].snapshot")
+            jsonPath("$.data[0].snapshot")
                 .value(org.hamcrest.Matchers.containsString("249.00")));
   }
 

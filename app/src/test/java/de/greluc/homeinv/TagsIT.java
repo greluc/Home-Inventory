@@ -166,7 +166,7 @@ class TagsIT extends AbstractIntegrationTest {
 
           // The source is a tombstone pointing at what it became, so a client
           // holding the old id is redirected rather than told it never existed.
-          assertThat(tags.tags(null, 50).items()).extracting(TagView::name).containsExactly("Fragile");
+          assertThat(tags.tags(null, 50).data()).extracting(TagView::name).containsExactly("Fragile");
 
           // And the name it freed can be taken again.
           tags.create(new TagService.CreateTagCommand("Breakable", null, null, null), tenant.userId());
@@ -181,7 +181,7 @@ class TagsIT extends AbstractIntegrationTest {
    * @return the first page of its tags, which for these fixtures is all of them
    */
   private java.util.List<TagView> tagsOn(TagService.TagTarget target, UUID targetId) {
-    return tags.tagsOf(target, targetId, null, 50).items();
+    return tags.tagsOf(target, targetId, null, 50).data();
   }
 
   /**
@@ -208,7 +208,7 @@ class TagsIT extends AbstractIntegrationTest {
    * @return the place's id
    */
   private UUID aPlace(Tenant tenant, String name) {
-    UUID category = categories.list(null, 1).items().getFirst().id();
+    UUID category = categories.list(null, 1).data().getFirst().id();
     return locations
         .create(
             new LocationService.CreateLocationCommand(null, category, null, name, null), Optional.empty(),

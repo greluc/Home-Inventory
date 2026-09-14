@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.UUID;
 
@@ -71,7 +72,7 @@ public interface ItemBundles {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  BundleMemberPage contentsOf(UUID bundleId, String cursor, int limit);
+  Page<ItemBundles.BundleMemberView> contentsOf(UUID bundleId, String cursor, int limit);
 
   /**
    * Which bundles an item is in, one page at a time.
@@ -84,7 +85,7 @@ public interface ItemBundles {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  BundleMemberPage bundlesOf(UUID memberId, String cursor, int limit);
+  Page<ItemBundles.BundleMemberView> bundlesOf(UUID memberId, String cursor, int limit);
 
   /**
    * One membership.
@@ -95,11 +96,4 @@ public interface ItemBundles {
    */
   record BundleMemberView(UUID id, UUID bundleId, UUID memberId) {}
 
-  /**
-   * One page of memberships.
-   *
-   * @param items the memberships on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record BundleMemberPage(List<BundleMemberView> items, String nextCursor) {}
 }

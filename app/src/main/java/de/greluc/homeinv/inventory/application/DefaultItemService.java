@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.CatalogProvisioning;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.inventory.api.ItemService;
@@ -639,7 +640,7 @@ public class DefaultItemService implements ItemService {
 
   @Transactional(readOnly = true)
   @Override
-  public ItemPage trashed(String cursor, int limit) {
+  public Page<ItemView> trashed(String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
     List<Item> rows;
@@ -655,12 +656,12 @@ public class DefaultItemService implements ItemService {
       Item last = rows.get(rows.size() - 1);
       next = cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), TRASH_CURSOR);
     }
-    return new ItemPage(views, next);
+    return Page.of(views, next);
   }
 
   @Transactional(readOnly = true)
   @Override
-  public de.greluc.homeinv.audit.api.RevisionLog.RevisionPage history(
+  public Page<de.greluc.homeinv.audit.api.RevisionLog.RevisionView> history(
       UUID id, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     // Either the item is still here or its history is: a purge removes the row
@@ -673,7 +674,7 @@ public class DefaultItemService implements ItemService {
         items.findAny(tenantId, id).isPresent()
             || !revisions
                 .history(de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, null, 1)
-                .items()
+                .data()
                 .isEmpty();
     if (!known) {
       throw new NotFoundException("item", id);
@@ -685,8 +686,8 @@ public class DefaultItemService implements ItemService {
     // so the redaction happens here, on the way out. Without it the history would
     // be the way round REQ-TEN-008: a purchase price nobody may read today, read
     // out of yesterday.
-    return new de.greluc.homeinv.audit.api.RevisionLog.RevisionPage(
-        page.items().stream().map(revision -> redacted(id, revision)).toList(),
+    return Page.of(
+        page.data().stream().map(revision -> redacted(id, revision)).toList(),
         page.nextCursor());
   }
 

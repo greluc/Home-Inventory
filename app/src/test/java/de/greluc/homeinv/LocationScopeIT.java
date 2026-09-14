@@ -62,8 +62,8 @@ class LocationScopeIT extends AbstractIntegrationTest {
     unscoped(
         tenant,
         () -> {
-          assertThat(locations.list(null, 50).items()).hasSize(3);
-          assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, 50)).items()).hasSize(2);
+          assertThat(locations.list(null, 50).data()).hasSize(3);
+          assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, 50)).data()).hasSize(2);
         });
 
     // Confined to the garage: one place, one item, and the ordinary list methods
@@ -72,11 +72,11 @@ class LocationScopeIT extends AbstractIntegrationTest {
         tenant,
         places.garage(),
         () -> {
-          assertThat(locations.list(null, 50).items())
+          assertThat(locations.list(null, 50).data())
               .singleElement()
               .satisfies(place -> assertThat(place.id()).isEqualTo(places.garage()));
 
-          assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, 50)).items())
+          assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, 50)).data())
               .singleElement()
               .satisfies(item -> assertThat(item.id()).isEqualTo(places.inGarage()));
 
@@ -163,13 +163,13 @@ class LocationScopeIT extends AbstractIntegrationTest {
         tenant,
         UUID.randomUUID(),
         () -> {
-          assertThat(locations.list(null, 50).items()).isEmpty();
-          assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, 50)).items()).isEmpty();
+          assertThat(locations.list(null, 50).data()).isEmpty();
+          assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, 50)).data()).isEmpty();
         });
 
     // And the tenant itself is untouched: the scope was the session's, not the
     // data's.
-    unscoped(tenant, () -> assertThat(locations.list(null, 50).items()).hasSize(3));
+    unscoped(tenant, () -> assertThat(locations.list(null, 50).data()).hasSize(3));
     assertThat(places.garage()).isNotNull();
   }
 

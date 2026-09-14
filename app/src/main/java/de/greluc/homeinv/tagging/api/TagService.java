@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tagging.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,7 +39,7 @@ public interface TagService {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  TagPage tags(String cursor, int limit);
+  Page<TagView> tags(String cursor, int limit);
 
   /**
    * Changes a tag's name, group, colour or icon.
@@ -115,7 +116,7 @@ public interface TagService {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  TagPage tagsOf(TagTarget target, UUID targetId, String cursor, int limit);
+  Page<TagView> tagsOf(TagTarget target, UUID targetId, String cursor, int limit);
 
   /**
    * Creates a group of tags.
@@ -134,7 +135,7 @@ public interface TagService {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  TagGroupPage groups(String cursor, int limit);
+  Page<TagGroupView> groups(String cursor, int limit);
 
   /** What a tag can be attached to. */
   enum TagTarget {
@@ -175,21 +176,6 @@ public interface TagService {
   record CreateTagGroupCommand(
       String key, Map<String, String> labels, boolean exclusive, int displayOrder) {}
 
-  /**
-   * One page of tags.
-   *
-   * @param items the tags on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record TagPage(List<TagView> items, String nextCursor) {}
-
-  /**
-   * One page of tag groups.
-   *
-   * @param items the groups on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record TagGroupPage(List<TagGroupView> items, String nextCursor) {}
 
   /** Thrown when a tag name, or a group key, is already in use by this tenant. */
   class TagNameTakenException extends RuntimeException {

@@ -153,6 +153,13 @@ commit".
 
 ### Added
 
+- **Every list now answers in one shape.** Where each kind of list used to return
+  its own slightly different wrapper, all of them now carry the rows under `data`,
+  where the next page starts under `page`, and how the answer was produced under
+  `meta` — including, in time, whether a part of the system was unavailable and
+  something less capable answered instead. *REST API: breaking for every list
+  endpoint. `items` is now `data`, and `nextCursor` moved into `page`.*
+
 - **Five hundred items at a time.** Pick items in a list and move them, put a tag
   on them, write them against another type or delete them, in one call. Each item
   gets its own answer: one that somebody else has deleted in the meantime is
@@ -417,7 +424,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 28 types in the shared
+- **The shared kernel is measured.** `platform` holds 29 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

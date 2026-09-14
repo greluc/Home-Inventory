@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.RoleRef;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -132,7 +133,7 @@ public class DefaultInvitationService implements InvitationService {
 
   @Override
   @Transactional(readOnly = true)
-  public InvitationPage invitations(String cursor, int limit) {
+  public Page<InvitationView> invitations(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     Instant now = Instant.now(clock);
 
@@ -150,7 +151,7 @@ public class DefaultInvitationService implements InvitationService {
                 new CursorCodec.Position(rows.getLast().getCreatedAt(), rows.getLast().getId()),
                 CURSOR)
             : null;
-    return new InvitationPage(rows.stream().map(row -> viewOf(row, now)).toList(), next);
+    return Page.of(rows.stream().map(row -> viewOf(row, now)).toList(), next);
   }
 
   @Override

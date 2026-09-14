@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.LocationCategories;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -101,7 +102,7 @@ public class LocationController {
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public LocationService.LocationPage listLocations(
+  public Page<LocationView> listLocations(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return locations.list(cursor, limit);
@@ -125,7 +126,7 @@ public class LocationController {
   @GetMapping(value = "/categories", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public LocationCategories.LocationCategoryPage listLocationCategories(
+  public Page<de.greluc.homeinv.catalog.api.LocationCategoryView> listLocationCategories(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return categories.list(cursor, limit);
@@ -240,7 +241,7 @@ public class LocationController {
   @GetMapping(value = "/{id}/items", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public SearchService.SearchResult itemsInLocation(
+  public Page<de.greluc.homeinv.inventory.api.ItemView> itemsInLocation(
       @PathVariable UUID id,
       @RequestParam(required = false, defaultValue = "false") boolean includeSubtree,
       @RequestParam(required = false) @Size(max = 500) String cursor,

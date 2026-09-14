@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.LocationCategories;
 import de.greluc.homeinv.catalog.api.LocationCategoryView;
 import de.greluc.homeinv.platform.CursorCodec;
@@ -48,7 +49,7 @@ public class LocationCategoryQueries implements LocationCategories {
 
   @Override
   @Transactional(readOnly = true)
-  public LocationCategoryPage list(String cursor, int limit) {
+  public Page<LocationCategoryView> list(String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
 
@@ -100,7 +101,7 @@ public class LocationCategoryQueries implements LocationCategories {
       nextCursor =
           cursors.encode(new CursorCodec.Position(last.createdAt(), last.id()), CURSOR_FINGERPRINT);
     }
-    return new LocationCategoryPage(views, nextCursor);
+    return Page.of(views, nextCursor);
   }
 
   /**

@@ -179,8 +179,8 @@ class InputHardeningIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/locations/" + locationId + "/items").session(session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(1))
-        .andExpect(jsonPath("$.items[0].name").value("Bohrmaschine"));
+        .andExpect(jsonPath("$.data.length()").value(1))
+        .andExpect(jsonPath("$.data[0].name").value("Bohrmaschine"));
 
     mockMvc
         .perform(
@@ -188,7 +188,7 @@ class InputHardeningIT extends AbstractIntegrationTest {
                 .param("includeSubtree", "true")
                 .session(session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(1));
+        .andExpect(jsonPath("$.data.length()").value(1));
 
     // And the bound applies here too.
     mockMvc

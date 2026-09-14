@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.audit.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -93,7 +94,7 @@ public class RevisionLogAdapter implements RevisionLog {
 
   @Override
   @Transactional(readOnly = true)
-  public RevisionPage history(EntityType entityType, UUID entityId, String cursor, int limit) {
+  public Page<RevisionLog.RevisionView> history(EntityType entityType, UUID entityId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
 
@@ -123,7 +124,7 @@ public class RevisionLogAdapter implements RevisionLog {
                     java.time.Instant.ofEpochMilli(rows.getLast().revision()), entityId),
                 CURSOR)
             : null;
-    return new RevisionPage(rows, next);
+    return Page.of(rows, next);
   }
 
   @Override

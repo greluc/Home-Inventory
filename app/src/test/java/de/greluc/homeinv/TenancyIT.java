@@ -234,7 +234,7 @@ class TenancyIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/instance/operators").session(operatorSession))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items[?(@.email == 'ten-operator@example.org')]").exists());
+        .andExpect(jsonPath("$.data[?(@.email == 'ten-operator@example.org')]").exists());
   }
 
   @Test

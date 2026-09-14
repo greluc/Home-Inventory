@@ -83,7 +83,7 @@ class FirstOwnerIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/locations/categories").session(session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(13));
+        .andExpect(jsonPath("$.data.length()").value(13));
   }
 
   @Test

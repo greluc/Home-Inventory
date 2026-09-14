@@ -128,8 +128,21 @@ rejected instead of silently returning wrong results.
 }
 ```
 
+**The envelope is every collection's, not the search's.** All seventeen paged
+responses carry it, through one `platform.Page<T>` rather than a record per
+listing (implemented 2026-09-14, with the owner). The alternative — adding `meta`
+only to the one listing that can degrade — was considered and rejected: two shapes
+in one API is the drift this chapter exists to prevent.
+
 `estimatedTotal` is explicitly an estimate — an exact total over a million rows
-costs more than it is worth.
+costs more than it is worth — and it is **absent rather than wrong** where nobody
+counted, which today is everywhere. `took` is filled in at the edge, because no
+use case can see routing, deserialisation and authorisation time.
+
+**An absent member means `null`.** The example above spells `"degradedReason":
+null` out for clarity; the serialiser omits null members, so a client reads an
+absent `degradedReason`, `estimatedTotal` or `took` as null rather than expecting
+the key.
 
 **`meta.degraded` is the contract for degradation**, not a header
 ([ADR-0039](../adr/0039-degraded-response-signalling.md)). `degradedReason` is a

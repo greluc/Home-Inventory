@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.UUID;
 
@@ -61,7 +62,7 @@ public interface ItemRelations {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  RelationPage relationsOf(UUID itemId, String cursor, int limit);
+  Page<ItemRelations.RelationView> relationsOf(UUID itemId, String cursor, int limit);
 
   /** The four kinds REQ-CORE-006 names. */
   enum RelationType {
@@ -87,11 +88,4 @@ public interface ItemRelations {
    */
   record RelationView(UUID id, UUID sourceId, UUID targetId, RelationType type, boolean inbound) {}
 
-  /**
-   * One page of relations.
-   *
-   * @param items the relations on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record RelationPage(List<RelationView> items, String nextCursor) {}
 }

@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.inventory.api.ItemView;
+import de.greluc.homeinv.platform.Page;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -72,9 +74,9 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     int pages = 0;
     do {
       final String current = cursor;
-      SearchService.SearchResult result =
+      Page<ItemView> result =
           inTenant(tenant, () -> search.query(new SearchService.SearchRequest("", "de", List.of(), current, 3)));
-      result.items().forEach(item -> seen.add(item.name()));
+      result.data().forEach(item -> seen.add(item.name()));
       cursor = result.nextCursor();
       pages++;
     } while (cursor != null && pages < 10);
@@ -146,7 +148,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
 
   private List<String> namesOf(Fixture tenant, String text) {
     return inTenant(tenant, () -> search.query(new SearchService.SearchRequest(text, "de", List.of(), null, 50)))
-        .items()
+        .data()
         .stream()
         .map(de.greluc.homeinv.inventory.api.ItemView::name)
         .toList();

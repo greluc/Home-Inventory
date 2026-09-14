@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -44,13 +45,6 @@ public interface InvitationService {
    */
   record IssuedInvitation(InvitationView invitation, String token) {}
 
-  /**
-   * One page of invitations.
-   *
-   * @param items the invitations
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  record InvitationPage(List<InvitationView> items, String nextCursor) {}
 
   /**
    * What accepting an invitation produced.
@@ -90,7 +84,7 @@ public interface InvitationService {
    * @param limit how many at most, capped at 200
    * @return the page
    */
-  InvitationPage invitations(String cursor, int limit);
+  Page<InvitationView> invitations(String cursor, int limit);
 
   /**
    * Withdraws an invitation that has not been used.

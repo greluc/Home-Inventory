@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemBundles;
 import de.greluc.homeinv.platform.CursorCodec;
@@ -194,7 +195,7 @@ public class ItemBundleAdapter implements ItemBundles {
 
   @Override
   @Transactional(readOnly = true)
-  public BundleMemberPage contentsOf(UUID bundleId, String cursor, int limit) {
+  public Page<ItemBundles.BundleMemberView> contentsOf(UUID bundleId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     items.findAny(tenantId, bundleId).orElseThrow(() -> new NotFoundException("item", bundleId));
     return page(tenantId, bundleId, cursor, limit, CONTENTS, CONTENTS_AFTER, CONTENTS_CURSOR);
@@ -202,7 +203,7 @@ public class ItemBundleAdapter implements ItemBundles {
 
   @Override
   @Transactional(readOnly = true)
-  public BundleMemberPage bundlesOf(UUID memberId, String cursor, int limit) {
+  public Page<ItemBundles.BundleMemberView> bundlesOf(UUID memberId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     items.findAny(tenantId, memberId).orElseThrow(() -> new NotFoundException("item", memberId));
     return page(tenantId, memberId, cursor, limit, BUNDLES, BUNDLES_AFTER, BUNDLES_CURSOR);
@@ -248,7 +249,7 @@ public class ItemBundleAdapter implements ItemBundles {
    * @param fingerprint what the cursor is bound to
    * @return the page
    */
-  private BundleMemberPage page(
+  private Page<ItemBundles.BundleMemberView> page(
       UUID tenantId,
       UUID itemId,
       String cursor,
@@ -282,7 +283,7 @@ public class ItemBundleAdapter implements ItemBundles {
           cursors.encode(
               new CursorCodec.Position(last.createdAt(), last.id()), fingerprint);
     }
-    return new BundleMemberPage(
+    return Page.of(
         rows.stream()
             .map(row -> new BundleMemberView(row.id(), row.bundleItemId(), row.memberItemId()))
             .toList(),

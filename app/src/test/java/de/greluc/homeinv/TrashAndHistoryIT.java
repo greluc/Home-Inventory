@@ -57,12 +57,12 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           // Gone from the ordinary reads.
           assertThatThrownBy(() -> items.get(id)).isInstanceOf(NotFoundException.class);
           // And visible where a person goes looking for it.
-          assertThat(items.trashed(null, 50).items()).extracting(ItemView::id).contains(id);
+          assertThat(items.trashed(null, 50).data()).extracting(ItemView::id).contains(id);
 
           ItemView back = items.restore(id, OptionalLong.empty(), tenant.userId());
           assertThat(back.lifecycleState()).isEqualTo("ACTIVE");
           assertThat(items.get(id).id()).isEqualTo(id);
-          assertThat(items.trashed(null, 50).items()).extracting(ItemView::id).doesNotContain(id);
+          assertThat(items.trashed(null, 50).data()).extracting(ItemView::id).doesNotContain(id);
 
           // Restoring twice is not an error, for the same reason deleting twice
           // is not: a client retrying a request it never saw the answer to.
@@ -87,7 +87,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           items.purge(id, OptionalLong.empty(), tenant.userId());
 
           assertThatThrownBy(() -> items.get(id)).isInstanceOf(NotFoundException.class);
-          assertThat(items.trashed(null, 50).items()).extracting(ItemView::id).doesNotContain(id);
+          assertThat(items.trashed(null, 50).data()).extracting(ItemView::id).doesNotContain(id);
 
           // The history outlives the row: a removal that erased its own record
           // would leave nothing to say the thing ever existed.
@@ -160,7 +160,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
    * @return its revisions
    */
   private java.util.List<RevisionLog.RevisionView> historyOf(UUID id) {
-    return items.history(id, null, 50).items();
+    return items.history(id, null, 50).data();
   }
 
   /**

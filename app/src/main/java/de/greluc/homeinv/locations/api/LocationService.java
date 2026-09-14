@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.locations.api;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.idempotency.api.RequestKey;
 import java.util.List;
 import java.util.Optional;
@@ -133,13 +134,6 @@ public interface LocationService {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  LocationPage list(String cursor, int limit);
+  Page<LocationView> list(String cursor, int limit);
 
-  /**
-   * One page of locations.
-   *
-   * @param items the locations on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record LocationPage(List<LocationView> items, String nextCursor) {}
 }

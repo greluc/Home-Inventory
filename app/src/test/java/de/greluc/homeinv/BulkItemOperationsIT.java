@@ -315,7 +315,7 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/items/" + mug + "/tags").session(session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items[0].name").value("Kitchen"));
+        .andExpect(jsonPath("$.data[0].name").value("Kitchen"));
 
     // An item that is not there is this entry's 404 rather than a foreign-key
     // violation that would abort the transaction the other entries are using.
@@ -456,7 +456,7 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
             .andReturn()
             .getResponse()
             .getContentAsString(StandardCharsets.UTF_8);
-    String categoryId = json.readTree(categories).get("items").get(0).get("id").asString();
+    String categoryId = json.readTree(categories).get("data").get(0).get("id").asString();
     return created(
         session,
         "/api/v1/locations",

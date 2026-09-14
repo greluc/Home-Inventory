@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.authorization.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -44,13 +45,6 @@ public interface RoleAdministration {
       Set<Permission> added,
       Set<Permission> effective) {}
 
-  /**
-   * One page of roles.
-   *
-   * @param items the definitions
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  record RolePage(List<RoleDefinitionView> items, String nextCursor) {}
 
   /**
    * One page of this tenant's roles, oldest first.
@@ -63,7 +57,7 @@ public interface RoleAdministration {
    * @param limit how many at most, capped at 200
    * @return the page
    */
-  RolePage roles(String cursor, int limit);
+  Page<RoleDefinitionView> roles(String cursor, int limit);
 
   /**
    * One definition.

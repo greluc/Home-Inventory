@@ -32,7 +32,7 @@ public interface ItemSearchQuery {
    * @param limit how many rows at most
    * @return the page, ordered by creation
    */
-  Page search(
+  Rows search(
       String text,
       String language,
       List<UUID> locationIds,
@@ -40,11 +40,15 @@ public interface ItemSearchQuery {
       int limit);
 
   /**
-   * One page of results.
+   * The rows one search produced.
    *
-   * @param items the rows, in order
-   * @param last the position of the final row, or empty when the page is empty. The caller turns it
-   *     into a cursor; this block does not know how cursors are signed and should not
+   * <p>Deliberately not the response envelope {@code platform.Page}: this carries a cursor
+   * <em>position</em> rather than a signed cursor string, because this block does not know how
+   * cursors are signed and should not. The caller turns the position into a cursor and the rows
+   * into a page.
+   *
+   * @param rows the rows, in order
+   * @param last the position of the final row, or empty when there were none
    */
-  record Page(List<ItemView> items, Optional<CursorCodec.Position> last) {}
+  record Rows(List<ItemView> rows, Optional<CursorCodec.Position> last) {}
 }

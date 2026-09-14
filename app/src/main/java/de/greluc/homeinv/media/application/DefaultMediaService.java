@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.media.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.media.api.BlobStore;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.MediaObjectStored;
@@ -217,7 +218,7 @@ public class DefaultMediaService implements MediaService {
 
   @Override
   @Transactional(readOnly = true)
-  public MediaPage attachmentsOf(String targetKind, UUID targetId, String cursor, int limit) {
+  public Page<MediaView> attachmentsOf(String targetKind, UUID targetId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
 
@@ -267,7 +268,7 @@ public class DefaultMediaService implements MediaService {
       nextCursor =
           cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), fingerprint);
     }
-    return new MediaPage(views, nextCursor);
+    return Page.of(views, nextCursor);
   }
 
   /**

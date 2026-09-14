@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.inventory.api.ItemRelations;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.LastRow;
@@ -140,7 +141,7 @@ public class ItemRelationAdapter implements ItemRelations {
 
   @Override
   @Transactional(readOnly = true)
-  public RelationPage relationsOf(UUID itemId, String cursor, int limit) {
+  public Page<ItemRelations.RelationView> relationsOf(UUID itemId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
     items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
@@ -168,7 +169,7 @@ public class ItemRelationAdapter implements ItemRelations {
         rows.size() == size && last.position() != null
             ? cursors.encode(last.position(), CURSOR)
             : null;
-    return new RelationPage(rows, next);
+    return Page.of(rows, next);
   }
 
   /**

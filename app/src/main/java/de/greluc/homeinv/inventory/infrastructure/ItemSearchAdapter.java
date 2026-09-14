@@ -71,7 +71,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   private final de.greluc.homeinv.catalog.api.AttributeRedaction redaction;
 
   @Override
-  public Page search(
+  public Rows search(
       String text,
       String language,
       List<UUID> locationIds,
@@ -172,7 +172,7 @@ public class ItemSearchAdapter implements ItemSearchQuery {
                     page.get(page.size() - 1).createdAt(), page.get(page.size() - 1).id()))
             : Optional.empty();
 
-    return new Page(List.copyOf(page), last);
+    return new Rows(List.copyOf(page), last);
   }
   /**
    * The three figures of REQ-LIFE-001/002/014, read off the row.

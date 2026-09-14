@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.catalog.api.LocationCategoryView;
+import de.greluc.homeinv.platform.Page;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.greluc.homeinv.authorization.api.Permission;
@@ -93,9 +95,9 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         5,
         (cursor, size) -> {
-          TypeAdministration.ItemTypePage page = types.itemTypes(cursor, size);
-          return new Page(
-              page.items().stream().map(TypeAdministration.ItemTypeView::id).toList(),
+          Page<TypeAdministration.ItemTypeView> page = types.itemTypes(cursor, size);
+          return new Ids(
+              page.data().stream().map(TypeAdministration.ItemTypeView::id).toList(),
               page.nextCursor());
         });
   }
@@ -110,9 +112,9 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         13,
         (cursor, size) -> {
-          TypeAdministration.CategoryPage page = types.categories(cursor, size);
-          return new Page(
-              page.items().stream().map(TypeAdministration.CategoryView::id).toList(),
+          Page<TypeAdministration.CategoryView> page = types.categories(cursor, size);
+          return new Ids(
+              page.data().stream().map(TypeAdministration.CategoryView::id).toList(),
               page.nextCursor());
         });
 
@@ -122,9 +124,9 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         13,
         (cursor, size) -> {
-          LocationCategories.LocationCategoryPage page = categories.list(cursor, size);
-          return new Page(
-              page.items().stream()
+          Page<LocationCategoryView> page = categories.list(cursor, size);
+          return new Ids(
+              page.data().stream()
                   .map(de.greluc.homeinv.catalog.api.LocationCategoryView::id)
                   .toList(),
               page.nextCursor());
@@ -148,9 +150,9 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         5,
         (cursor, size) -> {
-          TypeAdministration.ValueListPage page = types.valueLists(cursor, size);
-          return new Page(
-              page.items().stream().map(TypeAdministration.ValueListView::id).toList(),
+          Page<TypeAdministration.ValueListView> page = types.valueLists(cursor, size);
+          return new Ids(
+              page.data().stream().map(TypeAdministration.ValueListView::id).toList(),
               page.nextCursor());
         });
   }
@@ -196,28 +198,28 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         5,
         (cursor, size) -> {
-          TagService.TagPage page = tags.tags(cursor, size);
-          return new Page(
-              page.items().stream().map(TagView::id).toList(), page.nextCursor());
+          Page<TagView> page = tags.tags(cursor, size);
+          return new Ids(
+              page.data().stream().map(TagView::id).toList(), page.nextCursor());
         });
 
     assertEveryRowIsSeenExactlyOnce(
         tenant,
         3,
         (cursor, size) -> {
-          TagService.TagGroupPage page = tags.groups(cursor, size);
-          return new Page(
-              page.items().stream().map(TagGroupView::id).toList(), page.nextCursor());
+          Page<TagGroupView> page = tags.groups(cursor, size);
+          return new Ids(
+              page.data().stream().map(TagGroupView::id).toList(), page.nextCursor());
         });
 
     assertEveryRowIsSeenExactlyOnce(
         tenant,
         5,
         (cursor, size) -> {
-          TagService.TagPage page =
+          Page<TagView> page =
               tags.tagsOf(TagService.TagTarget.ITEM, thing, cursor, size);
-          return new Page(
-              page.items().stream().map(TagView::id).toList(), page.nextCursor());
+          return new Ids(
+              page.data().stream().map(TagView::id).toList(), page.nextCursor());
         });
   }
 
@@ -235,9 +237,9 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         5,
         (cursor, size) -> {
-          RoleAdministration.RolePage page = roles.roles(cursor, size);
-          return new Page(
-              page.items().stream()
+          Page<RoleAdministration.RoleDefinitionView> page = roles.roles(cursor, size);
+          return new Ids(
+              page.data().stream()
                   .map(RoleAdministration.RoleDefinitionView::id)
                   .toList(),
               page.nextCursor());
@@ -266,9 +268,9 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
         tenant,
         5,
         (cursor, size) -> {
-          ItemRelations.RelationPage page = relations.relationsOf(camera, cursor, size);
-          return new Page(
-              page.items().stream().map(ItemRelations.RelationView::id).toList(),
+          Page<ItemRelations.RelationView> page = relations.relationsOf(camera, cursor, size);
+          return new Ids(
+              page.data().stream().map(ItemRelations.RelationView::id).toList(),
               page.nextCursor());
         });
   }
@@ -287,14 +289,14 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
    * @param listing takes a cursor and a size, answers the ids and the next cursor
    */
   private void assertEveryRowIsSeenExactlyOnce(
-      Tenant tenant, int expected, BiFunction<String, Integer, Page> listing) {
+      Tenant tenant, int expected, BiFunction<String, Integer, Ids> listing) {
 
     List<UUID> seen = new ArrayList<>();
     String cursor = null;
     int pages = 0;
     do {
       String current = cursor;
-      Page page = inOwn(tenant, () -> listing.apply(current, 2));
+      Ids page = inOwn(tenant, () -> listing.apply(current, 2));
       seen.addAll(page.ids());
       cursor = page.nextCursor();
       pages++;
@@ -311,7 +313,8 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
    * @param ids the ids on the page, in the order the listing gave them
    * @param nextCursor the cursor for the next page, or {@code null}
    */
-  private record Page(List<UUID> ids, String nextCursor) {}
+  /** What this harness compares: the ids one page held, and where the next starts. */
+  private record Ids(List<UUID> ids, String nextCursor) {}
 
   private UUID location(Tenant tenant, String name) {
     return locations

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.media.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -79,7 +80,7 @@ public interface MediaService {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one, or none when this was the last
    */
-  MediaPage attachmentsOf(String targetKind, UUID targetId, String cursor, int limit);
+  Page<MediaView> attachmentsOf(String targetKind, UUID targetId, String cursor, int limit);
 
   /**
    * Detaches a file and removes the bytes when nothing references them any more.
@@ -101,11 +102,4 @@ public interface MediaService {
    */
   InputStream openVerified(UUID tenantId, String sha256) throws IOException;
 
-  /**
-   * One page of attachments.
-   *
-   * @param items the attachments on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record MediaPage(List<MediaView> items, String nextCursor) {}
 }

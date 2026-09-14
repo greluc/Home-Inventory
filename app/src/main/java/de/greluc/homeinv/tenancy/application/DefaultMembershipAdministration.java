@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.RoleAdministration;
 import de.greluc.homeinv.authorization.api.RoleRef;
 import de.greluc.homeinv.platform.CursorCodec;
@@ -52,7 +53,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
 
   @Override
   @Transactional(readOnly = true)
-  public MemberPage members(String cursor, int limit) {
+  public Page<MemberView> members(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     List<Membership> rows;
     if (cursor == null || cursor.isBlank()) {
@@ -90,7 +91,7 @@ public class DefaultMembershipAdministration implements MembershipAdministration
                 new CursorCodec.Position(rows.getLast().getCreatedAt(), rows.getLast().getId()),
                 CURSOR)
             : null;
-    return new MemberPage(items, next);
+    return Page.of(items, next);
   }
 
   @Override

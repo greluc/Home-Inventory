@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 
 /**
@@ -39,13 +40,6 @@ public interface LocationCategories {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  LocationCategoryPage list(String cursor, int limit);
+  Page<LocationCategoryView> list(String cursor, int limit);
 
-  /**
-   * One page of categories.
-   *
-   * @param items the categories on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record LocationCategoryPage(List<LocationCategoryView> items, String nextCursor) {}
 }

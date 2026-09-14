@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.platform.Page;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -256,15 +257,15 @@ class LocationTreeIT extends AbstractIntegrationTest {
             tenant.tenantId(), () -> create(category, building.id(), "Room", tenant.userId()));
     inOwnTransaction(tenant.tenantId(), () -> create(category, room.id(), "Shelf", tenant.userId()));
 
-    LocationService.LocationPage page =
+    Page<LocationView> page =
         inOwnTransaction(tenant.tenantId(), () -> locationService.list(null, 50));
 
-    assertThat(page.items()).hasSize(3);
+    assertThat(page.data()).hasSize(3);
     assertThat(page.nextCursor()).isNull();
     // Each row carries what a tree is assembled from: the parent, and the
     // readable path a picker shows so that two shelves called "Shelf" are
     // distinguishable.
-    LocationView shelf = page.items().get(2);
+    LocationView shelf = page.data().get(2);
     assertThat(shelf.parentId()).isEqualTo(room.id());
     assertThat(shelf.ancestors()).containsExactly("Building", "Room", "Shelf");
   }
@@ -279,22 +280,22 @@ class LocationTreeIT extends AbstractIntegrationTest {
       inOwnTransaction(tenant.tenantId(), () -> create(category, null, name, tenant.userId()));
     }
 
-    LocationService.LocationPage first =
+    Page<LocationView> first =
         inOwnTransaction(tenant.tenantId(), () -> locationService.list(null, 2));
-    LocationService.LocationPage second =
+    Page<LocationView> second =
         inOwnTransaction(tenant.tenantId(), () -> locationService.list(first.nextCursor(), 2));
-    LocationService.LocationPage third =
+    Page<LocationView> third =
         inOwnTransaction(tenant.tenantId(), () -> locationService.list(second.nextCursor(), 2));
 
-    assertThat(first.items()).hasSize(2);
-    assertThat(second.items()).hasSize(2);
-    assertThat(third.items()).hasSize(1);
+    assertThat(first.data()).hasSize(2);
+    assertThat(second.data()).hasSize(2);
+    assertThat(third.data()).hasSize(1);
     assertThat(third.nextCursor()).isNull();
 
     List<UUID> seen = new java.util.ArrayList<>();
-    first.items().forEach(view -> seen.add(view.id()));
-    second.items().forEach(view -> seen.add(view.id()));
-    third.items().forEach(view -> seen.add(view.id()));
+    first.data().forEach(view -> seen.add(view.id()));
+    second.data().forEach(view -> seen.add(view.id()));
+    third.data().forEach(view -> seen.add(view.id()));
     assertThat(seen).doesNotHaveDuplicates().hasSize(5);
   }
 
@@ -303,14 +304,14 @@ class LocationTreeIT extends AbstractIntegrationTest {
   void theShippedCategoriesAreReadable() {
     Tenant tenant = newTenant("categories@example.org");
 
-    LocationCategories.LocationCategoryPage page =
+    Page<LocationCategoryView> page =
         inOwnTransaction(tenant.tenantId(), () -> locationCategories.list(null, 50));
 
     // The thirteen REQ-CORE-042 lists, by key. No assertion about their order:
     // they are written in one transaction and share a timestamp, so the keyset
     // tiebreaker decides, and the client sorts thirteen translated words in the
     // reader's language anyway.
-    assertThat(page.items().stream().map(LocationCategoryView::key))
+    assertThat(page.data().stream().map(LocationCategoryView::key))
         .containsExactlyInAnyOrder(
             "building",
             "floor",
@@ -332,7 +333,7 @@ class LocationTreeIT extends AbstractIntegrationTest {
     // shipped default would divide tenants in two, because a data migration
     // cannot reach the ones already provisioned -- `homeinv_migrator` is
     // NOBYPASSRLS and the policies are FORCEd -- so it stays a tenant's to set.
-    assertThat(page.items()).noneMatch(LocationCategoryView::mobile);
+    assertThat(page.data()).noneMatch(LocationCategoryView::mobile);
   }
 
   private void inTenantTransaction(UUID tenantId, Runnable body) {

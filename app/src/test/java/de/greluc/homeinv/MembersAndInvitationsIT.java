@@ -135,14 +135,14 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         mockMvc
             .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/invitations").session(owner))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items[0].state").value("OPEN"))
+            .andExpect(jsonPath("$.data[0].state").value("OPEN"))
             // The token is never in a listing: it exists once, in the answer that
             // created it, and afterwards only as a hash.
-            .andExpect(jsonPath("$.items[0].token").doesNotExist())
+            .andExpect(jsonPath("$.data[0].token").doesNotExist())
             .andReturn()
             .getResponse()
             .getContentAsString();
-    String invitationId = json.readTree(listed).get("items").get(0).get("id").asString();
+    String invitationId = json.readTree(listed).get("data").get(0).get("id").asString();
 
     mockMvc
         .perform(
@@ -294,7 +294,7 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/members").session(owner))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(2));
+        .andExpect(jsonPath("$.data.length()").value(2));
 
     mockMvc
         .perform(
@@ -305,7 +305,7 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
 
     mockMvc
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/members").session(owner))
-        .andExpect(jsonPath("$.items.length()").value(1));
+        .andExpect(jsonPath("$.data.length()").value(1));
 
     // Removing twice is not an error, for the reason deleting twice is not.
     mockMvc

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tagging.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.LastRow;
 import de.greluc.homeinv.platform.NotFoundException;
@@ -150,13 +151,13 @@ public class TagAdapter implements TagService {
 
   @Override
   @Transactional(readOnly = true)
-  public TagPage tags(String cursor, int limit) {
+  public Page<TagView> tags(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     LastRow last = new LastRow();
     List<TagView> rows =
         page(
             TAG_PAGE, TAG_PAGE_AFTER, cursor, size, TAG_CURSOR, (rs, rowNum) -> tagOf(rs, last));
-    return new TagPage(rows, nextCursor(rows.size(), size, TAG_CURSOR, last));
+    return Page.of(rows, nextCursor(rows.size(), size, TAG_CURSOR, last));
   }
 
   @Override
@@ -295,7 +296,7 @@ public class TagAdapter implements TagService {
 
   @Override
   @Transactional(readOnly = true)
-  public TagPage tagsOf(TagTarget target, UUID targetId, String cursor, int limit) {
+  public Page<TagView> tagsOf(TagTarget target, UUID targetId, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     requireVisible(target, targetId);
     int size = Math.clamp(limit, 1, MAX_PAGE);
@@ -317,7 +318,7 @@ public class TagAdapter implements TagService {
               .query((rs, rowNum) -> tagOf(rs, last))
               .list();
     }
-    return new TagPage(rows, nextCursor(rows.size(), size, ASSIGNED_CURSOR, last));
+    return Page.of(rows, nextCursor(rows.size(), size, ASSIGNED_CURSOR, last));
   }
 
   @Override
@@ -360,7 +361,7 @@ public class TagAdapter implements TagService {
 
   @Override
   @Transactional(readOnly = true)
-  public TagGroupPage groups(String cursor, int limit) {
+  public Page<TagGroupView> groups(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     LastRow last = new LastRow();
     List<TagGroupView> rows =
@@ -371,7 +372,7 @@ public class TagAdapter implements TagService {
             size,
             TAG_GROUP_CURSOR,
             (rs, rowNum) -> groupOf(rs, last));
-    return new TagGroupPage(rows, nextCursor(rows.size(), size, TAG_GROUP_CURSOR, last));
+    return Page.of(rows, nextCursor(rows.size(), size, TAG_GROUP_CURSOR, last));
   }
 
   // -------------------------------------------------------------------------

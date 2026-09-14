@@ -107,16 +107,16 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
             assertThat(relation.inbound()).isFalse();
 
             // The lens states it; the camera reads the same row the other way.
-            assertThat(relations.relationsOf(lens, null, 50).items())
+            assertThat(relations.relationsOf(lens, null, 50).data())
                 .singleElement()
                 .satisfies(view -> assertThat(view.inbound()).isFalse());
-            assertThat(relations.relationsOf(camera, null, 50).items())
+            assertThat(relations.relationsOf(camera, null, 50).data())
                 .singleElement()
                 .satisfies(view -> assertThat(view.inbound()).isTrue());
 
             // Asked for twice, the second is the first.
             relations.relate(lens, camera, ItemRelations.RelationType.ACCESSORY_OF, tenant.userId());
-            assertThat(relations.relationsOf(lens, null, 50).items()).hasSize(1);
+            assertThat(relations.relationsOf(lens, null, 50).data()).hasSize(1);
 
             assertThatThrownBy(
                     () ->
@@ -131,7 +131,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
             // nothing.
             UUID tripod = anItem(tenant, "Tripod");
             relations.unrelate(tripod, relation.id(), tenant.userId());
-            assertThat(relations.relationsOf(camera, null, 50).items())
+            assertThat(relations.relationsOf(camera, null, 50).data())
                 .as("a relation that does not join the named item is left alone")
                 .hasSize(1);
 
@@ -143,7 +143,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                 .isInstanceOf(de.greluc.homeinv.platform.NotFoundException.class);
 
             relations.unrelate(relation.sourceId(), relation.id(), tenant.userId());
-            assertThat(relations.relationsOf(camera, null, 50).items()).isEmpty();
+            assertThat(relations.relationsOf(camera, null, 50).data()).isEmpty();
           });
     }
   }

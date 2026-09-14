@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -57,7 +58,7 @@ public class TagController {
   @GetMapping(path = "/api/v1/tags", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TAG_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public TagService.TagPage listTags(
+  public Page<TagView> listTags(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return tags.tags(cursor, limit);
@@ -140,7 +141,7 @@ public class TagController {
   @GetMapping(path = "/api/v1/tag-groups", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TAG_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public TagService.TagGroupPage listGroups(
+  public Page<TagGroupView> listGroups(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return tags.groups(cursor, limit);
@@ -179,7 +180,7 @@ public class TagController {
   @GetMapping(path = "/api/v1/items/{id}/tags", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TAG_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public TagService.TagPage itemTags(
+  public Page<TagView> itemTags(
       @PathVariable UUID id,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
@@ -236,7 +237,7 @@ public class TagController {
   @GetMapping(path = "/api/v1/locations/{id}/tags", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TAG_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public TagService.TagPage locationTags(
+  public Page<TagView> locationTags(
       @PathVariable UUID id,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {

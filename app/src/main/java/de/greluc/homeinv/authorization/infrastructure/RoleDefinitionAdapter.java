@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.authorization.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.Role;
 import de.greluc.homeinv.authorization.api.RoleAdministration;
@@ -115,7 +116,7 @@ public class RoleDefinitionAdapter implements RoleAdministration {
 
   @Override
   @Transactional(readOnly = true)
-  public RolePage roles(String cursor, int limit) {
+  public Page<RoleDefinitionView> roles(String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
     Map<UUID, Set<Permission>> grants = grantsByRole(tenantId);
@@ -147,7 +148,7 @@ public class RoleDefinitionAdapter implements RoleAdministration {
 
     String next =
         views.size() == size ? cursors.encode(positions.getLast(), CURSOR) : null;
-    return new RolePage(views, next);
+    return Page.of(views, next);
   }
 
   @Override

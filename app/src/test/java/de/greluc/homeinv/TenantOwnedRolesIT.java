@@ -251,7 +251,7 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/members").session(owner))
         .andExpect(status().isOk())
         .andExpect(
-            jsonPath("$.items[?(@.userId == '" + member + "')].roleName")
+            jsonPath("$.data[?(@.userId == '" + member + "')].roleName")
                 .value(org.hamcrest.Matchers.hasItem("VIEWER")));
 
     // And the name is free again.

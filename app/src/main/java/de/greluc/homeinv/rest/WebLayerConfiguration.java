@@ -84,6 +84,24 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
   }
 
   /**
+   * Records when each request started, so a page can say how long it took (08 §8.2).
+   *
+   * <p>Second only to the forwarded-header filter, and for a plain reason: {@code meta.took} is
+   * meant to cover everything the server did, so the measurement has to begin before anything else
+   * runs. It writes one request attribute and nothing else; {@code PageTiming} reads it on the way
+   * out.
+   *
+   * @return the registration, just after the address correction
+   */
+  @Bean
+  public FilterRegistrationBean<PageTiming.Clock> requestClock() {
+    FilterRegistrationBean<PageTiming.Clock> registration =
+        new FilterRegistrationBean<>(new PageTiming.Clock());
+    registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+    return registration;
+  }
+
+  /**
    * Cross-origin rules: one origin, named, never reflected (REQ-SEC-062).
    *
    * <p>In the shipped topology this grants nothing, and that is the intended state: {@code web}

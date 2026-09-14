@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -42,13 +43,6 @@ public interface MembershipAdministration {
       UUID scopeLocationId,
       Instant joinedAt) {}
 
-  /**
-   * One page of members.
-   *
-   * @param items the members
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  record MemberPage(List<MemberView> items, String nextCursor) {}
 
   /**
    * One page of the tenant's members, oldest membership first.
@@ -57,7 +51,7 @@ public interface MembershipAdministration {
    * @param limit how many at most, capped at 200
    * @return the page
    */
-  MemberPage members(String cursor, int limit);
+  Page<MemberView> members(String cursor, int limit);
 
   /**
    * Changes what a member may do.

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -71,7 +72,7 @@ public class MemberController {
   @GetMapping(path = "/members", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
-  public MembershipAdministration.MemberPage members(
+  public Page<MembershipAdministration.MemberView> members(
       @PathVariable UUID tenantId,
       @AuthenticationPrincipal AuthenticatedUser user,
       @RequestParam(required = false) @Size(max = 500) String cursor,
@@ -185,7 +186,7 @@ public class MemberController {
   @GetMapping(path = "/invitations", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_INVITE)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
-  public InvitationService.InvitationPage invitations(
+  public Page<InvitationService.InvitationView> invitations(
       @PathVariable UUID tenantId,
       @AuthenticationPrincipal AuthenticatedUser user,
       @RequestParam(required = false) @Size(max = 500) String cursor,

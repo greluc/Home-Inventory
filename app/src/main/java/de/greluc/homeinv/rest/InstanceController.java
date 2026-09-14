@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.identity.api.AccountAdministration;
@@ -108,13 +109,13 @@ public class InstanceController {
   @GetMapping(path = "/operators", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
   @CanFail({ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
-  public OperatorPage operators(
+  public Page<AccountView> operators(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
 
-    OperatorDirectory.OperatorPage page = operators.operators(cursor, limit);
-    return new OperatorPage(
-        page.items().stream().map(InstanceController::viewOf).toList(), page.nextCursor());
+    Page<AccountAdministration.AccountView> page = operators.operators(cursor, limit);
+    return Page.of(
+        page.data().stream().map(InstanceController::viewOf).toList(), page.nextCursor());
   }
 
   /**
@@ -233,7 +234,7 @@ public class InstanceController {
   @GetMapping(path = "/erasures", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
   @CanFail({ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
-  public ErasureCertificates.CertificatePage erasures(
+  public Page<ErasureCertificates.Certificate> erasures(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return certificates.certificates(cursor, limit);
@@ -271,13 +272,6 @@ public class InstanceController {
         account.locked());
   }
 
-  /**
-   * One page of operators.
-   *
-   * @param items the accounts
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  public record OperatorPage(List<AccountView> items, String nextCursor) {}
 
   /**
    * The body of an entitlement change.

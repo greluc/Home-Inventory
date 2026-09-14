@@ -179,7 +179,7 @@ class TagTargetsIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/items/" + plate + "/tags").session(session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items[0].name").value("Crockery"));
+        .andExpect(jsonPath("$.data[0].name").value("Crockery"));
 
     // And taking it off twice is still fine. What the port refuses is a target
     // that is not there, which is a different question from an assignment that is
@@ -190,7 +190,7 @@ class TagTargetsIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/items/" + plate + "/tags").session(session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(0));
+        .andExpect(jsonPath("$.data.length()").value(0));
   }
 
   // -------------------------------------------------------------------------
@@ -215,7 +215,7 @@ class TagTargetsIT extends AbstractIntegrationTest {
             .andReturn()
             .getResponse()
             .getContentAsString(StandardCharsets.UTF_8);
-    String categoryId = json.readTree(categories).get("items").get(0).get("id").asString();
+    String categoryId = json.readTree(categories).get("data").get(0).get("id").asString();
     return created(session, "/api/v1/locations", Map.of("name", name, "categoryId", categoryId));
   }
 

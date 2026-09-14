@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.identity.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 
 /**
@@ -17,13 +18,6 @@ import java.util.List;
  */
 public interface OperatorDirectory {
 
-  /**
-   * One page of operators.
-   *
-   * @param items the accounts
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  record OperatorPage(List<AccountAdministration.AccountView> items, String nextCursor) {}
 
   /**
    * One page of the accounts that administer the instance, oldest first.
@@ -37,5 +31,5 @@ public interface OperatorDirectory {
    * @param limit how many at most, capped at 200
    * @return the page, with a cursor when there is more
    */
-  OperatorPage operators(String cursor, int limit);
+  Page<AccountAdministration.AccountView> operators(String cursor, int limit);
 }

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.identity.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.api.OperatorDirectory;
 import de.greluc.homeinv.identity.domain.AppUser;
@@ -40,7 +41,7 @@ public class DefaultOperatorDirectory implements OperatorDirectory {
 
   @Override
   @Transactional(readOnly = true)
-  public OperatorPage operators(String cursor, int limit) {
+  public Page<AccountAdministration.AccountView> operators(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     List<AppUser> rows;
     if (cursor == null || cursor.isBlank()) {
@@ -55,7 +56,7 @@ public class DefaultOperatorDirectory implements OperatorDirectory {
       AppUser last = rows.getLast();
       next = cursors.encode(new CursorCodec.Position(last.getCreatedAt(), last.getId()), CURSOR);
     }
-    return new OperatorPage(rows.stream().map(DefaultOperatorDirectory::viewOf).toList(), next);
+    return Page.of(rows.stream().map(DefaultOperatorDirectory::viewOf).toList(), next);
   }
 
   /**

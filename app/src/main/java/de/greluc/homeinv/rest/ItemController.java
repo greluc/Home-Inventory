@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.inventory.api.BulkItemOperations;
 import de.greluc.homeinv.inventory.api.ItemBundles;
@@ -438,7 +439,7 @@ public class ItemController {
   @GetMapping(path = "/{id}/relations", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public ItemRelations.RelationPage itemRelations(
+  public Page<ItemRelations.RelationView> itemRelations(
       @PathVariable UUID id,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
@@ -502,7 +503,7 @@ public class ItemController {
   @GetMapping(path = "/{id}/bundle", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public ItemBundles.BundleMemberPage bundleContents(
+  public Page<ItemBundles.BundleMemberView> bundleContents(
       @PathVariable UUID id,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
@@ -523,7 +524,7 @@ public class ItemController {
   @GetMapping(path = "/{id}/bundles", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public ItemBundles.BundleMemberPage bundlesContaining(
+  public Page<ItemBundles.BundleMemberView> bundlesContaining(
       @PathVariable UUID id,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
@@ -600,7 +601,7 @@ public class ItemController {
   @GetMapping(path = "/trash", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public ItemService.ItemPage trashedItems(
+  public Page<ItemView> trashedItems(
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return items.trashed(cursor, limit);
@@ -665,7 +666,7 @@ public class ItemController {
   @GetMapping(path = "/{id}/revisions", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
-  public RevisionLog.RevisionPage itemRevisions(
+  public Page<RevisionLog.RevisionView> itemRevisions(
       @PathVariable UUID id,
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {

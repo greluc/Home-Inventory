@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -83,7 +84,7 @@ public interface TypeAdministration {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  ItemTypePage itemTypes(String cursor, int limit);
+  Page<TypeAdministration.ItemTypeView> itemTypes(String cursor, int limit);
 
   /**
    * Archives an item type so it is offered for nothing new.
@@ -117,7 +118,7 @@ public interface TypeAdministration {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  CategoryPage categories(String cursor, int limit);
+  Page<TypeAdministration.CategoryView> categories(String cursor, int limit);
 
   /**
    * Changes an item type's icon (REQ-CORE-020).
@@ -322,7 +323,7 @@ public interface TypeAdministration {
    * @param limit how many lists at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  ValueListPage valueLists(String cursor, int limit);
+  Page<TypeAdministration.ValueListView> valueLists(String cursor, int limit);
 
   /**
    * Adds an entry to a value list.
@@ -567,29 +568,6 @@ public interface TypeAdministration {
   record ValueListEntryView(
       UUID id, String value, Map<String, String> labels, int displayOrder, boolean archived) {}
 
-  /**
-   * One page of item types.
-   *
-   * @param items the types on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record ItemTypePage(List<ItemTypeView> items, String nextCursor) {}
-
-  /**
-   * One page of location categories.
-   *
-   * @param items the categories on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record CategoryPage(List<CategoryView> items, String nextCursor) {}
-
-  /**
-   * One page of value lists.
-   *
-   * @param items the lists on this page, each with its entries
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record ValueListPage(List<ValueListView> items, String nextCursor) {}
 
   /** Thrown when a key a tenant chose is already in use for the same kind of thing. */
   class TypeKeyTakenException extends RuntimeException {

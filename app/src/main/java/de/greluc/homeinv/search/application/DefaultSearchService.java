@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.search.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.inventory.api.ItemSearchQuery;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.search.api.SearchService;
@@ -41,7 +42,7 @@ public class DefaultSearchService implements SearchService {
 
   @Override
   @Transactional(readOnly = true)
-  public SearchResult query(SearchRequest request) {
+  public Page<de.greluc.homeinv.inventory.api.ItemView> query(SearchRequest request) {
     int limit = request.limit() <= 0 ? DEFAULT_LIMIT : Math.min(request.limit(), MAX_LIMIT);
     String language = request.language() == null ? "de" : request.language();
     String text = request.text() == null ? "" : request.text();
@@ -58,11 +59,11 @@ public class DefaultSearchService implements SearchService {
             // resumes somewhere else (REQ-SEC-106, REQ-SRCH-009).
             : Optional.of(cursors.decode(request.cursor(), fingerprint));
 
-    ItemSearchQuery.Page page = items.search(text, language, locationIds, after, limit);
+    ItemSearchQuery.Rows page = items.search(text, language, locationIds, after, limit);
 
     String nextCursor =
         page.last().map(position -> cursors.encode(position, fingerprint)).orElse(null);
-    return new SearchResult(page.items(), nextCursor);
+    return Page.of(page.rows(), nextCursor);
   }
 
   /**

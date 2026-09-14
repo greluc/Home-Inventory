@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.Page;
 import java.math.BigDecimal;
 import de.greluc.homeinv.idempotency.api.RequestKey;
 import java.util.List;
@@ -183,7 +184,7 @@ public interface ItemService {
    * @param limit how many at most; capped at 200
    * @return the page and a cursor for the next one
    */
-  ItemPage trashed(String cursor, int limit);
+  Page<ItemView> trashed(String cursor, int limit);
 
   /**
    * One page of an item's history, newest first (REQ-CORE-010).
@@ -194,7 +195,8 @@ public interface ItemService {
    * @return the page and a cursor for the next one
    * @throws de.greluc.homeinv.platform.NotFoundException when the tenant never had such an item
    */
-  de.greluc.homeinv.audit.api.RevisionLog.RevisionPage history(UUID id, String cursor, int limit);
+  Page<de.greluc.homeinv.audit.api.RevisionLog.RevisionView> history(
+      UUID id, String cursor, int limit);
 
   /**
    * Makes an earlier state current again (REQ-CORE-010).
@@ -219,13 +221,6 @@ public interface ItemService {
   ItemView restoreRevision(
       UUID id, long revision, OptionalLong expectedVersion, UUID actor);
 
-  /**
-   * One page of items.
-   *
-   * @param items the items on this page
-   * @param nextCursor the cursor for the next page, or {@code null} when this was the last
-   */
-  record ItemPage(List<ItemView> items, String nextCursor) {}
 
   /**
    * What is needed to create an item.

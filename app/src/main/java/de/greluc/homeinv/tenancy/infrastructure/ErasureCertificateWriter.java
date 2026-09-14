@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.TenantErasure;
 import de.greluc.homeinv.tenancy.api.ErasureCertificates;
@@ -151,7 +152,7 @@ public class ErasureCertificateWriter implements ErasureCertificates {
 
   @Override
   @Transactional(readOnly = true)
-  public CertificatePage certificates(String cursor, int limit) {
+  public Page<ErasureCertificates.Certificate> certificates(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     List<Certificate> rows;
     if (cursor == null || cursor.isBlank()) {
@@ -178,7 +179,7 @@ public class ErasureCertificateWriter implements ErasureCertificates {
                 new CursorCodec.Position(rows.getLast().completedAt(), rows.getLast().tenantId()),
                 CURSOR)
             : null;
-    return new CertificatePage(rows, next);
+    return Page.of(rows, next);
   }
 
   /**

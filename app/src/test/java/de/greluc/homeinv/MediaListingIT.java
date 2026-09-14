@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.platform.Page;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -70,25 +71,25 @@ class MediaListingIT extends AbstractIntegrationTest {
     UUID item = UUID.randomUUID();
     List<UUID> uploaded = upload(context, item, 5);
 
-    MediaService.MediaPage first = as(context, () -> media.attachmentsOf("ITEM", item, null, 2));
-    assertThat(first.items()).hasSize(2);
+    Page<MediaView> first = as(context, () -> media.attachmentsOf("ITEM", item, null, 2));
+    assertThat(first.data()).hasSize(2);
     assertThat(first.nextCursor()).isNotNull();
 
-    MediaService.MediaPage second =
+    Page<MediaView> second =
         as(context, () -> media.attachmentsOf("ITEM", item, first.nextCursor(), 2));
-    assertThat(second.items()).hasSize(2);
+    assertThat(second.data()).hasSize(2);
 
-    MediaService.MediaPage third =
+    Page<MediaView> third =
         as(context, () -> media.attachmentsOf("ITEM", item, second.nextCursor(), 2));
-    assertThat(third.items()).hasSize(1);
+    assertThat(third.data()).hasSize(1);
     // A short page is the last one, and says so rather than handing out a cursor
     // a client would spend a request discovering is empty.
     assertThat(third.nextCursor()).isNull();
 
     List<UUID> paged = new ArrayList<>();
-    first.items().forEach(view -> paged.add(view.id()));
-    second.items().forEach(view -> paged.add(view.id()));
-    third.items().forEach(view -> paged.add(view.id()));
+    first.data().forEach(view -> paged.add(view.id()));
+    second.data().forEach(view -> paged.add(view.id()));
+    third.data().forEach(view -> paged.add(view.id()));
     assertThat(paged)
         .as("every attachment appears exactly once across the pages")
         .containsExactlyInAnyOrderElementsOf(uploaded);
@@ -104,9 +105,9 @@ class MediaListingIT extends AbstractIntegrationTest {
     // The service clamps; the endpoint refuses a larger number outright with its
     // `@Max(200)`, and both matter — a caller reaching the service another way
     // must not be able to ask for everything either.
-    MediaService.MediaPage page =
+    Page<MediaView> page =
         as(context, () -> media.attachmentsOf("ITEM", item, null, Integer.MAX_VALUE));
-    assertThat(page.items()).hasSize(3);
+    assertThat(page.data()).hasSize(3);
     assertThat(page.nextCursor()).isNull();
   }
 
@@ -119,7 +120,7 @@ class MediaListingIT extends AbstractIntegrationTest {
     upload(context, item, 2);
     upload(context, other, 2);
 
-    MediaService.MediaPage page = as(context, () -> media.attachmentsOf("ITEM", item, null, 1));
+    Page<MediaView> page = as(context, () -> media.attachmentsOf("ITEM", item, null, 1));
     assertThat(page.nextCursor()).isNotNull();
 
     assertThatThrownBy(
@@ -135,13 +136,13 @@ class MediaListingIT extends AbstractIntegrationTest {
     UUID item = UUID.randomUUID();
     upload(context, item, 3);
 
-    MediaService.MediaPage page = as(context, () -> media.attachmentsOf("ITEM", item, null, 10));
+    Page<MediaView> page = as(context, () -> media.attachmentsOf("ITEM", item, null, 10));
 
-    List<MediaView> primary = page.items().stream().filter(MediaView::primaryImage).toList();
+    List<MediaView> primary = page.data().stream().filter(MediaView::primaryImage).toList();
     assertThat(primary).as("exactly one attachment is the primary image").hasSize(1);
     assertThat(primary.getFirst().id())
         .as("and it is the first one uploaded")
-        .isEqualTo(page.items().getFirst().id());
+        .isEqualTo(page.data().getFirst().id());
   }
 
   // -------------------------------------------------------------------------

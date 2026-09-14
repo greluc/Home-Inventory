@@ -200,7 +200,7 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/instance/erasures").session(operator))
         .andExpect(status().isOk())
         .andExpect(
-            jsonPath("$.items[?(@.tenantId == '" + tenant.tenantId() + "')]").exists());
+            jsonPath("$.data[?(@.tenantId == '" + tenant.tenantId() + "')]").exists());
 
     mockMvc
         .perform(get("/api/v1/instance/erasures/" + tenant.tenantId()).session(operator))

@@ -101,10 +101,29 @@ export interface RecoveryCodes {
   codes: string[];
 }
 
-/** A page of search results. */
-export interface SearchResult {
-  items: Item[];
-  nextCursor: string | null;
+/**
+ * The envelope every collection answers with (08 §8.2).
+ *
+ * `data` are the rows. `page` says where the next ones are; the cursor is opaque and signed, and
+ * there is no offset anywhere in this API because offsets skip and duplicate rows on data that
+ * changes under them. `meta.degraded` is how the server says a derived store was unavailable and
+ * something less capable answered — a field and not a header, because `Warning: 199` was
+ * obsoleted by RFC 9111 §5.5.
+ */
+export interface Page<T> {
+  data: T[];
+  page: {
+    nextCursor: string | null;
+    hasMore: boolean;
+    /** Absent where counting is not cheap; explicitly an estimate where present. */
+    estimatedTotal?: number | null;
+  };
+  meta: {
+    degraded: boolean;
+    /** A stable token from `docs/reference/degraded-reasons.yaml`; branch on this, never on prose. */
+    degradedReason?: string | null;
+    took?: number | null;
+  };
 }
 
 /** A storage location with its readable path. */
@@ -117,12 +136,6 @@ export interface Location {
   ancestors: string[];
   /** The concurrency token: send it back as `If-Match` to change or delete this place. */
   version: number;
-}
-
-/** A page of locations. */
-export interface LocationPage {
-  items: Location[];
-  nextCursor: string | null;
 }
 
 /**
@@ -146,12 +159,6 @@ export interface LocationCategory {
   mobile: boolean;
 }
 
-/** A page of location categories. */
-export interface LocationCategoryPage {
-  items: LocationCategory[];
-  nextCursor: string | null;
-}
-
 /** A file attached to an item or a location. */
 export interface Media {
   id: string;
@@ -163,12 +170,6 @@ export interface Media {
   primaryImage: boolean;
   /** Signed, short-lived URLs per variant; empty until the malware scan says clean. */
   urls: Record<string, string>;
-}
-
-/** A page of attachments. */
-export interface MediaPage {
-  items: Media[];
-  nextCursor: string | null;
 }
 
 /**
@@ -337,12 +338,12 @@ export const api = {
    *   that a German user's search is stemmed with German rules (ADR-0047)
    * @param cursor the opaque cursor from a previous page
    */
-  search: (query: string, language: string, cursor?: string): Promise<SearchResult> => {
+  search: (query: string, language: string, cursor?: string): Promise<Page<Item>> => {
     const params = new URLSearchParams({ q: query, language, limit: "50" });
     if (cursor) {
       params.set("cursor", cursor);
     }
-    return request<SearchResult>(`/api/v1/search?${params.toString()}`);
+    return request<Page<Item>>(`/api/v1/search?${params.toString()}`);
   },
 
   /**
@@ -399,17 +400,17 @@ export const api = {
    *
    * @param cursor the opaque cursor from a previous page
    */
-  locations: (cursor?: string): Promise<LocationPage> => {
+  locations: (cursor?: string): Promise<Page<Location>> => {
     const params = new URLSearchParams({ limit: "200" });
     if (cursor) {
       params.set("cursor", cursor);
     }
-    return request<LocationPage>(`/api/v1/locations?${params.toString()}`);
+    return request<Page<Location>>(`/api/v1/locations?${params.toString()}`);
   },
 
   /** The kinds of place a location can be. */
-  locationCategories: (): Promise<LocationCategoryPage> =>
-    request<LocationCategoryPage>("/api/v1/locations/categories?limit=200"),
+  locationCategories: (): Promise<Page<LocationCategory>> =>
+    request<Page<LocationCategory>>("/api/v1/locations/categories?limit=200"),
 
   /**
    * The files attached to one thing.
@@ -417,9 +418,9 @@ export const api = {
    * @param targetKind `ITEM` or `LOCATION`
    * @param targetId what they hang on
    */
-  media: (targetKind: "ITEM" | "LOCATION", targetId: string): Promise<MediaPage> => {
+  media: (targetKind: "ITEM" | "LOCATION", targetId: string): Promise<Page<Media>> => {
     const params = new URLSearchParams({ targetKind, targetId, limit: "200" });
-    return request<MediaPage>(`/api/v1/media?${params.toString()}`);
+    return request<Page<Media>>(`/api/v1/media?${params.toString()}`);
   },
 
   /**

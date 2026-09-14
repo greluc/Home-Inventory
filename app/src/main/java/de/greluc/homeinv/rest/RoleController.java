@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -73,16 +74,16 @@ public class RoleController {
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_READ)
   @CanFail({ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
-  public RolePage roles(
+  public Page<RoleView> roles(
       @RequestParam(required = false) @jakarta.validation.constraints.Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50")
           @jakarta.validation.constraints.Positive
           @jakarta.validation.constraints.Max(200)
           int limit) {
 
-    RoleAdministration.RolePage page = roles.roles(cursor, limit);
-    return new RolePage(
-        page.items().stream().map(RoleController::viewOf).toList(), page.nextCursor());
+    Page<RoleAdministration.RoleDefinitionView> page = roles.roles(cursor, limit);
+    return Page.of(
+        page.data().stream().map(RoleController::viewOf).toList(), page.nextCursor());
   }
 
   /**
@@ -269,13 +270,6 @@ public class RoleController {
       @NotNull @Size(max = 32) String baseRole,
       @Size(max = 100) List<@Size(max = 100) String> permissions) {}
 
-  /**
-   * One page of roles.
-   *
-   * @param items the definitions
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  public record RolePage(List<RoleView> items, String nextCursor) {}
 
   /**
    * A tenant-owned role.

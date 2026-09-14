@@ -77,7 +77,7 @@ export function ItemPhotos({
   const reload = useCallback((): Promise<void> => {
     return api
       .media("ITEM", itemId)
-      .then((page) => setPhotos(page.items))
+      .then((page) => setPhotos(page.data))
       .catch((cause: unknown) => {
         onError(cause instanceof ApiError ? cause.detail : t("error.network"));
       });

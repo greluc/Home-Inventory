@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -133,7 +134,7 @@ public class MediaController {
   @GetMapping(value = "/api/v1/media", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEDIA_READ)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  public MediaService.MediaPage listMedia(
+  public Page<MediaView> listMedia(
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId,
       @RequestParam(required = false) @Size(max = 500) String cursor,

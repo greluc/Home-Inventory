@@ -151,7 +151,7 @@ class IdempotencyIT extends AbstractIntegrationTest {
             .andReturn()
             .getResponse()
             .getContentAsString(StandardCharsets.UTF_8);
-    String categoryId = json.readTree(categories).get("items").get(0).get("id").asString();
+    String categoryId = json.readTree(categories).get("data").get(0).get("id").asString();
 
     mockMvc
         .perform(

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.search.api;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.inventory.api.ItemView;
 import java.util.List;
 import java.util.UUID;
@@ -24,7 +25,7 @@ public interface SearchService {
    * @param request what to look for and where to resume
    * @return the matching items and a cursor for the next page
    */
-  SearchResult query(SearchRequest request);
+  Page<ItemView> query(SearchRequest request);
 
   /**
    * What to search for.
@@ -40,11 +41,4 @@ public interface SearchService {
   record SearchRequest(
       String text, String language, List<UUID> locationIds, String cursor, int limit) {}
 
-  /**
-   * What was found.
-   *
-   * @param items the matching items
-   * @param nextCursor the cursor for the following page, or {@code null} when this was the last
-   */
-  record SearchResult(List<ItemView> items, String nextCursor) {}
 }

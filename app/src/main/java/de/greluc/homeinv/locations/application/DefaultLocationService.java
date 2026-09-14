@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.locations.application;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.TypeRegistry;
 import de.greluc.homeinv.idempotency.api.RequestKey;
 import de.greluc.homeinv.inventory.api.ItemLocationUsage;
@@ -406,7 +407,7 @@ public class DefaultLocationService implements LocationService {
 
   @Override
   @Transactional(readOnly = true)
-  public LocationPage list(String cursor, int limit) {
+  public Page<LocationView> list(String cursor, int limit) {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
 
@@ -436,7 +437,7 @@ public class DefaultLocationService implements LocationService {
           cursors.encode(
               new CursorCodec.Position(last.getCreatedAt(), last.getId()), CURSOR_FINGERPRINT);
     }
-    return new LocationPage(views, nextCursor);
+    return Page.of(views, nextCursor);
   }
 
   /**

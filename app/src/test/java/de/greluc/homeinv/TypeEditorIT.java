@@ -327,7 +327,7 @@ class TypeEditorIT extends AbstractIntegrationTest {
 
           // An archived entry stays valid where it is stored and is offered no more.
           UUID used =
-              types.valueLists(null, 50).items().stream()
+              types.valueLists(null, 50).data().stream()
                   .filter(list -> list.key().equals("condition"))
                   .findFirst()
                   .orElseThrow()
@@ -389,7 +389,7 @@ class TypeEditorIT extends AbstractIntegrationTest {
           // and a shipped category is one this instance seeded rather than one it
           // owns: a tenant calling its `room` "Zimmer" is naming its own tree.
           TypeAdministration.CategoryView room =
-              types.categories(null, 200).items().stream()
+              types.categories(null, 200).data().stream()
                   .filter(view -> "room".equals(view.key()))
                   .findFirst()
                   .orElseThrow();
@@ -414,7 +414,7 @@ class TypeEditorIT extends AbstractIntegrationTest {
           // And the picker a client actually reads carries it, which is the half
           // that makes the edit visible to anybody (REQ-CORE-041).
           LocationCategoryView asOffered =
-              categories.list(null, 200).items().stream()
+              categories.list(null, 200).data().stream()
                   .filter(view -> view.id().equals(room.id()))
                   .findFirst()
                   .orElseThrow();

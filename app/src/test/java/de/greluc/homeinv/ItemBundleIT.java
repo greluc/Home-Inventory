@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.platform.Page;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -75,10 +76,10 @@ class ItemBundleIT extends AbstractIntegrationTest {
     assertThat(inOwn(tenant, () -> items.get(lens).locationId())).isEqualTo(drawer);
     assertThat(inOwn(tenant, () -> items.get(bag).locationId())).isEqualTo(shelf);
 
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(bag, null, 50).items()))
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(bag, null, 50).data()))
         .extracting(ItemBundles.BundleMemberView::memberId)
         .containsExactly(lens);
-    assertThat(inOwn(tenant, () -> bundles.bundlesOf(lens, null, 50).items()))
+    assertThat(inOwn(tenant, () -> bundles.bundlesOf(lens, null, 50).data()))
         .extracting(ItemBundles.BundleMemberView::bundleId)
         .containsExactly(bag);
   }
@@ -98,7 +99,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
 
     // Decided 2026-09-13: many bundles per item, so the graph is a DAG. Forcing
     // a choice here would make one of the two lists wrong about the same lens.
-    assertThat(inOwn(tenant, () -> bundles.bundlesOf(lens, null, 50).items()))
+    assertThat(inOwn(tenant, () -> bundles.bundlesOf(lens, null, 50).data()))
         .extracting(ItemBundles.BundleMemberView::bundleId)
         .containsExactlyInAnyOrder(bag, insured);
   }
@@ -119,7 +120,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
     // A client retrying a request whose answer it never saw gets the first one
     // back, with the same id, rather than a conflict.
     assertThat(again.id()).isEqualTo(first.id());
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(box, null, 50).items())).hasSize(1);
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(box, null, 50).data())).hasSize(1);
 
     // And removing is the same story from the other side.
     inOwn(
@@ -129,7 +130,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
           bundles.remove(box, cable, tenant.userId());
           return null;
         });
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(box, null, 50).items())).isEmpty();
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(box, null, 50).data())).isEmpty();
     // Removed from the bundle, not from the inventory.
     assertThat(inOwn(tenant, () -> items.get(cable).locationId())).isEqualTo(shelf);
   }
@@ -162,13 +163,13 @@ class ItemBundleIT extends AbstractIntegrationTest {
         .hasMessageContaining("contain");
 
     // Nothing was written by any of the three refusals.
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(inner, null, 50).items())).isEmpty();
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(middle, null, 50).items())).hasSize(1);
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(inner, null, 50).data())).isEmpty();
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(middle, null, 50).data())).hasSize(1);
 
     // A diamond is not a cycle and is allowed: the outer crate holds the pouch
     // directly as well as through the case.
     inOwn(tenant, () -> bundles.add(outer, inner, tenant.userId()));
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(outer, null, 50).items()))
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(outer, null, 50).data()))
         .extracting(ItemBundles.BundleMemberView::memberId)
         .containsExactlyInAnyOrder(middle, inner);
   }
@@ -191,7 +192,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
 
     // Trashed is restorable, so the membership stays — and the listing does not
     // offer it, because a list of what is in a box should not name what is not.
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(kit, null, 50).items())).isEmpty();
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(kit, null, 50).data())).isEmpty();
     assertThat(
             inOwn(
                 tenant,
@@ -205,7 +206,7 @@ class ItemBundleIT extends AbstractIntegrationTest {
 
     // Restored, it is back in the bundle it never left.
     inOwn(tenant, () -> items.restore(spanner, OptionalLong.empty(), tenant.userId()));
-    assertThat(inOwn(tenant, () -> bundles.contentsOf(kit, null, 50).items())).hasSize(1);
+    assertThat(inOwn(tenant, () -> bundles.contentsOf(kit, null, 50).data())).hasSize(1);
 
     // Something this tenant cannot see is a 404 rather than a constraint
     // violation surfacing as a 500.
@@ -231,21 +232,21 @@ class ItemBundleIT extends AbstractIntegrationTest {
           });
     }
 
-    ItemBundles.BundleMemberPage first =
+    Page<ItemBundles.BundleMemberView> first =
         inOwn(tenant, () -> bundles.contentsOf(chest, null, 2));
-    ItemBundles.BundleMemberPage second =
+    Page<ItemBundles.BundleMemberView> second =
         inOwn(tenant, () -> bundles.contentsOf(chest, first.nextCursor(), 2));
-    ItemBundles.BundleMemberPage third =
+    Page<ItemBundles.BundleMemberView> third =
         inOwn(tenant, () -> bundles.contentsOf(chest, second.nextCursor(), 2));
 
-    assertThat(first.items()).hasSize(2);
-    assertThat(second.items()).hasSize(2);
-    assertThat(third.items()).hasSize(1);
+    assertThat(first.data()).hasSize(2);
+    assertThat(second.data()).hasSize(2);
+    assertThat(third.data()).hasSize(1);
     assertThat(third.nextCursor()).isNull();
 
     List<UUID> seen =
         java.util.stream.Stream.of(first, second, third)
-            .flatMap(page -> page.items().stream())
+            .flatMap(page -> page.data().stream())
             .map(ItemBundles.BundleMemberView::id)
             .toList();
     assertThat(seen).doesNotHaveDuplicates().hasSize(5);

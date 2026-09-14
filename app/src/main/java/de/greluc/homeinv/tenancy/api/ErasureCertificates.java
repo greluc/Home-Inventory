@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.api;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.platform.TenantErasure;
 import java.time.Instant;
 import java.util.List;
@@ -39,13 +40,6 @@ public interface ErasureCertificates {
       Instant completedAt,
       List<TenantErasure.BlockReport> report) {}
 
-  /**
-   * One page of certificates, newest first.
-   *
-   * @param items the certificates
-   * @param nextCursor where the next page starts, or null when this was the last
-   */
-  record CertificatePage(List<Certificate> items, String nextCursor) {}
 
   /**
    * The certificate for one tenant.
@@ -62,5 +56,5 @@ public interface ErasureCertificates {
    * @param limit how many at most, capped at 200
    * @return the page
    */
-  CertificatePage certificates(String cursor, int limit);
+  Page<ErasureCertificates.Certificate> certificates(String cursor, int limit);
 }

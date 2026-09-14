@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.infrastructure;
 
+import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.AttributeUsage;
 import de.greluc.homeinv.catalog.api.FieldAdded;
 import de.greluc.homeinv.catalog.api.FieldDefinitionView;
@@ -144,7 +145,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   @Override
   @Transactional(readOnly = true)
-  public ItemTypePage itemTypes(String cursor, int limit) {
+  public Page<TypeAdministration.ItemTypeView> itemTypes(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     LastRow last = new LastRow();
     List<ItemTypeView> rows =
@@ -155,7 +156,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             size,
             ITEM_TYPE_CURSOR,
             (rs, rowNum) -> itemTypeOf(rs, last));
-    return new ItemTypePage(
+    return Page.of(
         rows, nextCursor(rows.size(), size, ITEM_TYPE_CURSOR, last.position()));
   }
 
@@ -301,7 +302,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   @Override
   @Transactional(readOnly = true)
-  public CategoryPage categories(String cursor, int limit) {
+  public Page<TypeAdministration.CategoryView> categories(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     LastRow last = new LastRow();
     List<CategoryView> rows =
@@ -312,7 +313,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             size,
             CATEGORY_CURSOR,
             (rs, rowNum) -> categoryOf(rs, last));
-    return new CategoryPage(
+    return Page.of(
         rows, nextCursor(rows.size(), size, CATEGORY_CURSOR, last.position()));
   }
 
@@ -820,7 +821,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
 
   @Override
   @Transactional(readOnly = true)
-  public ValueListPage valueLists(String cursor, int limit) {
+  public Page<TypeAdministration.ValueListView> valueLists(String cursor, int limit) {
     int size = Math.clamp(limit, 1, MAX_PAGE);
     LastRow last = new LastRow();
     List<UUID> ids =
@@ -836,7 +837,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
               return rs.getObject("id", UUID.class);
             });
     List<ValueListView> rows = ids.stream().map(this::valueList).toList();
-    return new ValueListPage(
+    return Page.of(
         rows, nextCursor(rows.size(), size, VALUE_LIST_CURSOR, last.position()));
   }
 
