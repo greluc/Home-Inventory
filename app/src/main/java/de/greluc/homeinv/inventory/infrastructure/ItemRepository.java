@@ -41,6 +41,24 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
   Optional<Item> findLive(@Param("tenantId") UUID tenantId, @Param("id") UUID id);
 
   /**
+   * The live items among these ids, in no particular order.
+   *
+   * <p>For a search: the index answers with ids and the rows are read here, once, rather than one
+   * query per hit. The order is the caller's to restore — relevance is the index's answer and a
+   * database has no opinion about it.
+   *
+   * <p>An id this tenant cannot see is simply absent from the result. A derived index that has gone
+   * stale can therefore name a row that is gone, and the worst it produces is a shorter page
+   * (REQ-SRCH-007).
+   *
+   * @param tenantId the tenant
+   * @param ids the items to read
+   * @return those that exist, are not deleted, and belong to this tenant
+   */
+  @Query("select i from Item i where i.tenantId = :tenantId and i.id in :ids and i.deletedAt is null")
+  List<Item> findLiveIn(@Param("tenantId") UUID tenantId, @Param("ids") java.util.Collection<UUID> ids);
+
+  /**
    * Finds one item of a tenant including a deleted one.
    *
    * <p>Used by the delete path, which must answer a repeated request the same way it answered the

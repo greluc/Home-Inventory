@@ -68,6 +68,21 @@ public interface ItemService {
       UUID id, UpdateItemCommand command, OptionalLong expectedVersion, UUID actor);
 
   /**
+   * Reads many items at once, in the order they were asked for.
+   *
+   * <p>What a search needs: the index answers with ids (REQ-SRCH-007) and this turns them back into
+   * rows — through row-level security and the field visibility rules, like every other read, which
+   * is what makes a derived index safe to run at all.
+   *
+   * <p>An id this tenant cannot see is left out rather than refused. A stale index naming a row that
+   * has since gone produces a shorter page, never an error and never somebody else's row.
+   *
+   * @param ids the items, in the order the answer should keep
+   * @return the items that are visible, in that order
+   */
+  java.util.List<ItemView> byIds(java.util.List<UUID> ids);
+
+  /**
    * Puts an item in another place.
    *
    * <p>A use case of its own rather than an {@link #update} carrying the other eight fields

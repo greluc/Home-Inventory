@@ -5,7 +5,7 @@
 package de.greluc.homeinv.search.application;
 
 import de.greluc.homeinv.platform.Page;
-import de.greluc.homeinv.inventory.api.ItemSearchQuery;
+import de.greluc.homeinv.search.api.SearchIndex;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.search.api.SearchService;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +37,18 @@ public class DefaultSearchService implements SearchService {
 
   private static final int DEFAULT_LIMIT = 50;
 
-  private final ItemSearchQuery items;
+  /**
+   * Where the search is actually run (REQ-SRCH-005).
+   *
+   * <p>One today. When OpenSearch joins it, this becomes the ordered list of engines to try and the
+   * fallback becomes a decision made here rather than in an adapter — which is why the service asks
+   * a port and not {@code ItemSearchQuery} directly, even while there is only one of them.
+   */
+  private final SearchIndex index;
+
+  /** Turns the ids the index answered with back into rows (REQ-SRCH-007). */
+  private final de.greluc.homeinv.inventory.api.ItemService items;
+
   private final CursorCodec cursors;
 
   @Override
@@ -59,11 +70,19 @@ public class DefaultSearchService implements SearchService {
             // resumes somewhere else (REQ-SEC-106, REQ-SRCH-009).
             : Optional.of(cursors.decode(request.cursor(), fingerprint));
 
-    ItemSearchQuery.Rows page = items.search(text, language, locationIds, after, limit);
+    SearchIndex.Hits hits =
+        index.find(new SearchIndex.Query(text, language, locationIds, after, limit));
+
+    // The ids become rows here, through the ordinary read: row-level security and
+    // the field visibility rules apply on the way out, which is what makes a
+    // derived index safe to run at all (REQ-SRCH-007). An id that named a row
+    // this tenant cannot see is simply absent, so a stale index costs a shorter
+    // page and never somebody else's item.
+    List<de.greluc.homeinv.inventory.api.ItemView> rows = items.byIds(hits.itemIds());
 
     String nextCursor =
-        page.last().map(position -> cursors.encode(position, fingerprint)).orElse(null);
-    return Page.of(page.rows(), nextCursor);
+        hits.last().map(position -> cursors.encode(position, fingerprint)).orElse(null);
+    return Page.of(rows, nextCursor);
   }
 
   /**

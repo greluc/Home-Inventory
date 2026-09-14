@@ -40,15 +40,24 @@ public interface ItemSearchQuery {
       int limit);
 
   /**
-   * The rows one search produced.
+   * What one search produced.
+   *
+   * <p><b>Identifiers, not rows.</b> The caller loads them through {@code ItemService.byIds}, which
+   * is the same path every other read takes and therefore the same row-level security and the same
+   * field visibility (REQ-SRCH-007). The OpenSearch adapter has no choice — a derived index must
+   * not hand out content — and this one follows the same contract deliberately, decided with the
+   * owner on 2026-09-14: two adapters behind one port are only interchangeable if they answer the
+   * same question, and REQ-SRCH-005 is the requirement that they are.
+   *
+   * <p>The price is a second query on the fallback path, which the {@code minimal} profile pays on
+   * every search. It is a lookup by primary key on rows the first query has just touched.
    *
    * <p>Deliberately not the response envelope {@code platform.Page}: this carries a cursor
    * <em>position</em> rather than a signed cursor string, because this block does not know how
-   * cursors are signed and should not. The caller turns the position into a cursor and the rows
-   * into a page.
+   * cursors are signed and should not.
    *
-   * @param rows the rows, in order
+   * @param ids the matching items, in the order they are to be shown
    * @param last the position of the final row, or empty when there were none
    */
-  record Rows(List<ItemView> rows, Optional<CursorCodec.Position> last) {}
+  record Rows(List<UUID> ids, Optional<CursorCodec.Position> last) {}
 }

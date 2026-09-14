@@ -398,6 +398,29 @@ public class DefaultItemService implements ItemService {
   }
 
   /**
+   * Reads many items at once, in the order they were asked for.
+   *
+   * @param ids the items
+   * @return those this tenant can see, in the order given
+   */
+  @Transactional(readOnly = true)
+  @Override
+  public List<ItemView> byIds(List<UUID> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return List.of();
+    }
+    UUID tenantId = TenantContext.require();
+    java.util.Map<UUID, Item> found = new java.util.HashMap<>();
+    for (Item item : items.findLiveIn(tenantId, ids)) {
+      found.put(item.getId(), item);
+    }
+    // The order is the caller's, not the database's: it is the relevance the
+    // index worked out, and a query by id returns rows in whatever order suits
+    // the plan.
+    return ids.stream().map(found::get).filter(java.util.Objects::nonNull).map(this::toView).toList();
+  }
+
+  /**
    * Puts an item in another place.
    *
    * @param id the item

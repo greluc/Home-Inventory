@@ -27,6 +27,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import de.greluc.homeinv.search.api.SearchIndex;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -37,16 +38,55 @@ import org.springframework.transaction.support.TransactionTemplate;
  * exist rather than one {@code simple} configuration (ADR-0047). If it were ever weakened to a
  * prefix match, the assertion below would still pass for the wrong reason — so it searches for a
  * word that shares no prefix with the text it must match.
+ *
+ * <p>Since 2026-09-14 the search runs through the {@code SearchIndex} port, which answers with
+ * identifiers and nothing else (REQ-SRCH-005, REQ-SRCH-007). The last test here holds that
+ * contract: the engine's order survives the reload, and an id the index names but the tenant cannot
+ * see costs a shorter page rather than an error — which is the whole reason a derived index is safe
+ * to run.
  */
 @DisplayName("Search and pagination")
 class SearchAndCursorIT extends AbstractIntegrationTest {
 
   @Autowired private SearchService search;
+  @Autowired private SearchIndex index;
   @Autowired private ItemService items;
   @Autowired private TenantProvisioningService provisioning;
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
+
+  @Test
+  @DisplayName("answers with ids, loads the rows, and keeps the index's order (REQ-SRCH-007)")
+  void theIndexSuppliesIdsAndTheRowsAreLoaded() {
+    Fixture tenant = newTenant("ids-only@example.org");
+    UUID first = create(tenant, "Alpha", "one");
+    UUID second = create(tenant, "Beta", "two");
+    UUID third = create(tenant, "Gamma", "three");
+
+    // What the port answers: identifiers, in the order they are to be shown.
+    SearchIndex.Hits hits =
+        inTenant(
+            tenant,
+            () ->
+                index.find(
+                    new SearchIndex.Query("", "de", List.of(), java.util.Optional.empty(), 50)));
+    assertThat(hits.itemIds())
+        .as("the index names the items and hands over nothing else")
+        .containsExactly(first, second, third);
+
+    // And what the service makes of them: the same items, in the same order,
+    // loaded through the ordinary read.
+    assertThat(namesOf(tenant, "")).containsExactly("Alpha", "Beta", "Gamma");
+
+    // An id the index names and the tenant cannot see is absent rather than an
+    // error. A derived index that has gone stale can only ever cost a row.
+    List<de.greluc.homeinv.inventory.api.ItemView> loaded =
+        inTenant(tenant, () -> items.byIds(List.of(first, UUID.randomUUID(), third)));
+    assertThat(loaded.stream().map(de.greluc.homeinv.inventory.api.ItemView::name).toList())
+        .as("a stale hit shortens the page and never fails it")
+        .containsExactly("Alpha", "Gamma");
+  }
 
   @Test
   @DisplayName("finds a German word by its stem, not by its prefix")
@@ -154,14 +194,16 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
         .toList();
   }
 
-  private void create(Fixture tenant, String name, String description) {
-    inTenant(
+  private UUID create(Fixture tenant, String name, String description) {
+    return inTenant(
         tenant,
         () ->
             items.create(
                 new ItemService.CreateItemCommand(
                     null, null, name, description, ItemKind.DIGITAL, null, null, null, null, null, null, Valuation.NONE), Optional.empty(),
-                tenant.userId()));
+                tenant.userId())
+                .item()
+                .id());
   }
 
   private <T> T inTenant(Fixture tenant, Supplier<T> body) {
