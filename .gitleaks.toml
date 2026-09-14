@@ -40,6 +40,29 @@ regexes = ['''correct-horse-battery-staple-42''']
 
 [[allowlists]]
 description = """
+The plaintext the envelope-encryption tests seal and open again.
+
+`SensitiveFieldCryptoIT` and `SealedAttributesIT` seal a value under a field
+called `licenceKey`, and the generic-api-key rule fires on the adjacency rather
+than on the value — which reads, in full, "not a real licence key". It is the
+plaintext side of a round trip: the test seals it, opens it, and asserts the two
+match, so it cannot be replaced by something shorter without the test losing its
+point.
+
+The push scan only ever sees a diff, so this surfaced first in the scheduled run
+that reads the whole history. Allowlisted rather than renamed again: the previous
+literal was changed once already for this rule, and a value chosen to slip past a
+regex is one the next regex catches.
+
+Scoped to test sources on purpose. The same string in `app/src/main` would be a
+finding, and should be.
+"""
+condition = "AND"
+paths = ['''app/src/test/.*\.java$''']
+regexes = ['''not a real licence key''']
+
+[[allowlists]]
+description = """
 The role passwords in the test database's init script.
 
 `app/src/test/resources/db/test-roles.sql` sets `test-app`, `test-migrator`,
