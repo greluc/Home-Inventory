@@ -153,6 +153,11 @@ commit".
 
 ### Added
 
+- **The plugin manifest format is readable.** `plugin-api` — the Apache-2.0
+  module a plugin author compiles against — now holds the manifest model and its
+  reader, so the same code that the system uses to register a plugin can tell an
+  author what is wrong with theirs before they ship it. Nothing user-visible yet.
+
 - **A search can be saved and reused.** Give a query a name and it becomes a
   smart list everybody in the household sees — "everything that needs mending",
   "the tools in the shed". Opening one runs the query again, so what it shows is

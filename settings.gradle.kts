@@ -15,6 +15,12 @@ rootProject.name = "home-inv"
 // already enforce it where it belongs — in the code.
 include(":app")
 
+// Apache-2.0 and depends on nothing in the core, which is the promise ADR-0018
+// makes to plugin authors and the reason it is a project of its own rather than
+// a package in :app. A Gradle project is how the "no dependency on core" rule
+// becomes something a build can check instead of something a reviewer has to.
+include(":plugin-api")
+
 dependencyResolutionManagement {
     repositories { mavenCentral() }
 }

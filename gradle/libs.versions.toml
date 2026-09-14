@@ -71,6 +71,15 @@ jetbrainsAnnotations = "26.1.0"
 # ahead of its server is a compatibility matrix nobody is reading.
 opensearch = "3.3.0"
 
+# What `plugin-api` is built and tested with. It is Apache-2.0 and depends on
+# nothing in the core (ADR-0018), so it cannot reach the versions Spring Boot's
+# platform pins for `:app` - it names its own, and they are the same ones the
+# platform resolves, so a type does not behave differently on the two sides of
+# the boundary.
+snakeyaml = "2.6"
+junit = "6.0.3"
+assertj = "3.27.7"
+
 testcontainers = "2.0.5"
 archunit = "1.5.0"
 
@@ -137,6 +146,13 @@ spring-security-test = { module = "org.springframework.security:spring-security-
 spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test" }
 
 opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
+
+# `plugin-api`'s own three. Apache-2.0 (SnakeYAML, AssertJ) and EPL-2.0 (JUnit,
+# a test dependency that ships with nothing).
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 # Testcontainers 2.x renamed every module to a `testcontainers-` prefix; the old
