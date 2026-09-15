@@ -96,6 +96,14 @@ class MigrationRulesTest {
           "identification.label_base_url_usage",
           "tenancy.erasure_certificate",
           // Infrastructure.
+          //
+          // A queued notification is a unit of work owned by the delivery
+          // mechanism, like an outbox row: its `state` and `next_attempt_at` are
+          // the mechanism's bookkeeping, and an `updated_by` on it would name the
+          // scheduler rather than a person. Its attempts are an append-only
+          // record of what happened on each try.
+          "notification.notification",
+          "notification.delivery_attempt",
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",

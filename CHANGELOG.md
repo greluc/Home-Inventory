@@ -174,6 +174,13 @@ commit".
 
 ### Added
 
+- **The system can notify people, and say what became of each message.** Each
+  person chooses what they want to hear about and where, and nothing goes to
+  somebody who asked for nothing. A message that could not be delivered is tried
+  again with a widening gap and then given up on out loud, with every attempt
+  and what the far side said kept beside it — so "did my invitation go out" has
+  an answer. *Mail itself still needs a plugin, which does not exist yet.*
+
 - **The log can be asked whether it has been altered.** Each household's
   entries can be checked against one another, and every hour is sealed with a
   fingerprint spanning the whole installation and linked to the hour before it
