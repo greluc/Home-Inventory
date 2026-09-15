@@ -174,6 +174,14 @@ commit".
 
 ### Added
 
+- **The system keeps an audit log that it cannot edit.** Every recorded action
+  carries who did it, what they did, to what, from where and in which request,
+  and each entry is chained to the one before it within the same household — so
+  a removed or altered entry no longer matches. The application may add entries
+  and read them and nothing else; that is enforced by the database, not by the
+  program. A plugin's action is recorded under the plugin's own name, never
+  under a person's. *Nothing writes to it yet — the write paths follow.*
+
 - **The system can call a plugin.** It connects to one over a mutually
   authenticated connection and checks that the certificate answering is the one
   the operator registered — a different one is refused even when this
