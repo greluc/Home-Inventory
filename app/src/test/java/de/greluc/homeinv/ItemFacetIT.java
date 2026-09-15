@@ -51,7 +51,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A counted list")
 class ItemFacetIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "counted-and-bucketed-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String ITEMS = "/api/v1/items";
 
   @Autowired private TypeAdministration types;

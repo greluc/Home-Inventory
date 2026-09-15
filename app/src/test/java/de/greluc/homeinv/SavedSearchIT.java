@@ -48,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A saved search")
 class SavedSearchIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "saved-and-replayed-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String SEARCHES = "/api/v1/saved-searches";
   private static final String ITEMS = "/api/v1/items";
 

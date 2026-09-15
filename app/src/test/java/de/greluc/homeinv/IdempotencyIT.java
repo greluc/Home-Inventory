@@ -43,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A repeated request")
 class IdempotencyIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "send-it-twice-get-it-once-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private TenantProvisioningService provisioning;
   @Autowired private AppUserRepository users;

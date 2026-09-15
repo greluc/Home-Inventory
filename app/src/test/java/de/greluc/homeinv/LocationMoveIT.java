@@ -55,7 +55,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RecordApplicationEvents
 class LocationMoveIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "move-it-move-it-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private LocationService locations;
   @Autowired private TypeAdministration types;

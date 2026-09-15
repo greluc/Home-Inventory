@@ -43,7 +43,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A sorted list")
 class ItemSortingIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "sorted-and-paged-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String ITEMS = "/api/v1/items";
 
   @Autowired private TenantProvisioningService provisioning;

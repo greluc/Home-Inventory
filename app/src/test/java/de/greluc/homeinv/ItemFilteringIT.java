@@ -53,7 +53,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A filtered list")
 class ItemFilteringIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "filtered-and-paged-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String ITEMS = "/api/v1/items";
 
   @Autowired private TypeAdministration types;

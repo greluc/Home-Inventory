@@ -37,7 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("The audit log")
 class AuditLogIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "the-log-remembers-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private AuditLog audit;
   @Autowired private JdbcClient jdbc;

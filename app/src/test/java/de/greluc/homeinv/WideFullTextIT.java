@@ -55,7 +55,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Full text without OpenSearch")
 class WideFullTextIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "wide-full-text-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String ITEMS = "/api/v1/items";
 
   @Autowired private TypeAdministration types;

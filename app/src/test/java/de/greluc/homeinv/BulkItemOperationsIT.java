@@ -52,7 +52,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A bulk operation over items")
 class BulkItemOperationsIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "five-hundred-at-a-time-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String BULK = "/api/v1/items/bulk";
 
   @Autowired private TenantProvisioningService provisioning;

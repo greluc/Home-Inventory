@@ -54,7 +54,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("Delivering a notification")
 class NotificationDeliveryIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "the-message-went-out-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String PLUGIN = "de.greluc.homeinv.plugin.notify.";
   private static final String KIND = "invitation";
 

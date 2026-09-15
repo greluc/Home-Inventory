@@ -88,7 +88,7 @@ import org.springframework.web.method.HandlerMethod;
 @DisplayName("Every endpoint")
 class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "every-endpoint-refuses-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   /** What every role holds, so no caller can lack it and the 403 case cannot be posed. */
   private static final Set<Permission> HELD_BY_EVERYONE = Role.GUEST.permissions();

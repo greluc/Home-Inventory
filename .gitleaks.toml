@@ -25,11 +25,17 @@ regex = '''homeinv-this-pattern-matches-nothing-[0-9a-f]{64}'''
 description = """
 The xkcd passphrase the integration tests sign in with.
 
-It is a literal in seven test classes and it is not a credential: `CLAUDE.md`
-says never use real credentials in tests or local stacks, and this is what
-following that rule looks like from a scanner's side. The account it belongs to
-exists for the length of one Testcontainers run, in a database that is destroyed
-with it.
+It is a literal in every integration test class and it is not a credential:
+`CLAUDE.md` says never use real credentials in tests or local stacks, and this is
+what following that rule looks like from a scanner's side. The account it belongs
+to exists for the length of one Testcontainers run, in a database that is
+destroyed with it.
+
+ONE passphrase and not one per class, which this file said was already true and
+was not: fifteen classes had invented their own, and on 2026-09-15 the entropy
+check finally fired on one of them. A bespoke password that happens not to trip
+today is how the next false positive arrives, so they were all aligned rather
+than the twenty-second one allowlisted.
 
 Scoped to test sources on purpose. The same string in `app/src/main` would be a
 finding, and should be.

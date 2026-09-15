@@ -40,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("Verifying the audit chain")
 class AuditChainVerificationIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "verify-the-chain-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private AuditLog audit;
   @Autowired private ChainVerification verification;

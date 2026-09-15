@@ -58,7 +58,7 @@ import tools.jackson.databind.node.ObjectNode;
 @DisplayName("A login that failed")
 class EnumerationIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "the-right-one-nobody-guessed-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String LOGIN = "/api/v1/auth/login";
 
   @Autowired private AppUserRepository users;

@@ -48,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A tag endpoint given a target that is not there")
 class TagTargetsIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "no-such-item-to-tag-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String NOT_FOUND = "https://home-inv.example/problems/not-found";
 
   @Autowired private TenantProvisioningService provisioning;

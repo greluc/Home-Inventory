@@ -45,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A write on a single resource")
 class EntityTagIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "if-match-or-do-not-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private TenantProvisioningService provisioning;
   @Autowired private AppUserRepository users;

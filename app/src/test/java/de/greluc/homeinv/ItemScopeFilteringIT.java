@@ -51,7 +51,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A list narrowed by type, tag or place")
 class ItemScopeFilteringIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "scoped-and-narrowed-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String ITEMS = "/api/v1/items";
 
   @Autowired private TypeAdministration types;

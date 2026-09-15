@@ -59,7 +59,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("Calling a plugin")
 class PluginRuntimeIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "the-plugin-answered-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   /**
    * The plugin id base. Each test appends its own name.
    *

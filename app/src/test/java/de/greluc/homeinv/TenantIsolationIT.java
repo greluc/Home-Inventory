@@ -43,7 +43,7 @@ class TenantIsolationIT extends AbstractIntegrationTest {
   @Autowired private TransactionTemplate transactions;
   @Autowired private ObjectMapper json;
 
-  private static final String PASSWORD = "correct horse battery staple";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Test
   @DisplayName("an item created by one tenant is invisible to another")

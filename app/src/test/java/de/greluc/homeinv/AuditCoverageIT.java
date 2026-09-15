@@ -42,7 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("The audit trail of a request")
 class AuditCoverageIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "every-change-is-recorded-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
 
   @Autowired private AuditLog audit;
   @Autowired private TenantProvisioningService provisioning;

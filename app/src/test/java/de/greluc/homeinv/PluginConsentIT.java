@@ -40,7 +40,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Consenting to a plugin")
 class PluginConsentIT extends AbstractIntegrationTest {
 
-  private static final String PASSWORD = "consented-and-withdrawn-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String PLUGIN = "de.greluc.homeinv.plugin.consent";
   private static final String PLUGINS = "/api/v1/plugins";
 

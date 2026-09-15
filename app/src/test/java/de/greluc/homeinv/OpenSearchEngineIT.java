@@ -56,7 +56,7 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("A search answered by OpenSearch")
 class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
 
-  private static final String PASSWORD = "opensearch-answers-2026";
+  private static final String PASSWORD = "correct-horse-battery-staple-42";
   private static final String ITEMS = "/api/v1/items";
   private static final Duration INDEXED = Duration.ofSeconds(30);
 
