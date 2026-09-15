@@ -25,11 +25,15 @@ exception** — do not "correct" the short identifiers to match it, and name the
 container image explicitly in CI, because derived from the repository it would
 read `home-inventory`.
 
-> **Status: stage 0 is being implemented.** `app/`, `web/`, `blobstore/`, `deploy/` and
-> `api/`, `blobstore/` and `proto/` hold real code and real generated artefacts; `cla/`,
-> `plugin-api/` and `plugin-sdk/` are still empty and belong to later stages. Do not invent build commands,
-> file paths or class names that do not exist — if something is neither in `docs/` nor in
-> the tree, it has not been decided.
+> **Status.** `app/`, `web/`, `blobstore/`, `egress-proxy/`, `deploy/`, `api/` and
+> `proto/` hold real code and real generated artefacts, and so does **`plugin-api/`**
+> since 2026-09-14 — the manifest model, the fourteen ports of `REQ-PLG-001` and the
+> health states a plugin reports ([ADR-0064](docs/adr/0064-the-ports-a-plugin-implements-are-apache.md)).
+> `cla/` and `plugin-sdk/` are still empty and belong to stage 3. *This line said
+> `plugin-api/` was empty until 2026-09-15; `ADR-0028` had moved the plugin runtime to
+> stage 1 and the sentence did not follow.* Do not invent build commands, file paths or
+> class names that do not exist — if something is neither in `docs/` nor in the tree, it
+> has not been decided.
 
 ## The documentation is the project (HARD RULE — read before every task)
 

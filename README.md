@@ -22,10 +22,17 @@ added — without touching the core.
 
 ## Status
 
-**Stage 0 is being implemented.** The architecture, the requirements catalogue
+**Stage 1 is being implemented.** The architecture, the requirements catalogue
 and the binding design system are complete and remain the source of truth. The
-application, the web client and the deployment descriptions are now being built
-against them; there is no release yet and nothing to install.
+application and the deployment descriptions are built against them: items, the
+type system, locations, tags, media with malware scanning, tenants and roles,
+search, and the plugin runtime all run. The web client is still a thin shell.
+There is no release yet and nothing to install.
+
+*This said "Stage 0 is being implemented" until 2026-09-15, when a requirement-by-requirement
+audit put 131 of stage 1's 219 requirements in the tree. What is still outstanding
+is written down in [ADR-0000](docs/adr/0000-open-points.md), entry A14, rather than
+left to be inferred from this paragraph.*
 
 ## Documentation
 
