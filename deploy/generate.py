@@ -51,7 +51,20 @@ SECRET_PLACEHOLDER = "@SECRET:{name}@"
 
 # `${HOMEINV_PUBLIC_BASE_URL}` and its kind: a value the operator supplies,
 # which Compose interpolates from compose/.env and systemd does not.
-PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+#
+# The `${VAR:-default}` form counts too, and did not until 2026-09-15. Compose
+# interpolates it and systemd passes the twelve-odd characters through, so
+# `HOMEINV_SEARCH_ENGINE` reached the container as the literal text
+# `${HOMEINV_SEARCH_ENGINE:-postgresql}` — which Spring read as a placeholder
+# referring to itself and refused to start on ("Circular placeholder reference").
+# The rootless smoke suite caught it under Podman while Docker passed, which is
+# exactly the difference the two-runtime matrix exists to find.
+#
+# A placeholder with a default is omitted from the unit like any other: the
+# default belongs to the application (`@Value("${homeinv.search.engine:postgresql}")`)
+# and stating it a second time in a generated unit would be a second place for it
+# to be wrong.
+PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}")
 
 BANNER = (
     "# GENERATED FROM ../services.yaml — DO NOT EDIT.\n"
@@ -1120,6 +1133,41 @@ def check_setup_writes_every_variable(rendered: str) -> None:
         )
 
 
+def check_no_placeholder_reaches_a_unit(units: dict) -> None:
+    """No Quadlet unit hands a container an un-interpolated ``${...}``.
+
+    systemd does not interpolate ``Environment=``: it passes the characters. A
+    unit written that way gives the container the literal text, and what happens
+    next depends on who reads it — ``bootstrap`` once reported "set
+    HOMEINV_BOOTSTRAP_EMAIL and run this service again" on a deployment where the
+    operator had, and on 2026-09-15 ``worker`` refused to start at all because
+    Spring read ``${HOMEINV_SEARCH_ENGINE:-postgresql}`` as a placeholder
+    referring to itself.
+
+    Both were the same bug in two spellings, and the second one slipped through
+    because the rule only knew the first. This check does not know any spelling:
+    a ``${`` in a value is a placeholder that did not get resolved, whatever
+    shape it has.
+
+    :param units: the rendered Quadlet units, by filename
+    :raises SystemExit: when a unit carries one
+    """
+    offenders = []
+    for filename, content in units.items():
+        for line in content.splitlines():
+            if line.startswith("Environment=") and "${" in line:
+                offenders.append(f"{filename}: {line}")
+
+    if offenders:
+        raise SystemExit(
+            "These Quadlet units pass an un-interpolated placeholder to a container.\n"
+            "systemd does not substitute it — the container receives the characters:\n  "
+            + "\n  ".join(offenders)
+            + "\n\nA value the operator supplies belongs in the environment file, which the\n"
+            "unit already reads; a default belongs to the application."
+        )
+
+
 def main() -> int:
     """Writes or checks the generated files.
 
@@ -1136,7 +1184,9 @@ def main() -> int:
     rendered_compose = compose(matrix)
     check_setup_writes_every_variable(rendered_compose)
     outputs = {COMPOSE_OUT: rendered_compose}
-    for filename, content in quadlet(matrix).items():
+    units = quadlet(matrix)
+    check_no_placeholder_reaches_a_unit(units)
+    for filename, content in units.items():
         outputs[QUADLET_DIR / filename] = content
     outputs.update(generated_files(matrix))
     outputs[GENERATED_DIR / "host-prerequisites.sh"] = host_prerequisites(matrix)

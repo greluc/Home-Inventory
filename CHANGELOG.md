@@ -41,6 +41,12 @@ commit".
 
 ### Fixed
 
+- **The Podman deployment starts again.** The background worker refused to
+  start because the generated unit passed it the *text* of a default setting
+  rather than the setting: systemd does not substitute those, and Docker's
+  Compose does, which is why only one of the two runtimes showed it. The
+  generator now refuses to write such a line at all.
+
 - **The application image builds again.** It stopped building when the
   Apache-2.0 plugin module joined the build, because the image never copied that
   module in. Nothing was released from it, and no installation was affected;
