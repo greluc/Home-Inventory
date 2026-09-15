@@ -174,6 +174,12 @@ commit".
 
 ### Added
 
+- **Every change is recorded, and nothing else is.** Whatever alters something
+  now leaves an entry saying who did it, from where and with what — and a
+  request that only read, or that was refused, leaves none. The completeness
+  does not depend on each part of the system remembering: anything that changed
+  something and recorded nothing is recorded at the edge.
+
 - **The system keeps an audit log that it cannot edit.** Every recorded action
   carries who did it, what they did, to what, from where and in which request,
   and each entry is chained to the one before it within the same household — so

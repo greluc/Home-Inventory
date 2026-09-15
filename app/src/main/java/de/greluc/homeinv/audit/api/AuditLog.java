@@ -48,6 +48,27 @@ public interface AuditLog {
   long record(NewEntry entry);
 
   /**
+   * Records one mutating action, taking who and from where from the ambient {@link AuditTrail}.
+   *
+   * <p>The form a block uses. It writes what it knows — what happened, to what, and what changed —
+   * and the six fields about the actor and the request come from the boundary that established
+   * them. A service that took an address as a parameter would carry the web layer into the domain;
+   * one that read a request would be a service that cannot be called from a queue.
+   *
+   * <p>Marks the trail as recorded, so the boundary does not write a second, plainer entry for the
+   * same action.
+   *
+   * @param action what was done, as the block names it: {@code item.created}, {@code member.removed}
+   * @param resourceType what kind of thing it was done to
+   * @param resourceId which one, or {@code null} where the action is not about a single row
+   * @param diff field to before-and-after, <b>after redaction</b> (REQ-SEC-027)
+   * @return the sequence number it was given
+   * @throws IllegalStateException when no origin has been established, which means a mutating path
+   *     runs outside every boundary that knows who is acting
+   */
+  long record(String action, String resourceType, UUID resourceId, Map<String, Object> diff);
+
+  /**
    * What one account did in a period (REQ-SEC-071).
    *
    * <p>The question an incident asks first, and the reason the actor index exists. Answered per

@@ -382,6 +382,26 @@
   </Match>
 
   <!--
+    SERVLET_HEADER_USER_AGENT on `AuditTrailInterceptor`. The header is read to
+    record WHAT MADE a change, which REQ-SEC-068 asks for by name, and it is
+    untrusted exactly as the rule says.
+
+    So it is treated as untrusted rather than excused. Control characters are
+    replaced before the value goes anywhere, because a newline in a header is how
+    a caller forges what looks like a second log line; and it is cut to the 300
+    characters the column takes, because a longer one would be refused by the
+    database after the change had already committed — and the failure is
+    swallowed on purpose there, so the entry would simply not exist.
+
+    It reaches one bound parameter in one INSERT and is rendered nowhere. There
+    is no path from it to a page, a command or a query.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER_USER_AGENT"/>
+    <Class name="de.greluc.homeinv.rest.AuditTrailInterceptor"/>
+  </Match>
+
+  <!--
     SERVLET_PARAMETER on `ItemController.listItems`. It is the one place in the
     application that reads a query parameter through the servlet API rather than
     through `@RequestParam`, and it has to be: Spring converts a single value into

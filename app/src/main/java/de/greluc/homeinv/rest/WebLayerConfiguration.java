@@ -26,6 +26,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class WebLayerConfiguration implements WebMvcConfigurer {
 
+  private final AuditTrailInterceptor auditTrailInterceptor;
   private final PermissionInterceptor permissionInterceptor;
   private final ApiCallQuotaInterceptor apiCallQuotaInterceptor;
   private final TenantAccessInterceptor tenantAccessInterceptor;
@@ -44,6 +45,11 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
    */
   @Override
   public void addInterceptors(@NonNull InterceptorRegistry registry) {
+    // First, so that the origin is established before anything else runs and so
+    // that its `afterCompletion` runs last — Spring calls those in reverse. It
+    // records nothing for a request the interceptors below refuse, because a
+    // refused request changed nothing (REQ-SEC-068).
+    registry.addInterceptor(auditTrailInterceptor);
     registry.addInterceptor(permissionInterceptor);
     // Before the quota, and after the permission check. A request to a tenant
     // that is suspended or waiting to be erased answers 403 and should not come

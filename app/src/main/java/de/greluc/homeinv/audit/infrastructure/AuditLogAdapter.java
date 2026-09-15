@@ -5,6 +5,7 @@
 package de.greluc.homeinv.audit.infrastructure;
 
 import de.greluc.homeinv.audit.api.AuditLog;
+import de.greluc.homeinv.audit.api.AuditTrail;
 import de.greluc.homeinv.platform.CursorCodec;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.platform.TenantContext;
@@ -96,6 +97,36 @@ public class AuditLogAdapter implements AuditLog {
 
   /** The months this process has already made sure of. */
   private final java.util.Set<String> knownMonths = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  @Override
+  @Transactional(propagation = Propagation.MANDATORY)
+  public long record(String action, String resourceType, UUID resourceId, Map<String, Object> diff) {
+    AuditTrail.Origin origin =
+        AuditTrail.current()
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "No audit origin is established for "
+                            + action
+                            + ". Every mutating path runs inside a boundary that knows who is"
+                            + " acting (REQ-SEC-068); one that does not would record an action"
+                            + " nobody can be held to."));
+    long seq =
+        record(
+            new NewEntry(
+                origin.actorKind(),
+                origin.actorId(),
+                origin.actorLabel(),
+                action,
+                resourceType,
+                resourceId,
+                diff,
+                origin.ip(),
+                origin.client(),
+                origin.correlationId()));
+    AuditTrail.recorded();
+    return seq;
+  }
 
   @Override
   @Transactional(propagation = Propagation.MANDATORY)
