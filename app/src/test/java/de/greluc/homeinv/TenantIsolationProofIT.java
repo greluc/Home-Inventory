@@ -98,6 +98,17 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
 
   private static final Pattern HEX_LENGTH = Pattern.compile("\\^\\[0-9a-f]\\{(\\d+)}\\$");
 
+  /**
+   * The length of a {@code length(x) = n} check, as pg prints it.
+   *
+   * <p>A digest column says its size exactly rather than as a range — {@code audit.audit_entry}'s
+   * two hashes and {@code audit.chain_truncation.oldest_hash} are all SHA-256 and all 32 bytes. The
+   * seeder knew {@code BETWEEN} and not this, so the first table to use the exact form failed the
+   * proof by being unseedable rather than by being unisolated.
+   */
+  private static final Pattern EXACT_LENGTH =
+      Pattern.compile("length\\([^)]*\\)\\s*=\\s*\\(?(\\d+)\\)?", Pattern.CASE_INSENSITIVE);
+
   @Autowired private JdbcClient jdbc;
   @Autowired private TransactionTemplate transactions;
 
@@ -681,6 +692,10 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     Matcher between = BETWEEN.matcher(check);
     if (between.find()) {
       return "decode(repeat('00', " + between.group(1) + "), 'hex')";
+    }
+    Matcher exact = EXACT_LENGTH.matcher(check);
+    if (exact.find()) {
+      return "decode(repeat('00', " + exact.group(1) + "), 'hex')";
     }
     return "'\\x00'::bytea";
   }

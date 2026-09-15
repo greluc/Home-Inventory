@@ -174,6 +174,14 @@ commit".
 
 ### Added
 
+- **The log can be asked whether it has been altered.** Each household's
+  entries can be checked against one another, and every hour is sealed with a
+  fingerprint spanning the whole installation and linked to the hour before it
+  — so entries cannot be removed and the record quietly rebuilt. A deletion
+  made by the retention rules is reported as exactly that, and tells which rule
+  removed how much: without that, obeying the retention rules and being
+  attacked would look the same.
+
 - **Every change is recorded, and nothing else is.** Whatever alters something
   now leaves an entry saying who did it, from where and with what — and a
   request that only read, or that was refused, leaves none. The completeness

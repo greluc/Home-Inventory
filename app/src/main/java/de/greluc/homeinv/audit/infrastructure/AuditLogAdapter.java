@@ -76,8 +76,8 @@ public class AuditLogAdapter implements AuditLog {
       """
       insert into audit.audit_entry (tenant_id, seq, occurred_at, actor_kind, actor_id,
                                      actor_label, action, resource_type, resource_id, diff,
-                                     ip, client, correlation_id, prev_hash, entry_hash)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::inet, ?, ?, ?, ?)
+                                     ip, ip_hash, client, correlation_id, prev_hash, entry_hash)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::inet, ?, ?, ?, ?, ?)
       """;
 
   private static final String COLUMNS =
@@ -135,7 +135,10 @@ public class AuditLogAdapter implements AuditLog {
     Tail tail = tailOf(tenantId);
 
     long seq = tail.seq() + 1;
-    Instant occurredAt = Instant.now();
+    // Truncated to microseconds, which is what `timestamptz` keeps. Hashing a
+    // nanosecond the column cannot store would mean the value read back never
+    // reproduces its own hash, and every verification run would report tampering.
+    Instant occurredAt = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     String diff = canonicalJson(entry.diff());
     byte[] entryHash = hash(tail.hash(), tenantId, seq, occurredAt, entry, diff);
 
@@ -275,6 +278,7 @@ public class AuditLogAdapter implements AuditLog {
         .param(entry.resourceId())
         .param(diff)
         .param(entry.ip())
+        .param(addressHash(entry.ip()))
         .param(entry.client())
         .param(entry.correlationId())
         .param(prevHash)
@@ -299,6 +303,32 @@ public class AuditLogAdapter implements AuditLog {
    */
   static byte[] hash(
       byte[] prevHash, UUID tenantId, long seq, Instant occurredAt, NewEntry entry, String diff) {
+    return hashOf(prevHash, tenantId, seq, occurredAt, entry, diff, addressHash(entry.ip()));
+  }
+
+  /**
+   * The same hash, with the address's digest supplied rather than derived.
+   *
+   * <p>What a verification run needs: the stored row no longer holds the address once a retention
+   * run has cleared it, and the hash was never over the address itself for exactly that reason.
+   *
+   * @param prevHash the predecessor's hash
+   * @param tenantId whose chain
+   * @param seq the sequence number
+   * @param occurredAt when it happened
+   * @param entry the entry, whose {@code ip} is ignored here
+   * @param diff the canonical JSON of the diff
+   * @param ipHash the digest of the address, or {@code null} when there was none
+   * @return the SHA-256 of the canonical form
+   */
+  static byte[] hashOf(
+      byte[] prevHash,
+      UUID tenantId,
+      long seq,
+      Instant occurredAt,
+      NewEntry entry,
+      String diff,
+      byte[] ipHash) {
     StringBuilder canonical = new StringBuilder(256);
     canonical
         .append(java.util.HexFormat.of().formatHex(prevHash))
@@ -325,7 +355,13 @@ public class AuditLogAdapter implements AuditLog {
         .append('\n')
         .append(diff)
         .append('\n')
-        .append(orEmpty(entry.ip()))
+        // THE ADDRESS AS A HASH, not as itself. REQ-PRIV-006 removes it from
+        // ordinary entries after seven days, and a chain computed over a column
+        // somebody is required to clear would break at every cleared row —
+        // honouring one requirement would forge evidence against another. The
+        // hash never changes, so the tamper evidence stays complete and the
+        // address stays removable.
+        .append(ipHash == null ? "" : java.util.HexFormat.of().formatHex(ipHash))
         .append('\n')
         .append(orEmpty(entry.client()))
         .append('\n')
@@ -358,10 +394,51 @@ public class AuditLogAdapter implements AuditLog {
    * @return the canonical JSON object
    */
   private String canonicalJson(Map<String, Object> diff) {
+    return canonicalJson(json, diff);
+  }
+
+  /**
+   * The canonical form of a diff, from the map a block passed.
+   *
+   * @param mapper the serialiser
+   * @param diff what changed, possibly {@code null}
+   * @return the canonical JSON object
+   */
+  static String canonicalJson(ObjectMapper mapper, Map<String, Object> diff) {
     if (diff == null || diff.isEmpty()) {
       return "{}";
     }
-    return json.writeValueAsString(new TreeMap<>(diff));
+    return mapper.writeValueAsString(new TreeMap<>(diff));
+  }
+
+  /**
+   * The canonical form of a diff, from what the column gives back.
+   *
+   * <p>PostgreSQL's {@code jsonb} keeps the value and not the text: it drops whitespace and orders
+   * keys its own way, so the stored text is not the string that was hashed. Parsing it and
+   * re-serialising through the same sorted form is what makes the two agree — one canonicaliser,
+   * two inputs.
+   *
+   * @param mapper the serialiser
+   * @param stored what {@code diff::text} returned
+   * @return the canonical JSON object
+   */
+  @SuppressWarnings("unchecked")
+  static String canonicalJsonOf(ObjectMapper mapper, String stored) {
+    if (stored == null || stored.isBlank() || "{}".equals(stored)) {
+      return "{}";
+    }
+    return canonicalJson(mapper, mapper.readValue(stored, Map.class));
+  }
+
+  /**
+   * The SHA-256 of an address, or {@code null} when there is none.
+   *
+   * @param ip the address as it was seen, possibly {@code null}
+   * @return the digest for the column, or {@code null}
+   */
+  static byte[] addressHash(String ip) {
+    return ip == null || ip.isBlank() ? null : sha256(ip.getBytes(StandardCharsets.UTF_8));
   }
 
   private static String orEmpty(Object value) {
