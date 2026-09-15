@@ -17,6 +17,7 @@
 #   REQ-PRIV-003  `api` and `worker` have no outbound route out of the deployment
 #   REQ-NFR-014   the WAL archive actually receives segments
 #   REQ-NFR-067   every container that declares a health check reports healthy
+#   ADR-0036      the scanner's signature updater actually initialised
 #
 # A segment flag is a claim; a refused connection is evidence. That distinction is
 # ADR-0044's, and it is the reason this file exists rather than another grep over
@@ -268,6 +269,27 @@ else
     else
         fail "the WAL archive holds $archived segment(s) and refused $failed"
     fi
+fi
+
+section "ADR-0036: the scanner's signature updater started"
+# A scanner that cannot update is a scanner that quietly falls behind, and it
+# looks exactly like a working one: `clamd` starts on the signatures baked into
+# the image and scans every upload with them.
+#
+# That is what happened until 2026-09-15. The generated `freshclam.conf` named
+# `/dev/stdout` as its log file; under rootless Podman that symlink resolved back
+# on itself, freshclam reported "Symbolic link loop" and "libfreshclam init
+# failed" and exited, and nothing else noticed. Docker was unaffected, which is
+# why only the two-runtime matrix could have found it.
+#
+# This asserts INITIALISATION and not a completed download, on purpose: reaching
+# the mirror depends on a third party that rate-limits, and a security check that
+# flakes is one somebody switches off.
+updater=$("$RUNTIME" logs homeinv-clamav 2>&1 || true)
+if printf '%s' "$updater" | grep -qiE "libfreshclam init failed|Initialization error|Failed to open log file"; then
+    fail "freshclam could not initialise — the signatures will never update"
+else
+    pass "freshclam initialised; nothing refused it a log or a database directory"
 fi
 
 printf '\n'

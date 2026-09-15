@@ -41,6 +41,12 @@ commit".
 
 ### Fixed
 
+- **The malware scanner updates its signatures again.** Under Podman the
+  updater failed to start and said so only in a line nobody read: the scanner
+  itself came up on the signatures shipped in the image and scanned every
+  upload with them, so nothing looked wrong while the definitions quietly aged.
+  The smoke suite now fails if the updater cannot start.
+
 - **The Podman deployment starts again.** The background worker refused to
   start because the generated unit passed it the *text* of a default setting
   rather than the setting: systemd does not substitute those, and Docker's
