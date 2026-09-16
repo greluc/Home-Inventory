@@ -35,7 +35,9 @@ the process asking may not fetch one.
 
 1. **The list ships in the image**: SecLists
    `Passwords/Common-Credentials/Pwdb_top-100000.txt`, 100 000 entries, MIT,
-   vendored gzipped (432 kB) at `app/src/main/resources/security/`. Its
+   vendored as **plain text** (828 kB) at `app/src/main/resources/security/` —
+   gzipped it would be a binary in a tree that is otherwise text, undiffable when
+   the list is next updated, and git compresses the blob either way. Its
    provenance and licence are recorded in `REUSE.toml`. It is read once at
    startup, and a missing file **aborts the start**: a policy that silently
    stopped checking would be a control that reports success while doing nothing.

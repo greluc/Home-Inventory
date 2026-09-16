@@ -54,7 +54,17 @@ import tools.jackson.databind.ObjectMapper;
 class PasswordResetIT extends AbstractIntegrationTest {
 
   private static final String PASSWORD = "correct-horse-battery-staple-42";
-  private static final String NEW_PASSWORD = "an-entirely-different-passphrase-99";
+
+  /**
+   * What a reset changes the password to.
+   *
+   * <p>A variant of the one passphrase rather than a second invented one. {@code .gitleaks.toml}
+   * allowlists exactly one string for the test sources and says why: fifteen classes had each made
+   * up their own until the entropy check fired on one, and a bespoke password that happens not to
+   * trip today is how the next false positive arrives. This test needs two <em>different</em>
+   * passwords — that is its subject — and derives the second rather than inventing it.
+   */
+  private static final String NEW_PASSWORD = PASSWORD + "-after-the-reset";
   private static final String RESET = "/api/v1/auth/password-reset";
   private static final String COMPLETE = RESET + "/complete";
 
@@ -133,7 +143,7 @@ class PasswordResetIT extends AbstractIntegrationTest {
     String token = tokenFor(userId);
 
     complete(token, NEW_PASSWORD).andExpect(status().isNoContent());
-    complete(token, "a-third-passphrase-entirely-1").andExpect(status().isUnprocessableContent());
+    complete(token, PASSWORD + "-a-third-time").andExpect(status().isUnprocessableContent());
 
     // And the second attempt changed nothing: the password is still the one the
     // first redemption set.

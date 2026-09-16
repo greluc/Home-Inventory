@@ -129,10 +129,11 @@ SPDX-License-Identifier = "ISC AND MIT"
 # The breached-password list REQ-SEC-011 checks against. Verbatim from SecLists
 # (`Passwords/Common-Credentials/Pwdb_top-100000.txt`), MIT, vendored because
 # the core has no outbound route and may not fetch it at run time (ADR-0026,
-# ADR-0067). Stored gzipped: it is read once at startup and never edited.
+# ADR-0067). Plain text: a compressed file is a binary in a repository that is
+# otherwise text, and git compresses the blob either way.
 
 [[annotations]]
-path = ["app/src/main/resources/security/breached-passwords.txt.gz"]
+path = ["app/src/main/resources/security/breached-passwords.txt"]
 precedence = "override"
 SPDX-FileCopyrightText = "Daniel Miessler, Jason Haddix, g0tmi1k and SecLists contributors"
 SPDX-License-Identifier = "MIT"

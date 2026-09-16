@@ -13,7 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.zip.GZIPInputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +25,11 @@ import org.springframework.stereotype.Component;
  * all (ADR-0026), so that call cannot be made from here and will not be: the list ships with the
  * image, is read once at startup, and works in every profile including {@code minimal}. An operator
  * who wants a live service installs the plugin that ADR-0067 provides for it.
+ *
+ * <p>Stored as plain text rather than gzipped. A compressed file is a binary in a repository that is
+ * otherwise text — it cannot be diffed when the list is next updated, and it trips the control
+ * character check that keeps this tree readable. It costs almost nothing: git compresses the blob
+ * either way.
  *
  * <h2>Hashes rather than strings</h2>
  *
@@ -43,7 +47,7 @@ import org.springframework.stereotype.Component;
 public class BreachedPasswordList {
 
   /** Where the vendored list sits in the image. */
-  private static final String RESOURCE = "/security/breached-passwords.txt.gz";
+  private static final String RESOURCE = "/security/breached-passwords.txt";
 
   /** Entry hashes, sorted, for {@link Arrays#binarySearch(long[], long)}. */
   private final long[] hashes;
@@ -109,8 +113,7 @@ public class BreachedPasswordList {
                 + " absent list would mean the check silently stops happening.");
       }
       try (BufferedReader reader =
-          new BufferedReader(
-              new InputStreamReader(new GZIPInputStream(resource), StandardCharsets.UTF_8))) {
+          new BufferedReader(new InputStreamReader(resource, StandardCharsets.UTF_8))) {
         return truncatedSha256Of(reader);
       }
     } catch (IOException unreadable) {
