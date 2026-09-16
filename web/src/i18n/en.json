@@ -115,5 +115,10 @@
     "usePasskey": "Use a passkey instead",
     "passkeyLabel": "This device",
     "passkeyFailed": "This device could not create a passkey."
+  },
+  "about": {
+    "version": "Version {{version}} ({{commit}})",
+    "source": "Source code",
+    "licence": "Licensed under {{licence}}"
   }
 }

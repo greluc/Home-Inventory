@@ -79,4 +79,20 @@ public interface UserSessions {
    * @throws de.greluc.homeinv.platform.NotFoundException when this account has no such session
    */
   void end(UUID userId, String handle);
+
+  /**
+   * Ends every session this account has open, including the one asking.
+   *
+   * <p>What a password reset does before it is finished (REQ-SEC-018), and what a detected refresh
+   * token reuse does (REQ-SEC-016): if somebody else has the account, a new password that left
+   * their session open would have changed nothing for them.
+   *
+   * <p>Ending none is not an error. An account that was not signed in anywhere is already in the
+   * state the caller wants, and a reset asked for from a machine that never logged in is the
+   * ordinary case rather than a failure.
+   *
+   * @param userId the account
+   * @return how many sessions were ended, for the log line that says so
+   */
+  int endAll(UUID userId);
 }

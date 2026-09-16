@@ -111,6 +111,61 @@ public class DefaultPluginRegistry implements PluginRegistry {
     }
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public List<Grant> instanceGrants(String pluginId) {
+    return registry.instanceGrants(pluginId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public boolean permitsForInstance(String pluginId, String capability) {
+    Optional<Registration> installed = registry.registration(pluginId);
+    if (installed.isEmpty() || installed.get().disabled()) {
+      return false;
+    }
+    // The same "in the current manifest" rule the per-tenant path applies, and
+    // for the same reason: a grant that outlived the capability it was for is a
+    // leftover rather than a permission.
+    if (!installed.get().capabilities().contains(capability)) {
+      return false;
+    }
+    return registry.grantedForInstance(pluginId, capability);
+  }
+
+  @Override
+  @Transactional
+  public Grant grantForInstance(String pluginId, String capability, UUID actor) {
+    Registration installed = registration(pluginId);
+    if (!installed.capabilities().contains(capability)) {
+      throw new IllegalArgumentException(
+          "The plugin "
+              + pluginId
+              + " does not ask for "
+              + capability
+              + ". Consent to something it never asked for is consent to nothing, and would be"
+              + " waiting as a permission if it asked later.");
+    }
+    registry.grantForInstance(pluginId, capability, installed.manifestDigest(), actor);
+    log.info("Capability {} granted to plugin {} for the instance", capability, pluginId);
+    return instanceGrants(pluginId).stream()
+        .filter(grant -> grant.capability().equals(capability))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("The grant was written and is not there"));
+  }
+
+  @Override
+  @Transactional
+  public void revokeForInstance(String pluginId, String capability, UUID actor) {
+    // The plugin has to exist, for the reason revoke() gives.
+    registration(pluginId);
+    int removed = registry.revokeForInstance(pluginId, capability);
+    if (removed > 0) {
+      log.info(
+          "Instance capability {} withdrawn from plugin {} by {}", capability, pluginId, actor);
+    }
+  }
+
   /**
    * Registers a plugin an operator installed, or brings its registration up to date.
    *

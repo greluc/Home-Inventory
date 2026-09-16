@@ -236,7 +236,10 @@ jobs:
       - name: Build the five images the deployment names
         run: |
           set -euo pipefail
-          ${{ matrix.runtime }} build -f app/Dockerfile -t ghcr.io/greluc/home-inv:latest .
+          # The commit, because the image has no git of its own and an instance
+          # that reported `unknown` would leave the AGPL's source offer pointing
+          # at a project rather than at a build (REQ-CON-009).
+          ${{ matrix.runtime }} build -f app/Dockerfile             --build-arg HOMEINV_BUILD_COMMIT="$(git rev-parse --short=12 HEAD)"             -t ghcr.io/greluc/home-inv:latest .
           ${{ matrix.runtime }} build -f web/Dockerfile -t ghcr.io/greluc/home-inv-web:latest .
           ${{ matrix.runtime }} build -f deploy/images/postgres/Dockerfile \
             -t ghcr.io/greluc/home-inv-postgres:latest .

@@ -61,6 +61,18 @@ jobs:
           path: app/build/reports/tests/test
           retention-days: 7
 
+      # REQ-CON-010. The SBOM is produced by `build`, so it is never stale
+      # relative to the dependencies beside it, and it is kept here so that a
+      # release can attach the one that belongs to its own commit rather than
+      # one regenerated later against whatever resolved that day.
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: app/build/sbom/
+          retention-days: 90
+          if-no-files-found: error
+
   contract:
     name: API contract
     runs-on: ubuntu-latest
@@ -201,6 +213,10 @@ jobs:
           push: false
           load: true
           tags: home-inv:ci
+          # The image has no git of its own, so the commit is handed to it
+          # (REQ-CON-009).
+          build-args: |
+            HOMEINV_BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -590,6 +606,64 @@ jobs:
             fi
           done
           [ "$fail" -eq 0 ] && echo "Every commit is signed off and conventionally named."
+          exit $fail
+
+      # REQ-CON-006. The four files a contributor, a reporter and a packager look
+      # for first. Their absence is never noticed by a build, only by the person
+      # who went looking.
+      - name: The community files are present
+        run: |
+          set -uo pipefail
+          fail=0
+          for file in README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md; do
+            if [ ! -s "$file" ]; then
+              echo "::error::$file is missing or empty (REQ-CON-006)"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "Every community file is present."
+          exit $fail
+
+      # REQ-CON-005. A changelog with nothing in its Unreleased section during a
+      # run of feature commits is one nobody is keeping, and the first release
+      # would then have to be reconstructed from git log.
+      - name: The changelog is being kept
+        run: |
+          set -uo pipefail
+          if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no [Unreleased] section (REQ-CON-005)"
+            exit 1
+          fi
+          entries=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md | grep -c '^- ')
+          if [ "$entries" -eq 0 ]; then
+            echo "::error::CHANGELOG.md's [Unreleased] section names no change (REQ-CON-005)"
+            exit 1
+          fi
+          echo "The changelog's Unreleased section names $entries change(s)."
+
+      # REQ-CON-007. Every file says who owns it and under which licence, and
+      # the Apache-2.0 modules carry their own copy of theirs -- a plugin author
+      # who vendors `plugin-api` gets the licence with the code.
+      - name: Licences are declared for every file
+        run: |
+          set -uo pipefail
+          pipx install reuse >/dev/null 2>&1 || pip install --quiet reuse
+          reuse lint
+
+      - name: The Apache modules carry their own licence
+        run: |
+          set -uo pipefail
+          fail=0
+          for module in plugin-api proto plugin-sdk; do
+            if [ ! -s "$module/LICENSE" ]; then
+              echo "::error::$module has no LICENSE of its own (REQ-CON-007, ADR-0018)"
+              fail=1
+            elif ! head -5 "$module/LICENSE" | grep -q 'Apache License'; then
+              echo "::error::$module/LICENSE is not the Apache licence (REQ-CON-007)"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "Every Apache module carries its own licence."
           exit $fail
 
       # REQ-SEC-078. `pull_request_target` runs with the BASE repository's

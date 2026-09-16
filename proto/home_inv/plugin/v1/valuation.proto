@@ -72,7 +72,7 @@ message ValuationValueRequest {
   // The item's attributes, so that a market-price provider can find the model.
   //
   // Only the fields the tenant made visible to plugins are in here: a
-  // `sensitive` field never leaves the core (REQ-SEC-011).
+  // `sensitive` field never leaves the core (REQ-SEC-027, 09 §9.4).
   map<string, string> attributes = 7;
 }
 

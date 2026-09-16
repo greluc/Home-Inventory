@@ -158,6 +158,47 @@ stateDiagram-v2
 Capabilities are granted **per tenant**. An installed plugin is active for tenant
 A and invisible to tenant B until B's administrator consents.
 
+### The second level: what the instance grants
+
+Since 2026-09-16 there is one more grantor, and exactly one reason for it
+([ADR-0066](../adr/0066-instance-level-capability-grants.md)). `REQ-NOTI-004`
+requires security-relevant **account** events to be reported by e-mail always,
+and an account may belong to several tenants or to none — a password reset
+(`REQ-SEC-018`) is asked for at the login page, where there is no session and no
+tenant to resolve a channel with. Every part of the path was per tenant, so the
+requirement and the mechanism contradicted each other for the accounts that need
+the mail most.
+
+The **instance operator** ([ADR-0057](../adr/0057-the-instance-operator.md))
+therefore grants capabilities for the deployment itself, in
+`plugins.instance_capability_grant`, and a call made under such a grant carries
+`CALL_SCOPE_INSTANCE` and **no** `tenant_id`.
+
+| | Granted by | Authorises | Read by |
+|---|---|---|---|
+| Tenant grant | a tenant administrator | calls made on behalf of that tenant | `ExtensionRegistry.lookup(port, tenantId)` |
+| **Instance grant** | the instance operator | calls the deployment makes on its own behalf | `ExtensionRegistry.lookupForInstance(port)` |
+
+The second level is deliberately narrow, and each boundary is a mechanism rather
+than a promise:
+
+- **It reaches no tenant's data.** An instance call runs with no tenant context,
+  so every row-level policy yields zero rows — the same property that makes a
+  missing context return nothing rather than something
+  ([ADR-0003](../adr/0003-multi-tenancy.md)).
+- **The two consents are independent.** Granting at instance level says nothing
+  about any tenant, and a plugin every tenant has granted everything is still not
+  available here.
+- **One caller only.** `ArchitectureRulesTest.onlyAccountNotificationsResolveAtInstanceLevel`
+  fails the build if anything outside the `notification` block resolves this way.
+- **The manifest still governs**, exactly as above: an instance grant for a
+  capability the current manifest no longer declares is a leftover.
+
+An operator installing `plugin-smtp` therefore grants twice — once per tenant for
+that tenant's invitations and reminders, once for the instance so account
+security mail goes out at all. The administration surface says so, because the
+second grant is otherwise the one nobody makes and the symptom is silence.
+
 A manifest change never escalates silently. When a new version asks for a
 capability the tenant has not agreed to, **what was granted stays granted and the
 new one is simply not granted** — the plugin carries on with the capabilities it

@@ -24,6 +24,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | **quality goals, risks, terms** | [14 Quality, Risks, Glossary](architecture/14-quality-risks-glossary.md) |
 | **implementable requirements** | [Requirements catalogue](requirements/) |
 | the **design system** | [Design system brief](design/design-system-brief.md) — the system itself is in [`design-system/`](../design-system/) |
+| why the system is **not** Kubernetes-only and **not** microservices | [Kubernetes and microservices assessment](design/kubernetes-and-microservices-assessment.md) — assessed and closed on 2026-09-15 with the plan unchanged; no ADR is superseded |
 | the **project website** | [`website/`](../website/), with the pre-render request in [design/](design/website-prerender-request.md) |
 | the **error and degradation tokens** clients branch on | [`problem-types.yaml`](reference/problem-types.yaml) · [`degraded-reasons.yaml`](reference/degraded-reasons.yaml) |
 | the **plugin states** an operator sees | [`plugin-health-states.yaml`](reference/plugin-health-states.yaml) |
@@ -35,8 +36,9 @@ contradicts the implementation is a defect and gets corrected immediately.
 docs/
 ├── architecture/     arc42-oriented system description (01–14)
 ├── adr/              architecture decisions, numbered consecutively
-├── design/           the briefs behind the design system and the website — the system
-│                  itself is at ../design-system/ (it is source, not docs)
+├── design/           the briefs behind the design system and the website, and
+│                  assessments of proposals that have not become decisions — the
+│                  design system itself is at ../design-system/ (source, not docs)
 ├── reference/        reference data: label geometries, plugin health states,
 │                  the `problem.type` registry, the `degradedReason`
 │                  registry, and the tracked facts and retired spellings
@@ -119,6 +121,8 @@ Each has its own ADR with rationale and alternatives. *This table stopped at 48 
 | 53 | First account | A one-shot service creates the first owner and tenant — not an endpoint strangers could reach | [0053](adr/0053-first-owner-as-a-one-shot.md) |
 | 54 | Malware scan | In the worker, with the upload answered `202` — `api` has no route to `clamd` and never had | [0054](adr/0054-the-scan-is-asynchronous.md) |
 | 55 | Plugin SDKs | Five, all first-class: Java, Kotlin, Rust, Python and Go | [0055](adr/0055-five-first-class-plugin-sdks.md) |
+| 56 | Instance-level plugin grants | The capability model has a second level, so an account with no tenant still gets its security mail | [0066](adr/0066-instance-level-capability-grants.md) |
+| 57 | Breached passwords | A list ships in the image, because the core may not call one; a plugin may add a live service | [0067](adr/0067-breached-passwords-from-a-shipped-list.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open** — the

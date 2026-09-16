@@ -79,6 +79,28 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
+  @Autowired private de.greluc.homeinv.notification.api.SecurityNotifications securityNotifications;
+  @Autowired private de.greluc.homeinv.notification.application.SecurityDeliveryDispatcher securityDispatcher;
+
+  /**
+   * Withdraws every instance-level grant this class makes.
+   *
+   * <p>An instance grant is not scoped to a tenant — that is its whole nature — so one left behind
+   * by a finished test is visible to the next one, which then resolves a plugin whose server has
+   * already been stopped. The per-tenant tests need no such cleanup because their grants are
+   * invisible outside their own tenant, and that difference is worth seeing in the fixture rather
+   * than debugging later.
+   */
+  @org.junit.jupiter.api.AfterEach
+  void withdrawInstanceGrants() {
+    for (String name : List.of("instance", "accountmail")) {
+      try {
+        registrations.revokeForInstance(PLUGIN + name, "network:outbound", UUID.randomUUID());
+      } catch (RuntimeException neverRegistered) {
+        // This test did not register that one. Nothing to withdraw.
+      }
+    }
+  }
 
   @AfterAll
   static void stopTheServer() {
@@ -117,6 +139,95 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
     // plugin had to be trusted to read.
     assertThat(seen.get().getContext().getTenantId()).isEqualTo(tenant.toString());
     assertThat(seen.get().getIdempotencyKey()).isEqualTo("invitation-1");
+  }
+
+  @Test
+  @DisplayName("resolves for the instance, with no tenant anywhere in the call")
+  void anInstanceCallCarriesNoTenant() throws Exception {
+    // ADR-0066. The deployment owes an account its security mail whether or not
+    // the account belongs to a tenant (REQ-NOTI-004), so the operator grants at
+    // instance level and the call goes out with no tenant at all. What is
+    // asserted is what the PLUGIN received: an empty tenant and a scope saying
+    // why it is empty, rather than a zero UUID standing in for one.
+    AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
+    int port = startPlugin(serviceOf(seen, null, false));
+    String pluginId = PLUGIN + "instance";
+    register(pluginId, port, fingerprint());
+    registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
+
+    // No TenantContext is opened here on purpose: an instance resolution must
+    // work where there is none, which is the situation a password reset is in.
+    NotificationChannel channel =
+        extensions.lookupForInstance(NotificationChannel.class).orElseThrow();
+
+    channel.deliver(
+        CallContext.forInstance("", "en", 0),
+        new NotificationChannel.Message(
+            "somebody@example.org",
+            "Your password was changed",
+            "If this was not you, act now.",
+            "",
+            "en",
+            java.util.Map.of(),
+            "security-1",
+            List.of()));
+
+    assertThat(seen.get().getContext().getTenantId()).isEmpty();
+    assertThat(seen.get().getContext().getScope())
+        .isEqualTo(de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE);
+  }
+
+  @Test
+  @DisplayName("delivers an account notification through the plugin, with no tenant in the call")
+  void anAccountNotificationGoesOut() throws Exception {
+    // The whole of REQ-NOTI-004's delivery half, end to end: a security message
+    // is raised for an account that belongs to no tenant, the operator has
+    // granted the plugin at instance level, and the message goes out.
+    AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
+    int port = startPlugin(serviceOf(seen, null, false));
+    String pluginId = PLUGIN + "accountmail";
+    register(pluginId, port, fingerprint());
+    registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
+
+    UUID account = UUID.randomUUID();
+    var queued =
+        securityNotifications.raise(
+            new de.greluc.homeinv.notification.api.SecurityNotifications.NewSecurityNotification(
+                account,
+                "security.password-reset",
+                "somebody@example.org",
+                "Reset your password",
+                "Open this link.",
+                null,
+                "en",
+                "runtime-account-" + account));
+
+    securityDispatcher.deliverDue(java.time.Instant.now());
+
+    assertThat(seen.get().getContext().getTenantId()).isEmpty();
+    assertThat(seen.get().getRecipient()).isEqualTo("somebody@example.org");
+    assertThat(
+            securityNotifications.of(account, 5).stream()
+                .filter(candidate -> candidate.id().equals(queued.id()))
+                .findFirst()
+                .orElseThrow()
+                .state())
+        .isEqualTo("DELIVERED");
+    assertThat(securityNotifications.attempts(queued.id()))
+        .singleElement()
+        .satisfies(attempt -> assertThat(attempt.outcome()).isEqualTo("ACCEPTED"));
+  }
+
+  @Test
+  @DisplayName("is not resolved for the instance when only a tenant granted it")
+  void aTenantGrantIsNotAnInstanceGrant() throws Exception {
+    // The two levels are separate in both directions (ADR-0066). A tenant that
+    // consented to everything has said nothing about the deployment's own calls,
+    // and the proof is the resolution rather than the flag.
+    int port = startPlugin(serviceOf(null, null, false));
+    aTenantThatConsented(port, "tenantonly");
+
+    assertThat(extensions.lookupForInstance(NotificationChannel.class)).isEmpty();
   }
 
   @Test

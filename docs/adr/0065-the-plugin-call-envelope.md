@@ -5,6 +5,13 @@
 **Depends on:** [ADR-0026](0026-core-outbound-via-plugins.md),
 [ADR-0028](0028-plugin-runtime-stage-1.md), [ADR-0064](0064-the-ports-a-plugin-implements-are-apache.md)
 
+> **Amended by [ADR-0066](0066-instance-level-capability-grants.md)**: the envelope's
+> `CallContext` gains a **scope**, and a call may be made for the instance rather than for
+> a tenant. Everything below stands — an instance call is resolved, wrapped and bounded
+> exactly like a tenant call; what changes is that `tenant_id` is empty in the one shape
+> where the grant came from the instance operator rather than from a tenant, which is what
+> lets `REQ-NOTI-004` reach an account that belongs to no tenant.
+
 ## Context
 
 `REQ-PLG-002` makes out-of-process plugins over gRPC with mTLS the default for

@@ -49,6 +49,16 @@ COPY app/src ./app/src
 # path, so this line names the file rather than the directory: nothing else
 # under `docs/` is in the context to copy.
 COPY docs/reference/type-templates.yaml ./docs/reference/
+
+# WHICH COMMIT THIS IMAGE IS (REQ-CON-009).
+#
+# There is no git here -- no binary and no `.git` directory -- so the build
+# cannot find out for itself, and an image that reported `unknown` would leave
+# the AGPL's source offer pointing at a project rather than at a build. The
+# caller passes it: `docker build --build-arg HOMEINV_BUILD_COMMIT=$(git rev-parse --short=12 HEAD)`.
+ARG HOMEINV_BUILD_COMMIT=unknown
+ENV HOMEINV_BUILD_COMMIT=${HOMEINV_BUILD_COMMIT}
+
 RUN ./gradlew --no-daemon :app:bootJar -x test
 
 # The layered jar, so the runtime image gets the dependencies in one layer and

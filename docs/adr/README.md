@@ -85,5 +85,7 @@ Date: YYYY-MM-DD
 | [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
 | [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |
-| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted |
-| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted |
+| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted, amended by 0067 |
+| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066 |
+| [0066](0066-instance-level-capability-grants.md) | An instance-level capability grant, for what the deployment owes an account | Accepted, amended by 0067 |
+| [0067](0067-breached-passwords-from-a-shipped-list.md) | Breached passwords are checked against a shipped list, and a plugin may add to it | Accepted |

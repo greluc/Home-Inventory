@@ -56,6 +56,13 @@ class MigrationRulesTest {
           // once per tenant, which is the thing REQ-PLG-013 says an operator
           // does once.
           "plugins.plugin_registration",
+          // What the instance operator permitted a plugin to do for the
+          // deployment itself (ADR-0066). It belongs to no tenant by
+          // construction: it authorises the calls the instance makes on its own
+          // behalf, so that a security notification reaches an account that is a
+          // member of nothing (REQ-NOTI-004). A policy keyed on a context that
+          // does not exist would disable the one path it exists for.
+          "plugins.instance_capability_grant",
           "identification.public_code",
           "identification.label_base_url_usage",
           "audit.chain_anchor",
@@ -73,7 +80,19 @@ class MigrationRulesTest {
           // when there is no tenant yet to scope a policy with (REQ-AUTH-002).
           // Reachable only through the caller's own session: no endpoint takes a
           // user id, and no operator path reaches somebody else's authenticator.
-          "identity.credential");
+          "identity.credential",
+          // A reset is asked for at the login page — before the password rather
+          // than after it, so one step earlier than `credential` above, and for
+          // an address nobody has an account for there is no tenant even in
+          // principle (REQ-SEC-018). A policy keyed on a context that does not
+          // exist yields zero rows rather than an error, which would make the
+          // request look successful while nothing happened.
+          "identity.password_reset",
+          // What the deployment owes an ACCOUNT rather than a tenant
+          // (REQ-NOTI-004, ADR-0066). The recipient may be a member of nothing,
+          // and a policy would hide the queue from the run that has to empty it.
+          "notification.security_notification",
+          "notification.security_delivery_attempt");
 
   /**
    * The tables rule 4 exempts, as 07 §7.1 lists them.
@@ -93,6 +112,11 @@ class MigrationRulesTest {
           "audit.chain_anchor",
           "audit.chain_truncation",
           "audit.revision_record",
+          // A maintenance entry is a record of what happened to a thing, and
+          // REQ-LIFE-003 says entries are not retroactively editable: no
+          // `version`, no `updated_*`, and no UPDATE granted. A correction is a
+          // second entry.
+          "inventory.maintenance_entry",
           "identification.label_base_url_usage",
           "tenancy.erasure_certificate",
           // Infrastructure.
@@ -107,6 +131,17 @@ class MigrationRulesTest {
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",
+          // A reset token is issued by the flow and spent once: `used_at` is
+          // that spend, `updated_by` would name whoever presented the token —
+          // who is anonymous at that moment, which is the property REQ-SEC-018
+          // rests on — and the single-use guarantee comes from the column and a
+          // partial unique index rather than from an optimistic lock.
+          "identity.password_reset",
+          // The account queue, the same shape as the tenant queue next to it:
+          // its state and next attempt are the delivery mechanism's bookkeeping,
+          // and its attempts are an append-only record of what happened.
+          "notification.security_notification",
+          "notification.security_delivery_attempt",
           // Issued, never edited.
           "identification.public_code",
           "identification.code_binding",
@@ -114,6 +149,38 @@ class MigrationRulesTest {
           "inventory.item_bundle",
           // A rule that exists or does not.
           "catalog.location_category_child");
+
+  /**
+   * The {@code SECURITY DEFINER} functions, as {@code 07 §7.5} lists them (REQ-SEC-008).
+   *
+   * <p>The requirement asks for the list to be documented, and a documented list nobody compares
+   * with reality is the thing this project calls a claim. So it is compared in both directions: a
+   * new definer function without a row in that chapter fails, and a row that outlived its function
+   * fails too.
+   *
+   * <p>Every one of them crosses row-level security because the tenant context is what the caller
+   * is trying to establish — a login before it has a tenant, a token that names one, a run looking
+   * for the tenants that need a context.
+   */
+  private static final List<String> DOCUMENTED_SECURITY_DEFINERS =
+      List.of(
+          "audit.ensure_audit_partition",
+          "audit.entry_hashes_in",
+          "audit.oldest_entry_at",
+          "identity.service_account_by_token",
+          "notification.tenants_with_due_notifications",
+          "tenancy.invitation_by_token",
+          "tenancy.quotas_of_tenant",
+          "tenancy.set_tenant_quota",
+          "tenancy.tenant_by_revocation_token",
+          "tenancy.tenants_due_for_erasure",
+          "tenancy.tenants_of_user");
+
+  /** Where a function is created, so the definer check can name it. */
+  private static final Pattern CREATE_FUNCTION =
+      Pattern.compile(
+          "create\\s+(?:or\\s+replace\\s+)?function\\s+([a-z_]+\\.[a-z_]+)",
+          Pattern.CASE_INSENSITIVE);
 
   /** What rule 4 demands of every other table. */
   private static final List<String> REQUIRED_COLUMNS =
@@ -372,5 +439,34 @@ class MigrationRulesTest {
    */
   private static String stripComments(String sql) {
     return sql.lines().filter(line -> !line.stripLeading().startsWith("--")).reduce("", (a, b) -> a + "\n" + b);
+  }
+
+  @Test
+  @DisplayName("document every SECURITY DEFINER function, and document no function that is gone")
+  void everySecurityDefinerFunctionIsDocumented() throws IOException {
+    List<String> actual = new ArrayList<>();
+    for (Path script : scripts()) {
+      String sql = Files.readString(script, StandardCharsets.UTF_8);
+      // Split on the function bodies' delimiter so that "is this one a definer"
+      // is asked of the right function when a script creates several.
+      Matcher functions = CREATE_FUNCTION.matcher(sql);
+      while (functions.find()) {
+        int from = functions.end();
+        int to = sql.indexOf("$$", from);
+        String header = to < 0 ? sql.substring(from) : sql.substring(from, to);
+        if (header.toLowerCase(Locale.ROOT).contains("security definer")
+            && !actual.contains(functions.group(1).toLowerCase(Locale.ROOT))) {
+          actual.add(functions.group(1).toLowerCase(Locale.ROOT));
+        }
+      }
+    }
+
+    assertThat(actual)
+        .describedAs(
+            "REQ-SEC-008: cross-tenant administration goes through explicit, logged "
+                + "SECURITY DEFINER functions and THE LIST IS DOCUMENTED. A new one needs a row "
+                + "in 07 §7.5 and an entry here, in the same change — and a row there that no "
+                + "longer names a function is a list nobody is reading.")
+        .containsExactlyInAnyOrderElementsOf(DOCUMENTED_SECURITY_DEFINERS);
   }
 }

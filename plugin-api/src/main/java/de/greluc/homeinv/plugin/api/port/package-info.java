@@ -4,7 +4,7 @@
  */
 
 /**
- * The fourteen extension points a plugin implements (REQ-PLG-001, 09 §9.2).
+ * The fifteen extension points a plugin implements (REQ-PLG-001, 09 §9.2).
  *
  * <h2>Why they are here and not in the core</h2>
  *
@@ -30,7 +30,7 @@
  *       the process boundary as a gRPC status. A class name does not travel; a kind does.
  *   <li>Nothing here returns a URL for the core to fetch. A plugin holds the network capability and
  *       the egress allowlist, so it fetches and sends the bytes (REQ-SEC-034).
- *   <li>Six of the fourteen belong to stage 2 or 3 features and have no implementation yet. They
+ *   <li>Six of the fifteen belong to stage 2 or 3 features and have no implementation yet. They
  *       exist because the contract is written once (ADR-0028).
  * </ul>
  */

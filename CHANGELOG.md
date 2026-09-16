@@ -174,6 +174,71 @@ commit".
 
 ### Added
 
+- **Contributing needs a signed agreement, once.** A pull request from anybody
+  but the maintainer is blocked until its author has signed the Contributor
+  Licence Agreement — comment the sentence the bot names and it is recorded, on a
+  branch of this repository, where it stays readable however the tooling changes.
+  There is a version for an individual and one for contributing on behalf of an
+  employer; both grant rights of use rather than transfer copyright, and both say
+  plainly that no lawyer has read them.
+
+- **You can record who borrowed something.** Lend a thing to a member of the
+  household or to anybody else by name, with the date it went out and the date it
+  is due back, and record the return when it comes. A thing is lent to one person
+  at a time, a lent thing shows as lent, and it cannot be put in the trash while
+  somebody else has it — the loan is the only record of who to ask.
+
+- **An item keeps a service history.** Record what was done to something, when,
+  what it cost and why — with the invoice attached. Entries are listed with the
+  most recent work first, by when the work was *done* rather than when it was
+  typed, and **no entry can be edited afterwards**: a correction is a second
+  entry, the way a service history behaves on paper.
+
+- **Every event carries the version of its own schema**, in the routing key, so
+  a consumer binds the version it understands and two can run side by side.
+  *Event schemas: breaking, pre-release — the keys changed from
+  `homeinv.inventory::item-created` to `…::item-created.v1`.*
+
+- **Every page says which build it is and where its source is.** A footer names
+  the version, the exact commit and a link to the source — the AGPL's offer is
+  about *this* instance, and two builds of the same version can differ. The same
+  answer is at `GET /api/v1/version`, without a session, because an offer only
+  signed-in people could take up would be owed only to them.
+
+- **Each release carries a CycloneDX SBOM**, generated from what the artefact
+  actually ships rather than from what the build files ask for.
+
+- **A password that is already known to attackers is refused.** Choosing one
+  now checks it against a list of the hundred thousand most breached passwords
+  that ships with the system — no service is called, because this system calls
+  nobody. Twelve characters are still the minimum, and there is still no rule
+  demanding a capital letter or a digit. An operator who wants a live breach
+  service can install a plugin for it; it is asked after the list, receives five
+  characters of a hash rather than a password, and cannot let anything through.
+  *Plugin contract: a fifteenth port, `PasswordBreachCheck`. Additive.*
+
+- **An operator is told when the malware scanner is missing.** It was already
+  impossible for an unscanned file to be served — uploads simply never become
+  retrievable — but the cause was invisible, and looked like uploads being slow.
+  The worker now says so at startup and reports it unhealthy while it lasts.
+
+- **A forgotten password can be reset.** Ask at the login page and a link
+  arrives that works once and for thirty minutes. Setting the new password ends
+  every session the account has open — so somebody who took the account over is
+  signed out by the real owner — and tells the address the account had before
+  the change, which is where you find out if it was not you. Asking about an
+  address that has no account looks exactly like asking about one that does.
+  *Needs a mail plugin with an instance-level grant; without one the message
+  waits and the delivery log says why.*
+
+- **An operator can permit a plugin to act for the instance, not only for a
+  tenant.** Security mail about an account — a password reset, a new second
+  factor, a remote sign-out — has to go out even when the account belongs to no
+  tenant, and until now every part of the path demanded one. The instance
+  operator now grants such a plugin under `/api/v1/instance/plugins`, separately
+  from any tenant's consent and reaching no tenant's data. *An operator
+  installing `plugin-smtp` grants twice: once per tenant, once for the instance.*
+
 - **The system can notify people, and say what became of each message.** Each
   person chooses what they want to hear about and where, and nothing goes to
   somebody who asked for nothing. A message that could not be delivered is tried
@@ -686,7 +751,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 66 architecture decision records, each with its alternatives and consequences —
+- 68 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

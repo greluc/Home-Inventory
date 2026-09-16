@@ -19,6 +19,6 @@ import org.springframework.modulith.events.Externalized;
  * @param target what kind of thing it came off
  * @param targetId the item or place
  */
-@Externalized("homeinv.tagging::tag-unassigned")
+@Externalized("homeinv.tagging::tag-unassigned.v1")
 public record TagUnassigned(
     UUID tenantId, UUID tagId, TagService.TagTarget target, UUID targetId) {}

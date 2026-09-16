@@ -93,7 +93,7 @@ public class MediaDerivationListener {
               // would lose every message published during a deployment.
               value = @Queue(name = "homeinv.media.derivation", durable = "true"),
               exchange = @Exchange(name = "homeinv.media", type = "topic", durable = "true"),
-              key = "media-object-stored"))
+              key = "media-object-stored.v1"))
   public void onMediaObjectStored(MediaObjectStored event, Message message) {
     TenantContext.runAs(
         event.tenantId(),

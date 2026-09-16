@@ -23,6 +23,7 @@ import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.Role;
+import de.greluc.homeinv.plugins.api.ExtensionRegistry;
 import jakarta.persistence.Entity;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -329,6 +330,77 @@ class ArchitectureRulesTest {
         .because(
             "\"may this caller do this\" is answered in one place; reading the grant set "
                 + "elsewhere is how a second answer appears (REQ-SEC-022, ADR-0010)")
+        .check(CLASSES);
+  }
+
+  @Test
+  @DisplayName("keep every class under the one package root")
+  void onePackageRoot() {
+    // REQ-CON-001. The root is `de.greluc.homeinv` — the short form, not the
+    // repository's long name (CLAUDE.md, "Display name is Home Inventory").
+    // A class outside it compiles and runs perfectly; what it breaks is the
+    // Modulith scan, which finds blocks by package, and every rule in this file,
+    // which asks about that package and would simply not see it.
+    //
+    // The importer above already scans only that package, so this rule reads
+    // THIS MODULE'S COMPILED OUTPUT instead — otherwise it could only ever
+    // confirm what it was given. By path and not by package prefix: a prefix
+    // wide enough to catch a stray class is also wide enough to catch the JDK.
+    JavaClasses everything =
+        new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPath(Path.of("build", "classes", "java", "main"));
+
+    List<String> strays =
+        everything.stream()
+            .map(JavaClass::getName)
+            .filter(name -> !name.startsWith("de.greluc.homeinv."))
+            .sorted()
+            .toList();
+
+    assertThat(strays)
+        .as("classes outside the package root de.greluc.homeinv (REQ-CON-001)")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("let only the two named blocks resolve a plugin at instance level")
+  void onlyAccountNotificationsResolveAtInstanceLevel() {
+    // ADR-0066, amended by ADR-0067. The capability model has a second level so
+    // that something reaching an account with no tenant is possible at all. It is
+    // a widening, and a widening is only as narrow as its callers: with a named
+    // list it stays what it was decided to be, with any caller it becomes a way
+    // to reach a plugin without a tenant's consent.
+    //
+    // Two callers, and each had to argue for itself. `notification` raises the
+    // security mail of REQ-NOTI-004 for an account that may be a member of
+    // nothing; `identity` asks the optional breach service of REQ-SEC-011 about
+    // a password chosen at registration or at a reset from the login page, where
+    // there is no tenant either.
+    //
+    // The plugins block itself is excluded because that is where the method is
+    // declared and implemented.
+    noClasses()
+        .that()
+        .resideOutsideOfPackages(
+            "de.greluc.homeinv.notification..",
+            "de.greluc.homeinv.identity..",
+            "de.greluc.homeinv.plugins..")
+        .should()
+        .callMethodWhere(
+            DescribedPredicate.describe(
+                "resolves a plugin for the instance rather than for a tenant",
+                target ->
+                    target
+                            .getTarget()
+                            .getOwner()
+                            .getFullName()
+                            .equals(ExtensionRegistry.class.getName())
+                        && target.getTarget().getName().equals("lookupForInstance")))
+        .because(
+            "an instance-level resolution bypasses every tenant's consent by design, and only "
+                + "the account notifications of REQ-NOTI-004 and the breach check of REQ-SEC-011 "
+                + "are allowed to need that (ADR-0066, ADR-0067)")
         .check(CLASSES);
   }
 

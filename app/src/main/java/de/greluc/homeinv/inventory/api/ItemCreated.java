@@ -30,6 +30,6 @@ import org.springframework.modulith.events.Externalized;
  * @param name what it is called
  * @param locationId where it is, or {@code null} for a digital item, which is nowhere
  */
-@Externalized("homeinv.inventory::item-created")
+@Externalized("homeinv.inventory::item-created.v1")
 public record ItemCreated(
     UUID tenantId, UUID itemId, UUID itemTypeVersionId, String name, UUID locationId) {}

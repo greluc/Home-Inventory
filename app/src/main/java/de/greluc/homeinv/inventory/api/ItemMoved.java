@@ -24,5 +24,5 @@ import org.springframework.modulith.events.Externalized;
  * @param fromLocationId where it was, or {@code null} when it was nowhere
  * @param toLocationId where it is now, or {@code null} when it is now nowhere
  */
-@Externalized("homeinv.inventory::item-moved")
+@Externalized("homeinv.inventory::item-moved.v1")
 public record ItemMoved(UUID tenantId, UUID itemId, UUID fromLocationId, UUID toLocationId) {}

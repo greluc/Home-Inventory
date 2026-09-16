@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# FINDINGS THAT WERE FIXED, NOT ACCEPTED.
+#
+# `.gitleaks.toml` says a value is not a credential and never will be. This file
+# says something different and much narrower: a value WAS in the history, it has
+# been removed, and the commit that carried it is still inside a range the
+# scanner reads. One line here is one finding — commit, file, rule and line — so
+# it can never suppress anything but the exact occurrence it names. The same
+# string in a new commit is a new finding, which is the property that makes this
+# the right instrument rather than an allowlist.
+#
+# Nothing that is still in the tree belongs here. If a value is live, remove it
+# and rotate it; an entry below would be hiding it.
+
+# `a-third-passphrase-entirely-1` in `PasswordResetIT`, 2026-09-15.
+#
+# A second passphrase invented for one test — the test signs in, resets, and has
+# to prove the OLD password no longer works, so it needs two distinct values.
+# Inventing the second one was the mistake `.gitleaks.toml` already describes one
+# class of: a bespoke password that happens not to trip today. This one tripped
+# immediately, and `0b65b21` replaced it with a value derived from the single
+# allowlisted passphrase, which is what the second value should always have been.
+#
+# It is listed here rather than allowlisted because allowlisting it would
+# re-permit exactly the habit that produced it, and rather than rewritten out of
+# the branch because a shared branch's history is not edited to make a scanner
+# quiet. It was never a credential: no account outside a Testcontainers run ever
+# had it, and that database is destroyed with the run.
+b279668aad6fe7fcdff5f3ba2f3cb2f9d983d235:app/src/test/java/de/greluc/homeinv/PasswordResetIT.java:generic-api-key:136

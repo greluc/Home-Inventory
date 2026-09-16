@@ -21,6 +21,6 @@ import org.springframework.modulith.events.Externalized;
  * @param fromItemTypeVersionId the version it was written against before
  * @param toItemTypeVersionId the version it is written against now
  */
-@Externalized("homeinv.inventory::item-type-changed")
+@Externalized("homeinv.inventory::item-type-changed.v1")
 public record ItemTypeChanged(
     UUID tenantId, UUID itemId, UUID fromItemTypeVersionId, UUID toItemTypeVersionId) {}

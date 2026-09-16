@@ -22,12 +22,12 @@ lint:
     #
     # `home_inv.plugin.v1.BlobStore` is what a plugin author looks up, and it is
     # what this file has been called since the contract's first line. Appending
-    # `Service` to fourteen of them to satisfy a naming rule would put a second
+    # `Service` to fifteen of them to satisfy a naming rule would put a second
     # spelling of every port into the system — and the requirement's spelling is
     # the one `PortCatalogueTest` checks against.
     - SERVICE_SUFFIX
 
-    # ONE PACKAGE HOLDS FIFTEEN SERVICES, so a message called `DescribeRequest`
+    # ONE PACKAGE HOLDS SIXTEEN SERVICES, so a message called `DescribeRequest`
     # could exist exactly once.
     #
     # These three rules assume a package per service: they want `Describe` to
@@ -37,10 +37,10 @@ lint:
     # information in a name that can be unique. The third would forbid
     # `LabelRenderer` from returning the `LabelMedium` its own request carried.
     #
-    # Splitting the contract into fifteen packages was the alternative and was
+    # Splitting the contract into sixteen packages was the alternative and was
     # not taken: `home_inv.plugin.v1` is named in CLAUDE.md, in the manifest's
     # `apiVersion` and in every ADR about the contract, and a version suffix per
-    # port would mean fifteen versions to keep in step.
+    # port would mean sixteen versions to keep in step.
     - RPC_REQUEST_STANDARD_NAME
     - RPC_RESPONSE_STANDARD_NAME
     - RPC_REQUEST_RESPONSE_UNIQUE

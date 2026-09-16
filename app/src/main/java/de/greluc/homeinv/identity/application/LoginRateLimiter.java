@@ -104,6 +104,41 @@ public class LoginRateLimiter {
   }
 
   /**
+   * How long the caller must wait before another password reset may be asked for (REQ-SEC-018).
+   *
+   * <p>Its own counters, not the login ones, and the separation is the point in both directions: a
+   * flood of reset requests must not lock the account holder out of signing in, and somebody
+   * failing to guess a password must not thereby stop the real owner from asking for a reset.
+   *
+   * <p>What it protects is the mailbox. A reset endpoint with no throttle is a way to send somebody
+   * a hundred messages, and the account it belongs to has no say in whether they arrive.
+   *
+   * @param email the address a reset was asked for, in any casing
+   * @param clientIp the caller's address
+   * @return the remaining wait, or {@link Duration#ZERO} when the request may proceed now
+   */
+  public Duration retryAfterReset(String email, String clientIp) {
+    Duration byAccount = delayFor(resetAccountKey(email));
+    Duration byAddress = delayFor(resetAddressKey(clientIp));
+    return byAccount.compareTo(byAddress) >= 0 ? byAccount : byAddress;
+  }
+
+  /**
+   * Records that a reset was asked for.
+   *
+   * <p>Counted whether or not the address has an account, for the reason {@link #recordFailure}
+   * gives: a counter that only moved for known addresses would answer the question the endpoint
+   * refuses to answer (REQ-SEC-110).
+   *
+   * @param email the address a reset was asked for
+   * @param clientIp the caller's address
+   */
+  public void recordResetRequest(String email, String clientIp) {
+    bump(resetAccountKey(email));
+    bump(resetAddressKey(clientIp));
+  }
+
+  /**
    * Computes the wait a key's failure count currently imposes.
    *
    * @param key the Valkey key holding the count
@@ -183,5 +218,25 @@ public class LoginRateLimiter {
    */
   private static String addressKey(String clientIp) {
     return "login:fail:address:" + clientIp;
+  }
+
+  /**
+   * The key for an account's reset requests.
+   *
+   * @param email the address
+   * @return the Valkey key
+   */
+  private static String resetAccountKey(String email) {
+    return "reset:ask:account:" + email.toLowerCase(Locale.ROOT);
+  }
+
+  /**
+   * The key for a client address's reset requests.
+   *
+   * @param clientIp the address
+   * @return the Valkey key
+   */
+  private static String resetAddressKey(String clientIp) {
+    return "reset:ask:address:" + clientIp;
   }
 }

@@ -457,4 +457,21 @@
     <Class name="~de[.]greluc[.]homeinv[.](inventory[.]infrastructure[.]ItemSearchAdapter|tagging[.]infrastructure[.]TagAdapter|locations[.]infrastructure[.]LocationTreeQueries)"/>
   </Match>
 
+  <!--
+    WEAK_MESSAGE_DIGEST_SHA1 on the password policy's breach lookup. SHA-1 is
+    here by PROTOCOL rather than by choice: the k-anonymity range query every
+    such service answers is defined over it (ADR-0067), and a different digest
+    would mean a port no existing service can serve.
+
+    It is a lookup key and not a credential store. The password itself is hashed
+    with Argon2id (REQ-SEC-010) and this digest is never stored, never compared
+    against a stored value and never used to authenticate anything. Five of its
+    forty characters leave the deployment; the comparison happens in the core, so
+    a plugin learns neither the password nor its full hash.
+  -->
+  <Match>
+    <Bug pattern="WEAK_MESSAGE_DIGEST_SHA1"/>
+    <Class name="de.greluc.homeinv.identity.application.DefaultPasswordPolicy"/>
+  </Match>
+
 </FindBugsFilter>

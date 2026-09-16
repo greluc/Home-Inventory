@@ -124,6 +124,15 @@ public class DefaultItemService implements ItemService {
   private final de.greluc.homeinv.inventory.api.PlaceScope scope;
 
   /**
+   * Whether an item is out on loan (REQ-LIFE-005).
+   *
+   * <p>Asked before a deletion and nowhere else here. "A lent item is ... not deletable" is
+   * REQ-LIFE-005's acceptance criterion, and the reason is that the loan row is the only record of
+   * who has the thing: trashing the item would take the question and the answer away together.
+   */
+  private final de.greluc.homeinv.inventory.api.LoanLog loans;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -605,6 +614,14 @@ public class DefaultItemService implements ItemService {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
     Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+    // REQ-LIFE-005: a lent item is not deletable. Before the version check would
+    // be wrong -- a caller holding a stale version should be told that first,
+    // because re-reading is what they do about it -- and after the state change
+    // would be too late.
+    if (loans.isLent(id)) {
+      throw new de.greluc.homeinv.inventory.api.ItemLentException(
+          "This item is lent out. Record its return before deleting it.");
+    }
     item.markDeleted(actor, Instant.now(clock));
     items.flush();
     revisions.record(

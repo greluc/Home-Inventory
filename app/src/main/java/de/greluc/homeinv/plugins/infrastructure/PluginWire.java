@@ -28,14 +28,24 @@ public final class PluginWire {
    * without anybody remembering to check it, and a second one in the payload would be a second
    * answer to the same question.
    *
+   * <p>An <b>instance</b> call carries no tenant and says so twice, which is the contract's own
+   * rule: the scope is {@code CALL_SCOPE_INSTANCE} and {@code tenant_id} is empty (ADR-0066). The
+   * two are written from one source here — the absence of the tenant — so they cannot disagree on
+   * the wire the way two independently filled fields eventually would.
+   *
    * @param context who the call is for
    * @return the message
    */
   public static de.greluc.homeinv.plugin.v1.CallContext contextOf(CallContext context) {
+    boolean forTheInstance = context.scope() == CallContext.Scope.INSTANCE;
     return de.greluc.homeinv.plugin.v1.CallContext.newBuilder()
-        .setTenantId(context.tenantId().toString())
+        .setTenantId(forTheInstance ? "" : context.tenantId().toString())
         .setTraceId(context.traceId())
         .setLanguage(context.language())
+        .setScope(
+            forTheInstance
+                ? de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE
+                : de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_TENANT)
         .build();
   }
 

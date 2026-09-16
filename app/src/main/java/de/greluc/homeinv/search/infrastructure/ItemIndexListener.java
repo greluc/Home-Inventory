@@ -70,9 +70,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-created", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-created.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-created"))
+      key = "item-created.v1"))
   public void onCreated(ItemCreated event) {
     indexer.reindex(event.tenantId(), event.itemId());
   }
@@ -83,9 +83,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-updated", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-updated.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-updated"))
+      key = "item-updated.v1"))
   public void onUpdated(ItemUpdated event) {
     indexer.reindex(event.tenantId(), event.itemId());
   }
@@ -96,9 +96,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-moved", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-moved.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-moved"))
+      key = "item-moved.v1"))
   public void onMoved(ItemMoved event) {
     indexer.reindex(event.tenantId(), event.itemId());
   }
@@ -109,9 +109,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-type-changed", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-type-changed.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-type-changed"))
+      key = "item-type-changed.v1"))
   public void onTypeChanged(ItemTypeChanged event) {
     indexer.reindex(event.tenantId(), event.itemId());
   }
@@ -126,9 +126,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-deleted", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-deleted.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-deleted"))
+      key = "item-deleted.v1"))
   public void onDeleted(ItemDeleted event) {
     indexer.reindex(event.tenantId(), event.itemId());
   }
@@ -139,9 +139,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-restored", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-restored.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-restored"))
+      key = "item-restored.v1"))
   public void onRestored(ItemRestored event) {
     indexer.reindex(event.tenantId(), event.itemId());
   }
@@ -155,9 +155,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "item-purged", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "item-purged.v1", durable = "true"),
       exchange = @Exchange(name = EXCHANGE, type = "topic", durable = "true"),
-      key = "item-purged"))
+      key = "item-purged.v1"))
   public void onPurged(ItemPurged event) {
     indexer.forget(event.tenantId(), event.itemId());
   }
@@ -172,9 +172,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "tag-assigned", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "tag-assigned.v1", durable = "true"),
       exchange = @Exchange(name = TAGGING, type = "topic", durable = "true"),
-      key = "tag-assigned"))
+      key = "tag-assigned.v1"))
   public void onTagAssigned(TagAssigned event) {
     onTagChanged(event.tenantId(), event.target(), event.targetId());
   }
@@ -185,9 +185,9 @@ public class ItemIndexListener {
    * @param event what happened
    */
   @RabbitListener(bindings = @QueueBinding(
-      value = @Queue(name = QUEUE_PREFIX + "tag-unassigned", durable = "true"),
+      value = @Queue(name = QUEUE_PREFIX + "tag-unassigned.v1", durable = "true"),
       exchange = @Exchange(name = TAGGING, type = "topic", durable = "true"),
-      key = "tag-unassigned"))
+      key = "tag-unassigned.v1"))
   public void onTagUnassigned(TagUnassigned event) {
     onTagChanged(event.tenantId(), event.target(), event.targetId());
   }

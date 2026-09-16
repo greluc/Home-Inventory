@@ -37,7 +37,7 @@ forbids database and repository access from the access blocks.
 
 ```
 /api/v1
-├── /auth        /login /logout /refresh /password-reset
+├── /auth        /login /logout /refresh · /password-reset {,/complete}
 │             /mfa  (answer a login) · /mfa/enrolment · /mfa/totp {,/confirmation,/removal}
 │             /mfa/recovery-codes · /mfa/step-up  (prove it again)
 │             /mfa/passkeys {,/challenge,/confirmation,{id}/removal}
@@ -324,14 +324,21 @@ resource exists, and never contain internal paths, SQL or stack traces.
 ## 8.3 Versioning
 
 Four contracts are versioned **separately**, because they evolve at different
-speeds:
+speeds. `REQ-CON-004` names its four as *the application, the REST API, the
+plugin contract and the event schemas*; this table lists the four **contracts**
+and so has GraphQL in the application's place — the application's own version is
+the artefact's, and GraphQL deliberately has none, which its row says. *The
+spelling in the last row was `de.greluc.homeinv.item.created.v1` until
+2026-09-16 and no event had ever been called that: the annotations use Modulith's
+`target::key` form, and they carried no version at all. The keys gained one and
+this row was corrected to what the code says.*
 
 | Contract | Scheme | Breaking-change check |
 |---|---|---|
 | REST API | `/api/v1`, SemVer inside the OpenAPI document | `oasdiff` in CI, every change against the last release |
 | GraphQL | No version, fields get deprecated | Schema comparison in CI |
 | Plugin / gRPC contract | `home_inv.plugin.v1` | `buf breaking` in CI |
-| Event schemas | `de.greluc.homeinv.item.created.v1` | Schema comparison in CI |
+| Event schemas | `homeinv.inventory::item-created.v1` — Spring Modulith's `target::key` form, which is what the broker binds on, with the version in the **key** so a consumer can route on it and two versions can run side by side | `EventSchemaVersionTest` holds the shape; a schema comparison in CI holds the content |
 
 ### What counts as breaking
 

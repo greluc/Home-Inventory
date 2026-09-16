@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 public class DeliverySchedule {
 
   private final DeliveryDispatcher dispatcher;
+  private final SecurityDeliveryDispatcher securityDispatcher;
 
   /**
    * Delivers everything due.
@@ -44,6 +45,18 @@ public class DeliverySchedule {
       // in some runtimes, and notifications that silently stopped going out is
       // the failure this whole block is against.
       log.error("The notification delivery run failed; the next one will pick it up", failed);
+    }
+
+    // The account queue, in its own try. One queue failing must not stop the
+    // other: a broken tenant channel would otherwise hold up the password reset
+    // somebody is waiting for (REQ-NOTI-004, ADR-0066).
+    try {
+      securityDispatcher.deliverDue(Instant.now());
+    } catch (RuntimeException failed) {
+      log.error(
+          "The account notification run failed; the next one will pick it up. Nobody is told"
+              + " about their own account while this keeps happening",
+          failed);
     }
   }
 }

@@ -281,6 +281,25 @@ assigned:
       - "REQ-CORE-007: an item can be a bundle containing other items"
       - "04 §4.4: a bundle does not contain itself"
 
+  - token: item-lent
+    status: 409
+    since: 1
+    summary: >
+      The item is out on loan, and what was asked cannot be done while somebody
+      else has it.
+    notes: >
+      TWO requests get it and the caller does the same thing about both, which is
+      why it is one token: lending something that is already out would open a
+      second loan on one object, and trashing it would throw away the only record
+      of who to ask for it back. A `409` and not a `422` -- nothing about the
+      request is malformed and the identical one succeeds once the thing is back.
+      Its own token rather than `validation-failed`, because no field is wrong and
+      a client showing a field error would point at nothing. Registered with
+      REQ-LIFE-005's implementation, when an item could first be out.
+    sources:
+      - "REQ-LIFE-005: a lent item is recognisable as such and not deletable"
+      - "07 §7.8 `inventory.loan`: at most one open loan per item"
+
   - token: invalid-move
     status: 409
     since: 1

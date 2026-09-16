@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -32,7 +33,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The isolation proof {@code REQ-SEC-007} asks for: <b>every</b> table, two tenants, and a wrongly
+ * The isolation proof {@code REQ-SEC-007} asks for — and the second line {@code REQ-TEN-001} promises, which is the same proof seen from the other side: all data belongs to a tenant and the separation holds independently of the application logic —: <b>every</b> table, two tenants, and a wrongly
  * set context.
  *
  * <h2>Why this exists next to the tests that were already here</h2>
@@ -463,6 +464,35 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         values.remove(at);
         changed = true;
       }
+      if (!kept) {
+        // The row carries NONE of them, which `num_nonnulls(...) = 1` refuses as
+        // firmly as it refuses two. It happens when every named column is nullable
+        // and none is a foreign key the optimistic pass could fill —
+        // `inventory.loan` is the first: a borrower is a member of the tenant or a
+        // typed name, and the member column deliberately has no foreign key
+        // (07 §7.8), so nothing upstream had a reason to write either.
+        //
+        // The FIRST of them is added with a value derived from its type, the same
+        // way a required column of that type would have been. Dropping to a list
+        // of tables here would be the exemption this seeder exists to refuse.
+        for (String column : named) {
+          String type = columnType(superuser, table, column);
+          if (type == null) {
+            continue;
+          }
+          columns.add(column);
+          values.add(
+              valueFor(
+                  table,
+                  new Column(column, type),
+                  tenant,
+                  UUID.randomUUID(),
+                  checkClauses(superuser, table),
+                  foreignTargets,
+                  seeded));
+          return true;
+        }
+      }
       return changed;
     }
 
@@ -592,6 +622,11 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     return switch (column.type().toLowerCase(Locale.ROOT)) {
       case "uuid" -> "'" + UUID.randomUUID() + "'";
       case "timestamp with time zone", "timestamp without time zone" -> "now()";
+      // A date is not a timestamp to PostgreSQL and a text value is not a date:
+      // `inventory.maintenance_entry.performed_on` is the first column of this
+      // type the proof met, and it failed to seed rather than quietly skipping
+      // the table, which is the behaviour this seeder is written for.
+      case "date" -> "current_date";
       case "boolean" -> "false";
       // Zero unless a check demands more. `location.depth` must be 0 for the row to
       // be a root — `nlevel(path) = depth + 1` with one label, and
@@ -698,6 +733,30 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       return "decode(repeat('00', " + exact.group(1) + "), 'hex')";
     }
     return "'\\x00'::bytea";
+  }
+
+  /**
+   * The SQL type of one column, as {@code information_schema} names it.
+   *
+   * @param superuser the connection that may read the catalogue
+   * @param table the qualified table name
+   * @param column the column
+   * @return its data type, or {@code null} when the table has no such column
+   * @throws SQLException when the catalogue cannot be read
+   */
+  private String columnType(Connection superuser, String table, String column) throws SQLException {
+    String[] parts = table.split("\\.");
+    String sql =
+        "select data_type from information_schema.columns "
+            + "where table_schema = ? and table_name = ? and column_name = ?";
+    try (PreparedStatement statement = superuser.prepareStatement(sql)) {
+      statement.setString(1, parts[0]);
+      statement.setString(2, parts[1]);
+      statement.setString(3, column);
+      try (ResultSet rows = statement.executeQuery()) {
+        return rows.next() ? rows.getString(1) : null;
+      }
+    }
   }
 
   private record Column(String name, String type) {}
