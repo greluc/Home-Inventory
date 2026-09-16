@@ -174,6 +174,15 @@ commit".
 
 ### Added
 
+- **Every page says which build it is and where its source is.** A footer names
+  the version, the exact commit and a link to the source — the AGPL's offer is
+  about *this* instance, and two builds of the same version can differ. The same
+  answer is at `GET /api/v1/version`, without a session, because an offer only
+  signed-in people could take up would be owed only to them.
+
+- **Each release carries a CycloneDX SBOM**, generated from what the artefact
+  actually ships rather than from what the build files ask for.
+
 - **A password that is already known to attackers is refused.** Choosing one
   now checks it against a list of the hundred thousand most breached passwords
   that ships with the system — no service is called, because this system calls

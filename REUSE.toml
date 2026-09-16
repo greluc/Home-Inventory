@@ -24,12 +24,34 @@ path = [
   "deploy/**",
   "api/**",
   "blobstore/**",
+  "egress-proxy/**",
   "website/**",
   ".github/**",
+  "tools/**",
+  # The build itself. These carry no header of their own — a comment in a
+  # `.properties` or a `.gitignore` is a line somebody eventually deletes as
+  # noise — so they are declared here, which is what REUSE.toml is for
+  # (REQ-CON-007).
+  "build.gradle.kts",
+  "settings.gradle.kts",
+  "gradle.properties",
+  "gradle/libs.versions.toml",
+  ".dockerignore",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Lucas Greuloch"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# --- The Gradle wrapper, which is Gradle's and not ours ----------------------
+# Checked in on purpose: the wrapper is how a contributor gets the right Gradle
+# without installing one (CLAUDE.md, "always through the wrapper"). The jar is a
+# binary that can carry no header.
+
+[[annotations]]
+path = ["gradle/wrapper/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "Gradle Inc."
+SPDX-License-Identifier = "Apache-2.0"
 
 # --- The plugin contract: Apache-2.0, deliberately ---------------------------
 # Anything a plugin author compiles against must stay permissive. A file that
@@ -57,7 +79,17 @@ SPDX-License-Identifier = "CC-BY-SA-4.0"
 # --- Third-party text, kept verbatim ----------------------------------------
 
 [[annotations]]
-path = ["LICENSES/**", "LICENSE"]
+path = [
+  "LICENSES/**",
+  "LICENSE",
+  # The Apache modules carry their own copy, which REQ-CON-007 asks for by name:
+  # a plugin author who vendors `plugin-api` or `proto` gets the licence with the
+  # code rather than having to know that the root of some other repository holds
+  # a different one.
+  "plugin-api/LICENSE",
+  "proto/LICENSE",
+  "plugin-sdk/LICENSE",
+]
 precedence = "override"
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"

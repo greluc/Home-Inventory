@@ -144,6 +144,12 @@ public class WebSecurityConfiguration {
                         "/api/v1/auth/password-reset",
                         "/api/v1/auth/password-reset/complete")
                     .permitAll()
+                    // Which build this is and where its source is (REQ-CON-009).
+                    // The AGPL's source offer is owed to whoever uses the
+                    // instance, and requiring an account to discharge it would
+                    // owe it only to the people who already have one.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/version")
+                    .permitAll()
                     // The generated OpenAPI document. `springdoc.api-docs.enabled`
                     // is false in every deployment, so this path answers 404
                     // there; permitting it grants access to nothing. It is here

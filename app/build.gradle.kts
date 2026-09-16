@@ -11,6 +11,8 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.protobuf)
     alias(libs.plugins.spotbugs)
+    // The SBOM of REQ-CON-010, in CycloneDX.
+    alias(libs.plugins.cyclonedx)
     // REQ-NFR-070 asks for `Money` to be held at 100 % branch coverage. The plugin
     // is here for that one class and for nothing else -- see the verification
     // rule below.
@@ -357,6 +359,61 @@ protobuf {
                     create("grpc")
                 }
             }
+        }
+    }
+}
+
+// THE SBOM (REQ-CON-010).
+//
+// CycloneDX, generated from the resolved runtime classpath, so it lists what the
+// artefact actually carries rather than what the build files ask for -- the
+// transitive dependency nobody chose is exactly the one an advisory names.
+//
+// It runs as part of `build`, so it cannot be forgotten at release time and is
+// never stale relative to the dependencies beside it. `deploy/` publishes it with
+// the release.
+tasks.cyclonedxDirectBom {
+    // 1.6 is the schema version the current tooling reads; naming it beats
+    // whatever the plugin's default becomes in a later release.
+    schemaVersion = org.cyclonedx.Version.VERSION_16
+    projectType = org.cyclonedx.model.Component.Type.APPLICATION
+    jsonOutput = layout.buildDirectory.file("sbom/home-inv-sbom.json")
+    xmlOutput = layout.buildDirectory.file("sbom/home-inv-sbom.xml")
+    // Runtime only. A build-time dependency is not in the artefact, and an SBOM
+    // that listed the test framework would make every advisory against it look
+    // like an advisory against the product.
+    includeConfigs = listOf("runtimeClasspath")
+}
+
+tasks.named("build") { dependsOn(tasks.named("cyclonedxDirectBom")) }
+
+// WHICH BUILD THIS IS, AND WHERE ITS SOURCE IS (REQ-CON-009).
+//
+// The AGPL obligation is not satisfied by a version number: somebody running an
+// instance has to be able to get to the source OF THAT INSTANCE, which means the
+// exact commit. So the commit reaches the artefact at build time and the
+// application serves it (`VersionController`).
+//
+// Read from git, overridable by `HOMEINV_BUILD_COMMIT` for a build that has no
+// git directory -- a container build from a source tarball is the usual one --
+// and "unknown" where neither is available, which is a statement rather than a
+// silent zero.
+val buildCommit: String =
+    providers.environmentVariable("HOMEINV_BUILD_COMMIT").orNull
+        ?: providers.exec {
+            commandLine("git", "rev-parse", "--short=12", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.map { it.trim() }.orNull?.takeIf { it.isNotEmpty() }
+        ?: "unknown"
+
+springBoot {
+    buildInfo {
+        properties {
+            additional.put("commit", buildCommit)
+            // Where the source of THIS build is. A link to the project rather
+            // than to the commit, because the commit is beside it and a reader
+            // can reach either.
+            additional.put("source", "https://github.com/greluc/Home-Inventory")
         }
     }
 }

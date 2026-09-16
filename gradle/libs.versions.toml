@@ -45,6 +45,11 @@ therapi = "0.15.0"
 # SAST for the JVM code (REQ-SEC-076). `find-sec-bugs` is the plugin that turns
 # SpotBugs from a bug finder into a security one.
 spotbugsPlugin = "6.5.11"
+
+# The SBOM of REQ-CON-010, in CycloneDX. Pinned like everything else: an SBOM
+# produced by a floating generator is an SBOM whose format can change between
+# two releases of the thing it describes.
+cyclonedxPlugin = "3.4.1"
 findSecBugs = "1.14.0"
 
 # The JSON Schema validator of REQ-CORE-027. Draft 2020-12, Apache-2.0, and it
@@ -182,3 +187,4 @@ protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugsPlugin" }
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedxPlugin" }

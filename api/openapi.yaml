@@ -5845,7 +5845,7 @@ paths:
   /api/v1/catalog/versions/{id}:
     get:
       description: One version with every field it declares.
-      operationId: version
+      operationId: version_1
       parameters:
       - description: the version
         in: path
@@ -13065,6 +13065,36 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Revokes one, at once.
+  /api/v1/version:
+    get:
+      description: The build's identity.
+      operationId: version
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionView'
+          description: the version, the commit, when it was built, and where its source is
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The build's identity.
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

@@ -232,7 +232,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 /** Everything the application asks of the server. */
+/**
+ * Which build this instance is running, and where its source is.
+ *
+ * The AGPL's source offer is about THIS instance, so the commit is the part that
+ * matters: two builds of the same version can differ (REQ-CON-009).
+ */
+export interface Version {
+  /** The application's own version. */
+  readonly version: string;
+  /** The exact commit, or `unknown` for a build made without one. */
+  readonly commit: string;
+  /** When it was built, ISO-8601, or null when the build said nothing. */
+  readonly builtAt: string | null;
+  /** Where the source is. */
+  readonly source: string;
+  /** What the source is licensed under. */
+  readonly licence: string;
+}
+
 export const api = {
+  /**
+   * Which build this instance is running (REQ-CON-009).
+   *
+   * Public: the source offer is owed to whoever uses the instance, not only to
+   * whoever has an account on it.
+   *
+   * @returns the build's identity
+   */
+  version: (): Promise<Version> => request<Version>("/api/v1/version"),
+
   /**
    * Logs in and establishes a session.
    *

@@ -56,6 +56,20 @@ body {
 .shell { max-width: 70rem; margin: 0 auto; padding: 1rem; }
 
 .bar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+
+/* Which build this is, and where its source is (REQ-CON-009). Quiet by design:
+   it is an obligation being discharged rather than something anybody came for,
+   and it wraps on a phone rather than pushing the page sideways. */
+.about {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem 1rem;
+  margin-top: 2rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+  font-size: .85rem;
+}
+.about a { color: var(--text-muted); }
 .bar h1 { font-size: 1.1rem; margin: 0; }
 .bar-actions { display: flex; align-items: center; gap: .75rem; }
 
