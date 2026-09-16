@@ -93,6 +93,18 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "ISC AND MIT"
 
+# --- Third-party data vendored into the application ---------------------------
+# The breached-password list REQ-SEC-011 checks against. Verbatim from SecLists
+# (`Passwords/Common-Credentials/Pwdb_top-100000.txt`), MIT, vendored because
+# the core has no outbound route and may not fetch it at run time (ADR-0026,
+# ADR-0067). Stored gzipped: it is read once at startup and never edited.
+
+[[annotations]]
+path = ["app/src/main/resources/security/breached-passwords.txt.gz"]
+precedence = "override"
+SPDX-FileCopyrightText = "Daniel Miessler, Jason Haddix, g0tmi1k and SecLists contributors"
+SPDX-License-Identifier = "MIT"
+
 # --- Project meta -----------------------------------------------------------
 
 [[annotations]]

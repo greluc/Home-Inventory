@@ -122,6 +122,7 @@ Each has its own ADR with rationale and alternatives. *This table stopped at 48 
 | 54 | Malware scan | In the worker, with the upload answered `202` — `api` has no route to `clamd` and never had | [0054](adr/0054-the-scan-is-asynchronous.md) |
 | 55 | Plugin SDKs | Five, all first-class: Java, Kotlin, Rust, Python and Go | [0055](adr/0055-five-first-class-plugin-sdks.md) |
 | 56 | Instance-level plugin grants | The capability model has a second level, so an account with no tenant still gets its security mail | [0066](adr/0066-instance-level-capability-grants.md) |
+| 57 | Breached passwords | A list ships in the image, because the core may not call one; a plugin may add a live service | [0067](adr/0067-breached-passwords-from-a-shipped-list.md) |
 
 Open points and outstanding work are collected in
 [ADR-0000](adr/0000-open-points.md). **No decision is currently open** — the

@@ -174,6 +174,12 @@ commit".
 
 ### Added
 
+- **A password that is already known to attackers is refused.** Choosing one
+  now checks it against a list of the hundred thousand most breached passwords
+  that ships with the system — no service is called, because this system calls
+  nobody. Twelve characters are still the minimum, and there is still no rule
+  demanding a capital letter or a digit.
+
 - **An operator is told when the malware scanner is missing.** It was already
   impossible for an unscanned file to be served — uploads simply never become
   retrievable — but the cause was invisible, and looked like uploads being slow.
@@ -708,7 +714,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 67 architecture decision records, each with its alternatives and consequences —
+- 68 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
