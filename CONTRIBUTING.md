@@ -64,8 +64,15 @@ came from; the CLA grants the rights that a later relicensing or a commercial
 dual licence would require ([ADR-0018](docs/adr/0018-licensing.md)).
 
 We know this is a barrier, and we would rather name it than bury it. It is asked
-once, not per pull request. A bot will comment on your first pull request with
-the link.
+once, not per pull request: a check on your first pull request says no signature
+is on file, you read the document and comment
+
+```
+I have read the CLA Document and I hereby sign the CLA
+```
+
+and that is recorded in this repository, on the `cla-signatures` branch, where it
+can be read by anybody.
 
 ## Commits and pull requests
 
