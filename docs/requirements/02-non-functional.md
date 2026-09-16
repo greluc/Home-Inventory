@@ -118,7 +118,7 @@ Related to the quality goals Q1–Q7 in
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-CON-001 | Package root `de.greluc.homeinv`; code, API, database and protocols **in English only**. | M | 0 | A lint rule and review |
+| REQ-CON-001 | Package root `de.greluc.homeinv`; code, API, database and protocols **in English only**. | M | 0 | Two checks, because it is two claims. The **root** is `ArchitectureRulesTest.onePackageRoot`, which reads this module's compiled output by path rather than by package prefix — a prefix wide enough to catch a stray class also catches the JDK — and fails on any class outside `de.greluc.homeinv`. Short form, not the repository's long name. The **language** is the CI gate of `REQ-CON-012` plus the British-English gate of `REQ-CON-014`, both over the whole corpus |
 | REQ-CON-002 | Documentation in **English**, in arc42 structure, with Mermaid diagrams in plain text. | M | 0 | No binary diagrams in the repository; no German-language document in the corpus |
 | REQ-CON-003 | Conventional Commits and **DCO** (`git commit -s`) for every contribution. | M | 0 | A CI check |
 | REQ-CON-004 | Semantic versioning separately for the application, the REST API, the plugin contract and the event schemas. | M | 1 | Four version streams documented |

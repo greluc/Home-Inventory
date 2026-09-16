@@ -334,6 +334,36 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("keep every class under the one package root")
+  void onePackageRoot() {
+    // REQ-CON-001. The root is `de.greluc.homeinv` — the short form, not the
+    // repository's long name (CLAUDE.md, "Display name is Home Inventory").
+    // A class outside it compiles and runs perfectly; what it breaks is the
+    // Modulith scan, which finds blocks by package, and every rule in this file,
+    // which asks about that package and would simply not see it.
+    //
+    // The importer above already scans only that package, so this rule reads
+    // THIS MODULE'S COMPILED OUTPUT instead — otherwise it could only ever
+    // confirm what it was given. By path and not by package prefix: a prefix
+    // wide enough to catch a stray class is also wide enough to catch the JDK.
+    JavaClasses everything =
+        new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPath(Path.of("build", "classes", "java", "main"));
+
+    List<String> strays =
+        everything.stream()
+            .map(JavaClass::getName)
+            .filter(name -> !name.startsWith("de.greluc.homeinv."))
+            .sorted()
+            .toList();
+
+    assertThat(strays)
+        .as("classes outside the package root de.greluc.homeinv (REQ-CON-001)")
+        .isEmpty();
+  }
+
+  @Test
   @DisplayName("let only the notification block resolve a plugin at instance level")
   void onlyAccountNotificationsResolveAtInstanceLevel() {
     // ADR-0066. The capability model has a second level so that a security

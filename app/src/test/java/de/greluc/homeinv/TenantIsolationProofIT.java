@@ -32,7 +32,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The isolation proof {@code REQ-SEC-007} asks for: <b>every</b> table, two tenants, and a wrongly
+ * The isolation proof {@code REQ-SEC-007} asks for — and the second line {@code REQ-TEN-001} promises, which is the same proof seen from the other side: all data belongs to a tenant and the separation holds independently of the application logic —: <b>every</b> table, two tenants, and a wrongly
  * set context.
  *
  * <h2>Why this exists next to the tests that were already here</h2>

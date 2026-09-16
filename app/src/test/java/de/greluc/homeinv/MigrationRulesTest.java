@@ -145,6 +145,38 @@ class MigrationRulesTest {
           // A rule that exists or does not.
           "catalog.location_category_child");
 
+  /**
+   * The {@code SECURITY DEFINER} functions, as {@code 07 §7.5} lists them (REQ-SEC-008).
+   *
+   * <p>The requirement asks for the list to be documented, and a documented list nobody compares
+   * with reality is the thing this project calls a claim. So it is compared in both directions: a
+   * new definer function without a row in that chapter fails, and a row that outlived its function
+   * fails too.
+   *
+   * <p>Every one of them crosses row-level security because the tenant context is what the caller
+   * is trying to establish — a login before it has a tenant, a token that names one, a run looking
+   * for the tenants that need a context.
+   */
+  private static final List<String> DOCUMENTED_SECURITY_DEFINERS =
+      List.of(
+          "audit.ensure_audit_partition",
+          "audit.entry_hashes_in",
+          "audit.oldest_entry_at",
+          "identity.service_account_by_token",
+          "notification.tenants_with_due_notifications",
+          "tenancy.invitation_by_token",
+          "tenancy.quotas_of_tenant",
+          "tenancy.set_tenant_quota",
+          "tenancy.tenant_by_revocation_token",
+          "tenancy.tenants_due_for_erasure",
+          "tenancy.tenants_of_user");
+
+  /** Where a function is created, so the definer check can name it. */
+  private static final Pattern CREATE_FUNCTION =
+      Pattern.compile(
+          "create\\s+(?:or\\s+replace\\s+)?function\\s+([a-z_]+\\.[a-z_]+)",
+          Pattern.CASE_INSENSITIVE);
+
   /** What rule 4 demands of every other table. */
   private static final List<String> REQUIRED_COLUMNS =
       List.of("version", "created_at", "updated_at", "created_by", "updated_by");
@@ -402,5 +434,34 @@ class MigrationRulesTest {
    */
   private static String stripComments(String sql) {
     return sql.lines().filter(line -> !line.stripLeading().startsWith("--")).reduce("", (a, b) -> a + "\n" + b);
+  }
+
+  @Test
+  @DisplayName("document every SECURITY DEFINER function, and document no function that is gone")
+  void everySecurityDefinerFunctionIsDocumented() throws IOException {
+    List<String> actual = new ArrayList<>();
+    for (Path script : scripts()) {
+      String sql = Files.readString(script, StandardCharsets.UTF_8);
+      // Split on the function bodies' delimiter so that "is this one a definer"
+      // is asked of the right function when a script creates several.
+      Matcher functions = CREATE_FUNCTION.matcher(sql);
+      while (functions.find()) {
+        int from = functions.end();
+        int to = sql.indexOf("$$", from);
+        String header = to < 0 ? sql.substring(from) : sql.substring(from, to);
+        if (header.toLowerCase(Locale.ROOT).contains("security definer")
+            && !actual.contains(functions.group(1).toLowerCase(Locale.ROOT))) {
+          actual.add(functions.group(1).toLowerCase(Locale.ROOT));
+        }
+      }
+    }
+
+    assertThat(actual)
+        .describedAs(
+            "REQ-SEC-008: cross-tenant administration goes through explicit, logged "
+                + "SECURITY DEFINER functions and THE LIST IS DOCUMENTED. A new one needs a row "
+                + "in 07 §7.5 and an entry here, in the same change — and a row there that no "
+                + "longer names a function is a list nobody is reading.")
+        .containsExactlyInAnyOrderElementsOf(DOCUMENTED_SECURITY_DEFINERS);
   }
 }

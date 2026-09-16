@@ -174,6 +174,11 @@ commit".
 
 ### Added
 
+- **An operator is told when the malware scanner is missing.** It was already
+  impossible for an unscanned file to be served — uploads simply never become
+  retrievable — but the cause was invisible, and looked like uploads being slow.
+  The worker now says so at startup and reports it unhealthy while it lasts.
+
 - **A forgotten password can be reset.** Ask at the login page and a link
   arrives that works once and for thirty minutes. Setting the new password ends
   every session the account has open — so somebody who took the account over is

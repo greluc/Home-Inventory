@@ -124,7 +124,7 @@ class BlobStoreContractIT {
   }
 
   @Test
-  @DisplayName("stores a duplicate once, and says so")
+  @DisplayName("stores a duplicate once, and says so (REQ-MED-007)")
   void duplicatesAreStoredOnce() throws IOException {
     byte[] content = "the same file twice".getBytes(StandardCharsets.UTF_8);
     String digest = sha256(content);
@@ -136,7 +136,7 @@ class BlobStoreContractIT {
   }
 
   @Test
-  @DisplayName("never deduplicates across tenants (ADR-0032)")
+  @DisplayName("never deduplicates across tenants (REQ-MED-007, ADR-0032)")
   void tenantsDoNotShareBlobs() throws IOException {
     byte[] content = "bytes two tenants happen to share".getBytes(StandardCharsets.UTF_8);
     String digest = sha256(content);

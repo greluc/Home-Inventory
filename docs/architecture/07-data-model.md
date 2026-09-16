@@ -520,6 +520,39 @@ CREATE POLICY tenant_isolation ON inventory.item
 | Cross-tenant administration | An explicit, logged `SECURITY DEFINER` function with its own permission check — never `BYPASSRLS` |
 | Proof | A test procedure creates two tenants, sets the context wrongly or not at all, and verifies for **every** table that nothing leaks. A new table without RLS fails the test. |
 
+### The `SECURITY DEFINER` functions, exhaustively (`REQ-SEC-008`)
+
+`REQ-SEC-008` asks for the list to be **documented**, and four rows of this
+chapter already referred to "the second" and "the fourth" of it. This is that
+list. `MigrationRulesTest.everySecurityDefinerFunctionIsDocumented` compares it
+with the migrations in both directions, so a new one cannot appear without a row
+here and a row here cannot outlive its function.
+
+Every one of them exists for the same reason and is bounded the same way: a read
+with **no tenant context to go through**, because the context is what the caller
+is trying to establish. Each returns the narrowest thing that answers its
+question, and none of them returns a tenant's content.
+
+| Function | Why no tenant context is available | What bounds it |
+|---|---|---|
+| `tenancy.tenants_of_user` | A login has a person and no tenant yet; the memberships are what decides which tenant the session gets | Owned by `homeinv_bootstrap`, a `NOLOGIN` role with a `SELECT` policy on one table. Returns memberships of **the given user** and nothing about the tenants beyond their ids and names |
+| `tenancy.invitation_by_token` | Whoever accepts an invitation is not a member yet, and the token is what names the tenant (`REQ-TEN-004`) | Looked up by the token's SHA-256 only. Deliberately **unfiltered** on expiry and acceptance, so "unknown" and "already used" cannot be told apart by how far the request gets |
+| `tenancy.tenant_by_revocation_token` | The same circularity: undoing an erasure request has to work for somebody the request locked out | By token hash, and unfiltered on state for the same reason as the invitation |
+| `tenancy.tenants_due_for_erasure` | The erasure run looks for tenants; it cannot set the context of one it has not found (`REQ-TEN-011`) | Returns ids and instants, and not one fact about any tenant |
+| `tenancy.set_tenant_quota` | The instance operator is not a member of the tenant and sets no tenant context ([ADR-0057](../adr/0057-the-instance-operator.md)) | Writes limits only. What a tenant has **used** stays its own |
+| `tenancy.quotas_of_tenant` | The operator's view of the same | Limits only; usage needs impersonation (`REQ-SEC-072`) |
+| `identity.service_account_by_token` | A machine presents a token and nothing else; the token is what names the tenant | By token hash, and the account is tenant-scoped and RLS-protected from that point on |
+| `notification.tenants_with_due_notifications` | The delivery run is looking for the tenants that need a context | Returns tenant ids and nothing else; the notifications themselves are then read under each tenant's own context |
+| `audit.entry_hashes_in` | The hourly anchor spans every tenant by design ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)) | Returns hashes, never content |
+| `audit.oldest_entry_at` | Where the anchor run starts on an instance that has never anchored | Returns one timestamp |
+| `audit.ensure_audit_partition` | `homeinv_app` has no DDL rights and must never get any (`REQ-SEC-101`) | Creates one shape of one object in one schema from a timestamp; it takes no table name |
+
+**`SECURITY DEFINER` does not bypass `FORCE ROW LEVEL SECURITY`**, which is why
+the owner matters: a policy applies to the table owner too, so these functions
+are owned by `homeinv_bootstrap` — a `NOLOGIN` role that owns the functions and
+holds the narrow policies they need — rather than by the migrator.
+
+
 ### The gap RLS does not close: foreign keys
 
 PostgreSQL documents it plainly: *referential integrity checks, such as unique or
