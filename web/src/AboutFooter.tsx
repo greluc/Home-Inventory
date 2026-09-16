@@ -30,6 +30,7 @@ export function AboutFooter(): React.JSX.Element | null {
         if (current) {
           setBuild(answer);
         }
+        return answer;
       })
       .catch(() => {
         // Deliberately silent. This is the one part of the page nobody came for,

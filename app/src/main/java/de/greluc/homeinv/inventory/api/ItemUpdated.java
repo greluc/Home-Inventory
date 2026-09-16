@@ -23,6 +23,6 @@ import org.springframework.modulith.events.Externalized;
  *     mirrors attributes can skip a rename with this; one that mirrors the name cannot skip
  *     anything, which is why there is no flag for the other direction
  */
-@Externalized("homeinv.inventory::item-updated")
+@Externalized("homeinv.inventory::item-updated.v1")
 public record ItemUpdated(
     UUID tenantId, UUID itemId, String name, boolean attributesChanged) {}

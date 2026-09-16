@@ -399,11 +399,19 @@ tasks.named("build") { dependsOn(tasks.named("cyclonedxDirectBom")) }
 // and "unknown" where neither is available, which is a statement rather than a
 // silent zero.
 val buildCommit: String =
-    providers.environmentVariable("HOMEINV_BUILD_COMMIT").orNull
-        ?: providers.exec {
-            commandLine("git", "rev-parse", "--short=12", "HEAD")
-            isIgnoreExitValue = true
-        }.standardOutput.asText.map { it.trim() }.orNull?.takeIf { it.isNotEmpty() }
+    providers.environmentVariable("HOMEINV_BUILD_COMMIT").orNull?.takeIf { it.isNotBlank() }
+        // `runCatching` and not `isIgnoreExitValue`: the latter covers a git that
+        // ANSWERED badly, and the case that actually happens is a git that is not
+        // there at all -- the container build has no git binary and no `.git`
+        // directory, and Gradle turns a missing executable into a configuration
+        // failure. That broke the image build on 2026-09-16, in the very case
+        // the comment above had named.
+        ?: runCatching {
+            providers.exec {
+                commandLine("git", "rev-parse", "--short=12", "HEAD")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim()
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
         ?: "unknown"
 
 springBoot {

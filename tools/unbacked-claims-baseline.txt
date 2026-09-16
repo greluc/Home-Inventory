@@ -82,8 +82,8 @@ docs/architecture/07-data-model.md:660:enforced
 docs/architecture/08-api-contract.md:13:cannot
 docs/architecture/08-api-contract.md:321:enforced
 docs/architecture/08-api-contract.md:322:enforced
-docs/architecture/08-api-contract.md:403:cannot
-docs/architecture/08-api-contract.md:481:fails the build
+docs/architecture/08-api-contract.md:410:cannot
+docs/architecture/08-api-contract.md:488:fails the build
 docs/architecture/09-extensibility-and-plugins.md:22:must never
 docs/architecture/09-extensibility-and-plugins.md:244:cannot
 docs/architecture/09-extensibility-and-plugins.md:257:cannot

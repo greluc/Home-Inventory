@@ -174,6 +174,11 @@ commit".
 
 ### Added
 
+- **Every event carries the version of its own schema**, in the routing key, so
+  a consumer binds the version it understands and two can run side by side.
+  *Event schemas: breaking, pre-release — the keys changed from
+  `homeinv.inventory::item-created` to `…::item-created.v1`.*
+
 - **Every page says which build it is and where its source is.** A footer names
   the version, the exact commit and a link to the source — the AGPL's offer is
   about *this* instance, and two builds of the same version can differ. The same

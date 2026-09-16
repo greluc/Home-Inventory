@@ -213,6 +213,10 @@ jobs:
           push: false
           load: true
           tags: home-inv:ci
+          # The image has no git of its own, so the commit is handed to it
+          # (REQ-CON-009).
+          build-args: |
+            HOMEINV_BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

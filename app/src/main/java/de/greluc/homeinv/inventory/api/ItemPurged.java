@@ -22,5 +22,5 @@ import org.springframework.modulith.events.Externalized;
  * @param tenantId the tenant the item belonged to; a consumer establishes its context from here
  * @param itemId the item that no longer exists
  */
-@Externalized("homeinv.inventory::item-purged")
+@Externalized("homeinv.inventory::item-purged.v1")
 public record ItemPurged(UUID tenantId, UUID itemId) {}

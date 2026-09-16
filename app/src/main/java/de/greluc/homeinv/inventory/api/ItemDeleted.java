@@ -20,5 +20,5 @@ import org.springframework.modulith.events.Externalized;
  * @param tenantId whose data changed
  * @param itemId the item
  */
-@Externalized("homeinv.inventory::item-deleted")
+@Externalized("homeinv.inventory::item-deleted.v1")
 public record ItemDeleted(UUID tenantId, UUID itemId) {}

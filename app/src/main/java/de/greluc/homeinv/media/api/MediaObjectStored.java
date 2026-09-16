@@ -38,5 +38,5 @@ import org.springframework.modulith.events.Externalized;
  * @param sha256 the content address of the stored {@code full} variant, from which the others are
  *     derived
  */
-@Externalized("homeinv.media::media-object-stored")
+@Externalized("homeinv.media::media-object-stored.v1")
 public record MediaObjectStored(UUID tenantId, UUID mediaObjectId, String sha256) {}
