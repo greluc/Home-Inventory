@@ -87,6 +87,7 @@ public class ItemController {
   private final de.greluc.homeinv.search.api.SearchService search;
   private final ItemRelations relations;
   private final MaintenanceLog maintenance;
+  private final de.greluc.homeinv.inventory.api.LoanLog loans;
   private final ItemBundles bundles;
   private final BulkItemOperations bulk;
 
@@ -642,6 +643,77 @@ public class ItemController {
   }
 
   /**
+   * Who has had this item (REQ-LIFE-005).
+   *
+   * <p>Most recent handover first, open loan included. A client tells the open one by its absent
+   * {@code returnedOn} rather than by a flag: the row already says it, and a second answer to one
+   * question is the kind that goes wrong.
+   *
+   * @param id the item
+   * @param limit how many at most; capped at 200 by the service
+   * @return the loans
+   */
+  @GetMapping(path = "/{id}/loans", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public List<de.greluc.homeinv.inventory.api.LoanLog.LoanView> loansOf(
+      @PathVariable UUID id,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return loans.loansOf(id, limit);
+  }
+
+  /**
+   * Hands this item to somebody (REQ-LIFE-005).
+   *
+   * @param id the item
+   * @param request to whom, since when, and back when
+   * @param user the authenticated caller
+   * @return the open loan
+   */
+  @PostMapping(path = "/{id}/loans", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED, ProblemType.ITEM_LENT})
+  @ResponseStatus(HttpStatus.CREATED)
+  public de.greluc.homeinv.inventory.api.LoanLog.LoanView lendItem(
+      @PathVariable UUID id,
+      @Valid @RequestBody LoanRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return loans.lend(
+        id,
+        new de.greluc.homeinv.inventory.api.LoanLog.NewLoan(
+            request.borrowerUserId(),
+            request.borrowerName(),
+            request.handedOutOn(),
+            request.dueOn(),
+            request.note()),
+        user.userId());
+  }
+
+  /**
+   * Records that this item came back (REQ-LIFE-005).
+   *
+   * <p>A {@code POST} to a sub-resource, the shape {@code /restore} uses, because a return is a
+   * transition and not an edit of a field somebody chose. Recording one twice leaves the first date
+   * standing — the first return is the true one.
+   *
+   * @param id the item
+   * @param loanId which loan is being closed
+   * @param request when it came back
+   * @param user the authenticated caller
+   * @return the closed loan
+   */
+  @PostMapping(path = "/{id}/loans/{loanId}/return", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public de.greluc.homeinv.inventory.api.LoanLog.LoanView returnItem(
+      @PathVariable UUID id,
+      @PathVariable UUID loanId,
+      @Valid @RequestBody ReturnRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return loans.returnItem(id, loanId, request.returnedOn(), user.userId());
+  }
+
+  /**
    * Relates this item to another.
    *
    * @param id the item the relation is stated from
@@ -777,12 +849,6 @@ public class ItemController {
   public record BundleMemberRequest(@jakarta.validation.constraints.NotNull UUID memberId) {}
 
   /**
-   * The body of a relation.
-   *
-   * @param targetId the item this one points at
-   * @param type {@code ACCESSORY_OF}, {@code PART_OF}, {@code REPLACEMENT_FOR} or {@code RELATED}
-   */
-  /**
    * The body of a maintenance entry (REQ-LIFE-003).
    *
    * @param performedOn when the work was done
@@ -797,9 +863,46 @@ public class ItemController {
       Money cost,
       @Size(max = 2000) String note) {}
 
+  /**
+   * The body of a relation.
+   *
+   * <p>*Its Javadoc sat above `MaintenanceRequest` rather than above this record until 2026-09-16,
+   * so this one had none and that one had two.*
+   *
+   * @param targetId the item this one points at
+   * @param type {@code ACCESSORY_OF}, {@code PART_OF}, {@code REPLACEMENT_FOR} or {@code RELATED}
+   */
   public record RelationRequest(
       @jakarta.validation.constraints.NotNull UUID targetId,
       @NotBlank @Size(max = 20) String type) {}
+
+  /**
+   * The body of a handover (REQ-LIFE-005).
+   *
+   * <p>Exactly one of the two borrower fields is given, which the service leaves to the database's
+   * {@code num_nonnulls(...) = 1} rather than restating: two places deciding one rule is how they
+   * come to disagree.
+   *
+   * @param borrowerUserId a member of this tenant, or absent
+   * @param borrowerName who has it, in the lender's own words, or absent. Most things are lent to
+   *     people with no account here
+   * @param handedOutOn when it went out
+   * @param dueOn when it is due back, or absent when nothing was agreed
+   * @param note anything else worth knowing, or absent
+   */
+  public record LoanRequest(
+      UUID borrowerUserId,
+      @Size(max = 200) String borrowerName,
+      @NotNull java.time.LocalDate handedOutOn,
+      java.time.LocalDate dueOn,
+      @Size(max = 2000) String note) {}
+
+  /**
+   * The body of a return (REQ-LIFE-005).
+   *
+   * @param returnedOn when it came back; never before the handover, which the database checks
+   */
+  public record ReturnRequest(@NotNull java.time.LocalDate returnedOn) {}
 
   /**
    * One page of the tenant's trashed items (REQ-CORE-009).

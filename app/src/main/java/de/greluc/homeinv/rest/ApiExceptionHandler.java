@@ -14,6 +14,7 @@ import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
+import de.greluc.homeinv.inventory.api.ItemLentException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -751,6 +752,21 @@ public class ApiExceptionHandler {
   public ProblemDetail handleBundleCycle(
       BundleCycleException exception, HttpServletRequest request) {
     return problem(ProblemType.BUNDLE_CYCLE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a request that cannot be served while the item is out (REQ-LIFE-005).
+   *
+   * <p>Raised by two places -- lending something already lent, and trashing something somebody
+   * else has -- and answered identically, because the caller does the same thing about both.
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(ItemLentException.class)
+  public ProblemDetail handleItemLent(ItemLentException exception, HttpServletRequest request) {
+    return problem(ProblemType.ITEM_LENT, exception.getMessage(), request);
   }
 
   /**

@@ -224,6 +224,19 @@ public enum ProblemType {
   BUNDLE_CYCLE("bundle-cycle", HttpStatus.CONFLICT, "Bundle would contain itself"),
 
   /**
+   * The item is out on loan, and what was asked cannot be done while it is (REQ-LIFE-005).
+   *
+   * <p>Two requests get it, and a caller does the same thing about both: record the return first.
+   * Lending something somebody already has would open a second loan on one object, and trashing it
+   * would throw away the only record of who to ask for it back — which is what REQ-LIFE-005 means
+   * by "a lent item is *not deletable*".
+   *
+   * <p>A {@code 409} rather than a {@code 422}: nothing about the request is malformed, and the
+   * identical request succeeds once the thing is back.
+   */
+  ITEM_LENT("item-lent", HttpStatus.CONFLICT, "The item is lent out"),
+
+  /**
    * The move would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>A {@code 409}: nothing about the request is malformed, and the same request would work

@@ -182,6 +182,12 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **You can record who borrowed something.** Lend a thing to a member of the
+  household or to anybody else by name, with the date it went out and the date it
+  is due back, and record the return when it comes. A thing is lent to one person
+  at a time, a lent thing shows as lent, and it cannot be put in the trash while
+  somebody else has it — the loan is the only record of who to ask.
+
 - **An item keeps a service history.** Record what was done to something, when,
   what it cost and why — with the invoice attached. Entries are listed with the
   most recent work first, by when the work was *done* rather than when it was

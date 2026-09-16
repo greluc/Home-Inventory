@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -463,6 +464,35 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         values.remove(at);
         changed = true;
       }
+      if (!kept) {
+        // The row carries NONE of them, which `num_nonnulls(...) = 1` refuses as
+        // firmly as it refuses two. It happens when every named column is nullable
+        // and none is a foreign key the optimistic pass could fill —
+        // `inventory.loan` is the first: a borrower is a member of the tenant or a
+        // typed name, and the member column deliberately has no foreign key
+        // (07 §7.8), so nothing upstream had a reason to write either.
+        //
+        // The FIRST of them is added with a value derived from its type, the same
+        // way a required column of that type would have been. Dropping to a list
+        // of tables here would be the exemption this seeder exists to refuse.
+        for (String column : named) {
+          String type = columnType(superuser, table, column);
+          if (type == null) {
+            continue;
+          }
+          columns.add(column);
+          values.add(
+              valueFor(
+                  table,
+                  new Column(column, type),
+                  tenant,
+                  UUID.randomUUID(),
+                  checkClauses(superuser, table),
+                  foreignTargets,
+                  seeded));
+          return true;
+        }
+      }
       return changed;
     }
 
@@ -703,6 +733,30 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       return "decode(repeat('00', " + exact.group(1) + "), 'hex')";
     }
     return "'\\x00'::bytea";
+  }
+
+  /**
+   * The SQL type of one column, as {@code information_schema} names it.
+   *
+   * @param superuser the connection that may read the catalogue
+   * @param table the qualified table name
+   * @param column the column
+   * @return its data type, or {@code null} when the table has no such column
+   * @throws SQLException when the catalogue cannot be read
+   */
+  private String columnType(Connection superuser, String table, String column) throws SQLException {
+    String[] parts = table.split("\\.");
+    String sql =
+        "select data_type from information_schema.columns "
+            + "where table_schema = ? and table_name = ? and column_name = ?";
+    try (PreparedStatement statement = superuser.prepareStatement(sql)) {
+      statement.setString(1, parts[0]);
+      statement.setString(2, parts[1]);
+      statement.setString(3, column);
+      try (ResultSet rows = statement.executeQuery()) {
+        return rows.next() ? rows.getString(1) : null;
+      }
+    }
   }
 
   private record Column(String name, String type) {}

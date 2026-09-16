@@ -1118,6 +1118,86 @@ components:
           format: int64
           type: integer
       type: object
+    LoanRequest:
+      description: |-
+        The body of a handover (REQ-LIFE-005).
+
+        Exactly one of the two borrower fields is given, which the service leaves to the database's
+        `num_nonnulls(...) = 1` rather than restating: two places deciding one rule is how they
+        come to disagree.
+      properties:
+        borrowerName:
+          description: |-
+            who has it, in the lender's own words, or absent. Most things are lent to
+            people with no account here
+          maxLength: 200
+          minLength: 0
+          type: string
+        borrowerUserId:
+          description: a member of this tenant, or absent
+          format: uuid
+          type: string
+        dueOn:
+          description: when it is due back, or absent when nothing was agreed
+          format: date
+          type: string
+        handedOutOn:
+          description: when it went out
+          format: date
+          type: string
+        note:
+          description: anything else worth knowing, or absent
+          maxLength: 2000
+          minLength: 0
+          type: string
+      required:
+      - handedOutOn
+      type: object
+    LoanView:
+      description: One loan, open or closed.
+      properties:
+        borrowerName:
+          description: the name that was typed, or `null`
+          type: string
+        borrowerUserId:
+          description: the member who has it, or `null`
+          format: uuid
+          type: string
+        dueOn:
+          description: when it is due back, or `null`
+          format: date
+          type: string
+        handedOutOn:
+          description: when it went out
+          format: date
+          type: string
+        id:
+          description: the loan
+          format: uuid
+          type: string
+        itemId:
+          description: what was lent
+          format: uuid
+          type: string
+        note:
+          description: anything else worth knowing, or `null`
+          type: string
+        open:
+          description: Whether the item is still out.
+          type: boolean
+        recordedAt:
+          description: when the handover was written down
+          format: date-time
+          type: string
+        recordedBy:
+          description: who wrote it down
+          format: uuid
+          type: string
+        returnedOn:
+          description: when it came back, or `null` while it is still out
+          format: date
+          type: string
+      type: object
     LocationCategoryView:
       description: |-
         A kind of place a location can be: a room, a shelf, a box.
@@ -2655,11 +2735,18 @@ components:
           type: array
       type: object
     RelationRequest:
+      description: |-
+        The body of a relation.
+
+        *Its Javadoc sat above `MaintenanceRequest` rather than above this record until 2026-09-16,
+        so this one had none and that one had two.*
       properties:
         targetId:
+          description: the item this one points at
           format: uuid
           type: string
         type:
+          description: '`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR` or `RELATED`'
           maxLength: 20
           minLength: 0
           type: string
@@ -2706,6 +2793,16 @@ components:
           type: string
       required:
       - name
+      type: object
+    ReturnRequest:
+      description: The body of a return (REQ-LIFE-005).
+      properties:
+        returnedOn:
+          description: when it came back; never before the handover, which the database checks
+          format: date
+          type: string
+      required:
+      - returnedOn
       type: object
     RevisionView:
       description: One entry of a history.
@@ -8245,6 +8342,282 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Which bundles this item is in (REQ-CORE-007)
+  /api/v1/items/{id}/loans:
+    get:
+      description: |-
+        Who has had this item (REQ-LIFE-005).
+
+        Most recent handover first, open loan included. A client tells the open one by its absent
+        `returnedOn` rather than by a flag: the row already says it, and a second answer to one
+        question is the kind that goes wrong.
+      operationId: loansOf
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: how many at most; capped at 200 by the service
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LoanView'
+                type: array
+          description: the loans
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Who has had this item (REQ-LIFE-005)
+    post:
+      description: Hands this item to somebody (REQ-LIFE-005).
+      operationId: lendItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanRequest'
+        description: to whom, since when, and back when
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanView'
+          description: the open loan
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The item is lent out (`item-lent`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Hands this item to somebody (REQ-LIFE-005).
+  /api/v1/items/{id}/loans/{loanId}/return:
+    post:
+      description: |-
+        Records that this item came back (REQ-LIFE-005).
+
+        A `POST` to a sub-resource, the shape `/restore` uses, because a return is a
+        transition and not an edit of a field somebody chose. Recording one twice leaves the first date
+        standing — the first return is the true one.
+      operationId: returnItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: which loan is being closed
+        in: path
+        name: loanId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnRequest'
+        description: when it came back
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanView'
+          description: the closed loan
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Records that this item came back (REQ-LIFE-005)
   /api/v1/items/{id}/maintenance:
     get:
       description: |-
