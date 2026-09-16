@@ -14,6 +14,7 @@ import de.greluc.homeinv.tenancy.api.ErasureCertificates;
 import de.greluc.homeinv.tenancy.api.QuotaAdministration;
 import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import de.greluc.homeinv.platform.NotFoundException;
+import de.greluc.homeinv.plugins.api.PluginRegistry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
@@ -27,7 +28,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import java.time.Instant;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -58,6 +63,7 @@ public class InstanceController {
   private final OperatorDirectory operators;
   private final QuotaAdministration quotas;
   private final ErasureCertificates certificates;
+  private final PluginRegistry plugins;
 
   /**
    * Finds an account by its login address.
@@ -307,4 +313,120 @@ public class InstanceController {
       boolean mayCreateTenants,
       Integer tenantLimit,
       boolean locked) {}
+
+  /**
+   * What is installed, and what the <b>instance</b> has permitted each one (ADR-0066).
+   *
+   * <p>The operator's half of the plugin surface. The tenant's half is {@code /api/v1/plugins},
+   * which shows the same plugins with that tenant's grants beside them; the two answer different
+   * questions and neither can answer the other's.
+   *
+   * @param limit how many at most; capped at 200
+   * @return what is installed, with the instance-level grants
+   */
+  @GetMapping(path = "/plugins", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})
+  public List<InstancePluginView> plugins(
+      @RequestParam(required = false, defaultValue = "200") @Positive @Max(200) int limit) {
+    return plugins.installed(limit).stream().map(this::instanceViewOf).toList();
+  }
+
+  /**
+   * Permits one capability <b>for the instance itself</b> (ADR-0066).
+   *
+   * <p>This is not consent on any tenant's behalf and reaches no tenant's data: a call made under
+   * an instance grant carries no tenant context, so every row-level policy yields zero rows. What
+   * it makes possible is the account mail the deployment owes a person — a password reset, a new
+   * second factor, a remote sign-out — including for somebody who is a member of no tenant
+   * (REQ-NOTI-004, REQ-SEC-018).
+   *
+   * <p>Idempotent, and a capability the manifest does not declare is refused rather than recorded,
+   * exactly as on the tenant path.
+   *
+   * @param pluginId the plugin
+   * @param capability the capability, spelled as 09 §9.4 spells it
+   * @param user the operator agreeing
+   */
+  @PutMapping(path = "/plugins/{pluginId}/capabilities/{capability}")
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void grantInstanceCapability(
+      @PathVariable @Size(max = 200) String pluginId,
+      @PathVariable @Size(max = 100) String capability,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    plugins.grantForInstance(pluginId, capability, user.userId());
+  }
+
+  /**
+   * Withdraws one instance-level capability (ADR-0066).
+   *
+   * <p>Withdrawing what was never granted is not an error: the outcome the caller wants is "this
+   * plugin may not do this for the instance", and that is already true.
+   *
+   * @param pluginId the plugin
+   * @param capability the capability
+   * @param user the operator withdrawing it
+   */
+  @DeleteMapping(path = "/plugins/{pluginId}/capabilities/{capability}")
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND})
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void withdrawInstanceCapability(
+      @PathVariable @Size(max = 200) String pluginId,
+      @PathVariable @Size(max = 100) String capability,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    plugins.revokeForInstance(pluginId, capability, user.userId());
+  }
+
+  /**
+   * Maps a registration onto the operator's view of it.
+   *
+   * @param installed the registration
+   * @return the response body, with the instance-level grants marked
+   */
+  private InstancePluginView instanceViewOf(PluginRegistry.Registration installed) {
+    List<String> granted =
+        plugins.instanceGrants(installed.pluginId()).stream()
+            .map(PluginRegistry.Grant::capability)
+            .toList();
+    return new InstancePluginView(
+        installed.pluginId(),
+        installed.name(),
+        installed.version(),
+        installed.disabled(),
+        installed.registeredAt(),
+        installed.capabilities().stream()
+            .map(capability -> new InstanceCapabilityView(capability, granted.contains(capability)))
+            .toList());
+  }
+
+  /**
+   * An installed plugin as the operator sees it.
+   *
+   * @param id its reverse-domain id
+   * @param name what a person sees
+   * @param version the plugin's own version
+   * @param disabled whether it is out of service
+   * @param registeredAt when it was first seen
+   * @param capabilities everything its manifest asks for, each with whether the <b>instance</b> has
+   *     granted it. A tenant's grants are not shown here and are not this surface's business
+   */
+  public record InstancePluginView(
+      String id,
+      String name,
+      String version,
+      boolean disabled,
+      Instant registeredAt,
+      List<InstanceCapabilityView> capabilities) {}
+
+  /**
+   * One capability, and whether the instance has granted it.
+   *
+   * @param id the capability, from the closed set of 09 §9.4
+   * @param grantedForInstance whether the instance operator has agreed to it. False is where every
+   *     capability starts, on this level as on the tenant's
+   */
+  public record InstanceCapabilityView(String id, boolean grantedForInstance) {}
 }

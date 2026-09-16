@@ -5,11 +5,11 @@
 1. **PostgreSQL 18 is the single source of truth.** Every other store is derived
    and rebuildable.
 2. **Every domain table carries `tenant_id`** and is subject to row-level
-   security. There is no exception for "but this table is global" — but there are
-   seven tables that are **not domain tables**, and pretending otherwise would
-   force either a fake `tenant_id` or a silently weakened check. They are listed
-   exhaustively here, and the RLS check reads this list rather than treating them
-   as violations:
+   security. There is no exception for "but this table is global" — but the tables
+   below are **not domain tables**, and pretending otherwise would force either a
+   fake `tenant_id` or a silently weakened check. They are listed exhaustively
+   here, and the RLS check reads this list rather than treating them as
+   violations:
 
    | Table | Why it is instance-wide | What protects it instead |
    |---|---|---|
@@ -21,10 +21,22 @@
    | `identity.credential` | The second factor is asked for **between the password and the session** (`REQ-AUTH-002`), and at that moment there is no `app.tenant_id` to scope a policy with — the value is derived from the membership the login goes on to choose. A tenant column here would have to be read before the row carrying it had been found, which is `app_user`'s reason one step further on | Reachable only through the caller's own session: no endpoint takes a user id, and there is no instance-operator path to it either — an operator administers entitlements ([ADR-0057](../adr/0057-the-instance-operator.md)), and somebody else's authenticator is not one. The TOTP secret is sealed with `HOMEINV_CREDENTIAL_KEY_FILE` and recovery codes are Argon2id hashes, so the rows are of no use even to a reader who has them (`REQ-SEC-109`) |
    | `tenancy.erasure_certificate` | Evidence of an erasure has to outlive the thing it is about: a tenant-scoped certificate would be removed by the very run that writes it (`REQ-TEN-011`, [ADR-0060](../adr/0060-the-erasure-runs-in-one-pass.md)) | It holds no content — the tenant id, the name it had, which account asked and when, and a row count per block. Granted `SELECT` and `INSERT` and nothing else, so a certificate cannot be edited afterwards, and read only through `/api/v1/instance/**`, which is gated on `INSTANCE_OPERATOR`. A tenant that has been erased has no members left to ask |
    | `plugins.plugin_registration` | An operator installs a plugin the way they install any other container, once for the instance — there is no installation from inside the running system (`REQ-PLG-013`). A tenant-scoped registration would mean installing it once per tenant. | It holds no tenant data: a manifest, a contract range, an endpoint and a certificate fingerprint, all of which the operator wrote. What each tenant *permits* it lives beside it in `plugins.capability_grant`, which carries `tenant_id` and a forced policy — and a plugin has no permissions at all until a row appears there (09 §9.4) |
+   | `plugins.instance_capability_grant` | What the **instance operator** permitted a plugin to do for the deployment itself ([ADR-0066](../adr/0066-instance-level-capability-grants.md)). The row's whole purpose is that it belongs to no tenant: it authorises the calls the instance makes on its own behalf, for an account that may be a member of nothing (`REQ-NOTI-004`). A tenant column here would be the thing it exists to avoid, and a policy keyed on a context that does not exist would disable the one path it was added to make possible | Written only by the instance operator ([ADR-0057](../adr/0057-the-instance-operator.md)) and read only when resolving a port for an instance call. It grants no access to tenant data of any kind: an instance call runs with **no** tenant context, so every policy in the database yields zero rows, and the manifest still governs — a grant for a capability the current manifest no longer declares is a leftover rather than a permission |
+   | `outbox.event_publication` | The one entry that carries a `tenant_id` and is still on this list, because what it is exempt from is the **policy**, not the column. The relay publishes every tenant's rows by design, and a forced policy would hide them from the one process whose job it is to see them ([ADR-0009](../adr/0009-messaging-and-events.md)) | The column is there, so every row still says whose event it is and the tenant context is restored from it when a consumer runs. Nothing reads the table but the relay, under `homeinv_app`; no endpoint exposes it, and the payload is a domain event that has already been through the authorization the write went through |
 
    **The list is closed.** A new instance-wide table needs an entry here and a
    sentence saying what protects it instead — which is deliberately more friction
    than adding `tenant_id`.
+
+   *Two corrections on 2026-09-16, both found while adding
+   `plugins.instance_capability_grant`.* *This paragraph said **seven** tables
+   over a list of eight, and had since
+   `identity.credential` was added. And `outbox.event_publication` was exempted by
+   `MigrationRulesTest.INSTANCE_WIDE` — with its justification written out in a
+   comment there — while this list, which that check is supposed to read, did not
+   name it: the check was reading a longer list than the chapter published. The
+   count now follows the table rather than being restated, and the justification
+   lives where the chapter says it must.*
 3. **Primary keys are UUIDv7** (`uuidv7()`, built into PostgreSQL 18). They are
    time-ordered — unlike UUIDv4, therefore index-friendly — and can be generated
    by the client while offline ([ADR-0016](../adr/0016-identifiers.md)).
@@ -666,7 +678,8 @@ A relay process reads incomplete entries and publishes them to RabbitMQ.
 | `inventory.item_relation` | Relations between items | `relation_type` (`ACCESSORY_OF`, `PART_OF`, `REPLACEMENT_FOR`, `RELATED`). **Directed and stored once:** "the lens is an accessory of the camera" is one row, which the camera reads the other way round — two rows for one fact are two rows that can disagree, and the read is a union of the two directions carrying a flag for which end was asked. `CHECK (source_id <> target_id)`, because an item is not an accessory of itself; `UNIQUE (tenant_id, source_id, target_id, relation_type)`, so asking twice yields the first; a composite foreign key at each end ([7.5](#75-tenant-isolation-row-level-security)) with `ON DELETE CASCADE`, because a relation to an item that is gone is not a fact about anything |
 | `inventory.loan` | Lending | Borrower (internal or free text), handed out, due back, returned |
 | `plugins.plugin_registration` | Plugin registry | Manifest, contract version, certificate fingerprint |
-| `plugins.granted_capability` | Granted capabilities | Per tenant, with timestamp, granting person and revocation |
+| `plugins.capability_grant` | What one tenant permitted one plugin | Per tenant, one row per capability, with the manifest digest the administrator was looking at, the time and the person. A grant is never edited — it is made or withdrawn — so `updated_*` stay as they were written. *This row named the table `plugins.granted_capability` until 2026-09-16; the migration has called it `capability_grant` since it was written, and the code is what is right.* |
+| `plugins.instance_capability_grant` | What the instance itself permitted a plugin | Instance-wide, no `tenant_id` — see the exception list in [7.1](#71-ground-rules). The same shape as the row above with the tenant removed, because the grant belongs to the deployment: it authorises the calls the instance makes on its own behalf, which is how a security notification reaches an account that is a member of no tenant (`REQ-NOTI-004`, [ADR-0066](../adr/0066-instance-level-capability-grants.md)). A call made under it carries `CALL_SCOPE_INSTANCE` and no tenant context at all |
 | `authz.role_definition` | A role a tenant defined | Names one of the six built-in roles as its **base** and adds to it (`REQ-TEN-006`). The schema is `authz` and not `authorization`, which PostgreSQL will not take as a bare identifier ([ADR-0058](../adr/0058-authz-schema-name.md)). Tombstoned rather than deleted, because "who could do what, when" is a question an audit asks about a role that no longer exists; a member holding a removed one falls back to the base, which is why `tenancy.membership` keeps a built-in name beside the reference |
 | `authz.field_visibility` | Which roles read which sensitive fields | A grant per field key and role, with exactly one of `built_in_role` and `role_definition_id` set and a `num_nonnulls(...) = 1` check saying so — the shape [7.8](#78-other-load-bearing-tables) gives `tagging.tag_assignment`, for the same reason. Keyed by the field's **key**, so a rule holds for every type that has the field. What is done with a missing grant is **removal**, never masking: a mask reveals that the field exists and how long its value is ([12 §12.5](12-security.md), `REQ-SEC-027`) |
 | `authz.role_permission` | What a definition adds | A row per permission rather than an array, so a grant can be audited on its own. `permission` is text with **no** foreign key: the set of permissions lives in code and a table of them would be a second copy of a list the build already compares against [`permissions.yaml`](../reference/permissions.yaml). An id this build does not know grants nothing, which is the treatment an unknown role gets |

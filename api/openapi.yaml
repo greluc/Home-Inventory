@@ -904,6 +904,45 @@ components:
       required:
       - dataType
       type: object
+    InstanceCapabilityView:
+      description: One capability, and whether the instance has granted it.
+      properties:
+        grantedForInstance:
+          description: |-
+            whether the instance operator has agreed to it. False is where every
+            capability starts, on this level as on the tenant's
+          type: boolean
+        id:
+          description: the capability, from the closed set of 09 §9.4
+          type: string
+      type: object
+    InstancePluginView:
+      description: An installed plugin as the operator sees it.
+      properties:
+        capabilities:
+          description: |-
+            everything its manifest asks for, each with whether the **instance** has
+            granted it. A tenant's grants are not shown here and are not this surface's business
+          items:
+            $ref: '#/components/schemas/InstanceCapabilityView'
+          type: array
+        disabled:
+          description: whether it is out of service
+          type: boolean
+        id:
+          description: its reverse-domain id
+          type: string
+        name:
+          description: what a person sees
+          type: string
+        registeredAt:
+          description: when it was first seen
+          format: date-time
+          type: string
+        version:
+          description: the plugin's own version
+          type: string
+      type: object
     InvitationView:
       description: |-
         An invitation, as the tenant that issued it sees it.
@@ -6557,6 +6596,225 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: One page of the accounts that administer the instance
+  /api/v1/instance/plugins:
+    get:
+      description: |-
+        What is installed, and what the **instance** has permitted each one (ADR-0066).
+
+        The operator's half of the plugin surface. The tenant's half is `/api/v1/plugins`,
+        which shows the same plugins with that tenant's grants beside them; the two answer different
+        questions and neither can answer the other's.
+      operationId: plugins
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/InstancePluginView'
+                type: array
+          description: what is installed, with the instance-level grants
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What is installed, and what the **instance** has permitted each one (ADR-0066)
+  /api/v1/instance/plugins/{pluginId}/capabilities/{capability}:
+    delete:
+      description: |-
+        Withdraws one instance-level capability (ADR-0066).
+
+        Withdrawing what was never granted is not an error: the outcome the caller wants is "this
+        plugin may not do this for the instance", and that is already true.
+      operationId: withdrawInstanceCapability
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: the capability
+        in: path
+        name: capability
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Withdraws one instance-level capability (ADR-0066)
+    put:
+      description: |-
+        Permits one capability **for the instance itself** (ADR-0066).
+
+        This is not consent on any tenant's behalf and reaches no tenant's data: a call made under
+        an instance grant carries no tenant context, so every row-level policy yields zero rows. What
+        it makes possible is the account mail the deployment owes a person — a password reset, a new
+        second factor, a remote sign-out — including for somebody who is a member of no tenant
+        (REQ-NOTI-004, REQ-SEC-018).
+
+        Idempotent, and a capability the manifest does not declare is refused rather than recorded,
+        exactly as on the tenant path.
+      operationId: grantInstanceCapability
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: the capability, spelled as 09 §9.4 spells it
+        in: path
+        name: capability
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Permits one capability **for the instance itself** (ADR-0066)
   /api/v1/instance/tenants/{tenantId}/quotas:
     get:
       description: |-

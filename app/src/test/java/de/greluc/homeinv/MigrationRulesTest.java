@@ -56,6 +56,13 @@ class MigrationRulesTest {
           // once per tenant, which is the thing REQ-PLG-013 says an operator
           // does once.
           "plugins.plugin_registration",
+          // What the instance operator permitted a plugin to do for the
+          // deployment itself (ADR-0066). It belongs to no tenant by
+          // construction: it authorises the calls the instance makes on its own
+          // behalf, so that a security notification reaches an account that is a
+          // member of nothing (REQ-NOTI-004). A policy keyed on a context that
+          // does not exist would disable the one path it exists for.
+          "plugins.instance_capability_grant",
           "identification.public_code",
           "identification.label_base_url_usage",
           "audit.chain_anchor",

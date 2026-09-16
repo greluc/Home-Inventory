@@ -23,6 +23,7 @@ import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.Role;
+import de.greluc.homeinv.plugins.api.ExtensionRegistry;
 import jakarta.persistence.Entity;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -329,6 +330,38 @@ class ArchitectureRulesTest {
         .because(
             "\"may this caller do this\" is answered in one place; reading the grant set "
                 + "elsewhere is how a second answer appears (REQ-SEC-022, ADR-0010)")
+        .check(CLASSES);
+  }
+
+  @Test
+  @DisplayName("let only the notification block resolve a plugin at instance level")
+  void onlyAccountNotificationsResolveAtInstanceLevel() {
+    // ADR-0066. The capability model has a second level so that a security
+    // notification reaches an account belonging to no tenant (REQ-NOTI-004). It
+    // is a widening, and a widening is only as narrow as its callers: with one
+    // named user it stays what it was decided to be, with any user it becomes a
+    // way to reach a plugin without a tenant's consent.
+    //
+    // The plugins block itself is excluded because that is where the method is
+    // declared and implemented.
+    noClasses()
+        .that()
+        .resideOutsideOfPackages(
+            "de.greluc.homeinv.notification..", "de.greluc.homeinv.plugins..")
+        .should()
+        .callMethodWhere(
+            DescribedPredicate.describe(
+                "resolves a plugin for the instance rather than for a tenant",
+                target ->
+                    target
+                            .getTarget()
+                            .getOwner()
+                            .getFullName()
+                            .equals(ExtensionRegistry.class.getName())
+                        && target.getTarget().getName().equals("lookupForInstance")))
+        .because(
+            "an instance-level resolution bypasses every tenant's consent by design, and only "
+                + "the account notifications of REQ-NOTI-004 are allowed to need that (ADR-0066)")
         .check(CLASSES);
   }
 

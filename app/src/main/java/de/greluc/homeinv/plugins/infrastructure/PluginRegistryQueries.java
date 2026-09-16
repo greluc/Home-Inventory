@@ -250,6 +250,97 @@ public class PluginRegistryQueries {
         .update();
   }
 
+  /**
+   * What the <b>instance</b> has granted one plugin (ADR-0066).
+   *
+   * <p>No tenant appears anywhere in this query, which is the whole point: these grants authorise
+   * the calls the deployment makes on its own behalf, for an account that may belong to no tenant
+   * at all (REQ-NOTI-004).
+   *
+   * @param pluginId which plugin
+   * @return the instance-level grants
+   */
+  @Transactional(readOnly = true)
+  public List<Grant> instanceGrants(String pluginId) {
+    return jdbc
+        .sql(
+            """
+            select plugin_id, capability, manifest_digest, created_at, created_by
+            from plugins.instance_capability_grant
+            where plugin_id = ?
+            order by capability
+            """)
+        .params(pluginId)
+        .query(PluginRegistryQueries::toGrant)
+        .list();
+  }
+
+  /**
+   * Whether the instance has granted this plugin this capability (ADR-0066).
+   *
+   * @param pluginId which plugin
+   * @param capability which capability
+   * @return true when an instance-level grant exists
+   */
+  @Transactional(readOnly = true)
+  public boolean grantedForInstance(String pluginId, String capability) {
+    return !jdbc
+        .sql(
+            """
+            select 1
+            from plugins.instance_capability_grant
+            where plugin_id = ? and capability = ?
+            """)
+        .params(pluginId, capability)
+        .query(Integer.class)
+        .list()
+        .isEmpty();
+  }
+
+  /**
+   * Records an instance-level consent (ADR-0066).
+   *
+   * <p>Idempotent on the unique key, and the digest is not rewritten on a second call — both for
+   * the reasons {@link #grant} gives.
+   *
+   * @param pluginId which plugin
+   * @param capability which capability
+   * @param manifestDigest what the operator was looking at
+   * @param actor which instance operator agreed
+   */
+  @Transactional
+  public void grantForInstance(
+      String pluginId, String capability, String manifestDigest, UUID actor) {
+    jdbc.sql(
+            """
+            insert into plugins.instance_capability_grant
+                (plugin_id, capability, manifest_digest, created_by)
+            values (?, ?, ?, ?)
+            on conflict (plugin_id, capability) do nothing
+            """)
+        .params(pluginId, capability, manifestDigest, actor)
+        .update();
+  }
+
+  /**
+   * Withdraws an instance-level consent (ADR-0066).
+   *
+   * @param pluginId which plugin
+   * @param capability which capability
+   * @return how many rows went, which is one or none
+   */
+  @Transactional
+  public int revokeForInstance(String pluginId, String capability) {
+    return jdbc
+        .sql(
+            """
+            delete from plugins.instance_capability_grant
+            where plugin_id = ? and capability = ?
+            """)
+        .params(pluginId, capability)
+        .update();
+  }
+
   private static Registration toRegistration(ResultSet rs, int rowNum) throws SQLException {
     Array capabilities = rs.getArray("capabilities");
     return new Registration(

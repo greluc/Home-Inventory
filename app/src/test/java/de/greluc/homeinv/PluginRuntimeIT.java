@@ -120,6 +120,54 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("resolves for the instance, with no tenant anywhere in the call")
+  void anInstanceCallCarriesNoTenant() throws Exception {
+    // ADR-0066. The deployment owes an account its security mail whether or not
+    // the account belongs to a tenant (REQ-NOTI-004), so the operator grants at
+    // instance level and the call goes out with no tenant at all. What is
+    // asserted is what the PLUGIN received: an empty tenant and a scope saying
+    // why it is empty, rather than a zero UUID standing in for one.
+    AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
+    int port = startPlugin(serviceOf(seen, null, false));
+    String pluginId = PLUGIN + "instance";
+    register(pluginId, port, fingerprint());
+    registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
+
+    // No TenantContext is opened here on purpose: an instance resolution must
+    // work where there is none, which is the situation a password reset is in.
+    NotificationChannel channel =
+        extensions.lookupForInstance(NotificationChannel.class).orElseThrow();
+
+    channel.deliver(
+        CallContext.forInstance("", "en", 0),
+        new NotificationChannel.Message(
+            "somebody@example.org",
+            "Your password was changed",
+            "If this was not you, act now.",
+            "",
+            "en",
+            java.util.Map.of(),
+            "security-1",
+            List.of()));
+
+    assertThat(seen.get().getContext().getTenantId()).isEmpty();
+    assertThat(seen.get().getContext().getScope())
+        .isEqualTo(de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE);
+  }
+
+  @Test
+  @DisplayName("is not resolved for the instance when only a tenant granted it")
+  void aTenantGrantIsNotAnInstanceGrant() throws Exception {
+    // The two levels are separate in both directions (ADR-0066). A tenant that
+    // consented to everything has said nothing about the deployment's own calls,
+    // and the proof is the resolution rather than the flag.
+    int port = startPlugin(serviceOf(null, null, false));
+    aTenantThatConsented(port, "tenantonly");
+
+    assertThat(extensions.lookupForInstance(NotificationChannel.class)).isEmpty();
+  }
+
+  @Test
   @DisplayName("refuses a plugin whose certificate is not the one that was registered")
   void aForeignCertificate() throws Exception {
     // REQ-SEC-056. The impostor holds a certificate this deployment's CA signed —

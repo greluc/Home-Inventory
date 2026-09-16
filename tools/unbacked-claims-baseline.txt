@@ -71,24 +71,24 @@ docs/architecture/06-deployment-view.md:722:cannot
 docs/architecture/06-deployment-view.md:793:cannot
 docs/architecture/06-deployment-view.md:83:cannot
 docs/architecture/06-deployment-view.md:914:fails the build
-docs/architecture/07-data-model.md:411:cannot
-docs/architecture/07-data-model.md:532:enforces
-docs/architecture/07-data-model.md:559:cannot
-docs/architecture/07-data-model.md:567:enforced
-docs/architecture/07-data-model.md:569:cannot
-docs/architecture/07-data-model.md:588:guaranteed
-docs/architecture/07-data-model.md:593:enforces
-docs/architecture/07-data-model.md:612:enforced
+docs/architecture/07-data-model.md:423:cannot
+docs/architecture/07-data-model.md:544:enforces
+docs/architecture/07-data-model.md:571:cannot
+docs/architecture/07-data-model.md:579:enforced
+docs/architecture/07-data-model.md:581:cannot
+docs/architecture/07-data-model.md:600:guaranteed
+docs/architecture/07-data-model.md:605:enforces
+docs/architecture/07-data-model.md:624:enforced
 docs/architecture/08-api-contract.md:13:cannot
 docs/architecture/08-api-contract.md:321:enforced
 docs/architecture/08-api-contract.md:322:enforced
 docs/architecture/08-api-contract.md:403:cannot
 docs/architecture/08-api-contract.md:481:fails the build
-docs/architecture/09-extensibility-and-plugins.md:203:cannot
-docs/architecture/09-extensibility-and-plugins.md:216:cannot
-docs/architecture/09-extensibility-and-plugins.md:239:cannot
 docs/architecture/09-extensibility-and-plugins.md:22:must never
-docs/architecture/09-extensibility-and-plugins.md:316:must never
+docs/architecture/09-extensibility-and-plugins.md:244:cannot
+docs/architecture/09-extensibility-and-plugins.md:257:cannot
+docs/architecture/09-extensibility-and-plugins.md:280:cannot
+docs/architecture/09-extensibility-and-plugins.md:357:must never
 docs/architecture/10-identification-and-labels.md:117:cannot
 docs/architecture/10-identification-and-labels.md:155:is impossible
 docs/architecture/10-identification-and-labels.md:21:cannot

@@ -174,6 +174,14 @@ commit".
 
 ### Added
 
+- **An operator can permit a plugin to act for the instance, not only for a
+  tenant.** Security mail about an account — a password reset, a new second
+  factor, a remote sign-out — has to go out even when the account belongs to no
+  tenant, and until now every part of the path demanded one. The instance
+  operator now grants such a plugin under `/api/v1/instance/plugins`, separately
+  from any tenant's consent and reaching no tenant's data. *An operator
+  installing `plugin-smtp` grants twice: once per tenant, once for the instance.*
+
 - **The system can notify people, and say what became of each message.** Each
   person chooses what they want to hear about and where, and nothing goes to
   somebody who asked for nothing. A message that could not be delivered is tried
@@ -686,7 +694,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 66 architecture decision records, each with its alternatives and consequences —
+- 67 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code
