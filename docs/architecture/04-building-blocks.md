@@ -181,8 +181,8 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 |---|---|
 | Schema | `identity` |
 | Key notions | `User`, `Credential` (password/TOTP/passkey), `Session`, `RefreshToken`, `ServiceAccount`, `IdentityProvider` |
-| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else), `OperatorDirectory` (the paged listing of operators, its own port because paging signs a cursor and the one-shot `bootstrap` service is given no signing key), `AccountRegistry` implemented for `tenancy`, `SecondFactor` (enrolling, verifying and removing what an account authenticates with besides its password — `REQ-AUTH-002`), `SecondFactorStatus` implemented for `authorization`, `UserSessions` (what an account has open, and ending one of them — `REQ-AUTH-009`), `ServiceAccounts` (machine tokens with a role and an expiry — `REQ-AUTH-010`) |
-| Outbound ports | `PasswordHasher` (Argon2id, in-core) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
+| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else), `OperatorDirectory` (the paged listing of operators, its own port because paging signs a cursor and the one-shot `bootstrap` service is given no signing key), `AccountRegistry` implemented for `tenancy`, `SecondFactor` (enrolling, verifying and removing what an account authenticates with besides its password — `REQ-AUTH-002`), `SecondFactorStatus` implemented for `authorization`, `UserSessions` (what an account has open, and ending one of them — `REQ-AUTH-009`), `ServiceAccounts` (machine tokens with a role and an expiry — `REQ-AUTH-010`), `PasswordReset` (a single-use token valid thirty minutes that ends every session and tells the **old** address — `REQ-SEC-018`), `PasswordPolicy` (twelve characters, no forced complexity, no forced rotation — `REQ-SEC-011`) |
+| Outbound ports | `PasswordHasher` (Argon2id, in-core) · `SecurityNotifications` (the account-level queue in `notification`, which is how a reset reaches somebody who belongs to no tenant — [ADR-0066](../adr/0066-instance-level-capability-grants.md)) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
 | Events | `UserRegistered`, `UserDeactivated`, `CredentialChanged`, `SuspiciousLoginDetected` |
 | Notable | Knows **no** tenants and **no** permissions. Who someone is and what someone may do are separate questions. The account nevertheless carries three **instance-level** facts — `instance_operator`, `may_create_tenants` and `tenant_limit` ([ADR-0057](../adr/0057-the-instance-operator.md)) — and they are not a contradiction: nothing here evaluates them. This block stores them, `authorization` answers with them through the `AccountEntitlements` port, and no tenant can grant one. |
 
@@ -389,12 +389,12 @@ attributes, quantities, relations, lifecycle.
 | | |
 |---|---|
 | Schema | `notification` |
-| Key notions | `NotificationRule`, `Notification`, `DeliveryAttempt`, `Reminder`, `Subscription` |
-| Publishes | `NotificationService`, `ReminderService` |
+| Key notions | `NotificationRule`, `Notification`, `DeliveryAttempt`, `Reminder`, `Subscription`, `SecurityNotification` |
+| Publishes | `Notifications` (a tenant's queue, delivered on the channels a person subscribed to), `SecurityNotifications` (the **account** queue: no tenant, no subscription, always delivered — `REQ-NOTI-004`, [ADR-0066](../adr/0066-instance-level-capability-grants.md)), `ReminderService` |
 | Outbound ports | `NotificationChannel` — **every** implementation is a plugin, including e-mail and webhook, because every one of them leaves the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) |
 | Events | `NotificationRaised`, `NotificationDelivered`, `NotificationFailed` |
 | Triggers | Warranty expiry, maintenance interval, loan return date, minimum stock undercut, software licence expiry, stocktake discrepancy, security-relevant account events |
-| Notable | Reminder rules are data (level 1), not code: a condition as a saved search + a time offset + a channel. |
+| Notable | Reminder rules are data (level 1), not code: a condition as a saved search + a time offset + a channel. **Two queues, not one flag.** A tenant's message is scoped, subscribed to and delivered under that tenant's plugin grant; an account's message has no tenant to be scoped by, no subscription to consult, and is delivered under an **instance-level** grant — so that a password reset reaches somebody who is a member of nothing. Keeping them apart also keeps one person's account mail out of a tenant's delivery history. |
 
 ---
 

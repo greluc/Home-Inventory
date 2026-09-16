@@ -80,7 +80,19 @@ class MigrationRulesTest {
           // when there is no tenant yet to scope a policy with (REQ-AUTH-002).
           // Reachable only through the caller's own session: no endpoint takes a
           // user id, and no operator path reaches somebody else's authenticator.
-          "identity.credential");
+          "identity.credential",
+          // A reset is asked for at the login page — before the password rather
+          // than after it, so one step earlier than `credential` above, and for
+          // an address nobody has an account for there is no tenant even in
+          // principle (REQ-SEC-018). A policy keyed on a context that does not
+          // exist yields zero rows rather than an error, which would make the
+          // request look successful while nothing happened.
+          "identity.password_reset",
+          // What the deployment owes an ACCOUNT rather than a tenant
+          // (REQ-NOTI-004, ADR-0066). The recipient may be a member of nothing,
+          // and a policy would hide the queue from the run that has to empty it.
+          "notification.security_notification",
+          "notification.security_delivery_attempt");
 
   /**
    * The tables rule 4 exempts, as 07 §7.1 lists them.
@@ -114,6 +126,17 @@ class MigrationRulesTest {
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",
+          // A reset token is issued by the flow and spent once: `used_at` is
+          // that spend, `updated_by` would name whoever presented the token —
+          // who is anonymous at that moment, which is the property REQ-SEC-018
+          // rests on — and the single-use guarantee comes from the column and a
+          // partial unique index rather than from an optimistic lock.
+          "identity.password_reset",
+          // The account queue, the same shape as the tenant queue next to it:
+          // its state and next attempt are the delivery mechanism's bookkeeping,
+          // and its attempts are an append-only record of what happened.
+          "notification.security_notification",
+          "notification.security_delivery_attempt",
           // Issued, never edited.
           "identification.public_code",
           "identification.code_binding",

@@ -133,6 +133,17 @@ public class WebSecurityConfiguration {
                     // under /api/v1/tenants and needs the OWNER's permission.
                     .requestMatchers(HttpMethod.POST, "/api/v1/tenant-revocations/*")
                     .permitAll()
+                    // Both halves of a password reset (REQ-SEC-018). Somebody who
+                    // cannot sign in is the only person who needs either, so
+                    // requiring a session would be circular. What stands in for
+                    // one is a throttle on its own counters and, for the second
+                    // half, the single-use token from the message checked against
+                    // its stored hash. Exactly these two paths.
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/auth/password-reset",
+                        "/api/v1/auth/password-reset/complete")
+                    .permitAll()
                     // The generated OpenAPI document. `springdoc.api-docs.enabled`
                     // is false in every deployment, so this path answers 404
                     // there; permitting it grants access to nothing. It is here

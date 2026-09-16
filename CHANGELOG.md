@@ -174,6 +174,15 @@ commit".
 
 ### Added
 
+- **A forgotten password can be reset.** Ask at the login page and a link
+  arrives that works once and for thirty minutes. Setting the new password ends
+  every session the account has open — so somebody who took the account over is
+  signed out by the real owner — and tells the address the account had before
+  the change, which is where you find out if it was not you. Asking about an
+  address that has no account looks exactly like asking about one that does.
+  *Needs a mail plugin with an instance-level grant; without one the message
+  waits and the delivery log says why.*
+
 - **An operator can permit a plugin to act for the instance, not only for a
   tenant.** Security mail about an account — a password reset, a new second
   factor, a remote sign-out — has to go out even when the account belongs to no

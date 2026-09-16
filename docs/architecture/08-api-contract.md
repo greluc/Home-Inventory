@@ -37,7 +37,7 @@ forbids database and repository access from the access blocks.
 
 ```
 /api/v1
-├── /auth        /login /logout /refresh /password-reset
+├── /auth        /login /logout /refresh · /password-reset {,/complete}
 │             /mfa  (answer a login) · /mfa/enrolment · /mfa/totp {,/confirmation,/removal}
 │             /mfa/recovery-codes · /mfa/step-up  (prove it again)
 │             /mfa/passkeys {,/challenge,/confirmation,{id}/removal}

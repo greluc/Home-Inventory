@@ -79,6 +79,28 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
+  @Autowired private de.greluc.homeinv.notification.api.SecurityNotifications securityNotifications;
+  @Autowired private de.greluc.homeinv.notification.application.SecurityDeliveryDispatcher securityDispatcher;
+
+  /**
+   * Withdraws every instance-level grant this class makes.
+   *
+   * <p>An instance grant is not scoped to a tenant — that is its whole nature — so one left behind
+   * by a finished test is visible to the next one, which then resolves a plugin whose server has
+   * already been stopped. The per-tenant tests need no such cleanup because their grants are
+   * invisible outside their own tenant, and that difference is worth seeing in the fixture rather
+   * than debugging later.
+   */
+  @org.junit.jupiter.api.AfterEach
+  void withdrawInstanceGrants() {
+    for (String name : List.of("instance", "accountmail")) {
+      try {
+        registrations.revokeForInstance(PLUGIN + name, "network:outbound", UUID.randomUUID());
+      } catch (RuntimeException neverRegistered) {
+        // This test did not register that one. Nothing to withdraw.
+      }
+    }
+  }
 
   @AfterAll
   static void stopTheServer() {
@@ -153,6 +175,47 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
     assertThat(seen.get().getContext().getTenantId()).isEmpty();
     assertThat(seen.get().getContext().getScope())
         .isEqualTo(de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE);
+  }
+
+  @Test
+  @DisplayName("delivers an account notification through the plugin, with no tenant in the call")
+  void anAccountNotificationGoesOut() throws Exception {
+    // The whole of REQ-NOTI-004's delivery half, end to end: a security message
+    // is raised for an account that belongs to no tenant, the operator has
+    // granted the plugin at instance level, and the message goes out.
+    AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
+    int port = startPlugin(serviceOf(seen, null, false));
+    String pluginId = PLUGIN + "accountmail";
+    register(pluginId, port, fingerprint());
+    registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
+
+    UUID account = UUID.randomUUID();
+    var queued =
+        securityNotifications.raise(
+            new de.greluc.homeinv.notification.api.SecurityNotifications.NewSecurityNotification(
+                account,
+                "security.password-reset",
+                "somebody@example.org",
+                "Reset your password",
+                "Open this link.",
+                null,
+                "en",
+                "runtime-account-" + account));
+
+    securityDispatcher.deliverDue(java.time.Instant.now());
+
+    assertThat(seen.get().getContext().getTenantId()).isEmpty();
+    assertThat(seen.get().getRecipient()).isEqualTo("somebody@example.org");
+    assertThat(
+            securityNotifications.of(account, 5).stream()
+                .filter(candidate -> candidate.id().equals(queued.id()))
+                .findFirst()
+                .orElseThrow()
+                .state())
+        .isEqualTo("DELIVERED");
+    assertThat(securityNotifications.attempts(queued.id()))
+        .singleElement()
+        .satisfies(attempt -> assertThat(attempt.outcome()).isEqualTo("ACCEPTED"));
   }
 
   @Test

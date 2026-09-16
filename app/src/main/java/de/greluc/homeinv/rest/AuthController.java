@@ -7,6 +7,7 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.AuthenticationService;
+import de.greluc.homeinv.identity.api.PasswordReset;
 import de.greluc.homeinv.identity.api.SecondFactor;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -56,6 +57,7 @@ public class AuthController {
   private final SecondFactor secondFactor;
   private final PendingLogin pendingLogin;
   private final SessionEstablisher sessions;
+  private final PasswordReset passwordReset;
 
   /**
    * Verifies credentials and establishes a session.
@@ -193,6 +195,88 @@ public class AuthController {
   private static String clientAddressOf(HttpServletRequest request) {
     String remote = request.getRemoteAddr();
     return remote == null ? "unknown" : remote;
+  }
+
+
+  /**
+   * Asks for a password reset, and says nothing about whether there was anything to reset
+   * (REQ-SEC-018).
+   *
+   * <p>Always {@code 204}. An address with an account gets a message with a link good for thirty
+   * minutes; an address without one gets nothing, and the two answers are identical — a reset
+   * endpoint that said "no such account" would be a way to ask the instance who is registered on it
+   * (REQ-SEC-110).
+   *
+   * <p>Throttled on its own counters rather than the login ones: what this protects is somebody
+   * else's mailbox, and a flood of requests must not lock the account holder out of signing in.
+   *
+   * @param request the address
+   * @param httpRequest the servlet request, for the caller's address
+   */
+  @PostMapping("/password-reset")
+  @CanFail(ProblemType.RATE_LIMITED)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PublicEndpoint(
+      reason =
+          "Somebody who cannot sign in is the only person who needs it, so requiring a session "
+              + "would be circular. Protected instead by its own throttle and by answering "
+              + "identically for an address with an account and one without (REQ-SEC-018, "
+              + "REQ-SEC-110).")
+  public void requestPasswordReset(
+      @Valid @RequestBody PasswordResetRequest request, HttpServletRequest httpRequest) {
+    passwordReset.request(request.email(), clientAddressOf(httpRequest));
+  }
+
+  /**
+   * Redeems a reset token and sets the new password (REQ-SEC-018).
+   *
+   * <p>Ends every session the account has open, then tells the address the account had. A token
+   * that is unknown, expired or already spent gets one answer for all three: telling them apart
+   * tells somebody holding a stolen token which one they have.
+   *
+   * @param request the token and the new password
+   */
+  @PostMapping("/password-reset/complete")
+  @CanFail(ProblemType.VALIDATION_FAILED)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @PublicEndpoint(
+      reason =
+          "It is the other half of the reset: the caller has no session, which is why they are "
+              + "here. What authorises it is the single-use token from the message, checked "
+              + "against its stored hash (REQ-SEC-018, REQ-SEC-048).")
+  public void completePasswordReset(@Valid @RequestBody PasswordResetCompletion request) {
+    passwordReset.complete(request.token(), request.password());
+  }
+
+  /**
+   * The body of a reset request.
+   *
+   * @param email the address to send the link to
+   */
+  public record PasswordResetRequest(@NotBlank @Size(max = 320) String email) {}
+
+  /**
+   * The body of a redemption.
+   *
+   * @param token what the message carried
+   * @param password the new password
+   */
+  public record PasswordResetCompletion(
+      @NotBlank @Size(max = 500) String token, @NotBlank @Size(max = 200) String password) {
+
+    /**
+     * The token's presence, and no password.
+     *
+     * <p>The same reason {@code LoginRequest} masks its own: Spring MVC logs the deserialised body
+     * at {@code DEBUG} through the generated {@code toString}, and this record holds both a live
+     * reset token and a password in clear (REQ-SEC-050).
+     *
+     * @return the record with both secrets masked
+     */
+    @Override
+    public String toString() {
+      return "PasswordResetCompletion[token=***, password=***]";
+    }
   }
 
   /**

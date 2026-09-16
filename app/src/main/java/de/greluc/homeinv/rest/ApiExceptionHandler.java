@@ -12,6 +12,7 @@ import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.idempotency.api.IdempotencyKeyConflictException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
+import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
@@ -634,11 +635,44 @@ public class ApiExceptionHandler {
    * @param request the request
    * @return a {@code 429} problem detail with the wait in seconds
    */
+  /**
+   * Answers a reset token that is unknown, expired or already spent (REQ-SEC-018).
+   *
+   * <p>One answer for all three. Telling them apart would tell somebody holding a stolen token
+   * which one they have, and the useful half — "ask for a new one" — is the same either way.
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(de.greluc.homeinv.identity.api.PasswordReset.InvalidResetTokenException.class)
+  public ProblemDetail handleInvalidResetToken(
+      de.greluc.homeinv.identity.api.PasswordReset.InvalidResetTokenException exception,
+      HttpServletRequest request) {
+    return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a password the policy refuses (REQ-SEC-011).
+   *
+   * <p>The message is for the person choosing it rather than for a client to branch on: there is
+   * one rule, and saying what it is beats a token they would have to look up.
+   *
+   * @param exception the refusal, carrying what to tell them
+   * @param request the request, for the instance URI
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(WeakPasswordException.class)
+  public ProblemDetail handleWeakPassword(
+      WeakPasswordException exception, HttpServletRequest request) {
+    return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(), request);
+  }
+
   @ExceptionHandler(TooManyAttemptsException.class)
   public ProblemDetail handleTooManyAttempts(
       TooManyAttemptsException exception, HttpServletRequest request) {
     ProblemDetail problem =
-        problem(ProblemType.RATE_LIMITED, "Too many failed login attempts. Try again shortly.",
+        problem(ProblemType.RATE_LIMITED, "Too many attempts. Try again shortly.",
             request);
     problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
     return problem;
