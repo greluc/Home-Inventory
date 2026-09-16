@@ -11,6 +11,7 @@ import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.inventory.api.BulkItemOperations;
 import de.greluc.homeinv.inventory.api.ItemBundles;
 import de.greluc.homeinv.inventory.api.ItemRelations;
+import de.greluc.homeinv.inventory.api.MaintenanceLog;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -85,6 +86,7 @@ public class ItemController {
   private final ItemService items;
   private final de.greluc.homeinv.search.api.SearchService search;
   private final ItemRelations relations;
+  private final MaintenanceLog maintenance;
   private final ItemBundles bundles;
   private final BulkItemOperations bulk;
 
@@ -576,6 +578,70 @@ public class ItemController {
   }
 
   /**
+   * What has been done to this item (REQ-LIFE-003).
+   *
+   * <p>Most recent work first, ordered by when the work was done rather than by when it was
+   * recorded: somebody entering last year's invoice today has not just serviced the bicycle.
+   *
+   * @param id the item
+   * @param limit how many at most; capped at 200 by the service
+   * @return the entries
+   */
+  @GetMapping(path = "/{id}/maintenance", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public List<MaintenanceLog.MaintenanceEntryView> maintenanceOf(
+      @PathVariable UUID id,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return maintenance.entriesOf(id, limit);
+  }
+
+  /**
+   * Records a piece of work on this item (REQ-LIFE-003).
+   *
+   * <p>There is no endpoint that edits one. A maintenance log is a record of what happened and is
+   * worth something only if it cannot be tidied up afterwards; a mistake is corrected by recording
+   * the correction, and an entry logged against the wrong item is removed.
+   *
+   * @param id the item
+   * @param request what was done
+   * @param user the authenticated caller
+   * @return the recorded entry
+   */
+  @PostMapping(path = "/{id}/maintenance", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.CREATED)
+  public MaintenanceLog.MaintenanceEntryView recordMaintenance(
+      @PathVariable UUID id,
+      @Valid @RequestBody MaintenanceRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return maintenance.record(
+        id,
+        new MaintenanceLog.NewMaintenanceEntry(
+            request.performedOn(), request.kind(), request.cost(), request.note()),
+        user.userId());
+  }
+
+  /**
+   * Removes a maintenance entry that should not be there (REQ-LIFE-003).
+   *
+   * @param id the item, so the entry is addressed where it is read
+   * @param entryId the entry
+   * @param user the authenticated caller
+   */
+  @DeleteMapping(path = "/{id}/maintenance/{entryId}")
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail(ProblemType.NOT_FOUND)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeMaintenance(
+      @PathVariable UUID id,
+      @PathVariable UUID entryId,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    maintenance.remove(id, entryId, user.userId());
+  }
+
+  /**
    * Relates this item to another.
    *
    * @param id the item the relation is stated from
@@ -716,6 +782,21 @@ public class ItemController {
    * @param targetId the item this one points at
    * @param type {@code ACCESSORY_OF}, {@code PART_OF}, {@code REPLACEMENT_FOR} or {@code RELATED}
    */
+  /**
+   * The body of a maintenance entry (REQ-LIFE-003).
+   *
+   * @param performedOn when the work was done
+   * @param kind what kind of work, in the tenant's own words
+   * @param cost what it cost, or absent. Absent rather than zero for work under warranty: the two
+   *     are different claims
+   * @param note anything else worth knowing, or absent
+   */
+  public record MaintenanceRequest(
+      @NotNull java.time.LocalDate performedOn,
+      @NotBlank @Size(max = 100) String kind,
+      Money cost,
+      @Size(max = 2000) String note) {}
+
   public record RelationRequest(
       @jakarta.validation.constraints.NotNull UUID targetId,
       @NotBlank @Size(max = 20) String type) {}

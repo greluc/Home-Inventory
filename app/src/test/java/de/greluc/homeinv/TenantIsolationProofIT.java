@@ -592,6 +592,11 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     return switch (column.type().toLowerCase(Locale.ROOT)) {
       case "uuid" -> "'" + UUID.randomUUID() + "'";
       case "timestamp with time zone", "timestamp without time zone" -> "now()";
+      // A date is not a timestamp to PostgreSQL and a text value is not a date:
+      // `inventory.maintenance_entry.performed_on` is the first column of this
+      // type the proof met, and it failed to seed rather than quietly skipping
+      // the table, which is the behaviour this seeder is written for.
+      case "date" -> "current_date";
       case "boolean" -> "false";
       // Zero unless a check demands more. `location.depth` must be 0 for the row to
       // be a root — `nlevel(path) = depth + 1` with one label, and

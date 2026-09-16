@@ -114,8 +114,9 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    *
    * <p>Eighteen today, and every one of them needs a body or a query string this check cannot
    * invent. It went from seventeen on 2026-09-14 with {@code PUT /api/v1/saved-searches/{id}},
-   * which takes a name and a query — an ordinary new endpoint with a body, which is the reason
-   * this number is allowed to go up for. The number is here because the rule above has a soft edge: an endpoint that regressed
+   * which takes a name and a query, and from eighteen on 2026-09-16 with {@code POST
+   * /api/v1/items/{id}/maintenance}, which takes a date and a kind of work (REQ-LIFE-003) — both
+   * ordinary new endpoints with a body, which is the reason this number is allowed to go up for. The number is here because the rule above has a soft edge: an endpoint that regressed
    * from {@code 404} to {@code 400} would still satisfy it, and so would one that gained a required
    * field and quietly stopped being reachable. Counting them turns that from a silent loss of
    * coverage into a failing build.
@@ -125,7 +126,7 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    * commit: a new endpoint that takes a body is ordinary, an existing one that stopped answering
    * {@code 404} is not.
    */
-  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 18;
+  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 19;
 
   @Autowired private RequestMappingHandlerMapping mappings;
   @Autowired private TenantProvisioningService provisioning;

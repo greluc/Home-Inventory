@@ -174,6 +174,12 @@ commit".
 
 ### Added
 
+- **An item keeps a service history.** Record what was done to something, when,
+  what it cost and why — with the invoice attached. Entries are listed with the
+  most recent work first, by when the work was *done* rather than when it was
+  typed, and **no entry can be edited afterwards**: a correction is a second
+  entry, the way a service history behaves on paper.
+
 - **Every event carries the version of its own schema**, in the routing key, so
   a consumer binds the version it understands and two can run side by side.
   *Event schemas: breaking, pre-release — the keys changed from

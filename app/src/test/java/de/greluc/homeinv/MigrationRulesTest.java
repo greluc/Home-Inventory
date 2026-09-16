@@ -112,6 +112,11 @@ class MigrationRulesTest {
           "audit.chain_anchor",
           "audit.chain_truncation",
           "audit.revision_record",
+          // A maintenance entry is a record of what happened to a thing, and
+          // REQ-LIFE-003 says entries are not retroactively editable: no
+          // `version`, no `updated_*`, and no UPDATE granted. A correction is a
+          // second entry.
+          "inventory.maintenance_entry",
           "identification.label_base_url_usage",
           "tenancy.erasure_certificate",
           // Infrastructure.
