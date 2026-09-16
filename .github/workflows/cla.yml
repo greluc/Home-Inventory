@@ -83,13 +83,20 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      # The branch does not exist until the first signature is recorded, and a
+      # repository whose first contributor has not signed yet is the ordinary
+      # state rather than a broken one — so a checkout that fails is a case this
+      # job handles below, not one that ends it.
+      #
+      # `continue-on-error` is a STEP key and not an input to the action. Written
+      # under `with:` it was handed to `actions/checkout`, which warned about an
+      # input it does not have and then failed the job on the missing ref anyway
+      # (2026-09-16). The warning was the whole diagnosis and is worth reading
+      # when a `with:` key appears not to work.
       - uses: actions/checkout@v7
+        continue-on-error: true
         with:
           ref: cla-signatures
-          # The branch does not exist until the first signature is recorded, and
-          # a repository whose first contributor has not signed yet is the
-          # ordinary state rather than a broken one.
-          continue-on-error: true
 
       - name: Has this author signed?
         env:

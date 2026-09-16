@@ -174,6 +174,14 @@ commit".
 
 ### Added
 
+- **Contributing needs a signed agreement, once.** A pull request from anybody
+  but the maintainer is blocked until its author has signed the Contributor
+  Licence Agreement — comment the sentence the bot names and it is recorded, on a
+  branch of this repository, where it stays readable however the tooling changes.
+  There is a version for an individual and one for contributing on behalf of an
+  employer; both grant rights of use rather than transfer copyright, and both say
+  plainly that no lawyer has read them.
+
 - **An item keeps a service history.** Record what was done to something, when,
   what it cost and why — with the invoice attached. Entries are listed with the
   most recent work first, by when the work was *done* rather than when it was
