@@ -178,7 +178,10 @@ commit".
   now checks it against a list of the hundred thousand most breached passwords
   that ships with the system — no service is called, because this system calls
   nobody. Twelve characters are still the minimum, and there is still no rule
-  demanding a capital letter or a digit.
+  demanding a capital letter or a digit. An operator who wants a live breach
+  service can install a plugin for it; it is asked after the list, receives five
+  characters of a hash rather than a password, and cannot let anything through.
+  *Plugin contract: a fifteenth port, `PasswordBreachCheck`. Additive.*
 
 - **An operator is told when the malware scanner is missing.** It was already
   impossible for an unscanned file to be served — uploads simply never become

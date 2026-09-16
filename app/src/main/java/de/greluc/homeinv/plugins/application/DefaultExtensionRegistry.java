@@ -105,7 +105,7 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
       Class<T> port, java.util.function.Predicate<PluginRegistry.Registration> consent) {
     PortAdapter<T> adapter = adapterFor(port);
     if (adapter == null) {
-      // Six of the fourteen ports belong to features that ship later and have
+      // Six of the fifteen ports belong to features that ship later and have
       // no adapter yet (ADR-0064). Answering "nothing implements it" is right
       // for them, and would also be right for a port whose adapter was removed.
       return List.of();

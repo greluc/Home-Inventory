@@ -12,6 +12,14 @@ import de.greluc.homeinv.identity.api.PasswordPolicy;
 import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.identity.application.DefaultPasswordPolicy;
 import de.greluc.homeinv.identity.infrastructure.BreachedPasswordList;
+import de.greluc.homeinv.plugin.api.CallContext;
+import de.greluc.homeinv.plugin.api.PluginException;
+import de.greluc.homeinv.plugin.api.port.PasswordBreachCheck;
+import de.greluc.homeinv.plugins.api.ExtensionRegistry;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +34,11 @@ import org.junit.jupiter.api.Test;
 class PasswordPolicyTest {
 
   private final BreachedPasswordList list = new BreachedPasswordList();
-  private final PasswordPolicy policy = new DefaultPasswordPolicy(list);
+
+  /** What an installation with no breach plugin resolves: nothing. */
+  private static final ExtensionRegistry NO_PLUGIN = registryReturning(null);
+
+  private final PasswordPolicy policy = new DefaultPasswordPolicy(list, NO_PLUGIN);
 
   @Test
   @DisplayName("refuses anything under twelve characters")
@@ -84,5 +96,94 @@ class PasswordPolicyTest {
     // count is the cheapest way to notice, and the constructor already refuses
     // an absent file outright.
     assertThat(list.size()).isEqualTo(100_000);
+  }
+
+  @Test
+  @DisplayName("asks a breach plugin, and never shows it a password")
+  void theServiceSeesOnlyAPrefix() {
+    AtomicReference<String> asked = new AtomicReference<>();
+    AtomicReference<CallContext> context = new AtomicReference<>();
+    // The real SHA-1 of "kitchenwindowseat". The service claims to know its
+    // suffix, so the password is refused although the shipped list has never
+    // heard of it — which is the only way to see that the plugin was consulted.
+    String hash = "6599057EB761E8B185290EE0DE3E61EE77B4DA94";
+    PasswordPolicy withPlugin =
+        new DefaultPasswordPolicy(
+            list,
+            registryReturning(
+                (callContext, prefix) -> {
+                  context.set(callContext);
+                  asked.set(prefix);
+                  return new PasswordBreachCheck.Range(List.of(hash.substring(5)));
+                }));
+
+    assertThatThrownBy(() -> withPlugin.check("kitchenwindowseat"))
+        .isInstanceOf(WeakPasswordException.class)
+        .hasMessageContaining("already known to attackers");
+
+    // Five characters, and they are the first five of the hash rather than of
+    // anything a person typed.
+    assertThat(asked.get()).hasSize(5).isEqualTo(hash.substring(0, 5));
+    // An instance call: a password is chosen where there is often no tenant.
+    assertThat(context.get().scope()).isEqualTo(CallContext.Scope.INSTANCE);
+    assertThat(context.get().tenantId()).isNull();
+  }
+
+  @Test
+  @DisplayName("accepts what the service does not know")
+  void theServiceKnowsNothing() {
+    PasswordPolicy withPlugin =
+        new DefaultPasswordPolicy(
+            list, registryReturning((callContext, prefix) -> new PasswordBreachCheck.Range(List.of())));
+
+    assertThatCode(() -> withPlugin.check("kitchenwindowseat")).doesNotThrowAnyException();
+  }
+
+  @Test
+  @DisplayName("keeps the list's verdict when the service cannot be reached")
+  void theServiceIsDown() {
+    PasswordPolicy withPlugin =
+        new DefaultPasswordPolicy(
+            list,
+            registryReturning(
+                (callContext, prefix) -> {
+                  throw new PluginException(
+                      PluginException.Kind.UNAVAILABLE, "the service is not answering");
+                }));
+
+    // An unreachable plugin weakens nothing and blocks nobody: it was never the
+    // floor, and an outage must not stop people changing their password.
+    assertThatCode(() -> withPlugin.check("kitchenwindowseat")).doesNotThrowAnyException();
+    // And the list still refuses what it knows.
+    assertThatThrownBy(() -> withPlugin.check("q1w2e3r4t5y6"))
+        .isInstanceOf(WeakPasswordException.class);
+  }
+
+  /**
+   * A registry that resolves the breach port to one implementation, or to none.
+   *
+   * @param service what to answer with, or {@code null} for an installation with no plugin
+   * @return the registry
+   */
+  private static ExtensionRegistry registryReturning(PasswordBreachCheck service) {
+    return new ExtensionRegistry() {
+      @Override
+      public <T> Optional<T> lookup(Class<T> port, UUID tenantId) {
+        return Optional.empty();
+      }
+
+      @Override
+      public <T> List<T> lookupAll(Class<T> port, UUID tenantId) {
+        return List.of();
+      }
+
+      @Override
+      @SuppressWarnings("unchecked")
+      public <T> Optional<T> lookupForInstance(Class<T> port) {
+        return port.equals(PasswordBreachCheck.class)
+            ? Optional.ofNullable((T) service)
+            : Optional.empty();
+      }
+    };
   }
 }

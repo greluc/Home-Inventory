@@ -2,6 +2,9 @@
 
 **Status:** Accepted · **Date:** 2026-09-16
 **Depends on:** [ADR-0026](0026-core-outbound-via-plugins.md)
+**Amends:** [ADR-0064](0064-the-ports-a-plugin-implements-are-apache.md) (a fifteenth port),
+[ADR-0066](0066-instance-level-capability-grants.md) (a second caller of the instance-level
+resolution)
 
 ## Context
 
@@ -72,6 +75,16 @@ change to `MINIMUM_LENGTH` must not silently need a new data file.
   "choose another", and naming the source only invites an argument about it.
 - **Length is reported before breach**, because "too short" is the fixable
   thing and a password that is both should be told the simpler truth.
+- **The port is the fifteenth**, so `REQ-PLG-001`, `PortCatalogueTest`, the
+  contract's own README and `CLAUDE.md` all say fifteen now. `ADR-0064`'s body
+  still says fourteen and is left alone: it records what was true when it was
+  written, and the note at its head says what changed.
+- **It is the second caller of `lookupForInstance`**, after the account
+  notifications of [ADR-0066](0066-instance-level-capability-grants.md). A
+  password is chosen where there is often no tenant — at registration and at a
+  reset from the login page — so a per-tenant resolution would leave the plugin
+  silent on exactly the paths that matter. The ArchUnit rule now names two
+  blocks instead of one, which is still a list and not a door.
 - **The vendored file is third-party content in a public repository**, which
   means `REUSE.toml` carries its copyright and MIT licence explicitly. Without
   that entry the repository would declare somebody else's list as AGPL, which is

@@ -364,20 +364,28 @@ class ArchitectureRulesTest {
   }
 
   @Test
-  @DisplayName("let only the notification block resolve a plugin at instance level")
+  @DisplayName("let only the two named blocks resolve a plugin at instance level")
   void onlyAccountNotificationsResolveAtInstanceLevel() {
-    // ADR-0066. The capability model has a second level so that a security
-    // notification reaches an account belonging to no tenant (REQ-NOTI-004). It
-    // is a widening, and a widening is only as narrow as its callers: with one
-    // named user it stays what it was decided to be, with any user it becomes a
-    // way to reach a plugin without a tenant's consent.
+    // ADR-0066, amended by ADR-0067. The capability model has a second level so
+    // that something reaching an account with no tenant is possible at all. It is
+    // a widening, and a widening is only as narrow as its callers: with a named
+    // list it stays what it was decided to be, with any caller it becomes a way
+    // to reach a plugin without a tenant's consent.
+    //
+    // Two callers, and each had to argue for itself. `notification` raises the
+    // security mail of REQ-NOTI-004 for an account that may be a member of
+    // nothing; `identity` asks the optional breach service of REQ-SEC-011 about
+    // a password chosen at registration or at a reset from the login page, where
+    // there is no tenant either.
     //
     // The plugins block itself is excluded because that is where the method is
     // declared and implemented.
     noClasses()
         .that()
         .resideOutsideOfPackages(
-            "de.greluc.homeinv.notification..", "de.greluc.homeinv.plugins..")
+            "de.greluc.homeinv.notification..",
+            "de.greluc.homeinv.identity..",
+            "de.greluc.homeinv.plugins..")
         .should()
         .callMethodWhere(
             DescribedPredicate.describe(
@@ -391,7 +399,8 @@ class ArchitectureRulesTest {
                         && target.getTarget().getName().equals("lookupForInstance")))
         .because(
             "an instance-level resolution bypasses every tenant's consent by design, and only "
-                + "the account notifications of REQ-NOTI-004 are allowed to need that (ADR-0066)")
+                + "the account notifications of REQ-NOTI-004 and the breach check of REQ-SEC-011 "
+                + "are allowed to need that (ADR-0066, ADR-0067)")
         .check(CLASSES);
   }
 

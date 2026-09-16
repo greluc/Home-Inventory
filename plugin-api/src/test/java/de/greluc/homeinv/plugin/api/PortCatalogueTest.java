@@ -21,12 +21,12 @@ import org.junit.jupiter.api.Test;
 /**
  * The ports REQ-PLG-001 names are the ports that exist.
  *
- * <p>The requirement lists fourteen extension points by name. That list is a fact stated twice —
+ * <p>The requirement lists fifteen extension points by name. That list is a fact stated twice —
  * once in the catalogue and once in this source tree — and this test is what keeps the second copy
  * from drifting. A port renamed in code and not in the requirement fails here, which is the
  * cheapest moment to notice.
  *
- * <p>Six of the fourteen belong to features that ship at stage 2 or 3. They exist now because the
+ * <p>Six of the fifteen belong to features that ship at stage 2 or 3. They exist now because the
  * contract is written once (ADR-0028), and because a port added after the runtime was built is a
  * port the runtime was not designed for.
  */
@@ -43,7 +43,7 @@ class PortCatalogueTest {
 
     assertThat(named)
         .as("REQ-PLG-001 names the ports in its description cell; the row was not found or is empty")
-        .hasSize(14);
+        .hasSize(15);
 
     List<String> missing = new ArrayList<>();
     List<String> notAnInterface = new ArrayList<>();

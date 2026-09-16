@@ -6,6 +6,13 @@
 a second level), [07 §7.1](../architecture/07-data-model.md) (one more table on the
 closed instance-wide list)
 
+> **Amended by [ADR-0067](0067-breached-passwords-from-a-shipped-list.md)**: the
+> instance-level resolution gains a **second** named caller. A password is chosen where
+> there is often no tenant — at registration, and at a reset asked for from the login
+> page — so the optional `PasswordBreachCheck` plugin is resolved the same way the
+> account notifications are. The rule below still names its callers exhaustively; it now
+> names two.
+
 ## Context
 
 `REQ-NOTI-004` is unambiguous: **security-relevant account events are always
