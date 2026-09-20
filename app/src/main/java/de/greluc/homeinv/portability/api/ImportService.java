@@ -50,11 +50,23 @@ public interface ImportService {
    * @param actor who asked
    * @param archive the uploaded bytes, which this method reads to the end and does not close
    * @param dryRun whether to walk the whole import and then roll it back
+   * @param profileKey the mapping profile that reads a CSV — {@code homebox}, {@code inventree} or
+   *     a profile the tenant wrote — or null when the upload is this application's own archive
    * @return the queued job
    * @throws java.io.IOException when the upload cannot be stored
+   * @throws IllegalArgumentException when no profile has that key
    */
-  ImportJobView accept(UUID actor, java.io.InputStream archive, boolean dryRun)
+  ImportJobView accept(UUID actor, java.io.InputStream archive, boolean dryRun, String profileKey)
       throws java.io.IOException;
+
+  /**
+   * The mapping profiles this tenant may import with (REQ-PORT-002).
+   *
+   * <p>The two that ship — Homebox and InvenTree — followed by any the tenant wrote.
+   *
+   * @return the profiles, built-in ones first
+   */
+  java.util.List<MappingProfile> profiles();
 
   /**
    * One import job.

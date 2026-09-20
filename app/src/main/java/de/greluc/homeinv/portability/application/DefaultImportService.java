@@ -8,7 +8,9 @@ import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.portability.api.ArchiveStore;
 import de.greluc.homeinv.portability.api.ImportService;
+import de.greluc.homeinv.portability.api.MappingProfile;
 import de.greluc.homeinv.portability.infrastructure.ImportJobQueries;
+import de.greluc.homeinv.portability.infrastructure.MappingProfiles;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,11 +45,22 @@ public class DefaultImportService implements ImportService {
 
   private final ImportJobQueries jobs;
   private final ArchiveStore blobs;
+  private final MappingProfiles profiles;
 
   @Override
-  public ImportJobView accept(UUID actor, InputStream archive, boolean dryRun) throws IOException {
+  public ImportJobView accept(
+      UUID actor, InputStream archive, boolean dryRun, String profileKey)
+      throws IOException {
     UUID tenantId = TenantContext.require();
-    Path temporary = Files.createTempFile("homeinv-import-", ".zip");
+    if (profileKey != null && profiles.profileOf(profileKey).isEmpty()) {
+      // Refused here, in the request that named it, rather than by the worker
+      // minutes later: a typo in a profile name is a mistake somebody can fix
+      // while they are still looking at the screen.
+      throw new IllegalArgumentException(
+          "No mapping profile is called '" + profileKey + "'. "
+              + profiles.all().stream().map(MappingProfile::key).toList());
+    }
+    Path temporary = Files.createTempFile("homeinv-import-", ".upload");
     try {
       MessageDigest digest;
       try {
@@ -76,12 +89,17 @@ public class DefaultImportService implements ImportService {
       // A wrapper here would be a self-invocation -- `this.queue(...)` does not
       // pass through the proxy -- so the annotation would do nothing at all and
       // the tests would still pass, because they call through the bean.
-      UUID id = jobs.queue(tenantId, actor, sha256, size, dryRun);
+      UUID id = jobs.queue(tenantId, actor, sha256, size, dryRun, profileKey);
       log.info("An archive of {} byte(s) was accepted for tenant {}", size, tenantId);
       return jobs.byId(tenantId, id).orElseThrow();
     } finally {
       deleteQuietly(temporary);
     }
+  }
+
+  @Override
+  public List<MappingProfile> profiles() {
+    return profiles.all();
   }
 
   @Override

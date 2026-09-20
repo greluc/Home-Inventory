@@ -105,7 +105,7 @@ class ArchiveMoveIT extends AbstractIntegrationTest {
             to,
             () -> {
               try (InputStream archive = inOwn(from, () -> openQuietly(export.id()))) {
-                return imports.accept(to.userId(), archive, false);
+                return imports.accept(to.userId(), archive, false, null);
               } catch (java.io.IOException unreadable) {
                 throw new IllegalStateException(unreadable);
               }
@@ -149,7 +149,7 @@ class ArchiveMoveIT extends AbstractIntegrationTest {
             to,
             () -> {
               try (InputStream archive = inOwn(from, () -> openQuietly(export.id()))) {
-                return imports.accept(to.userId(), archive, true);
+                return imports.accept(to.userId(), archive, true, null);
               } catch (java.io.IOException unreadable) {
                 throw new IllegalStateException(unreadable);
               }

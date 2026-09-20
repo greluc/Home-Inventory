@@ -61,6 +61,7 @@ dependencies {
     // checks the generated document itself, so the server and an offline client
     // reach the same verdict rather than two implementations of the same rules.
     implementation(libs.json.schema.validator)
+    implementation(libs.jackson.dataformat.csv)
     // WebAuthn/passkeys (REQ-AUTH-002). Configured with no metadata service and
     // no certificate-path validation: the core opens no outbound connection
     // (ADR-0026), and a self-hosted instance has nothing to attest against.

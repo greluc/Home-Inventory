@@ -69,6 +69,11 @@ class CatalogSchemaTest {
           }
 
           @Override
+          public java.util.Optional<UUID> itemTypeByKey(String key) {
+            return java.util.Optional.empty();
+          }
+
+          @Override
           public java.util.Map<UUID, TypeIdentity> typesOfVersions(
               java.util.Collection<UUID> versionIds) {
             // Nor what a version's type is called.

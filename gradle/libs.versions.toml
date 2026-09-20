@@ -103,6 +103,14 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+
+# CSV, for the imports of REQ-PORT-001/002. No version and no new vendor: it is
+# the same Jackson 3 the whole application already speaks, from the same BOM as
+# the YAML and CBOR dataformats beside it. A hand-written RFC 4180 reader was the
+# alternative and was rejected -- quoted newlines, doubled quotes, a BOM and CRLF
+# are exactly the edge cases a parser gets wrong, and this one reads a file
+# somebody uploaded.
+jackson-dataformat-csv = { module = "tools.jackson.dataformat:jackson-dataformat-csv" }
 # `org.springframework.boot:...`, not `org.springframework.session:...`. Boot 4
 # moved every auto-configuration out of `spring-boot-autoconfigure` into a module
 # per technology, and the plain Spring Session artefact carries none: with it

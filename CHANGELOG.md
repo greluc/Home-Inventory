@@ -194,6 +194,14 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **You can bring an inventory in from Homebox or InvenTree.** Upload their CSV
+  export, pick the profile, and the things arrive with their places, their tags
+  and what they cost — the place path becomes a real tree rather than a label.
+  A dry run shows you the first rows as they would be written, and importing the
+  same file again updates what came from it rather than making a second copy.
+  Columns this inventory has no field for are listed rather than silently
+  dropped; a date that is not a date stops the whole import with the line named.
+
 - **An archive can be read back in.** Upload an export to another instance and the
   inventory arrives — items, places, tags, photographs and the type definitions they
   are written against, which is what makes them mean anything. It is all-or-nothing:

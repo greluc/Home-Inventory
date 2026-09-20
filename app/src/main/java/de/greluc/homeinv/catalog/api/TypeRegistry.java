@@ -40,6 +40,21 @@ public interface TypeRegistry {
   UUID publishedItemTypeVersion(UUID itemTypeId);
 
   /**
+   * The item type with this key, if the tenant has one.
+   *
+   * <p>By key rather than by id, for the one caller that knows a type by name rather than by
+   * reference: an import writes its rows against a type the person importing named — {@code
+   * general} unless they said otherwise — and a key is what a mapping profile can carry, because a
+   * profile is the same on every instance and an id is not.
+   *
+   * @param key the type's key, as a tenant's catalogue holds it
+   * @return the type's id, or empty when the tenant has no type with that key. Empty rather than an
+   *     exception: a profile naming a type somebody has since deleted is a mistake to report, not a
+   *     failure to throw from a registry
+   */
+  java.util.Optional<UUID> itemTypeByKey(String key);
+
+  /**
    * The published version a location category currently points at.
    *
    * @param categoryId the category

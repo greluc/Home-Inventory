@@ -18,7 +18,7 @@ for **the move** as its acceptance test. Until now only half of that existed: te
 wrote themselves into an archive and nothing read one back, so the sentence was a claim
 about a file rather than about a system.
 
-Four questions had to be answered before any of it could be written, and none of them
+Five questions had to be answered before any of it could be written, and none of them
 follows from the code.
 
 ## Decision
@@ -79,6 +79,44 @@ A dry run (`REQ-PORT-001`) writes every row, meets or fails every constraint, an
 back on purpose. It is deliberately **not** a separate, simpler code path: a preview produced
 by different code is a preview of something else, which is the one failure a dry run exists
 to prevent.
+
+### 5. A CSV is the same job, read through a profile of pairs
+
+`REQ-PORT-001` asks for a CSV import with a mapping profile, a preview and a dry run, and
+`REQ-PORT-002` for profiles for Homebox and InvenTree. It is the **same** `import_job` — the
+same upload, queue, single transaction and report — with one column saying which profile
+reads it. A second table would have duplicated the state machine, the claiming and the
+report for one column's worth of difference.
+
+A profile is **pairs and nothing else**: this column is that field. No expressions, no
+conditions, no defaults that depend on another column. ADR-0020 says the configuration
+surface must not become a programming language, and a mapping with an `if` in it is the
+first step of exactly that. A file needing more than pairs is edited before it is uploaded,
+or handled by a plugin.
+
+The two that ship are **constants**, not rows. They are identical on every instance and in
+every tenant, so a row per tenant per profile would be provisioning writing the same thing a
+thousand times — and a built-in nobody may edit is what a constant already is. A tenant
+needing one changed copies it, keeps the key and edits the columns; its own then wins.
+
+Their column names come from each system's own source rather than from its documentation:
+Homebox tags every field of `io_row.go` with the header it writes, which is why
+`HB.purchase_time` sits beside `HB.purchase_date` — an older installation writes the older
+spelling, and that is exactly the file somebody is migrating away from.
+
+Three reactions to what a file carries, and the difference between them is the decision:
+
+| What | What happens | Why |
+|---|---|---|
+| A column the profile does not map | Reported, skipped | Another system's export always carries columns this one has no home for |
+| An attribute the item type does not declare | Reported, skipped | Which fields an item has is the tenant's decision (ADR-0020); refusing the file until they create them would make a migration a project |
+| A value that is not what its column says it is | **Fails the import**, naming the line | A date that is not a date is data loss, not a mismatch of vocabulary |
+
+Places and tags named in a file are **created** when they are missing. The alternative
+refuses every row whose place does not exist yet, which on a first import is all of them.
+Both go through their own service rather than being written behind its back, so the depth
+ceiling, the category rules and the audit entries all apply: an import is not a way around
+the rules the tree has.
 
 ## Consequences
 

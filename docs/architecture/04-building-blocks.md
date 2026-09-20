@@ -464,7 +464,19 @@ channels — and its report says so in as many words
 ([ADR-0069](../adr/0069-an-import-merges-by-id-and-writes-no-people.md),
 `ArchiveMoveIT`).
 
-**Who may ask.** All four `/api/v1/export-jobs` endpoints and all three
+**A file from somewhere else.** The same job with a mapping profile on it:
+`POST /api/v1/import-jobs?profile=homebox` reads a CSV through a set of pairs — this
+column is that field, and nothing in a profile is an expression (ADR-0020). **Homebox and
+InvenTree ship**, as constants rather than rows, with the column names taken from each
+system's own source. A place path becomes a real tree and unknown tags become tags,
+because refusing a row whose place does not exist yet refuses every row of a first
+import. What the file carries and this inventory has no field for is **reported**; a
+value that is not what its column says it is **fails the whole import**, naming the line
+(REQ-PORT-001, REQ-PORT-002, `CsvImportIT`). Every item it writes keeps a provenance row
+saying where it came from, which is also what makes importing the same file twice an
+update rather than a second copy (REQ-PORT-008).
+
+**Who may ask.** All four `/api/v1/export-jobs` endpoints and all four
 `/api/v1/import-jobs` endpoints require
 `portability:export:request`, held by `ADMIN` and `OWNER`. It is not
 `tenancy:tenant:read`, because taking a copy of everything is not the same act as reading

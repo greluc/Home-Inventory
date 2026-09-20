@@ -43,6 +43,21 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public java.util.Optional<UUID> itemTypeByKey(String key) {
+    return jdbc
+        .sql(
+            """
+            select id from catalog.item_type
+            where tenant_id = ? and key = ? and archived_at is null
+            """)
+        .param(TenantContext.require())
+        .param(key)
+        .query(UUID.class)
+        .optional();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public UUID publishedItemTypeVersion(UUID itemTypeId) {
     UUID tenantId = TenantContext.require();
     return jdbc

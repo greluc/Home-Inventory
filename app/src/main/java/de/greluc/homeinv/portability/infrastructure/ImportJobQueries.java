@@ -57,16 +57,23 @@ public class ImportJobQueries {
    * @param sha256 where the archive is in the blob store
    * @param byteSize how large it is
    * @param dryRun whether the work is thrown away at the end
+   * @param profileKey which mapping profile reads it, or null for an archive
    * @return the new job's id
    */
   @Transactional
-  public UUID queue(UUID tenantId, UUID actor, String sha256, long byteSize, boolean dryRun) {
+  public UUID queue(
+      UUID tenantId,
+      UUID actor,
+      String sha256,
+      long byteSize,
+      boolean dryRun,
+      String profileKey) {
     return jdbc
         .sql(
             """
             insert into portability.import_job
-                (tenant_id, requested_by, sha256, byte_size, dry_run)
-            values (?, ?, ?, ?, ?)
+                (tenant_id, requested_by, sha256, byte_size, dry_run, kind, profile_key)
+            values (?, ?, ?, ?, ?, ?, ?)
             returning id
             """)
         .param(tenantId)
@@ -74,6 +81,8 @@ public class ImportJobQueries {
         .param(sha256)
         .param(byteSize)
         .param(dryRun)
+        .param(profileKey == null ? "ARCHIVE" : "CSV")
+        .param(profileKey)
         .query(UUID.class)
         .single();
   }
@@ -90,7 +99,8 @@ public class ImportJobQueries {
         jdbc
             .sql(
                 """
-                select id, sha256, dry_run from portability.import_job
+                select id, sha256, dry_run, kind, profile_key, requested_by
+                  from portability.import_job
                  where tenant_id = ? and state = 'QUEUED'
                  order by requested_at
                  limit 1
@@ -102,7 +112,10 @@ public class ImportJobQueries {
                     new Claimed(
                         rs.getObject("id", UUID.class),
                         rs.getString("sha256"),
-                        rs.getBoolean("dry_run")))
+                        rs.getBoolean("dry_run"),
+                        rs.getString("kind"),
+                        rs.getString("profile_key"),
+                        rs.getObject("requested_by", UUID.class)))
             .optional();
     claimed.ifPresent(
         job ->
@@ -254,8 +267,12 @@ public class ImportJobQueries {
    * A job claimed for this run.
    *
    * @param id which job
-   * @param sha256 where its archive is
+   * @param sha256 where the uploaded file is
    * @param dryRun whether to throw the work away at the end
+   * @param kind {@code ARCHIVE} or {@code CSV}
+   * @param profileKey which mapping profile reads it, for a CSV
+   * @param requestedBy who asked, recorded as the author of what the import writes
    */
-  public record Claimed(UUID id, String sha256, boolean dryRun) {}
+  public record Claimed(
+      UUID id, String sha256, boolean dryRun, String kind, String profileKey, UUID requestedBy) {}
 }

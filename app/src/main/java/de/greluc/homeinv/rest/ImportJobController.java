@@ -53,6 +53,8 @@ public class ImportJobController {
    * @param user the authenticated caller
    * @param file the archive, as produced by an export
    * @param dryRun whether to walk the whole import and then roll it back, writing nothing
+   * @param profile which mapping profile reads a CSV — {@code homebox}, {@code inventree} or one
+   *     the tenant wrote. Absent for this application's own archive, which needs no mapping
    * @return {@code 202} with the queued job and a {@code Location} pointing at it
    * @throws IOException when the upload cannot be stored
    */
@@ -72,10 +74,11 @@ public class ImportJobController {
   public ResponseEntity<ImportService.ImportJobView> upload(
       @AuthenticationPrincipal AuthenticatedUser user,
       @RequestParam("file") MultipartFile file,
-      @RequestParam(required = false, defaultValue = "false") boolean dryRun)
+      @RequestParam(required = false, defaultValue = "false") boolean dryRun,
+      @RequestParam(required = false) String profile)
       throws IOException {
     try (InputStream bytes = file.getInputStream()) {
-      ImportService.ImportJobView job = imports.accept(user.userId(), bytes, dryRun);
+      ImportService.ImportJobView job = imports.accept(user.userId(), bytes, dryRun, profile);
       return ResponseEntity.accepted()
           .header(HttpHeaders.LOCATION, "/api/v1/import-jobs/" + job.id())
           .body(job);
@@ -88,6 +91,24 @@ public class ImportJobController {
    * @param limit how many at most; capped at 200
    * @return the jobs
    */
+  /**
+   * The mapping profiles a CSV may be read with (REQ-PORT-002).
+   *
+   * <p>Bounded like every other collection (REQ-NFR-010), although this one is two plus whatever a
+   * tenant wrote: the rule is about the shape of an endpoint rather than about today's row count,
+   * and a list that is short now is a list nobody notices growing.
+   *
+   * @param limit how many at most; capped at 200
+   * @return the two that ship, followed by any this tenant wrote
+   */
+  @GetMapping(path = "/profiles", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.TENANT_EXPORT)
+  @CanFail(ProblemType.MALFORMED_REQUEST)
+  public List<de.greluc.homeinv.portability.api.MappingProfile> profiles(
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return imports.profiles().stream().limit(limit).toList();
+  }
+
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TENANT_EXPORT)
   @CanFail(ProblemType.MALFORMED_REQUEST)

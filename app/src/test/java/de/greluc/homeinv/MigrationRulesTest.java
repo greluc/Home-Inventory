@@ -131,6 +131,10 @@ class MigrationRulesTest {
           "notification.reminder",
           "portability.export_job",
           "portability.import_job",
+          // Append-only: a second import of the same file writes a second row
+          // rather than editing the first, which is what makes the table the
+          // history REQ-PORT-008 asks the provenance to be visible in.
+          "portability.import_provenance",
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",

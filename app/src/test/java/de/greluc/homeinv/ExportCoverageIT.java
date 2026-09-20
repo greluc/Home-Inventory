@@ -97,7 +97,9 @@ class ExportCoverageIT extends AbstractIntegrationTest {
           Map.entry("data/authorization/field-visibility.jsonl", "authz.field_visibility"),
           Map.entry("data/notification/reminder-rules.jsonl", "notification.notification_rule"),
           Map.entry("data/notification/subscriptions.jsonl", "notification.subscription"),
-          Map.entry("data/search/saved-searches.jsonl", "search.saved_search"));
+          Map.entry("data/search/saved-searches.jsonl", "search.saved_search"),
+          Map.entry("data/portability/mapping-profiles.jsonl",
+              "portability.mapping_profile"));
 
   /**
    * Columns deliberately left out, and why.
@@ -195,6 +197,11 @@ class ExportCoverageIT extends AbstractIntegrationTest {
           Map.entry(
               "portability.export_job",
               "The archive would contain the record of its own making, and of every earlier one"),
+          Map.entry(
+              "portability.import_provenance",
+              "Every row of it points at an import job, and on the receiving instance there is no "
+                  + "such job. Where an item came from is a fact about the instance it was "
+                  + "imported into, made afresh there by the import that brings it"),
           Map.entry(
               "portability.import_job",
               "The other direction of the same thing: an archive that carried the record of being "
@@ -474,6 +481,18 @@ class ExportCoverageIT extends AbstractIntegrationTest {
                   """)
               .param(tenant.tenantId())
               .param(search)
+              .param(tenant.userId())
+              .param(tenant.userId())
+              .update();
+          jdbc.sql(
+                  """
+                  insert into portability.mapping_profile
+                      (tenant_id, key, name, source, column_map, default_currency, created_by,
+                       updated_by)
+                  values (?, 'the-old-spreadsheet', 'The old spreadsheet', 'spreadsheet',
+                          '{"Thing": "name"}'::jsonb, 'EUR', ?, ?)
+                  """)
+              .param(tenant.tenantId())
               .param(tenant.userId())
               .param(tenant.userId())
               .update();

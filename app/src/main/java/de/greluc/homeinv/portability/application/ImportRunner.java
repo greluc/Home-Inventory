@@ -7,8 +7,10 @@ package de.greluc.homeinv.portability.application;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.portability.api.ArchiveStore;
 import de.greluc.homeinv.portability.api.ImportTarget;
+import de.greluc.homeinv.portability.api.MappingProfile;
 import de.greluc.homeinv.portability.api.Remapping;
 import de.greluc.homeinv.portability.infrastructure.ImportJobQueries;
+import de.greluc.homeinv.portability.infrastructure.MappingProfiles;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Comparator;
@@ -53,6 +55,8 @@ public class ImportRunner {
   private final ObjectMapper json;
   private final List<ImportTarget> targets;
   private final TransactionTemplate transactions;
+  private final CsvImportRunner csv;
+  private final MappingProfiles profiles;
 
   /**
    * Creates the runner.
@@ -62,16 +66,22 @@ public class ImportRunner {
    * @param json the mapper
    * @param targets every block that reads part of an archive
    * @param transactions how the one transaction is taken and, for a dry run, given back
+   * @param csv the other kind of import, for a file from another system
+   * @param profiles what a CSV's columns mean
    */
   public ImportRunner(
       ImportJobQueries jobs,
       ArchiveStore blobs,
       ObjectMapper json,
       List<ImportTarget> targets,
-      TransactionTemplate transactions) {
+      TransactionTemplate transactions,
+      CsvImportRunner csv,
+      MappingProfiles profiles) {
     this.jobs = jobs;
     this.blobs = blobs;
     this.json = json;
+    this.csv = csv;
+    this.profiles = profiles;
     // Sorted by the order each block declares, not by name: an item written
     // against a type version that has not arrived is a row that cannot be
     // inserted, and a place inside a place that has not arrived is the same
@@ -117,6 +127,10 @@ public class ImportRunner {
    */
   private void run(UUID tenantId, ImportJobQueries.Claimed job) {
     try {
+      if ("CSV".equals(job.kind())) {
+        readCsv(tenantId, job);
+        return;
+      }
       ArchiveReader archive;
       try (InputStream bytes = blobs.open(tenantId, job.sha256())) {
         archive = new ArchiveReader(json, bytes);
@@ -170,6 +184,45 @@ public class ImportRunner {
       log.error("An import failed for tenant {}", tenantId, failed);
       jobs.failed(tenantId, job.id(), reasonOf(failed));
     }
+  }
+
+  /**
+   * Reads one CSV through its mapping profile.
+   *
+   * <p>The same transaction rule as an archive: all of it or none of it, and a dry run does the
+   * work and gives it back (REQ-PORT-001, REQ-PORT-007). What differs is only what is in the file.
+   *
+   * @param tenantId whose
+   * @param job which job
+   * @throws IOException when the upload cannot be read
+   */
+  private void readCsv(UUID tenantId, ImportJobQueries.Claimed job) throws IOException {
+    MappingProfile profile =
+        profiles
+            .profileOf(job.profileKey())
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "No mapping profile is called '" + job.profileKey() + "' any more."));
+
+    Map<String, Object> report = new LinkedHashMap<>();
+    report.put("dryRun", job.dryRun());
+    try (InputStream bytes = blobs.open(tenantId, job.sha256())) {
+      transactions.executeWithoutResult(
+          status -> {
+            report.putAll(csv.read(bytes, profile, job.id(), job.requestedBy()));
+            jobs.progress(tenantId, job.id(), 95);
+            if (job.dryRun()) {
+              status.setRollbackOnly();
+            }
+          });
+    }
+    jobs.done(tenantId, job.id(), json.writeValueAsString(report));
+    log.info(
+        "A {} file was read into tenant {} ({})",
+        profile.key(),
+        tenantId,
+        job.dryRun() ? "dry run, rolled back" : "committed");
   }
 
   /**

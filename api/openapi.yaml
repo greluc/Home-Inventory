@@ -1553,6 +1553,55 @@ components:
       - kind
       - performedOn
       type: object
+    MappingProfile:
+      description: |-
+        What a CSV's columns mean (REQ-PORT-001, REQ-PORT-002).
+
+        ## Data, not a language
+
+        A profile is a set of pairs: this column is that field. Nothing in it is an expression, a
+        formula or a condition, and that is a rule rather than an omission — ADR-0020 says the
+        configuration surface must not become a programming language, and a mapping with an `if` in
+        it is the first step of exactly that. A file that needs more than pairs needs editing before it
+        is uploaded, or a plugin.
+
+        ## Two ship with the product
+
+        Homebox and InvenTree (REQ-PORT-002), as constants rather than as rows: they are the same on
+        every instance and in every tenant, so a row per tenant would be provisioning writing the same
+        thing over and over, and a built-in nobody may edit is what a constant already is. A tenant
+        needing one of them changed copies it into a profile of its own.
+      properties:
+        columns:
+          additionalProperties:
+            type: string
+          description: |-
+            the mapping, from the CSV's own header to a target. A header the map does not name
+            is reported and not written; the report lists them once, because a column nobody mapped is
+            usually a column somebody meant to
+          type: object
+        defaultCurrency:
+          description: |-
+            the currency every price in the file is in. A CSV rarely says, and
+            guessing per row is how a household ends up owning things in three currencies
+          type: string
+        itemTypeKey:
+          description: |-
+            which item type the rows are written against, or null for the tenant's
+            built-in `general`
+          type: string
+        key:
+          description: how the profile is named in a request — `homebox`, `inventree`
+          type: string
+        name:
+          description: what it is called in a list
+          type: string
+        source:
+          description: |-
+            the system a file comes from, recorded as the provenance of every item it creates
+            (REQ-PORT-008)
+          type: string
+      type: object
     MediaView:
       description: |-
         What a client learns about a stored file.
@@ -7073,11 +7122,9 @@ paths:
       summary: Withdraws such a grant
   /api/v1/import-jobs:
     get:
-      description: This tenant's import jobs, newest first.
       operationId: listJobs
       parameters:
-      - description: how many at most; capped at 200
-        in: query
+      - in: query
         name: limit
         required: false
         schema:
@@ -7094,7 +7141,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/ImportJobView'
                 type: array
-          description: the jobs
+          description: OK
         '400':
           content:
             application/problem+json:
@@ -7137,7 +7184,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: This tenant's import jobs, newest first.
     post:
       description: Uploads an archive and queues it (REQ-PORT-007).
       operationId: upload
@@ -7149,6 +7195,14 @@ paths:
         schema:
           default: false
           type: boolean
+      - description: |-
+          which mapping profile reads a CSV — `homebox`, `inventree` or one
+          the tenant wrote. Absent for this application's own archive, which needs no mapping
+        in: query
+        name: profile
+        required: false
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
@@ -7217,6 +7271,78 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Uploads an archive and queues it (REQ-PORT-007).
+  /api/v1/import-jobs/profiles:
+    get:
+      description: |-
+        The mapping profiles a CSV may be read with (REQ-PORT-002).
+
+        Bounded like every other collection (REQ-NFR-010), although this one is two plus whatever a
+        tenant wrote: the rule is about the shape of an endpoint rather than about today's row count,
+        and a list that is short now is a list nobody notices growing.
+      operationId: profiles
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MappingProfile'
+                type: array
+          description: the two that ship, followed by any this tenant wrote
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The mapping profiles a CSV may be read with (REQ-PORT-002)
   /api/v1/import-jobs/{id}:
     get:
       description: One import job, which is how progress is watched and the report is read.
