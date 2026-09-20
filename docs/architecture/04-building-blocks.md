@@ -515,7 +515,7 @@ back is named in the manifest's `withheld` list.
 |---|---|
 | Schema | `plugins` |
 | Key notions | `PluginRegistration`, `PluginManifest`, `GrantedCapability`, `PluginInstance`, `HealthState`, `PluginAuditEntry` |
-| Publishes | `ExtensionRegistry.lookup(Port.class, tenantId)`, `PluginLifecycle`, `CapabilityGuard` |
+| Publishes | `ExtensionRegistry.lookup(Port.class, tenantId)`, `PluginRegistry` (what is installed, and what each tenant and the instance have granted it), `PluginCircuitOpened` |
 | Events | `PluginRegistered`, `PluginEnabled`, `PluginDisabled`, `PluginCallFailed`, `PluginCircuitOpened` |
 | Details | [09 Extensibility](09-extensibility-and-plugins.md) |
 

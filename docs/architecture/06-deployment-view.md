@@ -537,7 +537,7 @@ Only Docker was measured; Podman with `pasta` and `kind` remain as CI work. That
 does not weaken the conclusion — the service matrix generates **one** topology for
 all three, so a shape Docker cannot carry is a shape the design cannot use.
 
-Six properties, all verified in CI by a connectivity test rather than asserted:
+Seven properties, all verified in CI by a connectivity test rather than asserted:
 
 - **A plugin reaches PostgreSQL, OpenSearch, RabbitMQ or Valkey not at all.** It
   speaks gRPC with the core and HTTP with the proxy, nothing else.
@@ -564,6 +564,18 @@ Six properties, all verified in CI by a connectivity test rather than asserted:
   `REQ-SEC-102`'s "holds no data, no credential, no domain logic" was true of what it
   *holds* and silent about what it could *reach* — the same distinction
   [ADR-0037](../adr/0037-per-plugin-network-segments.md) drew for plugins.
+
+**The one port a plugin segment is meant to reach is 8091 on `api`** — the host
+channel of [ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md), off
+unless `HOMEINV_PLUGIN_HOST_PORT` names it. It is the one core listener that is *not*
+bound to a segment, because there is no single segment to bind it to: `api` is a member
+of every plugin segment. What refuses a caller there is the TLS handshake — the
+certificate must be the one pinned at that plugin's registration — and that is proved
+by `HostChannelIT` over a real socket rather than by this suite, which opens TCP
+connections and can neither present a client certificate nor read a gRPC status. The
+network-shape half of it — a plugin segment reaches 8091 and no other core port —
+joins the list above with the first plugin container in `deploy/services.yaml`
+(`REQ-PLG-013`), of which there is none yet.
 
 ### The `web` → `api` hop, and what it must not do
 
@@ -820,6 +832,7 @@ data loss, no migration.
 | `HOMEINV_MQ_USER`, `_PASSWORD_FILE` | yes in `standard`/`ha` | RabbitMQ user. There was none, and `guest` is loopback-only — the generated stack could not connect at all |
 | `HOMEINV_SEARCH_USER`, `_PASSWORD_FILE` | yes in `standard`/`ha` | The core's OpenSearch client user, distinct from the admin account |
 | `HOMEINV_PLUGINS_FILE` | no | Where the generated list of installed plugins is (`REQ-PLG-013`). Generated from `deploy/services.yaml` beside the units, the per-plugin network segment ([ADR-0037](../adr/0037-per-plugin-network-segments.md)) and the egress allowlist, so the registration and the container cannot disagree. The core reads that list and nothing else — it fetches nothing and installs nothing, because installation stays an operator action. Unset means no plugins, which is what `minimal` is and is a complete deployment rather than a degraded one |
+| `HOMEINV_PLUGIN_HOST_PORT` | no (`0`, off) | The port on which `api` answers the plugins that call **it** — the one channel whose direction is reversed ([ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md), `REQ-PLG-016`), serving `HostServices.RenderDocument` and nothing else. `0` is off, and off is right until a plugin is installed that holds `host:render-document`: a listener nothing can authenticate to is still a listener. Set it to `8091`, which is what `deploy/services.yaml` reserves. Unlike the management port it is **not** bound to one segment, because `api` sits on every plugin segment and there is no single segment to bind to — what gates it is mTLS against the fingerprint pinned at registration, refused in the handshake rather than in the call. `worker` runs no second copy: every plugin segment has `api` on it |
 | `HOMEINV_SEARCH_ENGINE` | no (`postgresql`) | Which engine answers a search: `postgresql` or `opensearch` ([ADR-0008](../adr/0008-search.md), `REQ-SRCH-005`). `minimal` has no OpenSearch at all and leaves this alone; `standard` and `ha` set `opensearch`. Deliberately a **switch and not a probe** — "use it if it answers" would erase the difference between an installation deliberately running without an index and one whose index is down, and the second is what `meta.degraded` reports ([ADR-0039](../adr/0039-degraded-response-signalling.md)). Choosing `opensearch` without `HOMEINV_SEARCH_URL`, `_USER` and `_PASSWORD_FILE` **aborts startup**: an operator who asked for OpenSearch and silently got the other engine has a deployment that is not the one they described. The generated Quadlet unit deliberately does not state the default: systemd does not interpolate `Environment=`, so a unit carrying `${HOMEINV_SEARCH_ENGINE:-postgresql}` handed the container those characters and the worker refused to start on a circular placeholder (fixed 2026-09-15, and the generator now refuses to emit one). An operator who wants `opensearch` sets it in the environment file the unit already reads |
 | `HOMEINV_SEARCH_URL` | yes in `standard`/`ha` | Where OpenSearch listens, scheme included (`https://opensearch:9200` in the generated stack). Named like `HOMEINV_DB_URL` rather than as a host, because the scheme is part of reaching a TLS-only service |
 | `HOMEINV_SEARCH_FINGERPRINT` | yes in `standard`/`ha` | The SHA-256 fingerprint of the one certificate OpenSearch may present, checked on every connection — the same mechanism `HOMEINV_BLOBSTORE_FINGERPRINT` uses (`REQ-SEC-056`). The deployment's CA signs every service and every plugin, so trusting it alone would let any of them answer as the index ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)). An `https` URL without one **aborts startup**; a plain `http` URL skips the pin and is a test's shape, never a deployment's |

@@ -270,6 +270,13 @@ HOMEINV_MEDIA_BASE_URL=http://media.localhost:8080
 # network; a real deployment narrows it.
 HOMEINV_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
+# The port on which api answers the plugins that call IT (ADR-0071). 0 is off,
+# and off is right until a plugin is installed that holds host:render-document —
+# a listener nothing can authenticate to is still a listener. Set it to 8091 with
+# that plugin, and to nothing else: it is the only port in the deployment where
+# the direction of a call reverses.
+HOMEINV_PLUGIN_HOST_PORT=0
+
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint
 

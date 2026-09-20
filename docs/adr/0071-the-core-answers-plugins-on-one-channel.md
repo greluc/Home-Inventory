@@ -55,10 +55,12 @@ answers a question the caller could not already answer does not belong on this s
 ### Three gates, and none of them is the network alone
 
 1. **A separate listener on a separate port.** Port 8090 still refuses every plugin segment
-   (`REQ-SEC-100`); this is a different port, serving this service and nothing else. A
-   plugin segment reaches that port and no other, which `deploy/services.yaml` expresses and
-   the connectivity suite proves by running the stack — a segment flag is a claim and a
-   refused connection is evidence.
+   (`REQ-SEC-100`); this is a different port — 8091 in `deploy/services.yaml` — serving this
+   service and nothing else. It is deliberately **not** bound to one segment the way 8090 is:
+   there is no single segment to bind it to, because `api` sits on every plugin segment and
+   each of them is its own network. The listener is **off unless `HOMEINV_PLUGIN_HOST_PORT`
+   names it**, so a deployment that runs no plugin asking the core for anything opens no
+   socket here at all.
 2. **mTLS in both directions.** The caller presents the certificate whose fingerprint the
    operator pinned when registering the plugin — the same fingerprint the core already pins
    when calling it. An unknown certificate is refused before a method is dispatched, and
@@ -102,6 +104,14 @@ return a document in at all.
 - **Every later method needs this record amended**, with the "takes what the caller already
   holds" test applied in writing. The service is narrow because it is kept narrow, not
   because it started small.
-- **The connectivity suite gains cases**: a plugin reaches the host port and only the host
-  port; an unpinned certificate is refused; a plugin without the capability is refused and
-  cannot tell that from a missing renderer.
+- **The three gates are proved by `HostChannelIT`**, against the real listener over a real
+  TLS socket with certificates generated when the test runs: a certificate no registration
+  pins gets no connection, a plugin without the capability is refused, a grant in one tenant
+  is not a grant in another, and the refusal for a missing grant is **the same sentence** as
+  the one for a missing renderer. *This bullet said the connectivity suite would gain those
+  cases, and it was wrong on 2026-09-20 when it was written: that suite opens TCP sockets
+  with `nc` from one container to another, which can prove a network shape and cannot present
+  a client certificate or read a gRPC status. The one case that does belong there — a plugin
+  segment reaches 8091 and no other core port — needs a plugin container in
+  `deploy/services.yaml`, and there is none yet (`REQ-PLG-013`); it lands with the first one,
+  in the same unit of work.*

@@ -194,6 +194,13 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **A plugin can ask for a document too.** A plugin that wants to hand you a PDF
+  no longer needs a PDF library of its own: it describes the document and the
+  core renders it with whichever renderer you installed. It is one method on one
+  port that is switched off until you turn it on, it reads nothing, and a plugin
+  you never granted it gets the same answer as one asking on an instance with no
+  renderer at all. *Plugin contract: additive.*
+
 - **The insurance report can be a document.** Install a renderer and the same
   figures come back as a PDF — a page per room, the photograph beside each
   thing, the figure and the day it was true. Without one you still get the
@@ -845,7 +852,7 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 427 numbered, testable requirements across
+- A requirements catalogue with 428 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
 - 72 architecture decision records, each with its alternatives and consequences —

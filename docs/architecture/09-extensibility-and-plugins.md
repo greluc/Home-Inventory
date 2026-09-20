@@ -139,6 +139,7 @@ entitlement, no "read access, which is harmless anyway".
 | `network:outbound` | Outbound network connections | Only through the egress proxy, only to the manifest's hosts. Enforced outside the plugin, never by the plugin ([ADR-0027](../adr/0027-egress-enforcement.md)) — an allowlist that untrusted code applies to itself is documentation, not a control |
 | `ui:panel` | Its own area in the UI | Served in an isolated `iframe` with its own origin and a strict CSP. The panel needs **no** `Cross-Origin-Embedder-Policy` of its own: the application does not set COEP ([ADR-0040](../adr/0040-no-cross-origin-isolation.md)), which was the one requirement a third-party author could not have guessed and would have met as a blank frame |
 | `print:target` | Appearing as a print target | |
+| `host:render-document` | Asking the **core** to render a document it describes | The one capability that is about calling <b>in</b> rather than reaching out. A plugin that produces documents describes one and the core renders it with whichever `DocumentRenderer` is installed — which the caller never addresses and never learns the name of. It reads nothing: the call takes what the caller already holds and gives back something made from it, which is the test anything added to that channel has to pass ([ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md)) |
 
 **Granting:**
 
@@ -252,16 +253,51 @@ graph LR
 
 ## 9.6 The plugin calling the core
 
-A plugin may call the core, but narrowly bounded:
+There is **one** service in the contract that the core serves and a plugin calls:
+`HostServices`, with one method on it — `RenderDocument`
+([ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md), `REQ-PLG-016`).
+It exists so that a plugin producing a document does not have to carry a PDF
+library and a font pack of its own: it describes the document in the model of
+[§9.2's](#92-extension-points-ports) `DocumentRenderer` and the core renders it
+with whichever renderer the tenant installed — possibly another plugin, which the
+caller never addresses and never learns the name of.
 
-1. The connection identifies the plugin through mTLS.
-2. Every call carries a short-lived token issued for **plugin + tenant +
-   capability**. No trust is derived from the connection alone.
-3. `CapabilityGuard` re-checks on **every** call: is the capability still granted
-   for this tenant? Is the plugin still active?
-4. Data access goes through the same authorization and the same RLS as user
-   access — a plugin cannot see more than the role it acts under.
-5. Every write appears in the audit log with the plugin as the actor.
+**There is no read here, and there will not be one.** Every method on this service
+takes what the caller already holds and gives back something made from it. A method
+that answered a question the caller could not already answer would turn every
+capability grant from a boundary into a starting point, and that sentence is the
+admission test for anything proposed for this channel later.
+
+How it is bounded:
+
+1. **Its own listener, on its own port** — 8091 in
+   [`deploy/services.yaml`](../../deploy/services.yaml), serving this service and
+   nothing else. Port 8090 still refuses every plugin segment (`REQ-SEC-100`). The
+   channel is **off unless `HOMEINV_PLUGIN_HOST_PORT` names a port**, so a
+   deployment with no plugin that asks the core for anything opens no socket for it.
+2. **The caller is named by its certificate and by nothing else.** The core accepts
+   a certificate whose SHA-256 is the fingerprint pinned at registration — the same
+   one it pins when calling that plugin — and refuses every other one *in the
+   handshake*, before a method is dispatched. A certificate the deployment's own CA
+   signed is a member of the deployment and still not a plugin
+   ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)).
+3. **The capability is re-checked on every call**, for the tenant the envelope
+   names: `host:render-document`, granted per tenant like every other capability
+   (§9.4, `REQ-PLG-005`). The tenant id in the envelope selects *whose* grant and
+   *whose* renderer apply; it is never believed as an identity.
+4. **A missing grant and a missing renderer are the same answer** —
+   `FAILED_PRECONDITION`, with the same description — because a caller that could
+   tell them apart could enumerate what a tenant has consented to, one probe at a
+   time.
+
+*Until 2026-09-20 this section described something else: a short-lived token issued
+per plugin, tenant and capability, a `CapabilityGuard`, and "data access through the
+same authorization and the same RLS as user access". No token was ever built and
+none is needed — the connection carries a client certificate, which is stronger than
+a bearer token and cannot be replayed elsewhere — and the third sentence described a
+read path that ADR-0071 exists to refuse. A plugin's own writes still appear in the
+audit log with the plugin as the actor (`REQ-PLG-011`); those come from the calls the
+**core** makes, which is the other direction and §9.5.*
 
 ## 9.7 In-process: the exception, and why it stays one
 

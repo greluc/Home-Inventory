@@ -42,8 +42,15 @@ public final class PluginManifestReader {
   /** How large a manifest may be. Beyond this it is not a manifest. */
   private static final int MAX_BYTES = 256 * 1024;
 
-  /** The capabilities of 09 §9.4, and nothing else. A typo is a refusal, not a silent omission. */
-  private static final Set<String> CAPABILITIES =
+  /**
+   * The capabilities of 09 §9.4, and nothing else. A typo is a refusal, not a silent omission.
+   *
+   * <p>Package-private for the same reason {@link #PORTS} is: {@code CapabilityCatalogueTest}
+   * compares it with the table in 09 §9.4, so the chapter a plugin author reads and the set a
+   * manifest is validated against cannot say different things. That is not a hypothetical — the
+   * port list beside this one drifted exactly that way.
+   */
+  static final Set<String> CAPABILITIES =
       Set.of(
           "core:item:read",
           "core:item:write",
@@ -56,7 +63,11 @@ public final class PluginManifestReader {
           "core:setting:read",
           "network:outbound",
           "ui:panel",
-          "print:target");
+          "print:target",
+          // What a plugin may ask the CORE for, rather than what it may reach
+          // (ADR-0071). The only capability on this list that is about the
+          // host channel, and the only one a plugin uses by calling in.
+          "host:render-document");
 
   /**
    * The extension points of REQ-PLG-001. A port outside this list is a port nobody calls.

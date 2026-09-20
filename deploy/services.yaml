@@ -250,6 +250,22 @@ services:
                                                  # per-tenant metrics of 13 §13.3 without
                                                  # holding a single capability
                                                  # (ADR-0037, REQ-SEC-099).
+      - { container: 8091, host: null }          # THE HOST CHANNEL (ADR-0071, REQ-PLG-016):
+                                                 # the one listener plugins CALL, rather than
+                                                 # are called on. Deliberately NOT bound to a
+                                                 # segment, because there is no single segment
+                                                 # to bind it to — `api` sits on every plugin
+                                                 # segment and each one is its own network.
+                                                 # What gates it is mTLS against the
+                                                 # fingerprint pinned at registration: a
+                                                 # container that is not a registered plugin
+                                                 # gets a refused handshake, not a refused
+                                                 # call. Reachability is never authorisation
+                                                 # (ADR-0044), and this is the one port where
+                                                 # that sentence has to do the work on its own.
+                                                 # Off unless HOMEINV_PLUGIN_HOST_PORT names
+                                                 # it; `minimal` runs no plugins and opens no
+                                                 # socket here.
     env:
       SPRING_PROFILES_ACTIVE: "api"             # the ROLE, which is fixed by which
                                                  # service this is
@@ -273,6 +289,18 @@ services:
       MANAGEMENT_SERVER_ADDRESS: "api-internal"               # the alias below, which resolves to
                                                               # this container's address on
                                                               # `internal` and to nothing else
+      HOMEINV_PLUGIN_HOST_PORT: "${HOMEINV_PLUGIN_HOST_PORT:-0}"
+                                                              # the host channel above. 0 is off,
+                                                              # and off is what a deployment with
+                                                              # no plugin that asks the core for
+                                                              # anything stays (ADR-0071).
+                                                              # `api` ONLY: `worker` runs no
+                                                              # second copy, because every plugin
+                                                              # segment has `api` on it, so one
+                                                              # listener is reachable from all of
+                                                              # them — and one place where the
+                                                              # direction reverses is easier to
+                                                              # keep narrow than two
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
       # The other two REQUIRED non-secret variables of 06 §6.11. They were listed
       # as required there and declared nowhere here, so the generated units would
