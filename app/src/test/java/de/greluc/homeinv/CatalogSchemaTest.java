@@ -74,6 +74,12 @@ class CatalogSchemaTest {
           }
 
           @Override
+          public java.util.Map<UUID, Integer> usefulLivesOfVersions(
+              java.util.Collection<UUID> versionIds) {
+            return java.util.Map.of();
+          }
+
+          @Override
           public java.util.Map<UUID, TypeIdentity> typesOfVersions(
               java.util.Collection<UUID> versionIds) {
             // Nor what a version's type is called.

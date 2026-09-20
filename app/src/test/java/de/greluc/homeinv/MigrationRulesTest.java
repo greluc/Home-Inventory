@@ -178,6 +178,7 @@ class MigrationRulesTest {
           "notification.tenants_with_due_notifications",
           "notification.tenants_with_enabled_rules",
           "media.tenants_with_orphaned_blobs",
+          "inventory.tenants_with_depreciable_items",
           "portability.tenants_with_queued_exports",
           "portability.tenants_with_queued_imports",
           "tenancy.invitation_by_token",

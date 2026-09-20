@@ -155,7 +155,9 @@ public class CatalogController {
       @Valid @RequestBody UpdateItemTypeRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
     return types.updateItemType(
-        id, new TypeAdministration.UpdateItemTypeCommand(request.icon()), user.userId());
+        id,
+        new TypeAdministration.UpdateItemTypeCommand(request.icon(), request.usefulLifeMonths()),
+        user.userId());
   }
 
   /**
@@ -577,7 +579,20 @@ public class CatalogController {
    *
    * @param icon an icon name for clients, or omitted to remove the one it has
    */
-  public record UpdateItemTypeRequest(@Size(max = 64) String icon) {}
+  /**
+   * What to change about an item type.
+   *
+   * @param icon the icon, or null to clear it
+   * @param usefulLifeMonths how long a thing of this type is expected to last, for the
+   *     straight-line depreciation of REQ-LIFE-009, or null for a type that is not depreciated.
+   *     Nothing ships with one: how long a household's furniture lasts is a judgement about that
+   *     household, and a figure this application invented would end up in somebody's insurance
+   *     report. Clearing it takes the depreciated values with it on the next run
+   */
+  public record UpdateItemTypeRequest(
+      @Size(max = 64) String icon,
+      @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(1200)
+          Integer usefulLifeMonths) {}
 
   /**
    * What to change about a location category.

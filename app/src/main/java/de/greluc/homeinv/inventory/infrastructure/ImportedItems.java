@@ -149,6 +149,7 @@ public class ImportedItems implements CsvIngest {
         null,
         null,
         null,
+        null,
         null);
   }
 

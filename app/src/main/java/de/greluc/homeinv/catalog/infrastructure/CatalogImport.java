@@ -48,6 +48,7 @@ public class CatalogImport implements ImportTarget {
   private static final List<String> ITEM_TYPE =
       List.of(
           "id", "key", "parent_id", "kind", "icon", "builtin", "archived_at",
+          "useful_life_months",
           "created_at", "updated_at", "created_by", "updated_by", "version");
 
   private static final List<String> ITEM_TYPE_VERSION =

@@ -1203,7 +1203,12 @@ public class ItemController {
           request.replacementAsOf(),
           request.replacementSource(),
           request.currentValue(),
-          request.currentValueAsOf());
+          request.currentValueAsOf(),
+          // Never taken from the request: a caller saying "a plugin worked this
+          // out" about a number they typed would put the figure beyond the reach
+          // of the refresh run that is supposed to keep it current. What arrives
+          // through the API is MANUAL, and the entity says so.
+          null);
     }
   }
 }

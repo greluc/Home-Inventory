@@ -194,6 +194,13 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **Things can lose value as they age.** Say how long something of a given
+  kind is expected to last and the current value follows a straight line from
+  what it cost, recomputed nightly. Nothing is assumed: until you give a type
+  a lifespan, nothing is depreciated — and a value you typed yourself is never
+  overwritten, which is the whole reason each figure records where it came
+  from.
+
 - **Anything with a date on it can be reminded about.** Mark one of your own date
   fields as an expiry — a licence, a passport, an inspection, a tin of paint — and
   a reminder rule watches it the way it already watched warranties. The same mark

@@ -53,7 +53,7 @@ public class InventoryExport implements ExportSource {
              purchase_amount, purchase_currency, purchased_on, purchase_source,
              warranty_until, lifetime_warranty,
              replacement_amount, replacement_currency, replacement_as_of, replacement_source,
-             current_amount, current_currency, current_as_of,
+             current_amount, current_currency, current_as_of, current_source,
              disposal_amount, disposal_currency, disposed_on, disposal_recipient, disposal_note,
              maintenance_interval_days,
              created_at, updated_at, created_by, updated_by, deleted_at, version

@@ -1234,6 +1234,9 @@ components:
           description: the newest published version, or `null` when none is published
           format: uuid
           type: string
+        usefulLifeMonths:
+          format: int32
+          type: integer
       type: object
     ItemView:
       description: |-
@@ -3765,10 +3768,21 @@ components:
       description: What to change about an item type.
       properties:
         icon:
-          description: an icon name for clients, or omitted to remove the one it has
+          description: the icon, or null to clear it
           maxLength: 64
           minLength: 0
           type: string
+        usefulLifeMonths:
+          description: |-
+            how long a thing of this type is expected to last, for the
+            straight-line depreciation of REQ-LIFE-009, or null for a type that is not depreciated.
+            Nothing ships with one: how long a household's furniture lasts is a judgement about that
+            household, and a figure this application invented would end up in somebody's insurance
+            report. Clearing it takes the depreciated values with it on the next run
+          format: int32
+          maximum: 1200
+          minimum: 1
+          type: integer
       type: object
     Valuation:
       description: |-
@@ -3793,6 +3807,15 @@ components:
         currentValueAsOf:
           description: the day that figure was true, or `null`
           format: date
+          type: string
+        currentValueSource:
+          description: |-
+            who says so — {@link Provenance#MANUAL Provenance#MANUAL}, {@link de.greluc.homeinv.inventory.api.Valuation      Provenance#DEPRECIATION} or {@link Provenance#PLUGIN Provenance#PLUGIN} — or `null`. Not decoration: the
+            refresh run rewrites only what it wrote, so a figure somebody typed survives the night
+          enum:
+          - MANUAL
+          - DEPRECIATION
+          - PLUGIN
           type: string
         lifetimeWarranty:
           description: |-
@@ -3825,6 +3848,7 @@ components:
             or `null`
           enum:
           - MANUAL
+          - DEPRECIATION
           - PLUGIN
           type: string
         warrantyUntil:
@@ -3878,6 +3902,7 @@ components:
           description: '`MANUAL` or `PLUGIN`'
           enum:
           - MANUAL
+          - DEPRECIATION
           - PLUGIN
           type: string
         warrantyUntil:

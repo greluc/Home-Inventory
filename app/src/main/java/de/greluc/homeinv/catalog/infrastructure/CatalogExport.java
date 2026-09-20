@@ -33,7 +33,7 @@ public class CatalogExport implements ExportSource {
 
   private static final String ITEM_TYPES =
       """
-      select id, key, parent_id, kind, icon, builtin, archived_at,
+      select id, key, parent_id, kind, icon, builtin, archived_at, useful_life_months,
              created_at, updated_at, created_by, updated_by, version
       from catalog.item_type
       order by key, id

@@ -212,6 +212,25 @@ public interface TypeRegistry {
   Map<UUID, TypeIdentity> typesOfVersions(Collection<UUID> versionIds);
 
   /**
+   * How long a thing of each of these versions' types is expected to last, in months
+   * (REQ-LIFE-009).
+   *
+   * <p>In bulk, and keyed by the <b>version</b> rather than by the type, because that is what an
+   * item carries: asking per item would be one query per row of a table somebody is depreciating
+   * ten thousand rows of.
+   *
+   * <p>A version whose type has no useful life is <b>absent from the map</b> rather than present
+   * with a null. No shipped type carries one — a useful life is a judgement about a household and
+   * the tenant makes it — so an instance nobody has configured returns an empty map, and the
+   * depreciation has nothing to divide by and produces nothing. That is the honest state rather
+   * than a default in disguise.
+   *
+   * @param versionIds the type versions to ask about
+   * @return the useful lives, by version id, missing where the type has none
+   */
+  Map<UUID, Integer> usefulLivesOfVersions(Collection<UUID> versionIds);
+
+  /**
    * What a type is called, and what it sits under.
    *
    * @param key the type's key, which is what a {@code type} filter names

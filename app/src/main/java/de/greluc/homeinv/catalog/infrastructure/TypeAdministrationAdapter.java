@@ -229,10 +229,16 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     jdbc.sql(
             """
             update catalog.item_type
-            set icon = ?, updated_at = now(), updated_by = ?, version = version + 1
+            set icon = ?, useful_life_months = ?,
+                updated_at = now(), updated_by = ?, version = version + 1
             where tenant_id = ? and id = ?
             """)
-        .params(command.icon(), actor, TenantContext.require(), typeId)
+        .params(
+            command.icon(),
+            command.usefulLifeMonths(),
+            actor,
+            TenantContext.require(),
+            typeId)
         .update();
     return loadItemType(typeId).orElseThrow();
   }
@@ -1013,6 +1019,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private static final String ITEM_TYPE_SELECT =
       """
       select t.id, t.key, t.kind, t.parent_id, t.icon, t.builtin, t.archived_at, t.created_at,
+             t.useful_life_months,
              (select v.id from catalog.item_type_version v
                where v.tenant_id = t.tenant_id and v.item_type_id = t.id
                  and v.published_at is not null
@@ -1130,7 +1137,11 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         rs.getBoolean("builtin"),
         rs.getTimestamp("archived_at") != null,
         rs.getObject("published_id", UUID.class),
-        rs.getObject("draft_id", UUID.class));
+        rs.getObject("draft_id", UUID.class),
+        // `getInt` would turn "this type is not depreciated" into a useful life
+        // of zero months, which the check constraint forbids and the run would
+        // divide by.
+        rs.getObject("useful_life_months", Integer.class));
   }
 
   /**

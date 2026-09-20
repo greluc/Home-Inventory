@@ -58,6 +58,37 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public java.util.Map<UUID, Integer> usefulLivesOfVersions(
+      java.util.Collection<UUID> versionIds) {
+    if (versionIds.isEmpty()) {
+      return java.util.Map.of();
+    }
+    java.util.Map<UUID, Integer> lives = new java.util.HashMap<>();
+    jdbc.sql(
+            """
+            select v.id as version_id, t.useful_life_months as months
+            from catalog.item_type_version v
+            join catalog.item_type t
+              on t.tenant_id = v.tenant_id and t.id = v.item_type_id
+            where v.tenant_id = ?
+              -- `::uuid[]` and a String[], not a UUID[]: the driver has no
+              -- mapping from a Java UUID array to a Postgres one, and binds
+              -- something that compares equal to nothing at all -- no error,
+              -- no rows, and a depreciation that silently does nothing.
+              and v.id = any(?::uuid[])
+              and t.useful_life_months is not null
+            """)
+        .param(TenantContext.require())
+        .param(versionIds.stream().map(UUID::toString).toArray(String[]::new))
+        .query(
+            (rs, rowNum) ->
+                lives.put(rs.getObject("version_id", UUID.class), rs.getInt("months")))
+        .list();
+    return java.util.Map.copyOf(lives);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public UUID publishedItemTypeVersion(UUID itemTypeId) {
     UUID tenantId = TenantContext.require();
     return jdbc

@@ -406,7 +406,17 @@ public interface TypeAdministration {
    *
    * @param icon an icon name for the client, or {@code null} for none
    */
-  record UpdateItemTypeCommand(String icon) {}
+  record UpdateItemTypeCommand(String icon, Integer usefulLifeMonths) {
+
+    /**
+     * The command that changes only the icon.
+     *
+     * @param icon the icon, or null to clear it
+     */
+    public UpdateItemTypeCommand(String icon) {
+      this(icon, null);
+    }
+  }
 
   /**
    * A field, as it is added or changed.
@@ -548,7 +558,8 @@ public interface TypeAdministration {
       boolean builtin,
       boolean archived,
       UUID publishedVersionId,
-      UUID draftVersionId) {}
+      UUID draftVersionId,
+      Integer usefulLifeMonths) {}
 
   /**
    * A location category as an administrator sees it.

@@ -198,6 +198,10 @@ public class Item {
   @Column(name = "current_amount")
   private BigDecimal currentAmount;
 
+  /** Who says so: {@code MANUAL}, {@code DEPRECIATION} or {@code PLUGIN} (REQ-LIFE-009). */
+  @Column(name = "current_source")
+  private String currentSource;
+
   @Column(name = "current_currency")
   private String currentCurrency;
 
@@ -510,10 +514,32 @@ public class Item {
     this.replacementSource =
         values.replacementSource() == null ? null : values.replacementSource().name();
 
-    this.currentAmount = values.currentValue() == null ? null : values.currentValue().amount();
-    this.currentCurrency =
+    // THE SOURCE CHANGES WHEN THE NUMBER DOES, and not before. A client that
+    // reads an item, renames it and writes the whole thing back is sending the
+    // depreciated figure it was just given -- and treating that as somebody
+    // typing it would freeze the value for ever, because the refresh run never
+    // touches what a person owns. A different number is a person's number; the
+    // same number is the same number.
+    java.math.BigDecimal incomingAmount =
+        values.currentValue() == null ? null : values.currentValue().amount();
+    String incomingCurrency =
         values.currentValue() == null ? null : values.currentValue().currencyCode();
+    boolean sameFigure =
+        java.util.Objects.equals(
+                incomingAmount == null ? null : incomingAmount.stripTrailingZeros(),
+                this.currentAmount == null ? null : this.currentAmount.stripTrailingZeros())
+            && java.util.Objects.equals(incomingCurrency, this.currentCurrency);
+
+    this.currentAmount = incomingAmount;
+    this.currentCurrency = incomingCurrency;
     this.currentAsOf = values.currentValueAsOf();
+    if (values.currentValue() == null) {
+      this.currentSource = null;
+    } else if (values.currentValueSource() != null) {
+      this.currentSource = values.currentValueSource().name();
+    } else if (!sameFigure || this.currentSource == null) {
+      this.currentSource = de.greluc.homeinv.inventory.api.Valuation.Provenance.MANUAL.name();
+    }
   }
 
   /**
@@ -539,7 +565,10 @@ public class Item {
             ? null
             : de.greluc.homeinv.inventory.api.Valuation.Provenance.valueOf(replacementSource),
         money(currentAmount, currentCurrency),
-        currentAsOf);
+        currentAsOf,
+        currentSource == null
+            ? null
+            : de.greluc.homeinv.inventory.api.Valuation.Provenance.valueOf(currentSource));
   }
 
   /**
