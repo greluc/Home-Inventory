@@ -16,7 +16,6 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Removes blobs nothing points at any more (REQ-MED-011, 13 §13.8).
@@ -80,9 +79,9 @@ public class OrphanedBlobSweep {
     Instant before = Instant.now(clock).minus(grace);
     int removed = 0;
     for (UUID tenantId : orphans.tenantsWithOrphans(before)) {
-      // The context around the transaction and never inside it, which is the
-      // shape `DeliveryDispatcher` uses: `SET LOCAL app.tenant_id` is applied
-      // when the transaction begins, from the context current at that moment.
+      // The context around the work, so every statement below runs under it:
+      // `SET LOCAL app.tenant_id` is applied when each transaction begins, from
+      // the context current at that moment.
       removed += TenantContext.callAs(tenantId, () -> sweepTenant(tenantId, before));
     }
     if (removed > 0) {
@@ -94,11 +93,21 @@ public class OrphanedBlobSweep {
   /**
    * Sweeps one tenant, in that tenant's context.
    *
+   * <p><b>Deliberately not one transaction</b>, and not merely un-annotated. The blob is deleted
+   * from the store and the row afterwards, and wrapping the pair would promise an atomicity the
+   * blob store cannot take part in anyway — it is a separate service behind mTLS, and no database
+   * transaction rolls back a deleted object. Each statement gets its own transaction from {@link
+   * de.greluc.homeinv.media.infrastructure.OrphanQueries}, inside the tenant context the caller
+   * established, which is what makes the failure mode the recoverable one.
+   *
+   * <p>*It carried {@code @Transactional} when it was written, which did nothing: the caller is in
+   * this same class, and Spring applies transactions through a proxy that a {@code this.} call
+   * goes straight past. Removed rather than made to work, because the pair must not be atomic.*
+   *
    * @param tenantId whose blobs
    * @param before the moment a blob must have been unreferenced since to go
    * @return how many were removed
    */
-  @Transactional
   public int sweepTenant(UUID tenantId, Instant before) {
     List<OrphanQueries.Orphan> due = orphans.orphansOf(before, BATCH);
     int removed = 0;

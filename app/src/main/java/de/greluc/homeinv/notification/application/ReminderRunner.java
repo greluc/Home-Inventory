@@ -10,7 +10,6 @@ import de.greluc.homeinv.notification.api.ReminderSource;
 import de.greluc.homeinv.notification.api.ReminderTrigger;
 import de.greluc.homeinv.notification.infrastructure.NotificationQueries;
 import de.greluc.homeinv.notification.infrastructure.ReminderRuleQueries;
-import de.greluc.homeinv.platform.TenantContext;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +41,14 @@ import org.springframework.transaction.annotation.Transactional;
  * catches the duplicate, so two overlapping passes cannot both send. A read-then-write would find
  * nothing recorded in both and send twice — and a reminder feature that repeats itself is one
  * people switch off, which costs more than one that occasionally arrives late.
+ *
+ * <h2>One tenant at a time, and the transaction is the point</h2>
+ *
+ * <p>{@link ReminderDispatcher} finds the tenants and calls this; the split is not organisational.
+ * Spring applies {@code @Transactional} through a proxy, so a tenant loop inside this class calling
+ * {@code this.runFor(...)} would leave the annotation doing nothing — and what it does matters, as
+ * a reminder is recorded and then queued, and stopping between the two leaves a rule believing it
+ * has told somebody something it never sent.
  *
  * <h2>Why the run reads no foreign table</h2>
  *
@@ -97,23 +104,6 @@ public class ReminderRunner {
                       throw new IllegalStateException(
                           "Two reminder sources claim the trigger " + one.trigger());
                     }));
-  }
-
-  /**
-   * Runs every tenant's rules.
-   *
-   * @param today the day to judge against
-   * @return how many notifications were raised
-   */
-  public int runAll(LocalDate today) {
-    int raised = 0;
-    for (UUID tenantId : queries.tenantsWithRules()) {
-      // The context around the transaction and never inside it: `SET LOCAL
-      // app.tenant_id` is applied when the transaction begins, from the context
-      // current at that moment -- the shape `DeliveryDispatcher` uses.
-      raised += TenantContext.callAs(tenantId, () -> runFor(tenantId, today));
-    }
-    return raised;
   }
 
   /**

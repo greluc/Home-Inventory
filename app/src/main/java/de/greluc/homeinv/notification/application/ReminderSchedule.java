@@ -30,14 +30,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReminderSchedule {
 
-  private final ReminderRunner runner;
+  private final ReminderDispatcher dispatcher;
   private final Clock clock;
 
   /** Raises whatever is due. */
   @Scheduled(fixedDelayString = "${HOMEINV_REMINDER_INTERVAL_MS:3600000}", initialDelay = 45_000)
   public void raiseDue() {
     try {
-      int raised = runner.runAll(LocalDate.now(clock));
+      int raised = dispatcher.runAll(LocalDate.now(clock));
       if (raised > 0) {
         log.info("The reminder run raised {} notification(s)", raised);
       }
