@@ -202,12 +202,12 @@ commit".
 
 - **Reminders.** Set a rule and be told before a warranty runs out, when
   something is due for servicing, when something you lent is overdue, or when a
-  consumable has run down. An item can carry a servicing interval, counted from
-  the last time it was actually serviced. A rule says
-  what to watch, optionally which things (a saved search narrows it), how many
-  days early — or late, for an overdue loan — and on which channel. It tells you
-  **once** per thing per date, and again if the date moves. Only people who asked
-  for that kind of message receive it.
+  consumable has run down — a rule says what to watch, optionally which things
+  (a saved search narrows it), how many days early (or late, for an overdue
+  loan) and on which channel. A servicing interval is counted from the last time
+  the thing was actually serviced, not from a fixed calendar. It tells you
+  **once** per thing per date, again if the date moves, and only to people who
+  asked for that kind of message.
 
 - **You can record that something was sold or thrown away.** Note the price, the
   date and who it went to, and the item moves out of your everyday lists without
