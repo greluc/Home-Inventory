@@ -380,8 +380,13 @@ public class DefaultLocationService implements LocationService {
     if (tree.hasChildren(tenantId, id)) {
       throw new LocationNotEmptyException(id, "it still contains other locations");
     }
-    if (itemUsage.anyItemIn(id)) {
-      throw new LocationNotEmptyException(id, "it still contains items");
+    long held = itemUsage.itemsIn(id);
+    if (held > 0) {
+      // REQ-CORE-046 asks the attempt to state the NUMBER. "It still contains
+      // things" sends somebody looking; "it still contains 14 things" tells them
+      // what they are in for, and whether to empty it or move it wholesale.
+      throw new LocationNotEmptyException(
+          id, held == 1 ? "it still contains 1 item" : "it still contains " + held + " items");
     }
 
     location.markDeleted(actor, Instant.now(clock));
