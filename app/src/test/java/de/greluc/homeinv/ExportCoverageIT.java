@@ -76,7 +76,10 @@ class ExportCoverageIT extends AbstractIntegrationTest {
               "data/catalog/location-category-versions.jsonl", "catalog.location_category_version"),
           Map.entry("data/catalog/value-lists.jsonl", "catalog.value_list"),
           Map.entry("data/catalog/value-list-entries.jsonl", "catalog.value_list_entry"),
-          Map.entry("data/tagging/tags.jsonl", "tagging.tag"));
+          Map.entry("data/tagging/tags.jsonl", "tagging.tag"),
+          Map.entry("data/media/media-objects.jsonl", "media.media_object"),
+          Map.entry("data/media/attachments.jsonl", "media.attachment"),
+          Map.entry("data/media/variants.jsonl", "media.media_variant"));
 
   /**
    * Columns deliberately left out, and why.
@@ -114,7 +117,7 @@ class ExportCoverageIT extends AbstractIntegrationTest {
     // populated: provisioning gives a tenant the built-in types, categories and
     // value lists, which is what makes this test cheap enough to be worth having.
     UUID place = aPlace(tenant, "A shed");
-    anItem(tenant, "A drill", place);
+    UUID item = anItem(tenant, "A drill", place);
     inOwn(
         tenant,
         () ->
@@ -122,6 +125,10 @@ class ExportCoverageIT extends AbstractIntegrationTest {
                 new de.greluc.homeinv.tagging.api.TagService.CreateTagCommand(
                     "valuable", null, null, null),
                 tenant.userId()));
+    // Written directly: reaching a media object through the API means uploading
+    // through a scanner, and this test is about columns rather than about
+    // uploads.
+    aMediaObject(tenant, item);
 
     ExportService.ExportJobView queued = inOwn(tenant, () -> exports.request(tenant.userId()));
     runner.runAsTenant(tenant.tenantId());
@@ -160,6 +167,67 @@ class ExportCoverageIT extends AbstractIntegrationTest {
   }
 
   // -------------------------------------------------------------------------
+
+  /**
+   * A clean media object, an attachment hanging off an item, and a derivative.
+   *
+   * <p>Written with SQL rather than through {@code MediaService}, because reaching a media object
+   * through the API means uploading bytes past a virus scanner, and this test is about columns
+   * rather than about uploads. The three rows exist so the three media datasets are non-empty —
+   * the check skips a dataset with no row, which would make the columns unexamined.
+   *
+   * @param tenant whose media it is
+   * @param item what the attachment hangs on
+   */
+  private void aMediaObject(Tenant tenant, UUID item) {
+    inOwn(
+        tenant,
+        () -> {
+          UUID object =
+              jdbc
+                  .sql(
+                      """
+                      insert into media.media_object
+                          (tenant_id, sha256, media_type, byte_size, width_px, height_px,
+                           scan_state, ref_count, created_by, updated_by)
+                      values (?, ?, 'image/png', 7, 4, 4, 'CLEAN', 1, ?, ?)
+                      returning id
+                      """)
+                  .param(tenant.tenantId())
+                  .param("f".repeat(64))
+                  .param(tenant.userId())
+                  .param(tenant.userId())
+                  .query(UUID.class)
+                  .single();
+          jdbc.sql(
+                  """
+                  insert into media.media_variant
+                      (tenant_id, media_object_id, kind, sha256, media_type, byte_size,
+                       width_px, height_px, created_by, updated_by)
+                  values (?, ?, 'thumb', ?, 'image/webp', 3, 2, 2, ?, ?)
+                  """)
+              .param(tenant.tenantId())
+              .param(object)
+              .param("e".repeat(64))
+              .param(tenant.userId())
+              .param(tenant.userId())
+              .update();
+          jdbc.sql(
+                  """
+                  insert into media.attachment
+                      (tenant_id, media_object_id, target_kind, target_id, primary_image,
+                       created_by, updated_by)
+                  values (?, ?, 'ITEM', ?, true, ?, ?)
+                  """)
+              .param(tenant.tenantId())
+              .param(object)
+              .param(item)
+              .param(tenant.userId())
+              .param(tenant.userId())
+              .update();
+          return object;
+        });
+  }
 
   private Set<String> columnsOf(String qualified) {
     String[] parts = qualified.split("\\.");

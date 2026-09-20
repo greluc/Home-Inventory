@@ -185,8 +185,8 @@ commit".
 - **You can ask for a copy of everything.** A request returns straight away with
   a job you can watch, and the finished archive is a ZIP of JSON Lines with a
   manifest saying what is in it — the shape a tenant needs to move to another
-  instance — items, places, tags and the type definitions they are written
-  against. Photographs follow.
+  instance — items, places, tags, the type definitions they are written
+  against, and the photographs themselves.
 
 - **Photographs nothing points at are cleaned up.** When the last item using an
   uploaded file is deleted, the file itself is removed a week later — long enough

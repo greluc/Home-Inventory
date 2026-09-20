@@ -16,9 +16,14 @@ package de.greluc.homeinv.portability.api;
  *
  * <p>It also means a block added later exports itself by implementing this, with nothing in
  * {@code portability} to change. A block that does not implement it contributes nothing, which is
- * correct for {@code platform} and would be a silent gap for anything holding tenant data — so
- * {@code ExportCoverageTest} compares the implementations against the blocks that own a
- * tenant-scoped table.
+ * correct for {@code platform} and would be a silent gap for anything holding tenant data.
+ *
+ * <p>{@code ExportCoverageIT} guards the half of that which can be guarded today: for every
+ * dataset an implementation writes, it compares the archive against {@code information_schema} and
+ * fails by name when a column is neither exported nor declared as deliberately left out. Which
+ * <b>blocks</b> owe an implementation at all is the other half, and it is not a structural
+ * question — {@code audit}, {@code notification} and {@code search} each hold tenant rows that may
+ * or may not belong in an archive, and REQ-PORT-006 is where that is decided.
  *
  * <h2>Read from PostgreSQL, never from a derived store</h2>
  *
@@ -72,5 +77,25 @@ public interface ExportSource {
      *     anything gets
      */
     void write(String dataset, java.util.stream.Stream<?> rows);
+
+    /**
+     * Puts a file in the archive, beside the rows that describe it.
+     *
+     * <p>For the bytes themselves — a photograph, a scanned receipt. REQ-PORT-003 asks for "data,
+     * configuration, <b>media</b> and a manifest", and rows alone would be an archive of captions
+     * with no pictures.
+     *
+     * <p>Named by the caller rather than derived, because the name is what the rows point at: a
+     * blob is content-addressed, so {@code media/blobs/<sha256>} says which row goes with which
+     * file without a second index that could disagree with the first.
+     *
+     * <p>The stream is read to the end and <b>not</b> closed — closing it is the caller's, which is
+     * the half that matters when the caller opened it from a store that must be released whether
+     * this succeeds or not.
+     *
+     * @param path where in the archive, relative to its root and using forward slashes
+     * @param bytes the content
+     */
+    void writeFile(String path, java.io.InputStream bytes);
   }
 }

@@ -49,6 +49,9 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
   /** One entry per dataset: what it was called and how many rows it holds. */
   private final List<Map<String, Object>> datasets = new ArrayList<>();
 
+  /** One entry per file: where it is and how large. The manifest's other half. */
+  private final List<Map<String, Object>> files = new ArrayList<>();
+
   private final ObjectMapper json;
   private final Path file;
   private final MessageDigest digest;
@@ -108,6 +111,21 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
     datasets.add(Map.of("block", block, "dataset", dataset, "rows", written, "file", name));
   }
 
+  @Override
+  public void writeFile(String path, java.io.InputStream bytes) {
+    try {
+      zip.putNextEntry(new ZipEntry(path));
+      // Copied through rather than read into memory: a photograph is megabytes
+      // and there may be thousands of them, so the archive is the only place the
+      // whole of it ever exists.
+      long copied = bytes.transferTo(zip);
+      zip.closeEntry();
+      files.add(Map.of("block", block, "file", path, "bytes", copied));
+    } catch (IOException failed) {
+      throw new UncheckedIOException("The export archive could not be written: " + path, failed);
+    }
+  }
+
   /**
    * Records something the archive should say about itself.
    *
@@ -130,6 +148,7 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
    */
   public Archive finish() throws IOException {
     manifest.put("datasets", List.copyOf(datasets));
+    manifest.put("files", List.copyOf(files));
     zip.putNextEntry(new ZipEntry("manifest.json"));
     zip.write(json.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
     zip.closeEntry();

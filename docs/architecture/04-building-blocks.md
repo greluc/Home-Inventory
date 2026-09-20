@@ -412,6 +412,31 @@ attributes, quantities, relations, lifecycle.
 | Migration in | Mapping profiles for **Homebox** and **InvenTree** ship with the product so that switching is possible |
 | GDPR | `DataSubjectService` produces access (Art. 15) and portability (Art. 20) artifacts mechanically and triggers erasure (Art. 17) across all blocks |
 
+**The archive's shape.** One directory per building block for the rows, one for the
+bytes, and a manifest counting both (REQ-PORT-003):
+
+```text
+manifest.json                  format, tenant, when, and by which version and commit;
+                               every dataset with its row count and every file with
+                               its size
+data/<block>/<dataset>.jsonl   one JSON object per line
+media/blobs/<sha256>           the original bytes, content-addressed
+```
+
+JSON Lines rather than one document per dataset, because a single array of ten thousand
+items cannot be read without holding all of it — which would make the receiving instance
+need as much memory as the sending one, and it is the least able to promise that. Lines
+are also what lets an import report *row 4,812* instead of *the file is wrong*, which is
+what REQ-PORT-007 asks of one. `ExportJobIT` holds the shape: one line per row.
+
+A blob is named by its digest, so a row finds its file without a second index that could
+disagree with the first. Two kinds of blob carry a row but no bytes: a **derivative**
+(thumbnail, preview), because it is recomputed from the original on the other side, and
+an **infected** one, because this deployment refuses to serve it (REQ-MED-013) and an
+archive would hand it over inside a container that hides it from the scanner. Each block
+writes its own share through `ExportSource`, which is what keeps `portability` from
+reading another block's tables (REQ-NFR-019…024).
+
 ---
 
 ### `audit` — traceability
