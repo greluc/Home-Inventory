@@ -1048,6 +1048,45 @@ components:
             $ref: '#/components/schemas/MoneyJson'
           type: array
       type: object
+    ImportJobView:
+      description: An import job as a caller sees it.
+      properties:
+        byteSize:
+          description: how large the uploaded archive was
+          format: int64
+          type: integer
+        dryRun:
+          description: whether the work was thrown away at the end
+          type: boolean
+        failure:
+          description: what went wrong, or null. One sentence, never a stack trace
+          type: string
+        finishedAt:
+          description: when it ended, or null
+          format: date-time
+          type: string
+        id:
+          description: its id
+          format: uuid
+          type: string
+        progress:
+          description: how far along, 0 to 100
+          format: int32
+          type: integer
+        report:
+          description: |-
+            what happened, as a JSON object, or null until the job finishes. Per block: how
+            many rows were inserted, how many overwritten and how many deliberately skipped, plus the
+            sentences saying what an import never writes
+          type: string
+        requestedAt:
+          description: when it was uploaded
+          format: date-time
+          type: string
+        state:
+          description: '`QUEUED`, `RUNNING`, `DONE` or `FAILED`'
+          type: string
+      type: object
     InstanceCapabilityView:
       description: One capability, and whether the instance has granted it.
       properties:
@@ -6588,7 +6627,7 @@ paths:
   /api/v1/export-jobs:
     get:
       description: This tenant's export jobs, newest first.
-      operationId: listJobs
+      operationId: listJobs_1
       parameters:
       - description: how many at most; capped at 200
         in: query
@@ -6702,7 +6741,7 @@ paths:
   /api/v1/export-jobs/{id}:
     get:
       description: One export job, which is how progress is watched.
-      operationId: job
+      operationId: job_1
       parameters:
       - description: which one
         in: path
@@ -7032,6 +7071,208 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Withdraws such a grant
+  /api/v1/import-jobs:
+    get:
+      description: This tenant's import jobs, newest first.
+      operationId: listJobs
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ImportJobView'
+                type: array
+          description: the jobs
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: This tenant's import jobs, newest first.
+    post:
+      description: Uploads an archive and queues it (REQ-PORT-007).
+      operationId: upload
+      parameters:
+      - description: whether to walk the whole import and then roll it back, writing nothing
+        in: query
+        name: dryRun
+        required: false
+        schema:
+          default: false
+          type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                file:
+                  description: the upload
+                  format: binary
+                  type: string
+              required:
+              - file
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJobView'
+          description: '`202` with the queued job and a `Location` pointing at it'
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Uploads an archive and queues it (REQ-PORT-007).
+  /api/v1/import-jobs/{id}:
+    get:
+      description: One import job, which is how progress is watched and the report is read.
+      operationId: job
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJobView'
+          description: the job
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One import job, which is how progress is watched and the report is read.
   /api/v1/instance/accounts:
     get:
       description: |-

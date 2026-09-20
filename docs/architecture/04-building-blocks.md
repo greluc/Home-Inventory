@@ -448,7 +448,24 @@ What is **not** in the archive is a list with a reason against every entry, and
 `ExportCoverageIT` holds it: it asks PostgreSQL for every tenant-scoped table there is,
 so a table that no block exports must be named there. The kinds that recur:
 
-**Who may ask.** All four `/api/v1/export-jobs` endpoints require
+**Reading one back.** `POST /api/v1/import-jobs` takes an archive and answers `202`
+with a job, exactly as the export does and for the same reason. The whole import is
+**one transaction** — the opposite arrangement from the export, which must not hold one
+— because `REQ-PORT-007` says an import is complete or it never happened; a dry run
+(`?dryRun=true`) does all of it and rolls back on purpose. Each block reads its own
+share through `ImportTarget`, in a declared order, because an item written against a
+type version that has not arrived is a row that cannot be inserted.
+
+Rows merge **by id** and the archive wins; the **catalogue** is the exception and is
+matched by its natural key, because every tenant is provisioned with the same built-in
+types under different ids and an archive would otherwise point at nothing. An import
+writes **no people** — no accounts, memberships, tenant-owned roles or notification
+channels — and its report says so in as many words
+([ADR-0069](../adr/0069-an-import-merges-by-id-and-writes-no-people.md),
+`ArchiveMoveIT`).
+
+**Who may ask.** All four `/api/v1/export-jobs` endpoints and all three
+`/api/v1/import-jobs` endpoints require
 `portability:export:request`, held by `ADMIN` and `OWNER`. It is not
 `tenancy:tenant:read`, because taking a copy of everything is not the same act as reading
 things one at a time — and a membership confined to part of the location tree holds no

@@ -194,6 +194,14 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **An archive can be read back in.** Upload an export to another instance and the
+  inventory arrives — items, places, tags, photographs and the type definitions they
+  are written against, which is what makes them mean anything. It is all-or-nothing:
+  if anything fails, nothing is written and the job says what went wrong. A dry run
+  does the whole thing and throws it away, so you can see what would happen first.
+  People are not recreated — invite them again on the new instance — and the report
+  lists what it left behind rather than leaving you to find out.
+
 - **Asking for an export is its own right now.** It used to need only
   permission to read the tenant, which meant somebody restricted to a single
   room could still download a copy of everything. Administrators and owners
@@ -806,7 +814,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 69 architecture decision records, each with its alternatives and consequences —
+- 70 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

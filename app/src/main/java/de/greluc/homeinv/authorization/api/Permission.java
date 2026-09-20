@@ -176,7 +176,12 @@ public enum Permission {
   SERVICE_ACCOUNT_ADMINISTER("identity:service-account:administer"),
 
   /**
-   * Ask for an export of the tenant, and download the archive (REQ-PORT-003, REQ-PORT-005).
+   * Move a whole tenant, in either direction (REQ-PORT-003, REQ-PORT-005, REQ-PORT-007).
+   *
+   * <p>Asking for an export and downloading the archive, and uploading one to be read back in.
+   * One permission for both because it is one act: whoever may take the inventory out may put one
+   * in, and the second half is the more consequential — it writes, and the archive wins wherever
+   * it and the tenant disagree.
    *
    * <p>Its own permission rather than {@code TENANT_READ}, because taking a copy of everything is
    * not the same act as reading things one at a time. The endpoints asked for {@code TENANT_READ}

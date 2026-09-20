@@ -239,10 +239,13 @@ permissions:
   - id: portability:export:request
     since: 1
     description: >
-      Ask for an export of the tenant, and download the archive (REQ-PORT-003,
-      REQ-PORT-005). Its own permission rather than tenancy:tenant:read, because
-      taking a copy of everything is not the same act as reading things one at a
-      time.
+      Move a whole tenant, in either direction: ask for an export and download
+      the archive (REQ-PORT-003, REQ-PORT-005), and upload one to be read back
+      (REQ-PORT-004, REQ-PORT-007). Its own permission rather than
+      tenancy:tenant:read, because taking a copy of everything is not the same
+      act as reading things one at a time — and reading an archive in is the
+      more consequential half, since it writes and the archive wins wherever the
+      two disagree.
     notable: >
       WHOLE-TENANT. A membership confined to part of the location tree
       (REQ-TEN-007) does not hold it, whatever its role: there is no archive of a

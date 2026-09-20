@@ -57,8 +57,8 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:533:enforced
-docs/architecture/04-building-blocks.md:538:enforced
+docs/architecture/04-building-blocks.md:550:enforced
+docs/architecture/04-building-blocks.md:555:enforced
 docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot
@@ -70,15 +70,15 @@ docs/architecture/06-deployment-view.md:536:cannot
 docs/architecture/06-deployment-view.md:722:cannot
 docs/architecture/06-deployment-view.md:793:cannot
 docs/architecture/06-deployment-view.md:83:cannot
-docs/architecture/06-deployment-view.md:914:fails the build
+docs/architecture/06-deployment-view.md:915:fails the build
 docs/architecture/07-data-model.md:434:cannot
-docs/architecture/07-data-model.md:591:enforces
-docs/architecture/07-data-model.md:618:cannot
-docs/architecture/07-data-model.md:626:enforced
-docs/architecture/07-data-model.md:628:cannot
-docs/architecture/07-data-model.md:647:guaranteed
-docs/architecture/07-data-model.md:652:enforces
-docs/architecture/07-data-model.md:671:enforced
+docs/architecture/07-data-model.md:592:enforces
+docs/architecture/07-data-model.md:619:cannot
+docs/architecture/07-data-model.md:627:enforced
+docs/architecture/07-data-model.md:629:cannot
+docs/architecture/07-data-model.md:648:guaranteed
+docs/architecture/07-data-model.md:653:enforces
+docs/architecture/07-data-model.md:672:enforced
 docs/architecture/08-api-contract.md:13:cannot
 docs/architecture/08-api-contract.md:322:enforced
 docs/architecture/08-api-contract.md:323:enforced

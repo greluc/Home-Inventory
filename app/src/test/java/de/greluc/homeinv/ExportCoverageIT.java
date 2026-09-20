@@ -196,6 +196,10 @@ class ExportCoverageIT extends AbstractIntegrationTest {
               "portability.export_job",
               "The archive would contain the record of its own making, and of every earlier one"),
           Map.entry(
+              "portability.import_job",
+              "The other direction of the same thing: an archive that carried the record of being "
+                  + "imported would, on the next export, carry the record of having carried it"),
+          Map.entry(
               "tenancy.invitation",
               "An open invitation holds a token and the address of somebody who is not a member. "
                   + "It would put a third party's address in a file handed to somebody else, and "
