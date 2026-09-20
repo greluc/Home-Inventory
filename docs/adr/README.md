@@ -58,7 +58,7 @@ Date: YYYY-MM-DD
 | [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted |
 | [0035](0035-design-system.md) | The delivered design system is binding, and `tokens.json` is its single source | Accepted |
 | [0036](0036-scanner-egress.md) | The malware scanner gets a route out; the egress proxy runs in every profile | Accepted |
-| [0037](0037-per-plugin-network-segments.md) | One network segment per plugin, and the management port out of their reach | Accepted |
+| [0037](0037-per-plugin-network-segments.md) | One network segment per plugin, and the management port out of their reach | Accepted, amended by 0071 |
 | [0038](0038-csp-delivery-and-first-paint.md) | The CSP is delivered by `web` with hashes; the theme is mirrored locally | Accepted, amended by 0040 |
 | [0039](0039-degraded-response-signalling.md) | Degradation is signalled in the payload; the `Warning` header is dropped | Accepted |
 | [0040](0040-no-cross-origin-isolation.md) | `Cross-Origin-Embedder-Policy` is dropped; `COOP` and `CORP` stay | Accepted |
@@ -85,9 +85,11 @@ Date: YYYY-MM-DD
 | [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
 | [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |
-| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted, amended by 0067 |
-| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066 |
+| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted, amended by 0067, 0070 |
+| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066, 0071 |
 | [0066](0066-instance-level-capability-grants.md) | An instance-level capability grant, for what the deployment owes an account | Accepted, amended by 0067 |
 | [0067](0067-breached-passwords-from-a-shipped-list.md) | Breached passwords are checked against a shipped list, and a plugin may add to it | Accepted |
 | [0068](0068-an-export-opens-what-its-requester-may-read.md) | An export opens a sealed value exactly as far as its requester may read it | Accepted |
 | [0069](0069-an-import-merges-by-id-and-writes-no-people.md) | An import merges by id, matches the catalogue by key, and writes no people | Accepted |
+| [0070](0070-documents-are-described-not-programmed.md) | A document is described, not programmed, and rendering it is a plugin's job | Accepted |
+| [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted |

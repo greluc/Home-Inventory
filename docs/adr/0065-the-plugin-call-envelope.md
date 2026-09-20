@@ -12,6 +12,12 @@
 > where the grant came from the instance operator rather than from a tenant, which is what
 > lets `REQ-NOTI-004` reach an account that belongs to no tenant.
 
+> **Amended by [ADR-0071](0071-the-core-answers-plugins-on-one-channel.md)**: one call now
+> runs **the other way round**, from a plugin to the core. The envelope is the same one and
+> the resolution is not: the caller is identified by the certificate it presents rather than
+> chosen by the core, and the tenant comes from the envelope rather than from anything the
+> caller asserts. Everything below stands for every call the core makes.
+
 ## Context
 
 `REQ-PLG-002` makes out-of-process plugins over gRPC with mTLS the default for

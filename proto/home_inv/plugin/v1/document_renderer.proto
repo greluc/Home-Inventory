@@ -1,0 +1,221 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// TURNING A DESCRIBED DOCUMENT INTO A RENDERED ONE.
+//
+// General on purpose. The first thing that needs one is the insurance report of
+// REQ-LIFE-016, and this service is deliberately not about insurance reports:
+// anything in this system that has to become a document describes it here and
+// asks whichever renderer the operator installed. A second report, a printed
+// inventory, a handover note for a lent item -- none of them needs a new port, a
+// new plugin or a PDF library in the core.
+//
+// It is available to OTHER PLUGINS as well, through the host channel
+// (host.proto): a plugin that produces documents describes one and asks the core
+// to render it, rather than carrying a PDF library and a font pack of its own.
+//
+// A DOCUMENT IS DESCRIBED, NOT PROGRAMMED. `Block` is a closed set and will stay
+// one: ADR-0020 says the configuration surface must not become a programming
+// language, and a document format with conditionals in it is that language
+// arriving through the back door. A renderer lays out what it is given and
+// evaluates nothing.
+//
+// The consequence is deliberate: THE CORE DECIDES WHAT A DOCUMENT SAYS AND THE
+// PLUGIN DECIDES WHAT IT LOOKS LIKE. A renderer chooses fonts, spacing, how a
+// table breaks across pages and what a heading weighs. It does not decide that a
+// figure is worth showing, because it is not the one that knows.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "DocumentRendererProto";
+
+// Renders described documents.
+service DocumentRenderer {
+  // What this renderer can produce.
+  rpc OutputFormats(DocumentRendererFormatsRequest) returns (DocumentRendererFormatsResponse);
+
+  // Renders one document.
+  //
+  // Both directions stream, because a document with photographs in it is
+  // megabytes and a rendered one is too: an insurance report of a household is
+  // the case this exists for, and it carries a picture per item.
+  rpc Render(stream DocumentRendererRenderRequest)
+      returns (stream DocumentRendererRenderResponse);
+}
+
+// Asks what a renderer writes.
+message DocumentRendererFormatsRequest {
+  CallContext context = 1;
+}
+
+// What a renderer writes.
+message DocumentRendererFormatsResponse {
+  // For example "application/pdf". A renderer producing several offers several,
+  // and the caller names the one it wants.
+  repeated string media_types = 1;
+}
+
+// One chunk of a render request.
+//
+// The first message carries the header and nothing else; every message after it
+// carries exactly one block. Splitting it this way is what lets a document be
+// larger than a gRPC message without the renderer having to hold all of it
+// before it can start.
+message DocumentRendererRenderRequest {
+  oneof part {
+    DocumentHeader header = 1;
+    Block block = 2;
+  }
+}
+
+// What a document is, before its content.
+message DocumentHeader {
+  CallContext context = 1;
+
+  // What the document is called. A renderer puts it in the file's metadata and
+  // usually at the top of the first page.
+  string title = 2;
+
+  // Anything else worth recording in the file -- "author", "subject",
+  // "generatedAt". A renderer writes what its format has a place for and
+  // ignores the rest.
+  map<string, string> metadata = 3;
+
+  // The paper to lay it out on.
+  Page page = 4;
+
+  // What to produce, one of the media types the renderer offers.
+  string media_type = 5;
+}
+
+// The paper.
+message Page {
+  // A paper size by name -- "A4", "A5", "Letter". A renderer that does not know
+  // a size says so rather than guessing: a document laid out on the wrong paper
+  // is one somebody prints twice.
+  string size = 1;
+
+  // Whether it is turned on its side.
+  bool landscape = 2;
+
+  // How much white to leave on every edge.
+  int32 margin_millimetres = 3;
+}
+
+// One piece of a document.
+//
+// A closed set, and that is the point rather than a detail: what a document can
+// contain is fixed by this contract, so a renderer written today handles every
+// document the core will ever describe within this major version. A new kind of
+// block is a breaking change and `buf breaking` says so.
+message Block {
+  oneof kind {
+    Heading heading = 1;
+    Paragraph paragraph = 2;
+    Facts facts = 3;
+    Table table = 4;
+    Image image = 5;
+    PageBreak page_break = 6;
+    Spacer spacer = 7;
+  }
+}
+
+// A heading.
+message Heading {
+  // 1 for the largest, down to 6. A renderer maps them to its own scale.
+  int32 level = 1;
+  string text = 2;
+}
+
+// A run of prose.
+message Paragraph {
+  // Plain, with no markup: a renderer that interpreted markup would be
+  // evaluating its input, which is the one thing this contract does not do.
+  string text = 1;
+}
+
+// A list of labelled facts -- what a report says about one thing.
+message Facts {
+  // What the list is about, or empty.
+  string caption = 1;
+  repeated Fact entries = 2;
+}
+
+// One labelled fact.
+message Fact {
+  string label = 1;
+
+  // Already formatted. Money is a string because the core knows its currency and
+  // its scale and a renderer does not.
+  string value = 2;
+}
+
+// A table.
+message Table {
+  // What it is a table of, or empty.
+  string caption = 1;
+  repeated string columns = 2;
+  repeated TableRow rows = 3;
+
+  // Which columns hold numbers, by index, so a renderer can align them right. A
+  // formatting hint and nothing more: the values are already strings.
+  repeated int32 numeric_columns = 4;
+}
+
+// One row, as long as the column list.
+//
+// A row of a different length is a document the renderer refuses: silently
+// padding one would hide a bug in whatever built it.
+message TableRow {
+  repeated string cells = 1;
+}
+
+// A picture.
+message Image {
+  // The bytes, carried with the document because a renderer has no route to the
+  // blob store and the core hands out no URL for a plugin to fetch
+  // (REQ-SEC-034). It is what makes a document with photographs large, and why
+  // Render streams.
+  bytes content = 1;
+
+  // What the bytes are -- "image/jpeg", "image/png".
+  string media_type = 2;
+
+  // What to print under it, or empty.
+  string caption = 3;
+
+  // How wide to draw it; the height follows the aspect ratio. Zero means "as
+  // wide as the text", which is what a photograph in a report usually wants.
+  int32 width_millimetres = 4;
+}
+
+// Start a new page here.
+message PageBreak {}
+
+// Vertical white space.
+message Spacer {
+  int32 millimetres = 1;
+}
+
+// One chunk of a rendered document.
+message DocumentRendererRenderResponse {
+  oneof part {
+    RenderedHeader header = 1;
+    bytes content = 2;
+  }
+}
+
+// What the rendered bytes are, before they arrive.
+message RenderedHeader {
+  string media_type = 1;
+
+  // What to call the file when somebody downloads it, without a path. The core
+  // may override it; a renderer with a better idea says so here.
+  string suggested_filename = 2;
+}

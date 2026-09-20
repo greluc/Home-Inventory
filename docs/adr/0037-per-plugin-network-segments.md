@@ -12,6 +12,12 @@
 > that this ADR removed. A missing back-link, same as the one in
 > [ADR-0042](0042-edge-is-not-internal.md).
 
+> **Amended by [ADR-0071](0071-the-core-answers-plugins-on-one-channel.md)**: the core
+> gains a **second listener**, on its own port, which plugin segments may reach. Everything
+> below stands: plugin-to-plugin traffic is still refused, and port 8090 still refuses every
+> plugin segment. What changed is that one narrow service answers there — a plugin may ask
+> for a document to be rendered from content it already holds, and for nothing else.
+
 ## Context
 
 [09 §9.5](../architecture/09-extensibility-and-plugins.md) promises every plugin
