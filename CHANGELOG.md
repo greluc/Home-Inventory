@@ -194,6 +194,12 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **The insurance report can be a document.** Install a renderer and the same
+  figures come back as a PDF — a page per room, the photograph beside each
+  thing, the figure and the day it was true. Without one you still get the
+  data and the table, and asking for the document says so rather than
+  returning an empty file.
+
 - **There is a report for your insurer.** Replacement value per room and in
   total, with the day each figure was true, the photograph and the receipt —
   as data and as a table you can paste into whatever they sent you. It counts

@@ -257,6 +257,16 @@ public enum ProblemType {
   EXPORT_NOT_READY("export-not-ready", HttpStatus.CONFLICT, "That export is not ready"),
 
   /**
+   * A document was asked for and nothing installed can render one (REQ-LIFE-016).
+   *
+   * <p>A {@code 409} and not a {@code 501}: the report exists and the figures are
+   * available, as data and as a table. What is missing is a renderer, which is something an
+   * operator installs rather than something this application is incapable of.
+   */
+  NO_DOCUMENT_RENDERER(
+      "no-document-renderer", HttpStatus.CONFLICT, "No document renderer is installed"),
+
+  /**
    * A reminder rule names a trigger nothing can answer here (REQ-NOTI-003).
    *
    * <p>A {@code 422}: the request is well formed and the value is one the enum accepts — what is

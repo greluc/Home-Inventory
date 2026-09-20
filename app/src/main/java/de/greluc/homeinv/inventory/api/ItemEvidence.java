@@ -37,6 +37,27 @@ public interface ItemEvidence {
   Map<UUID, List<Attached>> forItems(Collection<UUID> itemIds);
 
   /**
+   * The bytes of one picture, small enough to put in a document.
+   *
+   * <p>The <b>preview</b> where one has been derived, the original otherwise. A document carries
+   * its pictures (ADR-0070) and an insurance report carries one per item, so the difference between
+   * a preview and a twelve-megapixel original is the difference between a document somebody can
+   * e-mail and one they cannot.
+   *
+   * @param mediaObjectId which file
+   * @return its bytes and what they are, or empty when the file is gone or was never cleared
+   */
+  java.util.Optional<Picture> pictureOf(UUID mediaObjectId);
+
+  /**
+   * One picture, as bytes.
+   *
+   * @param content the bytes
+   * @param mediaType what they are
+   */
+  record Picture(byte[] content, String mediaType) {}
+
+  /**
    * One attachment.
    *
    * @param mediaObjectId which file

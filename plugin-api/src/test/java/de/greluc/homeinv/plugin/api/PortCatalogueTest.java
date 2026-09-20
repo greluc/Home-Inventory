@@ -68,6 +68,25 @@ class PortCatalogueTest {
         .isEmpty();
   }
 
+  @Test
+  @DisplayName("lets a manifest declare every port there is, and no port there is not")
+  void theManifestReaderKnowsTheSamePorts() {
+    // The list a manifest is validated against is a third copy of the same fact
+    // — the requirement, the package, and `PluginManifestReader.PORTS` — and it
+    // had already drifted: `PasswordBreachCheck` was added as the fifteenth port
+    // and never added there, so every manifest declaring it was rejected at
+    // registration with a message listing the ports it was not among. A plugin
+    // nobody could install, and nothing said why.
+    List<String> named = portsNamedByTheRequirement();
+
+    assertThat(PluginManifestReader.PORTS)
+        .as(
+            "a manifest may name exactly the ports REQ-PLG-001 names. A port missing here is a "
+                + "plugin that cannot be installed; a port here that does not exist is a manifest "
+                + "accepted for something nobody calls")
+        .containsExactlyInAnyOrderElementsOf(named);
+  }
+
   /**
    * Reads the port names out of the requirement's own description.
    *

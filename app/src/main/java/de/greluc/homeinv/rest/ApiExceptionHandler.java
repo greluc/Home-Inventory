@@ -814,6 +814,26 @@ public class ApiExceptionHandler {
   }
 
   /**
+   * Answers a document asked for on an instance that cannot render one (REQ-LIFE-016).
+   *
+   * <p>A {@code 409} rather than a {@code 501}, because the report is there: the figures and the
+   * table are served by the endpoints beside this one, and what is missing is a plugin an operator
+   * installs. The detail says so, which is what tells a caller to use the other two rather than to
+   * report a fault.
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(
+      de.greluc.homeinv.inventory.api.InsuranceDocuments.NoRendererException.class)
+  public ProblemDetail handleNoRenderer(
+      de.greluc.homeinv.inventory.api.InsuranceDocuments.NoRendererException exception,
+      HttpServletRequest request) {
+    return problem(ProblemType.NO_DOCUMENT_RENDERER, exception.getMessage(), request);
+  }
+
+  /**
    * Answers a move that would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>The detail says which of the two it was — a place moving into itself, or a category that

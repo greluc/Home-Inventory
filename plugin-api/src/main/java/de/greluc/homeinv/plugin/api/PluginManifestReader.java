@@ -58,8 +58,17 @@ public final class PluginManifestReader {
           "ui:panel",
           "print:target");
 
-  /** The extension points of REQ-PLG-001. A port outside this list is a port nobody calls. */
-  private static final Set<String> PORTS =
+  /**
+   * The extension points of REQ-PLG-001. A port outside this list is a port nobody calls.
+   *
+   * <p>Package-private rather than private so that {@code PortCatalogueTest} can compare it with
+   * the interfaces in {@code de.greluc.homeinv.plugin.api.port}. It had drifted: {@code
+   * PasswordBreachCheck} was added as the fifteenth port by ADR-0067 and never added here, which
+   * made every manifest declaring it invalid — a plugin nobody could install, failing at
+   * registration with a message listing the ports it was not among. That is exactly the shape of
+   * bug a list written twice produces, and the comparison is what stops the next one.
+   */
+  static final Set<String> PORTS =
       Set.of(
           "CodeFormat",
           "ScanSource",
@@ -74,7 +83,9 @@ public final class PluginManifestReader {
           "ImageProcessor",
           "VirusScanner",
           "ValuationProvider",
-          "ImportMapper");
+          "ImportMapper",
+          "PasswordBreachCheck",
+          "DocumentRenderer");
 
   /** The setting types a manifest may declare. */
   private static final Set<String> SETTING_TYPES =

@@ -338,6 +338,22 @@ assigned:
       - "REQ-NOTI-003: triggers at least warranty expiry, maintenance interval, return date, minimum stock, licence expiry, stocktake discrepancy"
       - "REQ-NOTI-001: reminder rules are data, not code"
 
+  - token: no-document-renderer
+    status: 409
+    since: 1
+    summary: >
+      A document was asked for and nothing installed can render one.
+    notes: >
+      A 409 and not a 501. The report exists and its figures are served by the
+      two endpoints beside this one, as data and as a table; what is missing is
+      a DocumentRenderer plugin, which an operator installs. A 501 would say
+      this application cannot do it, which is not what is wrong -- and an empty
+      file would be a worse answer than a refusal somebody can act on. The
+      detail says where the figures are.
+    sources:
+      - "REQ-LIFE-016: an insurance report is producible as a PDF and as a table"
+      - "ADR-0070: a document is described, not programmed, and rendering it is a plugin's job"
+
   - token: export-not-ready
     status: 409
     since: 1

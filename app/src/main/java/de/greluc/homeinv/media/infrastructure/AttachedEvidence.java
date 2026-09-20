@@ -5,6 +5,8 @@
 package de.greluc.homeinv.media.infrastructure;
 
 import de.greluc.homeinv.inventory.api.ItemEvidence;
+import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.platform.TenantContext;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -61,6 +63,43 @@ public class AttachedEvidence implements ItemEvidence {
       """;
 
   private final JdbcClient jdbc;
+  private final BlobStore blobs;
+
+  @Override
+  @Transactional(readOnly = true)
+  public java.util.Optional<Picture> pictureOf(UUID mediaObjectId) {
+    java.util.Optional<String[]> addresses =
+        jdbc
+            .sql(
+                """
+                select coalesce(preview_sha256, sha256) as sha256, media_type
+                from media.media_object
+                where id = ? and deleted_at is null and scan_state = 'CLEAN'
+                """)
+            .param(mediaObjectId)
+            .query(
+                (rs, rowNum) -> new String[] {rs.getString("sha256"), rs.getString("media_type")})
+            .optional();
+    if (addresses.isEmpty()) {
+      return java.util.Optional.empty();
+    }
+    try (java.io.InputStream bytes =
+        blobs.open(TenantContext.require(), addresses.get()[0])) {
+      // A preview is re-encoded to the one format this deployment stores
+      // (ADR-0052), so its media type is that rather than the original's. Read
+      // in full because a document carries its pictures and the renderer needs
+      // the whole of one before it can draw it.
+      return java.util.Optional.of(
+          new Picture(
+              bytes.readAllBytes(),
+              addresses.get()[0].equals(addresses.get()[1]) ? addresses.get()[1] : "image/webp"));
+    } catch (java.io.IOException unreadable) {
+      // A picture that cannot be read is a picture the document does without.
+      // Failing the whole report over one missing thumbnail would be worse than
+      // a report with a gap in it, and the gap is visible.
+      return java.util.Optional.empty();
+    }
+  }
 
   @Override
   @Transactional(readOnly = true)

@@ -39,6 +39,7 @@ public class ReportController {
   private final ValuationReport reports;
   private final ExpiryOverview expiries;
   private final de.greluc.homeinv.inventory.api.InsuranceReport insurance;
+  private final de.greluc.homeinv.inventory.api.InsuranceDocuments documents;
 
   /**
    * What the things in here are worth (REQ-LIFE-008).
@@ -174,6 +175,45 @@ public class ReportController {
             org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
             "attachment; filename=\"insurance-" + report.producedOn() + ".csv\"")
         .body(csv.toString());
+  }
+
+  /**
+   * The same report as a document, rendered by a plugin (REQ-LIFE-016, ADR-0070).
+   *
+   * <p>The core describes the document and whichever {@code DocumentRenderer} the operator
+   * installed renders it. An instance with none answers {@code 409 no-document-renderer} and says
+   * that the figures are available from the two endpoints beside this one — an empty file would be
+   * a worse answer than a refusal somebody can act on.
+   *
+   * @param root the place to report on, or omitted for everything
+   * @param limit how many items at most; capped at 200
+   * @param language what the reader reads, passed to the renderer
+   * @return the rendered document, as whatever the renderer produced
+   */
+  @GetMapping(path = "/insurance.pdf", produces = "application/pdf")
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.MALFORMED_REQUEST,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.NO_DOCUMENT_RENDERER
+  })
+  public org.springframework.http.ResponseEntity<byte[]> insuranceDocument(
+      @RequestParam(required = false) UUID root,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit,
+      @org.springframework.web.bind.annotation.RequestHeader(name = "Accept-Language", required = false, defaultValue = "en")
+          String language) {
+    var rendered = documents.render(root, limit, "application/pdf", language);
+    String filename =
+        rendered.suggestedFilename() == null || rendered.suggestedFilename().isBlank()
+            ? "insurance-report.pdf"
+            : rendered.suggestedFilename();
+    return org.springframework.http.ResponseEntity.ok()
+        .header(
+            org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"" + filename + "\"")
+        .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, rendered.mediaType())
+        .body(rendered.content());
   }
 
   /**
