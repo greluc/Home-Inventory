@@ -406,11 +406,20 @@ Nothing is dismissed because it was inconvenient. Where a finding is real it is
 fixed, and where the reason is a property of the system rather than of one call
 site, that property gets a test — because a sentence in a table is not evidence.
 
+> **Alerts are per ref, and a pull request has three of them.** Dismissing the
+> alerts listed by default clears them on the **default branch** and leaves the
+> pull request red, because the check that comments on a pull request analyses
+> `refs/pull/<n>/merge` — the merge commit, which is neither the branch nor the
+> base. Its alerts are separate records with their own numbers. Found on
+> 2026-09-20, after a first pass dismissed fifteen alerts and the check went on
+> reporting four that were not among them.
+
 | Rule | Where | Why it is not a defect here |
 |---|---|---|
 | `java/log-injection` (×11) | Every place a request value reaches a log statement | The only appender is the **ECS JSON encoder** (`REQ-NFR-041`), which escapes control characters inside the `message` value: a `CRLF` payload produces **one** line, not two, so nothing a caller sends can end the line and start a forged one. Held by `LogFormatIT.aValueWithNewlinesCannotForgeALine`, which logs the payload a forger would use and asserts both halves — exactly one line out, and the payload intact inside the value. **No sanitiser is added, deliberately:** scrubbing the value would make the log say less than what happened, and the attempt is the thing worth reading |
 | `java/tainted-permissions-check` (×2) | `TypeAdministrationAdapter.permittedChildren` | It is a **domain rule**, not an access-control check: `catalog.location_category_child` says which location category may sit beneath which (`REQ-CORE-047`), and the rule fires on the identifier. Authorisation for these endpoints is where [ADR-0010](../adr/0010-api-surfaces.md) puts all of it — `@RequiresPermission` in the REST adapter (`REQ-SEC-022`…`025`) — and the query is parameterised and scoped by `TenantContext.require()` under RLS |
 | `java/user-controlled-bypass` (×1) | `ServiceAccountAuthenticationFilter` | **Fail-closed.** The condition decides only whether *this* authenticator runs; a request whose `Authorization` header is absent or of another scheme continues down the chain still **unauthenticated**, which grants nothing. Every endpoint carries `@RequiresPermission` and the build fails without one (`REQ-SEC-022`), so not running the filter cannot bypass authorisation |
+| `java/potentially-weak-cryptographic-algorithm` (×1) | `DefaultPasswordPolicy.sha1Hex` | **SHA-1 by protocol, not by choice.** The breached-password check is a *k*-anonymity range query, and the range query every such service answers is defined over SHA-1 ([ADR-0067](../adr/0067-breached-passwords-from-a-shipped-list.md)). It is a **lookup key**: five of its forty characters select a bucket and the rest is compared locally, and nothing about the scheme rests on the digest being collision-resistant. What actually stores the password is Argon2id (`REQ-SEC-010`). The same finding is excluded for SpotBugs in `config/spotbugs-exclude.xml`, for the same reason |
 | `java/uncontrolled-arithmetic` (×1) | `TenantDataKeys.wrap` | `iv.length + sealed.length` adds a 12-byte GCM nonce to the AES-GCM output over a 32-byte data key. Both are bounded by the private caller, which wraps a freshly generated key and never anything a request supplies; for the sum to overflow an `int` the ciphertext would have to approach 2 GiB, which `Cipher.doFinal` would have failed to allocate long before |
 
 ## 12.13 Incident handling
