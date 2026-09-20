@@ -19,10 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Attachments and derivatives before the objects they describe.
  *
  * <p>The <b>blobs</b> are not removed here. They live in the blob store behind a port and are
- * reclaimed by the orphan sweep of 13 §13.8, which already removes what no reference points at —
- * with a grace period, never immediately. Deleting them inside this transaction would mean a
- * rollback leaving rows that point at bytes that are gone, which is the one direction this must
- * not fail in.
+ * reclaimed by the orphan sweep of 13 §13.8 ({@code OrphanedBlobSweep}), which removes what no
+ * reference points at — with a grace period, never immediately. Deleting them inside this
+ * transaction would mean a rollback leaving rows that point at bytes that are gone, which is the
+ * one direction this must not fail in.
+ *
+ * <p>*This said the sweep "already removes" them, and until 2026-09-20 there was no such run
+ * anywhere in this block: reference counts fell to zero and the bytes stayed for ever. The comment
+ * was describing a plan (13 §13.8 has listed the task since the chapter was written) in the present
+ * tense, which is how a gap hides behind a sentence that reads as reassurance.*
  */
 @Component
 @Slf4j

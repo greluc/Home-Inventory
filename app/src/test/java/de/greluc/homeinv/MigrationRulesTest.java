@@ -171,6 +171,7 @@ class MigrationRulesTest {
           "identity.service_account_by_token",
           "notification.tenants_with_due_notifications",
           "notification.tenants_with_enabled_rules",
+          "media.tenants_with_orphaned_blobs",
           "tenancy.invitation_by_token",
           "tenancy.quotas_of_tenant",
           "tenancy.set_tenant_quota",

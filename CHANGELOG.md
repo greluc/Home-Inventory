@@ -182,6 +182,12 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **Photographs nothing points at are cleaned up.** When the last item using an
+  uploaded file is deleted, the file itself is removed a week later — long enough
+  that moving a photograph between two items never loses it, and short enough
+  that deleted things stop taking up space. This never ran before, so uploads
+  stayed on disk for ever once detached.
+
 - **One list of everything that runs out.** Warranties, software licences and
   best-before dates together, soonest first, including what has already lapsed.
   A field in your own item types can join the list by being marked as an expiry,

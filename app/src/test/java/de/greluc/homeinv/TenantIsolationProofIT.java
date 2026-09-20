@@ -107,6 +107,9 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
    * so a column taking fewer than that could not be seeded at all. {@code
    * notification.reminder.subject_kind} was the first, at 40.
    */
+  /** A column a check requires to be present, as pg prints it. */
+  private static final Pattern MUST_BE_PRESENT =
+      Pattern.compile("(\\w+) IS NOT NULL");
   private static final Pattern MAX_LENGTH =
       Pattern.compile("length\\([^)]*\\)\\s*<=\\s*(\\d+)");
 
@@ -505,6 +508,38 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         }
       }
       return changed;
+    }
+
+    // A check that says a column must be PRESENT, when the row does not carry it.
+    // `media.media_object` has `(ref_count = 0) = (unreferenced_since IS NOT NULL)`
+    // and `ref_count` defaults to zero, so the left side is true and the right
+    // one has to be filled. The sibling shape on `inventory.item` --
+    // `(lifecycle_state = 'TRASHED') = (deleted_at IS NOT NULL)` -- never bit,
+    // because both halves are false by default and false equals false.
+    //
+    // Tried before the fallback below, which DROPS nullable columns: dropping is
+    // the wrong direction for a constraint complaining that something is absent.
+    Matcher present = MUST_BE_PRESENT.matcher(clause);
+    while (present.find()) {
+      String column = present.group(1);
+      if (columns.contains(column)) {
+        continue;
+      }
+      String type = columnType(superuser, table, column);
+      if (type == null) {
+        continue;
+      }
+      columns.add(column);
+      values.add(
+          valueFor(
+              table,
+              new Column(column, type),
+              tenant,
+              UUID.randomUUID(),
+              checkClauses(superuser, table),
+              foreignTargets,
+              seeded));
+      return true;
     }
 
     Set<String> nullable = nullableColumns(superuser, table);

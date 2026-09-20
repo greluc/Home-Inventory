@@ -552,6 +552,7 @@ question, and none of them returns a tenant's content.
 | `identity.service_account_by_token` | A machine presents a token and nothing else; the token is what names the tenant | By token hash, and the account is tenant-scoped and RLS-protected from that point on |
 | `notification.tenants_with_due_notifications` | The delivery run is looking for the tenants that need a context | Returns tenant ids and nothing else; the notifications themselves are then read under each tenant's own context |
 | `notification.tenants_with_enabled_rules` | The reminder run is looking for the tenants that have a rule, so there is no context to set yet (`REQ-NOTI-001`) | Returns tenant ids and nothing else; the rules themselves are read under each tenant's own context |
+| `media.tenants_with_orphaned_blobs` | The weekly sweep of 13 §13.8 looks for the tenants holding a blob nothing points at, so there is no context to set yet (`REQ-MED-011`) | Returns tenant ids and nothing else; the objects are read and removed under each tenant's own context |
 | `audit.entry_hashes_in` | The hourly anchor spans every tenant by design ([ADR-0031](../adr/0031-audit-chain-per-tenant.md)) | Returns hashes, never content |
 | `audit.oldest_entry_at` | Where the anchor run starts on an instance that has never anchored | Returns one timestamp |
 | `audit.ensure_audit_partition` | `homeinv_app` has no DDL rights and must never get any (`REQ-SEC-101`) | Creates one shape of one object in one schema from a timestamp; it takes no table name |
