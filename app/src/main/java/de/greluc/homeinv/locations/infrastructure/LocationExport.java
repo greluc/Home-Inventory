@@ -43,7 +43,7 @@ public class LocationExport implements ExportSource {
       """
       select id, category_version_id, parent_id, name, path::text as path, depth,
              is_mobile, attributes::text as attributes, sealed_at,
-             created_at, updated_at, created_by, deleted_at, version
+             created_at, updated_at, created_by, updated_by, deleted_at, version
       from locations.location
       order by path, id
       """;
