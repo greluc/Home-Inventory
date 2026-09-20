@@ -25,6 +25,10 @@ path = [
   "api/**",
   "blobstore/**",
   "egress-proxy/**",
+  # The plugins this project builds itself. AGPL like the rest of the
+  # first-party code; the CONTRACT they are written against stays Apache
+  # so that a third party may choose (ADR-0072, ADR-0018).
+  "plugins/**",
   "website/**",
   ".github/**",
   "tools/**",

@@ -539,4 +539,53 @@ class ArchitectureRulesTest {
                 + "value that came from a request (REQ-SEC-031)")
         .isEmpty();
   }
+  @Test
+  @DisplayName("names no plugin of its own: being first-party buys nothing")
+  void noPluginIsPrivilegedByItsName() {
+    // ADR-0072 puts the five first-party plugins in `plugins/` in this
+    // repository, and 09 §9.9 promises they are "installed, granted and revoked
+    // exactly like a third party's -- no privileged path, because a privileged
+    // path is what would eventually be used for something else".
+    //
+    // The cheapest way that promise breaks is a plugin ID in a string literal:
+    // one `if (pluginId.equals("de.greluc.homeinv.plugin.smtp"))` and there is a
+    // path only our code can take. So the core may not NAME one. It resolves a
+    // port through `ExtensionRegistry` and asks `PluginRegistry.permits`; which
+    // plugin answers is the operator's and the tenant's business.
+    //
+    // Comments and Javadoc are stripped first: a chapter reference or an example
+    // manifest ID in prose is documentation, and this rule is about code.
+    List<String> offenders = new ArrayList<>();
+    Pattern blockComments = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+    Pattern lineComments = Pattern.compile("//[^\\n]*");
+    Pattern pluginId = Pattern.compile("\"de\\.greluc\\.homeinv\\.plugin\\.[a-z]");
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String code = Files.readString(file);
+                  code = blockComments.matcher(code).replaceAll("");
+                  code = lineComments.matcher(code).replaceAll("");
+                  if (pluginId.matcher(code).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "the core names no plugin. A first-party plugin is installed, granted and revoked "
+                + "exactly like a third party's (ADR-0072, 09 §9.9), and an id in a literal is how "
+                + "that stops being true")
+        .isEmpty();
+  }
 }

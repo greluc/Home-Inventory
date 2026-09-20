@@ -64,7 +64,7 @@ like "nicely maintainable" deliberately do not appear.
 | **Security** | Isolation, authorization, uploads, headers | Project test suites, ZAP | [12 §12.12](12-security.md) |
 | **Sync** | Property-based, n devices, random sequences | jqwik, a shared suite for web and KMP | No silent data loss |
 | **End to end** | The ten most important user flows | Playwright | No regression in daily use |
-| **Load** | A generated inventory of 1 M items | k6 or Gatling | The Q7 scenarios |
+| **Load** | A generated inventory of 1 M items | **Gatling**, in the Gradle build (decided with the owner 2026-09-20; the row said "k6 or Gatling" until then, and an unmade choice is a suite nobody starts) | The Q7 scenarios |
 | **Plugin** | The contract test suite | `homeinv-plugin-testkit` | Third-party plugins behave correctly |
 
 **Test data:** a reproducible generator (fixed random seed) produces tenants,

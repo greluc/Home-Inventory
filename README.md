@@ -75,6 +75,7 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 ├── docs/          architecture, decisions, requirements, reference data
 ├── plugin-api/    the ports a plugin implements — Apache-2.0, not AGPL
 ├── plugin-sdk/    SDKs for Java, Kotlin, Rust, Python and Go, and the contract test suite
+├── plugins/       the plugins this project builds itself — SMTP, webhook, OIDC, S3, Nextcloud
 ├── proto/         home_inv.plugin.v1 — the plugin contract
 ├── blobstore/     the in-deployment BlobStore, in Rust
 ├── egress-proxy/  the allowlist chokepoint every outbound call passes, in Rust
@@ -83,9 +84,10 @@ Start here: **[docs/README.md](docs/README.md)** — the map over all documents.
 ```
 
 Each directory carries a `README.md` explaining what belongs there, what does
-not, and which stage fills it. The ones a later stage fills — `cla/`,
-`plugin-api/`, `plugin-sdk/`, `proto/` — are still empty, and deliberately so:
-contracts before implementations.
+not, and which stage fills it. Two are still empty and deliberately so — `cla/`
+and `plugin-sdk/`, both stage 3. *This paragraph named `plugin-api/` and
+`proto/` among the empty ones until 2026-09-20, after both had been carrying the
+plugin contract for a week.*
 
 ## Taking part
 
