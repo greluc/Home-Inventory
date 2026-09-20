@@ -194,6 +194,11 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **Anything with a date on it can be reminded about.** Mark one of your own date
+  fields as an expiry — a licence, a passport, an inspection, a tin of paint — and
+  a reminder rule watches it the way it already watched warranties. The same mark
+  puts the date in the expiry overview, so it is one decision rather than two.
+
 - **You can bring an inventory in from Homebox or InvenTree.** Upload their CSV
   export, pick the profile, and the things arrive with their places, their tags
   and what they cost — the place path becomes a real tree rather than a label.

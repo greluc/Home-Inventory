@@ -24,11 +24,10 @@ package de.greluc.homeinv.notification.api;
  * <h2>Two of them have no source yet</h2>
  *
  * <p>A trigger is declared here and <b>served</b> by a {@link ReminderSource} in the block that
- * owns the data. {@link #LICENCE_EXPIRY} and {@link #STOCKTAKE_DISCREPANCY} are declared and served
- * by nothing: a stocktake is stage 2, and a software licence has no date column to watch. A rule
- * naming one is refused when it is <b>created</b>, by the person who can still choose another —
- * rather than accepted and then silently never firing, which is the failure a reminder feature
- * cannot afford.
+ * owns the data. {@link #STOCKTAKE_DISCREPANCY} is the one declared and served by nothing: a
+ * stocktake is stage 2. A rule naming it is refused when it is <b>created</b>, by the person who
+ * can still choose another — rather than accepted and then silently never firing, which is the
+ * failure a reminder feature cannot afford.
  */
 public enum ReminderTrigger {
 
@@ -71,10 +70,17 @@ public enum ReminderTrigger {
   MINIMUM_STOCK("item"),
 
   /**
-   * A software licence is about to expire (REQ-NOTI-003).
+   * Something with a date on it is about to run out (REQ-NOTI-003, REQ-LIFE-013, REQ-CORE-023).
    *
-   * <p><b>Declared and not served.</b> REQ-NOTI-003 names it; nothing stores a licence expiry date
-   * yet, and a trigger that reads a column that does not exist would be a rule that never fires.
+   * <p>Served by {@code ExpiryFieldReminders} since 2026-09-20. It was declared and served by
+   * nothing before that, and the reason was true at the time: nothing stored such a date, and a
+   * trigger reading a column that does not exist is a rule that never fires. The {@code expiry}
+   * flag on a field definition is that column — a tenant marks one of its own date fields as an
+   * expiry and this watches every item that has one.
+   *
+   * <p>Which makes it broader than its name: a passport, an inspection, a certificate, a tin of
+   * paint. The name stays because REQ-NOTI-003 uses it and a rule already written against it would
+   * otherwise stop meaning anything.
    */
   LICENCE_EXPIRY("item"),
 

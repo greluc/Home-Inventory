@@ -261,8 +261,37 @@ class ReminderRuleIT extends AbstractIntegrationTest {
         .hasMessageContaining("WARRANTY_EXPIRY");
 
     assertThat(inOwn(tenant, () -> rules.servedTriggers()))
-        .contains(ReminderTrigger.WARRANTY_EXPIRY, ReminderTrigger.LOAN_DUE, ReminderTrigger.MINIMUM_STOCK)
-        .doesNotContain(ReminderTrigger.STOCKTAKE_DISCREPANCY, ReminderTrigger.LICENCE_EXPIRY);
+        .contains(
+            ReminderTrigger.WARRANTY_EXPIRY,
+            ReminderTrigger.LOAN_DUE,
+            ReminderTrigger.MINIMUM_STOCK,
+            ReminderTrigger.LICENCE_EXPIRY)
+        // Stocktaking is stage 2, so its trigger is still declared and served by
+        // nothing -- which is the state this test exists to keep visible.
+        .doesNotContain(ReminderTrigger.STOCKTAKE_DISCREPANCY);
+  }
+
+  @Test
+  @DisplayName("warns before a date a tenant marked as an expiry runs out (REQ-NOTI-003)")
+  void anExpiryFieldFires() {
+    Tenant tenant = newTenant("reminder-expiry@example.org");
+    UUID itemId = anItem(tenant, "A licence for something");
+    // The tenant marks one of its own date fields as an expiry. That flag is the
+    // column `LICENCE_EXPIRY` was waiting for: until it existed the trigger was
+    // declared and served by nothing, because nothing stored such a date.
+    expiryField(tenant, "validUntil");
+    expiryOn(tenant, itemId, "validUntil", "2026-10-01");
+    subscribe(tenant, ReminderTrigger.LICENCE_EXPIRY);
+
+    inOwn(
+        tenant,
+        () -> rules.create(rule("Licences", ReminderTrigger.LICENCE_EXPIRY, 14), tenant.userId()));
+
+    assertThat(run(tenant, "2026-09-16")).isZero();
+    assertThat(run(tenant, "2026-09-17")).isEqualTo(1);
+    // Once, like every other trigger: the unique index on (rule, subject, date)
+    // is what stops a reminder becoming something people switch off.
+    assertThat(run(tenant, "2026-09-18")).isZero();
   }
 
   @Test
@@ -314,6 +343,77 @@ class ReminderRuleIT extends AbstractIntegrationTest {
   }
 
   @Autowired private org.springframework.context.ApplicationContext applicationContext;
+
+  /**
+   * Marks one of the tenant's date fields as an expiry.
+   *
+   * <p>Written with SQL: adding a field through the type editor means publishing a new version, and
+   * this test is about the reminder rather than about the editor.
+   *
+   * @param tenant whose catalogue
+   * @param key the field's key
+   */
+  private void expiryField(Tenant tenant, String key) {
+    inOwn(
+        tenant,
+        () -> {
+          UUID version =
+              jdbc
+                  .sql(
+                      """
+                      select v.id from catalog.item_type_version v
+                      join catalog.item_type t on t.id = v.item_type_id
+                      where t.key = 'general'
+                      order by v.version_number desc
+                      limit 1
+                      """)
+                  .query(UUID.class)
+                  .single();
+          return jdbc
+              .sql(
+                  """
+                  insert into catalog.field_definition
+                      (tenant_id, item_type_version_id, key, data_type, labels, expiry,
+                       created_by, updated_by)
+                  values (?, ?, ?, 'date', '{"en": "Valid until"}'::jsonb, true, ?, ?)
+                  """)
+              .param(tenant.tenantId())
+              .param(version)
+              .param(key)
+              .param(tenant.userId())
+              .param(tenant.userId())
+              .update();
+        });
+  }
+
+  /**
+   * Gives an item a date in an expiry-flagged field.
+   *
+   * <p>Straight into {@code item_attr_index}, which is where an attribute is a date rather than a
+   * string in a JSONB object, and which is what the reminder reads.
+   *
+   * @param tenant whose item
+   * @param itemId which item
+   * @param key the field key
+   * @param date the date
+   */
+  private void expiryOn(Tenant tenant, UUID itemId, String key, String date) {
+    inOwn(
+        tenant,
+        () ->
+            jdbc.sql(
+                    """
+                    insert into inventory.item_attr_index
+                        (tenant_id, item_id, field_key, date_value)
+                    values (?, ?, ?, ?::timestamptz)
+                    on conflict (item_id, field_key) do update set date_value = excluded.date_value
+                    """)
+                .param(tenant.tenantId())
+                .param(itemId)
+                .param(key)
+                .param(date)
+                .update());
+  }
 
   private ReminderRules.NewReminderRule rule(String name, ReminderTrigger trigger, int offsetDays) {
     return new ReminderRules.NewReminderRule(name, trigger, null, offsetDays, CHANNEL, true);
