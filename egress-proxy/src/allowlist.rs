@@ -33,7 +33,7 @@ use std::net::IpAddr;
 #[derive(Debug, Default, Clone)]
 pub struct Allowlist {
     /// Hosts every caller may reach.
-    shared: Vec<String>,
+    shared: Vec<Entry>,
     /// One entry per plugin segment, in the order the file declares them.
     segments: Vec<Segment>,
 }
@@ -45,8 +45,62 @@ struct Segment {
     network: Network,
     /// Which plugin it is, for the log line. It decides nothing.
     plugin: String,
-    /// The hosts that plugin's manifest declared.
-    hosts: Vec<String>,
+    /// The targets that plugin's manifest declared.
+    hosts: Vec<Entry>,
+}
+
+/// One allowed target: a host, and a port when the manifest named one.
+///
+/// A manifest declares two shapes and they mean different things (09 §9.3): a
+/// `hosts:` entry is a name this plugin may reach, and a `tcp:` entry is a
+/// `host:port` — the form `plugin-smtp` needs, because a mail submission is not
+/// HTTP and "the mail server, on any port" is not what anybody meant.
+///
+/// So a bare entry matches the host on **any** port and a qualified one matches
+/// that port alone. The asymmetry is deliberate rather than tidy: `freshclam`
+/// fetches signatures over port 80 from the deployment allowlist's one bare
+/// entry, and making a bare entry imply 443 would have broken the scanner
+/// quietly (ADR-0036).
+#[derive(Debug, Clone)]
+struct Entry {
+    /// The name, lower-case and without a trailing dot.
+    host: String,
+    /// The port, when the entry named one.
+    port: Option<u16>,
+}
+
+impl Entry {
+    /// Reads `example.org` or `mail.example.org:587`.
+    ///
+    /// An IPv6 literal in brackets is not a host a manifest may declare — ADR-0027
+    /// allows a NAME, and an address check is `is_forbidden`'s job — so the last
+    /// colon is unambiguous.
+    fn parse(line: &str) -> Self {
+        match line.rsplit_once(':') {
+            Some((host, port)) => match port.parse::<u16>() {
+                Ok(port) if !host.is_empty() => Self {
+                    host: host.to_string(),
+                    port: Some(port),
+                },
+                // Not a port. The whole line is the host, which is what a name
+                // containing a colon would be -- and which nothing resolves, so
+                // it allows nothing rather than allowing something wider.
+                _ => Self {
+                    host: line.to_string(),
+                    port: None,
+                },
+            },
+            None => Self {
+                host: line.to_string(),
+                port: None,
+            },
+        }
+    }
+
+    /// Whether this entry allows a request.
+    fn matches(&self, host: &str, port: u16) -> bool {
+        self.host == host && self.port.map(|allowed| allowed == port).unwrap_or(true)
+    }
 }
 
 /// An address range, as a section header writes it.
@@ -154,10 +208,10 @@ impl Allowlist {
                 }
                 continue;
             }
-            let host = line.to_ascii_lowercase();
+            let entry = Entry::parse(&line.to_ascii_lowercase());
             match current {
-                Some(index) => segments[index].hosts.push(host),
-                None if !dropped => shared.push(host),
+                Some(index) => segments[index].hosts.push(entry),
+                None if !dropped => shared.push(entry),
                 None => {}
             }
         }
@@ -205,9 +259,9 @@ impl Allowlist {
     /// deployment's own, consented to by nobody and changed only by a change to
     /// this repository, so a plugin having it too costs nothing and removes a
     /// special case.
-    pub fn permits(&self, host: &str, arrival: IpAddr) -> bool {
+    pub fn permits(&self, host: &str, port: u16, arrival: IpAddr) -> bool {
         let wanted = host.trim_end_matches('.').to_ascii_lowercase();
-        if self.shared.iter().any(|allowed| allowed.as_str() == wanted) {
+        if self.shared.iter().any(|entry| entry.matches(&wanted, port)) {
             return true;
         }
         self.segment_for(arrival)
@@ -215,7 +269,7 @@ impl Allowlist {
                 segment
                     .hosts
                     .iter()
-                    .any(|allowed| allowed.as_str() == wanted)
+                    .any(|entry| entry.matches(&wanted, port))
             })
             .unwrap_or(false)
     }
@@ -277,25 +331,25 @@ mod tests {
     fn comments_and_blank_lines_are_ignored() {
         let list = Allowlist::parse("# a comment\n\ndatabase.clamav.net  # the mirror\n");
         assert_eq!(list.len(), 1);
-        assert!(list.permits("database.clamav.net", INTERNAL));
+        assert!(list.permits("database.clamav.net", 443, INTERNAL));
     }
 
     #[test]
     fn matching_is_exact_and_case_insensitive() {
         let list = Allowlist::parse("database.clamav.net\n");
-        assert!(list.permits("DATABASE.ClamAV.net", INTERNAL));
-        assert!(list.permits("database.clamav.net.", INTERNAL));
+        assert!(list.permits("DATABASE.ClamAV.net", 443, INTERNAL));
+        assert!(list.permits("database.clamav.net.", 443, INTERNAL));
         // No wildcards: a subdomain is a different host, and nobody declared it.
-        assert!(!list.permits("evil.database.clamav.net", INTERNAL));
-        assert!(!list.permits("clamav.net", INTERNAL));
-        assert!(!list.permits("database.clamav.net.evil.example", INTERNAL));
+        assert!(!list.permits("evil.database.clamav.net", 443, INTERNAL));
+        assert!(!list.permits("clamav.net", 443, INTERNAL));
+        assert!(!list.permits("database.clamav.net.evil.example", 443, INTERNAL));
     }
 
     #[test]
     fn an_empty_list_permits_nothing() {
         let list = Allowlist::parse("# nothing but a comment\n");
         assert!(list.is_empty());
-        assert!(!list.permits("database.clamav.net", INTERNAL));
+        assert!(!list.permits("database.clamav.net", 443, INTERNAL));
     }
 
     /// The address the deployment's own services arrive on, which is in no
@@ -321,8 +375,8 @@ mod tests {
     #[test]
     fn a_plugin_reaches_what_its_own_manifest_declared() {
         let list = two_plugins();
-        assert!(list.permits("hooks.example.org", ON_WEBHOOK_SEGMENT));
-        assert!(list.permits("mail.example.org", ON_SMTP_SEGMENT));
+        assert!(list.permits("hooks.example.org", 443, ON_WEBHOOK_SEGMENT));
+        assert!(list.permits("mail.example.org", 443, ON_SMTP_SEGMENT));
     }
 
     #[test]
@@ -330,21 +384,21 @@ mod tests {
         // The allowance nobody consented to, and the reason one shared list was
         // not enough (ADR-0037).
         let list = two_plugins();
-        assert!(!list.permits("mail.example.org", ON_WEBHOOK_SEGMENT));
-        assert!(!list.permits("hooks.example.org", ON_SMTP_SEGMENT));
+        assert!(!list.permits("mail.example.org", 443, ON_WEBHOOK_SEGMENT));
+        assert!(!list.permits("hooks.example.org", 443, ON_SMTP_SEGMENT));
     }
 
     #[test]
     fn every_caller_reaches_the_deployment_half() {
         let list = two_plugins();
-        assert!(list.permits("database.clamav.net", INTERNAL));
-        assert!(list.permits("database.clamav.net", ON_WEBHOOK_SEGMENT));
+        assert!(list.permits("database.clamav.net", 443, INTERNAL));
+        assert!(list.permits("database.clamav.net", 443, ON_WEBHOOK_SEGMENT));
     }
 
     #[test]
     fn a_caller_on_no_plugin_segment_gets_the_deployment_half_alone() {
         let list = two_plugins();
-        assert!(!list.permits("hooks.example.org", INTERNAL));
+        assert!(!list.permits("hooks.example.org", 443, INTERNAL));
     }
 
     #[test]
@@ -365,7 +419,7 @@ mod tests {
             "[not-a-network de.greluc.homeinv.plugin.webhook]\nhooks.example.org\n",
         );
         assert!(list.is_empty());
-        assert!(!list.permits("hooks.example.org", ON_WEBHOOK_SEGMENT));
+        assert!(!list.permits("hooks.example.org", 443, ON_WEBHOOK_SEGMENT));
     }
 
     #[test]
@@ -373,12 +427,50 @@ mod tests {
         let list = Allowlist::parse("[10.89.28.0/22 p]\nhooks.example.org\n");
         assert!(list.permits(
             "hooks.example.org",
+            443,
             IpAddr::V4(Ipv4Addr::new(10, 89, 30, 7))
         ));
         assert!(!list.permits(
             "hooks.example.org",
+            443,
             IpAddr::V4(Ipv4Addr::new(10, 89, 32, 7))
         ));
+    }
+
+    #[test]
+    fn a_bare_entry_allows_any_port_and_a_qualified_one_allows_only_its_own() {
+        // The asymmetry is deliberate. `freshclam` fetches over port 80 from the
+        // deployment half's one bare entry, so a bare entry implying 443 would
+        // have broken the scanner quietly (ADR-0036); a `tcp:` target names its
+        // port because "the mail server, on any port" is not what a manifest
+        // meant (09 §9.3).
+        let list = Allowlist::parse(
+            "database.clamav.net
+
+             [10.89.32.0/24 de.greluc.homeinv.plugin.smtp]
+             mail.example.org:587
+",
+        );
+        assert!(list.permits("database.clamav.net", 80, INTERNAL));
+        assert!(list.permits("database.clamav.net", 443, INTERNAL));
+
+        assert!(list.permits("mail.example.org", 587, ON_SMTP_SEGMENT));
+        // Not 25, not 465, not 8080: a manifest that named 587 allowed 587.
+        assert!(!list.permits("mail.example.org", 25, ON_SMTP_SEGMENT));
+        assert!(!list.permits("mail.example.org", 465, ON_SMTP_SEGMENT));
+    }
+
+    #[test]
+    fn a_name_with_something_that_is_not_a_port_after_a_colon_allows_nothing_wider() {
+        // The safe direction: the whole line becomes the host, which nothing
+        // resolves -- rather than the host before the colon, which would be an
+        // allowance nobody wrote.
+        let list = Allowlist::parse(
+            "[10.89.31.0/24 p]
+hooks.example.org:not-a-port
+",
+        );
+        assert!(!list.permits("hooks.example.org", 443, ON_WEBHOOK_SEGMENT));
     }
 
     #[test]
@@ -386,7 +478,11 @@ mod tests {
         // A dual-stack listener reports `::ffff:10.89.31.1` for a v4 connection,
         // and a plugin whose segment is declared in v4 is still that plugin.
         let list = two_plugins();
-        assert!(list.permits("hooks.example.org", "::ffff:10.89.31.1".parse().unwrap()));
+        assert!(list.permits(
+            "hooks.example.org",
+            443,
+            "::ffff:10.89.31.1".parse().unwrap()
+        ));
     }
 
     #[test]

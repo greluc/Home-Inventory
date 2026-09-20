@@ -467,18 +467,25 @@ def plugin_manifest(matrix: dict, name: str) -> str:
 
     document = yaml.safe_load(source.read_text(encoding="utf-8"))
     hosts = declared.get("hosts") or []
+    # `tcp:` is the other shape a manifest declares, and it means something
+    # different: a `host:port` for a protocol that is not HTTP -- SMTP
+    # submission, which is why O11 gave the proxy a tunnel rather than a fetch.
+    tcp = declared.get("tcp") or []
     outbound = [
         capability
         for capability in document["spec"].get("capabilities") or []
         if capability["id"] == "network:outbound"
     ]
-    if hosts and not outbound:
+    if (hosts or tcp) and not outbound:
         raise SystemExit(
             f"{declared['manifest']} declares no network:outbound capability, and services.yaml "
-            f"gives {name} hosts to reach. A host that is not in a manifest is a host the proxy "
-            "refuses, so the two have to agree.")
+            f"gives {name} somewhere to reach. A target that is not in a manifest is a target the "
+            "proxy refuses, so the two have to agree.")
     for capability in outbound:
-        capability["hosts"] = list(hosts)
+        if hosts:
+            capability["hosts"] = list(hosts)
+        if tcp:
+            capability["tcp"] = list(tcp)
 
     if document["metadata"]["id"] != declared["id"]:
         raise SystemExit(
@@ -584,9 +591,14 @@ def egress_allowlist(matrix: dict) -> str:
     for name, service in plugin_services(matrix).items():
         declared = service["plugin"]
         lines.append(f"[{subnets[name]} {declared['id']}]")
-        lines.append(f"# {name} — the hosts services.yaml allows it, compiled from its manifest")
+        lines.append(f"# {name} — the targets services.yaml allows it, compiled from its manifest")
         for host in declared.get("hosts") or []:
             lines.append(host)
+        # A `host:port` allows THAT port and no other; a bare host allows any,
+        # which is what `freshclam` needs on port 80. The proxy reads the
+        # difference (ADR-0027, O11).
+        for target in declared.get("tcp") or []:
+            lines.append(target)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

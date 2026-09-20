@@ -172,7 +172,7 @@ async fn serve(
         Destination::Fetch { host, port, .. } => (host.clone(), *port),
     };
 
-    if !list.permits(&host, arrival) {
+    if !list.permits(&host, port, arrival) {
         // The refusal is the product, not an error: a caller reaching for a host
         // nobody declared is exactly what this exists to stop. The plugin is in
         // the line because "which plugin asked for this" is the first question an
