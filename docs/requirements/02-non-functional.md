@@ -75,7 +75,7 @@ Related to the quality goals Q1–Q7 in
 
 | ID | Requirement | Prio | Stage | Acceptance |
 |---|---|---|---|---|
-| REQ-NFR-041 | Logging as JSON lines with `traceId`, `tenantId`, `actorId`. | M | 0 | The format verified |
+| REQ-NFR-041 | Logging as JSON lines with `traceId`, `tenantId`, `actorId`. | M | 0 | The format verified: `LogFormatIT` encodes an event through the console appender's own encoder and parses the result, because a test that swapped the stream afterwards would capture nothing and pass for the wrong reason. It also holds the property the format **buys** — a logged value carrying `CRLF` produces **one** line, escaped inside the `message` value rather than stripped, so a user-provided string cannot forge a log entry and the attempt stays readable. That is the answer to CodeQL's `java/log-injection`, which names every site where a request value reaches a log statement and cannot see the encoder that makes it harmless |
 | REQ-NFR-042 | Every error response contains a `traceId` findable in the server log. | M | 0 | An end-to-end test |
 | REQ-NFR-043 | Prometheus metrics for HTTP, database, outbox, queues, search, sync, plugins, media, security and the JVM. | M | 1 | The endpoint exists, dashboards ship with the product |
 | REQ-NFR-044 | Distributed tracing through OpenTelemetry, configurable and inactive when unconfigured. | S | 1 | A trace visible across core, broker, worker and plugin |

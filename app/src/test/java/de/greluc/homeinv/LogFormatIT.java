@@ -73,6 +73,38 @@ class LogFormatIT extends AbstractIntegrationTest {
     assertThat(parsed.get("actorId").asString()).isEqualTo("1c9f8d7e-6b5a-4c3d-8e2f-0a1b2c3d4e5f");
   }
 
+  @Test
+  @DisplayName("cannot be forged by a value carrying newlines (java/log-injection)")
+  void aValueWithNewlinesCannotForgeALine() {
+    // What log forging needs: a value that ends the line and starts a new one
+    // reading as though the application had written it. This is that payload.
+    String forged =
+        "innocent\r\n{\"@timestamp\":\"2026-01-01T00:00:00Z\",\"message\":\"the admin approved it\"}";
+
+    LoggingEvent event = new LoggingEvent();
+    event.setLoggerName("de.greluc.homeinv.Example");
+    event.setLevel(Level.INFO);
+    // The shape every site CodeQL names has: a user-provided value interpolated
+    // into a message.
+    event.setMessage("A plugin reported {}");
+    event.setArgumentArray(new Object[] {forged});
+    event.setTimeStamp(System.currentTimeMillis());
+    event.setMDCPropertyMap(Map.of());
+
+    String line = new String(encoder().encode(event), StandardCharsets.UTF_8);
+
+    // ONE line. The encoder ends the event with a newline and emits no other; a
+    // second one from inside the payload is the whole attack, and there is none.
+    assertThat(line.strip().lines()).hasSize(1);
+
+    // The payload survives intact INSIDE the message value, escaped rather than
+    // stripped -- so the log still records what was actually attempted. A reader
+    // sees the injection attempt rather than the injected line.
+    JsonNode parsed = json.readTree(line);
+    assertThat(parsed.get("message").asString()).contains(forged);
+    assertThat(line).doesNotContain("\r\n{");
+  }
+
   /**
    * The encoder the console appender writes every line through.
    *
