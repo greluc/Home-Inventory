@@ -183,7 +183,9 @@ commit".
   plainly that no lawyer has read them.
 
 - **Reminders.** Set a rule and be told before a warranty runs out, when
-  something you lent is overdue, or when a consumable has run down. A rule says
+  something is due for servicing, when something you lent is overdue, or when a
+  consumable has run down. An item can carry a servicing interval, counted from
+  the last time it was actually serviced. A rule says
   what to watch, optionally which things (a saved search narrows it), how many
   days early — or late, for an overdue loan — and on which channel. It tells you
   **once** per thing per date, and again if the date moves. Only people who asked

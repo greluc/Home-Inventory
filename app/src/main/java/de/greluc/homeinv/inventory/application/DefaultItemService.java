@@ -213,6 +213,7 @@ public class DefaultItemService implements ItemService {
             command.notes(),
             command.minimumStock(),
             command.valuation(),
+            command.maintenanceIntervalDays(),
             actor,
             now);
 
@@ -394,6 +395,7 @@ public class DefaultItemService implements ItemService {
         command.notes(),
         command.minimumStock(),
         command.valuation(),
+        command.maintenanceIntervalDays(),
         actor,
         Instant.now(clock));
 
@@ -827,7 +829,8 @@ public class DefaultItemService implements ItemService {
             stored.minimumStock(),
             stored.itemTypeVersionId(),
             stored.lifecycleState(),
-            stored.valuation());
+            stored.valuation(),
+            stored.maintenanceIntervalDays());
     return new de.greluc.homeinv.audit.api.RevisionLog.RevisionView(
         revision.revision(),
         revision.kind(),
@@ -876,6 +879,7 @@ public class DefaultItemService implements ItemService {
         // rather than keeping today's. That is the honest reading of "restore":
         // the state as it was, including what it did not have.
         earlier.valuation(),
+        earlier.maintenanceIntervalDays(),
         actor,
         Instant.now(clock));
     items.flush();
@@ -915,7 +919,8 @@ public class DefaultItemService implements ItemService {
             item.getMinimumStock(),
             item.getItemTypeVersionId(),
             item.getLifecycleState().name(),
-            item.valuation()));
+            item.valuation(),
+            item.getMaintenanceIntervalDays()));
   }
 
   /**
@@ -933,6 +938,8 @@ public class DefaultItemService implements ItemService {
    * @param minimumStock the restocking level, or {@code null}
    * @param itemTypeVersionId which definitions those attributes were written against
    * @param lifecycleState the state a person reads
+   * @param valuation what it cost, what covered it and what replacing it would cost
+   * @param maintenanceIntervalDays how often it needed servicing, or {@code null} (REQ-LIFE-004)
    */
   private record Snapshot(
       String name,
@@ -946,7 +953,8 @@ public class DefaultItemService implements ItemService {
       BigDecimal minimumStock,
       UUID itemTypeVersionId,
       String lifecycleState,
-      de.greluc.homeinv.inventory.api.Valuation valuation) {}
+      de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays) {}
 
   /**
    * Refuses a place outside the part of the tree this session is confined to (REQ-TEN-007).
@@ -991,7 +999,8 @@ public class DefaultItemService implements ItemService {
         item.getCreatedAt(),
         item.getUpdatedAt(),
         item.valuation(),
-        item.getVersion());
+        item.getVersion(),
+        item.getMaintenanceIntervalDays());
   }
 
 }

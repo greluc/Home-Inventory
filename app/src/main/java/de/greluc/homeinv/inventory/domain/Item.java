@@ -120,6 +120,16 @@ public class Item {
   @Column(name = "minimum_stock")
   private BigDecimal minimumStock;
 
+  /**
+   * How often this needs servicing, in days, or {@code null} (REQ-LIFE-004).
+   *
+   * <p>Days and not months: "every 3 months from 31 January" has no answer that is not a surprise
+   * to somebody. What reads it is the {@code MAINTENANCE_DUE} reminder, which measures from the
+   * last maintenance entry rather than from a fixed calendar.
+   */
+  @Column(name = "maintenance_interval_days")
+  private Integer maintenanceIntervalDays;
+
   /** Whether the item exists in the physical world, which decides whether it needs a location. */
   @Enumerated(EnumType.STRING)
   @Column(name = "kind", nullable = false)
@@ -276,6 +286,7 @@ public class Item {
       String notes,
       BigDecimal minimumStock,
       de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays,
       UUID actor,
       Instant now) {
     applyValuation(valuation);
@@ -285,6 +296,7 @@ public class Item {
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.notes = Notes.sanitise(notes);
     this.minimumStock = minimumStock;
+    this.maintenanceIntervalDays = maintenanceIntervalDays;
     this.name = name;
     this.description = description;
     this.kind = kind;
@@ -336,6 +348,7 @@ public class Item {
       String notes,
       BigDecimal minimumStock,
       de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -361,6 +374,7 @@ public class Item {
         notes,
         minimumStock,
         valuation,
+        maintenanceIntervalDays,
         actor,
         now);
   }
@@ -394,6 +408,7 @@ public class Item {
       String notes,
       BigDecimal minimumStock,
       de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -413,6 +428,7 @@ public class Item {
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.notes = Notes.sanitise(notes);
     this.minimumStock = minimumStock;
+    this.maintenanceIntervalDays = maintenanceIntervalDays;
     applyValuation(valuation);
     this.updatedBy = actor;
     this.updatedAt = now;

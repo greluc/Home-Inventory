@@ -142,7 +142,8 @@ public class ItemController {
                 request.attributes(),
                 request.notes(),
                 request.minimumStock(),
-                ValuationRequest.asValuation(request.valuation())),
+                ValuationRequest.asValuation(request.valuation()),
+                request.maintenanceIntervalDays()),
             IdempotencyKeys.from(http, request, json),
             user.userId());
 
@@ -534,7 +535,8 @@ public class ItemController {
                 request.attributes(),
                 request.notes(),
                 request.minimumStock(),
-                ValuationRequest.asValuation(request.valuation())),
+                ValuationRequest.asValuation(request.valuation()),
+                request.maintenanceIntervalDays()),
             EntityTags.required(http),
             user.userId());
     return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
@@ -1098,6 +1100,10 @@ public class ItemController {
    *     schema, and an offending value is a {@code 422} naming its path (REQ-CORE-005)
    * @param notes a paragraph in limited Markdown; HTML is removed before it is stored
    * @param minimumStock the level below which this consumable needs restocking, or omitted
+   * @param valuation what it cost, what covers it and what replacing it would cost, or omitted
+   * @param maintenanceIntervalDays how often it needs servicing, in days, or omitted when
+   *     nothing should remind about it (REQ-LIFE-004). Days and not months, because "every 3
+   *     months from 31 January" has no answer that is not a surprise to somebody
    */
   public record CreateItemRequest(
       UUID id,
@@ -1111,7 +1117,8 @@ public class ItemController {
       @Size(max = 65_536) String attributes,
       @Size(max = 20_000) String notes,
       @PositiveOrZero BigDecimal minimumStock,
-      @Valid ValuationRequest valuation) {}
+      @Valid ValuationRequest valuation,
+      @jakarta.validation.constraints.Min(1) @Max(3650) Integer maintenanceIntervalDays) {}
 
   /**
    * The body of an update. {@code kind} is absent: a physical item does not become a digital one.
@@ -1125,6 +1132,10 @@ public class ItemController {
    *     was written against rather than against whatever the type says today
    * @param notes the new notes; HTML is removed before they are stored
    * @param minimumStock the new restocking level, or omitted to stop tracking one
+   * @param valuation what it cost, what covers it and what replacing it would cost, or omitted
+   * @param maintenanceIntervalDays how often it needs servicing, in days, or omitted when
+   *     nothing should remind about it (REQ-LIFE-004). Days and not months, because "every 3
+   *     months from 31 January" has no answer that is not a surprise to somebody
    */
   public record UpdateItemRequest(
       @NotBlank @Size(max = 500) String name,
@@ -1135,7 +1146,8 @@ public class ItemController {
       @Size(max = 65_536) String attributes,
       @Size(max = 20_000) String notes,
       @PositiveOrZero BigDecimal minimumStock,
-      @Valid ValuationRequest valuation) {}
+      @Valid ValuationRequest valuation,
+      @jakarta.validation.constraints.Min(1) @Max(3650) Integer maintenanceIntervalDays) {}
 
   /**
    * What an item cost, what covers it and what replacing it would cost (REQ-LIFE-001/002/014).

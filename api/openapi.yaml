@@ -470,6 +470,15 @@ components:
           description: required for a physical item
           format: uuid
           type: string
+        maintenanceIntervalDays:
+          description: |-
+            how often it needs servicing, in days, or omitted when
+            nothing should remind about it (REQ-LIFE-004). Days and not months, because "every 3
+            months from 31 January" has no answer that is not a surprise to somebody
+          format: int32
+          maximum: 3650
+          minimum: 1
+          type: integer
         minimumStock:
           description: the level below which this consumable needs restocking, or omitted
           minimum: 0
@@ -495,6 +504,7 @@ components:
           type: string
         valuation:
           $ref: '#/components/schemas/ValuationRequest'
+          description: what it cost, what covers it and what replacing it would cost, or omitted
       required:
       - kind
       - name
@@ -1122,12 +1132,22 @@ components:
           description: '`PHYSICAL` or `DIGITAL`, as a string so consumers need no enum of ours'
           type: string
         lifecycleState:
-          description: where the item is in its life; stage 0 always `ACTIVE`
+          description: |-
+            where the item is in its life, as an {@link ItemState ItemState} name —
+            `ACTIVE`, `LENT`, `ARCHIVED`, `TRASHED`, `SOLD` or
+            `DISPOSED` (04 §4.4). *Said "stage 0 always ACTIVE" until 2026-09-20, by which
+            time trashing, lending and disposal all moved it*
           type: string
         locationId:
           description: where it is; `null` for a digital item
           format: uuid
           type: string
+        maintenanceIntervalDays:
+          description: |-
+            how often it needs servicing, in days, or `null` when
+            nothing reminds about it (REQ-LIFE-004)
+          format: int32
+          type: integer
         minimumStock:
           description: the level below which this consumable needs restocking, or `null`
           type: number
@@ -3461,6 +3481,15 @@ components:
           description: the new location; required while the item is physical
           format: uuid
           type: string
+        maintenanceIntervalDays:
+          description: |-
+            how often it needs servicing, in days, or omitted when
+            nothing should remind about it (REQ-LIFE-004). Days and not months, because "every 3
+            months from 31 January" has no answer that is not a surprise to somebody
+          format: int32
+          maximum: 3650
+          minimum: 1
+          type: integer
         minimumStock:
           description: the new restocking level, or omitted to stop tracking one
           minimum: 0
@@ -3486,6 +3515,7 @@ components:
           type: string
         valuation:
           $ref: '#/components/schemas/ValuationRequest'
+          description: what it cost, what covers it and what replacing it would cost, or omitted
       required:
       - name
       type: object

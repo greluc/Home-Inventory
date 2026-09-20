@@ -94,6 +94,50 @@ public class InventoryReminderSources {
   }
 
   /**
+   * Things due for servicing (REQ-LIFE-004).
+   *
+   * @param jdbc the SQL client
+   * @return the source
+   */
+  @Bean
+  public ReminderSource maintenanceDueReminders(JdbcClient jdbc) {
+    // MEASURED FROM THE LAST SERVICE, not from a fixed calendar: "every twelve
+    // months" means twelve months since it was last done, so servicing it early
+    // moves the next reminder rather than leaving it where it was.
+    //
+    // WHEN IT HAS NEVER BEEN SERVICED the clock starts at the purchase date, and
+    // at the day the record was created when even that is unknown. Something has
+    // to be the start, and "we have had it since then" is the honest one --
+    // treating a never-serviced thing as never due would silently exclude
+    // exactly the items somebody set an interval for.
+    return new Query(
+        jdbc,
+        ReminderTrigger.MAINTENANCE_DUE,
+        """
+        select i.id as subject_id, i.id as item_id, i.name as label,
+               coalesce(
+                   (select max(m.performed_on) from inventory.maintenance_entry m
+                     where m.tenant_id = i.tenant_id and m.item_id = i.id),
+                   i.purchased_on,
+                   cast(i.created_at as date)
+               ) + i.maintenance_interval_days as due_on
+        from inventory.item i
+        where i.tenant_id = ?
+          and i.deleted_at is null
+          and i.lifecycle_state in ('ACTIVE', 'LENT')
+          and i.maintenance_interval_days is not null
+          and coalesce(
+                  (select max(m.performed_on) from inventory.maintenance_entry m
+                    where m.tenant_id = i.tenant_id and m.item_id = i.id),
+                  i.purchased_on,
+                  cast(i.created_at as date)
+              ) + i.maintenance_interval_days <= ?
+        order by due_on
+        limit ?
+        """);
+  }
+
+  /**
    * Consumables that have run down (REQ-CORE-016).
    *
    * @param jdbc the SQL client

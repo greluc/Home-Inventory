@@ -302,6 +302,10 @@ public interface ItemService {
    *     (REQ-LIFE-001/002/014). Replaced whole: a figure left out is one deliberately
    *     cleared, which is the same rule the attributes follow and the only one under which
    *     "remove the purchase price" is sayable at all
+   * @param maintenanceIntervalDays how often this needs servicing, in days, or {@code null} for
+   *     nothing to remind about (REQ-LIFE-004). Days and not months, because "every 3 months from
+   *     31 January" has no answer that is not a surprise to somebody; a surface offers months and
+   *     multiplies
    */
   record CreateItemCommand(
       UUID id,
@@ -315,7 +319,58 @@ public interface ItemService {
       String attributes,
       String notes,
       BigDecimal minimumStock,
-      Valuation valuation) {}
+      Valuation valuation,
+      Integer maintenanceIntervalDays) {
+
+    /**
+     * The command without a servicing interval.
+     *
+     * <p>Here so that the callers written before REQ-LIFE-004 keep saying what they meant rather
+     * than gaining a {@code null} apiece. An item with no interval is the ordinary case: most
+     * things are never serviced.
+     *
+     * @param id the client-generated id, or {@code null}
+     * @param itemTypeVersionId the type version
+     * @param name the name
+     * @param description the description, or {@code null}
+     * @param kind physical or digital
+     * @param locationId where it is, or {@code null} for a digital item
+     * @param quantity how many
+     * @param quantityUnit the unit, or {@code null}
+     * @param attributes the type-defined attributes as JSON
+     * @param notes the free note, or {@code null}
+     * @param minimumStock the restocking level, or {@code null}
+     * @param valuation what it cost, what covers it and what it is worth
+     */
+    public CreateItemCommand(
+        UUID id,
+        UUID itemTypeVersionId,
+        String name,
+        String description,
+        ItemKind kind,
+        UUID locationId,
+        BigDecimal quantity,
+        String quantityUnit,
+        String attributes,
+        String notes,
+        BigDecimal minimumStock,
+        Valuation valuation) {
+      this(
+          id,
+          itemTypeVersionId,
+          name,
+          description,
+          kind,
+          locationId,
+          quantity,
+          quantityUnit,
+          attributes,
+          notes,
+          minimumStock,
+          valuation,
+          null);
+    }
+  }
 
   /**
    * What may be changed about an item. {@code kind} is absent: a physical item does not become a
@@ -331,6 +386,8 @@ public interface ItemService {
    * @param minimumStock the new restocking level, or {@code null} to stop tracking one
    * @param valuation what it cost, what covers it and what replacing it would cost
    *     (REQ-LIFE-001/002/014); replaced whole, so a figure left out is one cleared
+   * @param maintenanceIntervalDays the new servicing interval in days, or {@code null} to
+   *     stop reminding about it (REQ-LIFE-004)
    */
   record UpdateItemCommand(
       String name,
@@ -341,5 +398,46 @@ public interface ItemService {
       String attributes,
       String notes,
       BigDecimal minimumStock,
-      Valuation valuation) {}
+      Valuation valuation,
+      Integer maintenanceIntervalDays) {
+
+    /**
+     * The command without a servicing interval.
+     *
+     * <p>{@link CreateItemCommand}'s reason: an edit that says nothing about servicing should not
+     * have to say {@code null} about it.
+     *
+     * @param name the name
+     * @param description the description, or {@code null}
+     * @param locationId where it is
+     * @param quantity how many
+     * @param quantityUnit the unit, or {@code null}
+     * @param attributes the type-defined attributes as JSON
+     * @param notes the free note, or {@code null}
+     * @param minimumStock the restocking level, or {@code null}
+     * @param valuation what it cost, what covers it and what it is worth
+     */
+    public UpdateItemCommand(
+        String name,
+        String description,
+        UUID locationId,
+        BigDecimal quantity,
+        String quantityUnit,
+        String attributes,
+        String notes,
+        BigDecimal minimumStock,
+        Valuation valuation) {
+      this(
+          name,
+          description,
+          locationId,
+          quantity,
+          quantityUnit,
+          attributes,
+          notes,
+          minimumStock,
+          valuation,
+          null);
+    }
+  }
 }

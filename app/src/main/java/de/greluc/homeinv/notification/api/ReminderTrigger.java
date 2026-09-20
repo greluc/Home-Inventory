@@ -44,8 +44,11 @@ public enum ReminderTrigger {
   /**
    * A thing is due for servicing (REQ-LIFE-004).
    *
-   * <p>Watches the interval set on the item against the last maintenance entry recorded for it, so
-   * "every twelve months" is measured from the last service rather than from a fixed calendar.
+   * <p>Watches {@code inventory.item.maintenance_interval_days} against the last maintenance entry
+   * recorded for the item, so "every twelve months" is measured from the last service rather than
+   * from a fixed calendar: servicing something early moves the next reminder instead of leaving it
+   * where it was. A thing that has never been serviced counts from its purchase date, and from the
+   * day its record was created when even that is unknown.
    */
   MAINTENANCE_DUE("item"),
 

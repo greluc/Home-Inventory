@@ -56,6 +56,7 @@ class ReminderRuleIT extends AbstractIntegrationTest {
   @Autowired private Notifications notifications;
   @Autowired private ItemService items;
   @Autowired private LoanLog loans;
+  @Autowired private de.greluc.homeinv.inventory.api.MaintenanceLog maintenance;
   @Autowired private de.greluc.homeinv.locations.api.LocationService locations;
   @Autowired private AppUserRepository users;
   @Autowired private TenantProvisioningService provisioning;
@@ -91,6 +92,57 @@ class ReminderRuleIT extends AbstractIntegrationTest {
 
     assertThat(queuedFor(tenant)).hasSize(2);
     assertThat(ruleId).isNotNull();
+  }
+
+  @Test
+  @DisplayName("counts a servicing interval from the last service, not from a fixed calendar")
+  void maintenanceIsDueFromTheLastService() {
+    Tenant tenant = newTenant("reminder-service@example.org");
+    UUID itemId = anItem(tenant, "A boiler");
+    subscribe(tenant, ReminderTrigger.MAINTENANCE_DUE);
+    // Serviced on the first of March, every 90 days.
+    interval(tenant, itemId, 90);
+    inOwn(
+        tenant,
+        () ->
+            maintenance.record(
+                itemId,
+                new de.greluc.homeinv.inventory.api.MaintenanceLog.NewMaintenanceEntry(
+                    LocalDate.parse("2026-03-01"), "Serviced", null, null),
+                tenant.userId()));
+
+    inOwn(tenant, () -> rules.create(rule("Servicing", ReminderTrigger.MAINTENANCE_DUE, 0), tenant.userId()));
+
+    // 1 March + 90 days = 30 May.
+    assertThat(run(tenant, "2026-05-29")).isZero();
+    assertThat(run(tenant, "2026-05-30")).isEqualTo(1);
+
+    // SERVICING IT AGAIN MOVES THE NEXT ONE rather than leaving it where it was:
+    // "every 90 days" means 90 days since it was last done.
+    inOwn(
+        tenant,
+        () ->
+            maintenance.record(
+                itemId,
+                new de.greluc.homeinv.inventory.api.MaintenanceLog.NewMaintenanceEntry(
+                    LocalDate.parse("2026-06-01"), "Serviced", null, null),
+                tenant.userId()));
+    assertThat(run(tenant, "2026-06-02")).isZero();
+    assertThat(run(tenant, "2026-08-30")).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("never reminds about servicing when no interval was set")
+  void noIntervalNeverReminds() {
+    Tenant tenant = newTenant("reminder-nointerval@example.org");
+    anItem(tenant, "A doorstop");
+    subscribe(tenant, ReminderTrigger.MAINTENANCE_DUE);
+
+    inOwn(tenant, () -> rules.create(rule("Servicing", ReminderTrigger.MAINTENANCE_DUE, 0), tenant.userId()));
+
+    // Most things are never serviced, and an interval nobody set is not an
+    // interval of zero.
+    assertThat(run(tenant, "2030-01-01")).isZero();
   }
 
   @Test
@@ -290,6 +342,18 @@ class ReminderRuleIT extends AbstractIntegrationTest {
                 .param(tenant.tenantId())
                 .query(String.class)
                 .list());
+  }
+
+  private void interval(Tenant tenant, UUID itemId, int days) {
+    inOwn(
+        tenant,
+        () ->
+            jdbc
+                .sql("update inventory.item set maintenance_interval_days = ? where tenant_id = ? and id = ?")
+                .param(days)
+                .param(tenant.tenantId())
+                .param(itemId)
+                .update());
   }
 
   private void warrantyUntil(Tenant tenant, UUID itemId, String date) {

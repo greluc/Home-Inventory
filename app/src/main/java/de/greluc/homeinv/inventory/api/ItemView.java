@@ -30,11 +30,16 @@ import java.util.UUID;
  *     client reads the type version's schema to render it
  * @param notes the paragraph a person wrote, in limited Markdown with the HTML already removed
  * @param minimumStock the level below which this consumable needs restocking, or {@code null}
- * @param lifecycleState where the item is in its life; stage 0 always {@code ACTIVE}
+ * @param lifecycleState where the item is in its life, as an {@link ItemState} name —
+ *     {@code ACTIVE}, {@code LENT}, {@code ARCHIVED}, {@code TRASHED}, {@code SOLD} or
+ *     {@code DISPOSED} (04 §4.4). *Said "stage 0 always ACTIVE" until 2026-09-20, by which
+ *     time trashing, lending and disposal all moved it*
  * @param createdAt when it was created
  * @param updatedAt when it last changed
  * @param version the optimistic lock, which a client echoes back on update to detect a concurrent
  *     edit rather than overwriting one
+ * @param maintenanceIntervalDays how often it needs servicing, in days, or {@code null} when
+ *     nothing reminds about it (REQ-LIFE-004)
  */
 public record ItemView(
     UUID id,
@@ -51,4 +56,5 @@ public record ItemView(
     Instant createdAt,
     Instant updatedAt,
     Valuation valuation,
-    long version) {}
+    long version,
+    Integer maintenanceIntervalDays) {}
