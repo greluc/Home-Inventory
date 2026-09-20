@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The manifest `plugin-webhook` ships as its reference.
+#
+# THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS. A registration names a
+# manifest file on the deployment's own filesystem, generated from
+# `deploy/services.yaml` beside the container, the network segment and the
+# egress allowlist (REQ-PLG-013). That is not a formality: `spec.capabilities`
+# below carries the HOSTS this plugin may reach, and which receivers a
+# deployment allows is the operator's decision rather than the plugin author's.
+#
+# So this file is the template and the documentation of what to declare. The
+# `hosts` entry is deliberately an example that reaches nothing real.
+
+apiVersion: home-inv.plugin/v1
+
+metadata:
+  id: de.greluc.homeinv.plugin.webhook
+  name: "Webhook"
+  version: "0.1.0"
+  vendor: "greluc"
+  license: "AGPL-3.0-or-later"
+  homepage: "https://github.com/greluc/Home-Inventory"
+  descriptions:
+    en: "Delivers a notification to a URL as a signed JSON POST."
+    de: "Stellt eine Benachrichtigung als signierten JSON-POST an eine URL zu."   # spelling-exempt: a manifest's own multilingual DATA
+
+spec:
+  contract: ">=1.0.0 <2.0.0"
+  runtime: out-of-process
+
+  implements:
+    - port: NotificationChannel
+      priority: 100
+
+  capabilities:
+    # WHERE THIS DEPLOYMENT MAY SEND. Compiled into the egress proxy's allowlist,
+    # which is the enforcement point: no container runtime can express a hostname
+    # rule of its own (ADR-0027). A tenant that configures a webhook to a host
+    # outside this list is refused by the proxy, visibly, with a message naming
+    # the host -- and adding one is an operator's edit to `deploy/services.yaml`,
+    # not something the running system can do to itself (REQ-PLG-013).
+    - id: network:outbound
+      hosts: ["hooks.example.org"]
+      reason: "Delivering notifications to the receivers this deployment allows"
+    # WHAT THE TENANT CONFIGURED may be sent to this plugin. Since ADR-0073 this
+    # is what the capability means: not "the plugin may fetch its settings" --
+    # nothing fetches -- but "the core may send them". Without it the signing
+    # secret never leaves the core and this plugin delivers nothing.
+    - id: core:setting:read
+      reason: "Reading the signing secret this tenant agreed with its receiver"
+
+  settings:
+    # PER TENANT, and the only thing a tenant configures here. The target URL is
+    # not a setting: it is the subscription's address, which belongs to the
+    # subscription (ADR-0073).
+    - key: signingSecret
+      type: secret
+      required: true
+      label:
+        en: "Signing secret"
+        de: "Signaturschlüssel"   # spelling-exempt: a manifest's own multilingual DATA
+
+  health:
+    endpoint: /healthz
+    intervalSeconds: 60
+
+  resources:
+    # A socket in, a socket out, and no state. The budget is the one ADR-0072
+    # argues the language choice from: five JVMs would not have fitted
+    # REQ-NFR-009's sum of reservations, and this is what the alternative costs.
+    memoryMiB: 32
+    timeoutSeconds: 15

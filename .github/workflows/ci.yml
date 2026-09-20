@@ -319,6 +319,74 @@ jobs:
           fi
           echo "Runs as 10001:10001."
 
+  plugin-webhook:
+    name: Plugin — webhook
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/webhook
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: plugins/webhook
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --release --locked
+
+      # The same `-D warnings` the two core Rust services get. This one composes
+      # a request from a URL a person typed and signs a payload with a tenant's
+      # secret; a lint about an unchecked conversion is worth a build here.
+      - name: Clippy
+        run: cargo clippy --release --all-targets --locked -- -D warnings
+
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      # A first-party plugin is AGPL like the rest of the first-party code
+      # (ADR-0072), so its dependency tree has the same licence question to
+      # answer as `blobstore/` and `egress-proxy/`.
+      - name: Advisories and licences
+        run: cargo deny check
+
+      - name: Image
+        # `-f Dockerfile` with the repository root as the context, because the
+        # Dockerfile COPYs `proto/` and the crate from there.
+        run: docker build -f Dockerfile -t home-inv-plugin-webhook:ci ../..
+
+      # `scratch` plus one static binary, like the two core Rust services. A
+      # plugin with a shell in its image is a plugin that can be used as one.
+      - name: The image contains the binary and nothing else
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint /bin/sh home-inv-plugin-webhook:ci -c 'echo reachable' \
+             2>/dev/null; then
+            echo "::error::the runtime image contains a shell"
+            exit 1
+          fi
+          echo "No shell in the runtime image."
+
+      - name: The image does not run as root
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect home-inv-plugin-webhook:ci --format '{{.Config.User}}')
+          if [ "$user" != "10001:10001" ]; then
+            echo "::error::plugin-webhook runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
+            exit 1
+          fi
+          echo "Runs as 10001:10001."
+
   web:
     name: Web client
     runs-on: ubuntu-latest

@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-plugin-webhook"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Delivers Home Inventory notifications to a URL, signed"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+# gRPC towards the core. `tls-ring` rather than the aws-lc backend, as in
+# `blobstore/`: ring builds without a C toolchain and keeps the image smaller.
+tonic = { version = "0.14", features = ["tls-ring"] }
+tonic-prost = "0.14"
+prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "signal", "fs"] }
+
+# TLS towards the target, which is a host on the internet rather than a peer of
+# this deployment. `rustls` directly and not an HTTP client: what this has to
+# speak is one CONNECT line to the egress proxy and one POST, and the parser for
+# those is the same forty lines `egress-proxy/` already writes for the other end
+# of the same conversation.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+# The public roots, as data. A `scratch` image has no system trust store to read,
+# which is the whole reason this is a crate rather than a file path.
+webpki-roots = "1"
+
+# The signature. `sha2` alone: HMAC is thirty lines of RFC 2104 over it, and the
+# `hmac` crate would pin a `digest` version that has to match this one's — a
+# coupling that breaks on every digest release for no gain.
+sha2 = "0.11"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+# The protobuf compiler as a library, so no `protoc` binary has to be installed
+# anywhere. The same reasoning as `blobstore/build.rs`.
+protox = "0.9"
+
+[profile.release]
+# One socket in, one socket out. Both settings cost build time and buy a smaller
+# image, which is what ADR-0072 budgets this container around.
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
