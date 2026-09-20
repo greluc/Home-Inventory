@@ -112,7 +112,7 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
   /**
    * How many endpoints may refuse the request instead of answering {@code 404}.
    *
-   * <p><b>Twenty-one today</b>, and every one of them needs a body or a query string this check
+   * <p><b>Twenty-two today</b>, and every one of them needs a body or a query string this check
    * cannot invent. The number is here because the rule above has a soft edge: an endpoint that
    * regressed from {@code 404} to {@code 400} would still satisfy it, and so would one that gained
    * a required field and quietly stopped being reachable. Counting them turns that from a silent
@@ -128,6 +128,8 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    *   <li>19 → 21 on 2026-09-16, {@code POST /api/v1/items/{id}/loans} and {@code
    *       POST /api/v1/items/{id}/loans/{loanId}/return}, which take a borrower and a date
    *       (REQ-LIFE-005)
+   *   <li>21 → 22 on 2026-09-20, {@code POST /api/v1/items/{id}/disposal}, which takes what
+   *       became of the item and when (REQ-LIFE-007)
    * </ul>
    *
    * <p>*The prose said "Eighteen today" over a constant of 19 between the second and third of
@@ -139,7 +141,7 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    * commit: a new endpoint that takes a body is ordinary, an existing one that stopped answering
    * {@code 404} is not.
    */
-  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 21;
+  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 22;
 
   @Autowired private RequestMappingHandlerMapping mappings;
   @Autowired private TenantProvisioningService provisioning;

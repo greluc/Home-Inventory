@@ -15,6 +15,7 @@ import de.greluc.homeinv.identity.api.TooManyAttemptsException;
 import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemLentException;
+import de.greluc.homeinv.inventory.api.ItemStateException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -767,6 +768,18 @@ public class ApiExceptionHandler {
   @ExceptionHandler(ItemLentException.class)
   public ProblemDetail handleItemLent(ItemLentException exception, HttpServletRequest request) {
     return problem(ProblemType.ITEM_LENT, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a request the item's state refuses (04 §4.4, REQ-LIFE-007).
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(ItemStateException.class)
+  public ProblemDetail handleItemState(ItemStateException exception, HttpServletRequest request) {
+    return problem(ProblemType.ITEM_STATE, exception.getMessage(), request);
   }
 
   /**

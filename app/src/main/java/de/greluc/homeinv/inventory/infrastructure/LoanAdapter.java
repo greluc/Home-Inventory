@@ -10,6 +10,8 @@ import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -75,12 +77,20 @@ public class LoanAdapter implements LoanLog {
 
   private final JdbcClient jdbc;
   private final ItemRepository items;
+  private final Clock clock;
+  private final org.springframework.context.ApplicationEventPublisher events;
 
   @Override
   @Transactional
   public LoanView lend(UUID itemId, NewLoan loan, UUID actor) {
     UUID tenantId = TenantContext.require();
-    requireItem(tenantId, itemId);
+    // The aggregate decides whether it can go out: it refuses what is already
+    // lent, and what was trashed or sold. Doing it here rather than after the
+    // insert means the state and the row move together in one transaction, so
+    // "is it lent" cannot have two answers (04 §4.4).
+    de.greluc.homeinv.inventory.domain.Item item = requireItem(tenantId, itemId);
+    item.lend(actor, Instant.now(clock));
+    items.flush();
 
     UUID id;
     try {
@@ -111,6 +121,8 @@ public class LoanAdapter implements LoanLog {
       throw new ItemLentException("This item is already lent out. Record its return first.");
     }
 
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemLent(tenantId, itemId, id, loan.dueOn()));
     log.info("Item {} was lent out", itemId);
     return byId(tenantId, id);
   }
@@ -119,7 +131,7 @@ public class LoanAdapter implements LoanLog {
   @Transactional
   public LoanView returnItem(UUID itemId, UUID loanId, LocalDate returnedOn, UUID actor) {
     UUID tenantId = TenantContext.require();
-    requireItem(tenantId, itemId);
+    de.greluc.homeinv.inventory.domain.Item item = requireItem(tenantId, itemId);
 
     // Scoped by item as well as by id: a loan id belonging to a different item is
     // not this item's loan, and closing it would act on something the path did
@@ -149,6 +161,12 @@ public class LoanAdapter implements LoanLog {
     // Nothing was closed because it was closed already: the first return is the
     // true one and stands. Not an error -- what the caller wants is already so.
     if (closed > 0) {
+      // Only when a loan actually closed: a second return should not move a state
+      // that a trashing may have changed since.
+      item.returnedFromLoan(actor, Instant.now(clock));
+      items.flush();
+      events.publishEvent(
+          new de.greluc.homeinv.inventory.api.ItemReturned(tenantId, itemId, loanId, returnedOn));
       log.info("Item {} came back", itemId);
     }
     return loan;
@@ -159,6 +177,7 @@ public class LoanAdapter implements LoanLog {
   public Optional<LoanView> openLoanOf(UUID itemId) {
     UUID tenantId = TenantContext.require();
     requireItem(tenantId, itemId);
+
     return jdbc.sql(OPEN_LOAN).param(tenantId).param(itemId).query(LoanAdapter::toView).optional();
   }
 
@@ -206,9 +225,10 @@ public class LoanAdapter implements LoanLog {
    *
    * @param tenantId whose item
    * @param itemId which item
+   * @return the item, for the callers that move its state
    */
-  private void requireItem(UUID tenantId, UUID itemId) {
-    items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
+  private de.greluc.homeinv.inventory.domain.Item requireItem(UUID tenantId, UUID itemId) {
+    return items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
   }
 
   private LoanView byId(UUID tenantId, UUID id) {

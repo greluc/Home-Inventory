@@ -561,6 +561,45 @@ public class ItemController {
   }
 
   /**
+   * Records that this item was sold or otherwise parted with (REQ-LIFE-007).
+   *
+   * <p><b>Not a delete, and deliberately a different verb.</b> The item stays, stays readable and
+   * keeps its history; what changes is its state. "What did we have, and what became of it" is the
+   * question an inventory exists to answer, and `DELETE` would answer half of it.
+   *
+   * <p>Takes {@code ITEM_UPDATE} rather than {@code ITEM_DELETE} for the same reason: nothing is
+   * being removed. It is terminal, though, so it takes {@code If-Match} like any other write on a
+   * single resource (REQ-API-004).
+   *
+   * @param id the item
+   * @param request what became of it
+   * @param http the request, for the {@code If-Match} header
+   * @param user the authenticated caller
+   * @return the item in its new state
+   */
+  @PostMapping(path = "/{id}/disposal", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.ITEM_STATE,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public ItemView disposeOfItem(
+      @PathVariable UUID id,
+      @Valid @RequestBody DisposalRequest request,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return items.dispose(
+        id,
+        new ItemService.Disposal(
+            request.state(), request.price(), request.on(), request.recipient(), request.note()),
+        EntityTags.required(http),
+        user.userId());
+  }
+
+  /**
    * Every relation this item takes part in, from either end (REQ-CORE-006).
    *
    * @param id the item
@@ -903,6 +942,24 @@ public class ItemController {
    * @param returnedOn when it came back; never before the handover, which the database checks
    */
   public record ReturnRequest(@NotNull java.time.LocalDate returnedOn) {}
+
+  /**
+   * The body of a disposal (REQ-LIFE-007).
+   *
+   * @param state {@code SOLD} or {@code DISPOSED} — the two ways an item leaves. Any other value is
+   *     refused rather than treated as a disposal
+   * @param price what it fetched, or absent. Only a sale has one; absent rather than zero for
+   *     something given away, because the two are different claims
+   * @param on when it went
+   * @param recipient who to, in the seller's own words, or absent
+   * @param note anything else worth knowing, or absent
+   */
+  public record DisposalRequest(
+      @NotNull de.greluc.homeinv.inventory.api.ItemState state,
+      Money price,
+      @NotNull java.time.LocalDate on,
+      @Size(max = 200) String recipient,
+      @Size(max = 2000) String note) {}
 
   /**
    * One page of the tenant's trashed items (REQ-CORE-009).

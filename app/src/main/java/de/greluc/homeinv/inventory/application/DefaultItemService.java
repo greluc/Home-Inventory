@@ -639,6 +639,44 @@ public class DefaultItemService implements ItemService {
 
   @Transactional
   @Override
+  public de.greluc.homeinv.inventory.api.ItemView dispose(
+      UUID id,
+      de.greluc.homeinv.inventory.api.ItemService.Disposal disposal,
+      OptionalLong expectedVersion,
+      UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+
+    item.dispose(
+        disposal.state(),
+        disposal.price() == null ? null : disposal.price().amount(),
+        disposal.price() == null ? null : disposal.price().currency().getCurrencyCode(),
+        disposal.on(),
+        disposal.recipient(),
+        disposal.note(),
+        actor,
+        Instant.now(clock));
+    items.flush();
+
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
+    // The projection is NOT cleared, unlike a trashing: a sold item is still a
+    // thing the tenant had, and REQ-LIFE-007's record is worth nothing if the
+    // item stops being findable the moment it is recorded (07 §7.3).
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemDisposed(
+            tenantId, id, item.getLifecycleState(), disposal.on()));
+    log.info("Item {} left the inventory as {}", id, item.getLifecycleState());
+    return toView(item);
+  }
+
+  @Transactional
+  @Override
   public ItemView restore(UUID id, OptionalLong expectedVersion, UUID actor) {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
@@ -876,7 +914,7 @@ public class DefaultItemService implements ItemService {
             item.getNotes(),
             item.getMinimumStock(),
             item.getItemTypeVersionId(),
-            item.getLifecycleState(),
+            item.getLifecycleState().name(),
             item.valuation()));
   }
 
@@ -949,7 +987,7 @@ public class DefaultItemService implements ItemService {
         redaction.forCaller(item.getItemTypeVersionId(), item.getId(), item.getAttributes()),
         item.getNotes(),
         item.getMinimumStock(),
-        item.getLifecycleState(),
+        item.getLifecycleState().name(),
         item.getCreatedAt(),
         item.getUpdatedAt(),
         item.valuation(),

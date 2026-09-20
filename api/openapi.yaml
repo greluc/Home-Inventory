@@ -600,6 +600,44 @@ components:
             `minimal` installation is by design — this is the only way it reaches anybody
           type: string
       type: object
+    DisposalRequest:
+      description: The body of a disposal (REQ-LIFE-007).
+      properties:
+        note:
+          description: anything else worth knowing, or absent
+          maxLength: 2000
+          minLength: 0
+          type: string
+        'on':
+          description: when it went
+          format: date
+          type: string
+        price:
+          $ref: '#/components/schemas/MoneyJson'
+          description: |-
+            what it fetched, or absent. Only a sale has one; absent rather than zero for
+            something given away, because the two are different claims
+        recipient:
+          description: who to, in the seller's own words, or absent
+          maxLength: 200
+          minLength: 0
+          type: string
+        state:
+          description: |-
+            `SOLD` or `DISPOSED` — the two ways an item leaves. Any other value is
+            refused rather than treated as a disposal
+          enum:
+          - ACTIVE
+          - LENT
+          - ARCHIVED
+          - TRASHED
+          - SOLD
+          - DISPOSED
+          type: string
+      required:
+      - 'on'
+      - state
+      type: object
     EnrolmentView:
       description: What an account holds.
       properties:
@@ -8342,6 +8380,120 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Which bundles this item is in (REQ-CORE-007)
+  /api/v1/items/{id}/disposal:
+    post:
+      description: |-
+        Records that this item was sold or otherwise parted with (REQ-LIFE-007).
+
+        **Not a delete, and deliberately a different verb.** The item stays, stays readable and
+        keeps its history; what changes is its state. "What did we have, and what became of it" is the
+        question an inventory exists to answer, and `DELETE` would answer half of it.
+
+        Takes `ITEM_UPDATE` rather than `ITEM_DELETE` for the same reason: nothing is
+        being removed. It is terminal, though, so it takes `If-Match` like any other write on a
+        single resource (REQ-API-004).
+      operationId: disposeOfItem
+      parameters:
+      - description: the item
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisposalRequest'
+        description: what became of it
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemView'
+          description: the item in its new state
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The item is not in a state for that (`item-state`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Records that this item was sold or otherwise parted with (REQ-LIFE-007)
   /api/v1/items/{id}/loans:
     get:
       description: |-

@@ -237,6 +237,16 @@ public enum ProblemType {
   ITEM_LENT("item-lent", HttpStatus.CONFLICT, "The item is lent out"),
 
   /**
+   * The item is in a state where what was asked cannot be done (04 §4.4, REQ-LIFE-007).
+   *
+   * <p>Separate from {@link #ITEM_LENT} because a caller acts differently on the two: "somebody has
+   * it" is answered by asking for it back, "you sold it in March" is not answered at all. A client
+   * that had to read the detail text to tell them apart would be doing the work a stable {@code
+   * type} exists to remove.
+   */
+  ITEM_STATE("item-state", HttpStatus.CONFLICT, "The item is not in a state for that"),
+
+  /**
    * The move would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>A {@code 409}: nothing about the request is malformed, and the same request would work

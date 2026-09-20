@@ -148,6 +148,48 @@ public interface ItemService {
   void delete(UUID id, OptionalLong expectedVersion, UUID actor);
 
   /**
+   * Records that an item was sold or otherwise parted with (REQ-LIFE-007).
+   *
+   * <p><b>Not a deletion.</b> The item stays in the inventory and stays readable — that is the
+   * point of recording it: "what did we have, and what became of it" is the question an inventory
+   * exists to answer, and an item that vanished when it was sold would answer half of it. What
+   * changes is its {@link ItemState}, which takes it out of the everyday lists.
+   *
+   * <p><b>Terminal.</b> Unlike trashing there is no way back, because what is gone is the thing
+   * rather than the record of it. Recording the wrong disposal is corrected by the audit trail and
+   * a revision, not by an undo.
+   *
+   * @param id the item
+   * @param disposal what became of it
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last read;
+   *     empty skips the check (REQ-API-004)
+   * @param actor the authenticated user
+   * @return the item in its new state
+   * @throws de.greluc.homeinv.platform.NotFoundException when this tenant has no such item
+   * @throws ItemStateException when the item is not one the tenant still holds
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
+   */
+  ItemView dispose(UUID id, Disposal disposal, OptionalLong expectedVersion, UUID actor);
+
+  /**
+   * What became of an item (REQ-LIFE-007).
+   *
+   * @param state {@link ItemState#SOLD} or {@link ItemState#DISPOSED} — the two ways an item leaves
+   * @param price what it fetched, or {@code null}. Only a sale has one: an amount against a
+   *     disposal would be a row saying both. Null rather than zero for something given away,
+   *     because "nothing was paid" and "0.00 was paid" are different claims
+   * @param on when it went
+   * @param recipient who to, in the seller's own words, or {@code null}
+   * @param note anything else worth knowing, or {@code null}
+   */
+  record Disposal(
+      ItemState state,
+      de.greluc.homeinv.platform.Money price,
+      java.time.LocalDate on,
+      String recipient,
+      String note) {}
+
+  /**
    * The outcome of a creation.
    *
    * @param item the item, whether just created or found already present

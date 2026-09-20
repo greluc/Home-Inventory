@@ -182,6 +182,16 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **You can record that something was sold or thrown away.** Note the price, the
+  date and who it went to, and the item moves out of your everyday lists without
+  disappearing — an inventory should still answer "what did we have, and what
+  became of it". Only a sale carries a price: something given away carries none,
+  which is not the same as a price of zero. It cannot be undone, and a thing you
+  have parted with can no longer be lent out.
+
+- **An item now says where it is in its life** — active, lent, trashed, sold or
+  disposed of — as one value rather than several flags that could disagree.
+
 - **You can record who borrowed something.** Lend a thing to a member of the
   household or to anybody else by name, with the date it went out and the date it
   is due back, and record the return when it comes. A thing is lent to one person
