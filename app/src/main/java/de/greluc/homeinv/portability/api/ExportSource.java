@@ -18,12 +18,13 @@ package de.greluc.homeinv.portability.api;
  * {@code portability} to change. A block that does not implement it contributes nothing, which is
  * correct for {@code platform} and would be a silent gap for anything holding tenant data.
  *
- * <p>{@code ExportCoverageIT} guards the half of that which can be guarded today: for every
- * dataset an implementation writes, it compares the archive against {@code information_schema} and
- * fails by name when a column is neither exported nor declared as deliberately left out. Which
- * <b>blocks</b> owe an implementation at all is the other half, and it is not a structural
- * question — {@code audit}, {@code notification} and {@code search} each hold tenant rows that may
- * or may not belong in an archive, and REQ-PORT-006 is where that is decided.
+ * <p>{@code ExportCoverageIT} guards both halves. For every dataset an implementation writes it
+ * compares the archive against {@code information_schema} and fails by name when a column is
+ * neither exported nor declared as deliberately left out; and it asks PostgreSQL for every
+ * tenant-scoped table there is, so one that no implementation writes has to appear in that test's
+ * list of declared omissions with a reason. A block added later therefore owes an implementation
+ * or a sentence, and it owes it at the moment its first table is created rather than at the moment
+ * somebody's data fails to travel.
  *
  * <h2>Read from PostgreSQL, never from a derived store</h2>
  *

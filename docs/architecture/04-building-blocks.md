@@ -437,6 +437,25 @@ archive would hand it over inside a container that hides it from the scanner. Ea
 writes its own share through `ExportSource`, which is what keeps `portability` from
 reading another block's tables (REQ-NFR-019…024).
 
+**Ten blocks write themselves** — `inventory`, `locations`, `catalog`, `tagging`,
+`media`, `identity`, `tenancy`, `authorization`, `notification` and `search`. The last
+five are there because a move is not only the things: who had access and in what role,
+the roles a tenant defined for itself, which fields those roles may read, the reminders
+somebody set up and the searches they saved are all lost work otherwise, and the
+membership is the personal datum Art. 15 asks about (REQ-PORT-006).
+
+What is **not** in the archive is a list with a reason against every entry, and
+`ExportCoverageIT` holds it: it asks PostgreSQL for every tenant-scoped table there is,
+so a table that no block exports must be named there. The kinds that recur:
+
+| Kind | Example | Why it stays |
+|---|---|---|
+| A credential or key material | `identity.service_account`, `crypto.tenant_data_key`, `tenancy.tenant.revocation_token_hash` | The receiving instance issues its own. An archive is copied onto laptops and into support tickets |
+| This instance's own administration | `identity.app_user.instance_operator`, `tenancy.tenant_quota` | An import carrying them would hand its bearer operator rights on the instance receiving it |
+| A record of what this deployment did | `audit.*`, `notification.notification`, `outbox.event_publication` | Evidence is worth what the instance holding it is worth; a copy proves nothing and still names people |
+| Something derived | `inventory.item_attr_index` | Rebuilt on import from what the archive does carry, and a copy that disagreed with its source would be the one somebody trusted |
+| A third party's | `tenancy.invitation` | An open invitation holds somebody else's address and a token that still opens a door on the instance being left |
+
 ---
 
 ### `audit` — traceability

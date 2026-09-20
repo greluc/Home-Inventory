@@ -44,11 +44,10 @@ import tools.jackson.databind.ObjectMapper;
  * here are about that contract — the archive is not there until it is, and the thing that arrives
  * is a ZIP whose manifest says what is in it.
  *
- * <p>Five blocks write themselves — {@code inventory}, {@code locations}, {@code catalog}, {@code
- * tagging} and {@code media}, the last of them carrying the photographs and not only the rows about
- * them. What an archive must <b>not</b> lose is {@code ExportCoverageIT}<!-- -->'s subject; what it
- * must not carry is here, because a derivative and an infected file are both things the receiving
- * instance is better off without.
+ * <p>Ten blocks write themselves, {@code media} among them, so the archive carries the photographs
+ * and not only the rows about them. What an archive must <b>not</b> lose is {@code
+ * ExportCoverageIT}<!-- -->'s subject; what it must not carry is here, because a derivative and an
+ * infected file are both things the receiving instance is better off without.
  */
 @DisplayName("An export job")
 class ExportJobIT extends AbstractIntegrationTest {

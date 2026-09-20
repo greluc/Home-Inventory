@@ -72,14 +72,14 @@ public class InventoryExport implements ExportSource {
 
   private static final String RELATIONS =
       """
-      select id, source_id, target_id, relation_type, created_at, created_by
+      select id, source_id, target_id, relation_type, created_at, created_by, version
       from inventory.item_relation
       order by source_id, target_id, relation_type
       """;
 
   private static final String BUNDLES =
       """
-      select id, bundle_item_id, member_item_id, created_at, created_by
+      select id, bundle_item_id, member_item_id, created_at, created_by, version
       from inventory.item_bundle
       order by bundle_item_id, member_item_id
       """;

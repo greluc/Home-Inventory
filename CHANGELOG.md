@@ -186,7 +186,11 @@ commit".
   a job you can watch, and the finished archive is a ZIP of JSON Lines with a
   manifest saying what is in it — the shape a tenant needs to move to another
   instance — items, places, tags, the type definitions they are written
-  against, and the photographs themselves.
+  against, and the photographs themselves. It also takes what makes the
+  inventory yours rather than just its contents: who had access and in what
+  role, the roles you defined, the reminders you set up and the searches you
+  saved. Passwords, keys and this instance's own administration stay behind,
+  and the archive lists what it left out.
 
 - **Photographs nothing points at are cleaned up.** When the last item using an
   uploaded file is deleted, the file itself is removed a week later — long enough
