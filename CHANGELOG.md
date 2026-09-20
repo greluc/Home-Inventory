@@ -194,6 +194,15 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **A plugin can be configured, and it could not be before.** Whatever a plugin
+  offers to be told — which source it prefers, the key it signs with, your own
+  token for a service you have an account with — is now settable per tenant,
+  from the plugin's own page. A secret is stored sealed, never shown again and
+  never written to a log: the page says one is set and offers to replace it.
+  What the person running the installation configures — the mail server, the
+  storage keys — stays with the plugin's container and never reaches your
+  tenant at all. *Plugin contract: additive.*
+
 - **A plugin can ask for a document too.** A plugin that wants to hand you a PDF
   no longer needs a PDF library of its own: it describes the document and the
   core renders it with whichever renderer you installed. It is one method on one
@@ -852,10 +861,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 428 numbered, testable requirements across
+- A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 73 architecture decision records, each with its alternatives and consequences —
+- 74 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -86,11 +86,12 @@ Date: YYYY-MM-DD
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
 | [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |
 | [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted, amended by 0067, 0070 |
-| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066, 0071 |
+| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066, 0071, 0073 |
 | [0066](0066-instance-level-capability-grants.md) | An instance-level capability grant, for what the deployment owes an account | Accepted, amended by 0067 |
 | [0067](0067-breached-passwords-from-a-shipped-list.md) | Breached passwords are checked against a shipped list, and a plugin may add to it | Accepted |
 | [0068](0068-an-export-opens-what-its-requester-may-read.md) | An export opens a sealed value exactly as far as its requester may read it | Accepted |
 | [0069](0069-an-import-merges-by-id-and-writes-no-people.md) | An import merges by id, matches the catalogue by key, and writes no people | Accepted |
 | [0070](0070-documents-are-described-not-programmed.md) | A document is described, not programmed, and rendering it is a plugin's job | Accepted |
-| [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted |
+| [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted, amended by 0073 |
 | [0072](0072-first-party-plugins-live-here.md) | The first-party plugins live in this repository, one language each | Accepted |
+| [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted |

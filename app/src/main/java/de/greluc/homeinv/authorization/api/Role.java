@@ -166,6 +166,7 @@ public enum Role {
       Permission.REMINDER_RULE_DELETE,
       Permission.PLUGIN_READ,
       Permission.PLUGIN_CONSENT,
+      Permission.PLUGIN_CONFIGURE,
       Permission.TENANT_READ,
       Permission.TENANT_UPDATE,
       Permission.MEMBER_READ,

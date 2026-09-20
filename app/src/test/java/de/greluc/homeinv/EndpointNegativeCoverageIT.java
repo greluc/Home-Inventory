@@ -132,6 +132,8 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    *       became of the item and when (REQ-LIFE-007)
    *   <li>22 → 23 on 2026-09-20, {@code PUT /api/v1/reminder-rules/{id}}, which takes a trigger, an
    *       offset and a channel (REQ-NOTI-001)
+   *   <li>23 → 24 on 2026-09-20, {@code PUT /api/v1/plugins/{pluginId}/settings/{key}}, which
+   *       takes the value to store (REQ-PLG-017)
    * </ul>
    *
    * <p>*The prose said "Eighteen today" over a constant of 19 between the second and third of
@@ -143,7 +145,7 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    * commit: a new endpoint that takes a body is ordinary, an existing one that stopped answering
    * {@code 404} is not.
    */
-  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 23;
+  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 24;
 
   @Autowired private RequestMappingHandlerMapping mappings;
   @Autowired private TenantProvisioningService provisioning;

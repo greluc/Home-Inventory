@@ -3489,6 +3489,49 @@ components:
           format: uuid
           type: string
       type: object
+    SettingRequest:
+      description: The value to store.
+      properties:
+        value:
+          description: the value as text, of the type the manifest declares
+          maxLength: 4096
+          minLength: 0
+          type: string
+      required:
+      - value
+      type: object
+    SettingView:
+      description: One setting a plugin declares, with what this tenant made of it.
+      properties:
+        defaultValue:
+          description: what applies when nothing is set here, or null
+          type: string
+        key:
+          description: the manifest's key
+          type: string
+        label:
+          additionalProperties:
+            type: string
+          description: what a person sees, by language tag — multilingual data, like a field label
+          type: object
+        required:
+          description: whether the plugin says it cannot work without one
+          type: boolean
+        set:
+          description: whether a value is stored, which is all a surface learns about a secret
+          type: boolean
+        type:
+          description: '`string`, `secret`, `enum`, `integer` or `boolean`'
+          type: string
+        value:
+          description: what this tenant set, and **always null for a secret**
+          type: string
+        values:
+          description: the choices, for an `enum`; empty otherwise
+          items:
+            type: string
+          type: array
+      type: object
     SwitchTenantRequest:
       description: The body of a switch.
       properties:
@@ -12471,6 +12514,261 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Agrees to one capability, for this tenant
+  /api/v1/plugins/{pluginId}/settings:
+    get:
+      description: |-
+        What this tenant configured for one plugin, and what it could configure.
+
+        Every setting the manifest declares, whether or not a value has been stored, because "what
+        it wants" without "what it has" is not something anybody can act on — the same reasoning the
+        capability list follows.
+
+        **A secret's value never comes back.** `value` is null for one and `set` says
+        whether there is one to replace, which is what a password field does everywhere else.
+      operationId: pluginSettings
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: how many at most; capped at 200 (REQ-NFR-010)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SettingView'
+                type: array
+          description: the settings, in the manifest's order
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What this tenant configured for one plugin, and what it could configure
+  /api/v1/plugins/{pluginId}/settings/{key}:
+    delete:
+      description: |-
+        Removes one setting, so the manifest's default applies again.
+
+        Removing what was never set is not an error, for the reason withdrawing a capability is not.
+      operationId: clearPluginSetting
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: the setting
+        in: path
+        name: key
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes one setting, so the manifest's default applies again
+    put:
+      description: |-
+        Configures one setting, for this tenant.
+
+        A key the plugin's current manifest does not declare is refused rather than stored: it would
+        sit waiting to become live the day an update declared it, which is the same mistake as
+        consenting to a capability nobody asked for (REQ-PLG-006).
+      operationId: configurePlugin
+      parameters:
+      - description: the plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - description: the setting the manifest declares
+        in: path
+        name: key
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingRequest'
+        description: the value
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Configures one setting, for this tenant
   /api/v1/reminder-rules:
     get:
       description: |-

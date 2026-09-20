@@ -115,6 +115,28 @@ spec:
     timeoutSeconds: 5
 ```
 
+### `settings` are the TENANT's half, and only that half
+
+A plugin is configured twice, by two different people
+([ADR-0073](../adr/0073-a-plugin-is-configured-twice.md), `REQ-PLG-017`):
+
+| | Who decides | Where it lives | How the plugin gets it |
+|---|---|---|---|
+| **Instance configuration** | the operator, once for the deployment | [`deploy/services.yaml`](../../deploy/services.yaml) — the container's environment and mounted secrets | it is simply there, like every other service's credentials |
+| **Tenant settings** | each tenant administrator | `plugins.plugin_setting`, per tenant, secrets sealed ([ADR-0019](../adr/0019-sensitive-field-encryption.md)) | in the **call envelope**, on every call |
+
+**A manifest describes what a tenant may set; a container describes what an
+operator must set.** The block above is therefore the per-tenant list and nothing
+else — an SMTP host never appears in one. The core never holds a deployment's own
+credentials for a plugin, because it never needs to.
+
+Nothing is fetched: a plugin that could ask for its settings would be reading
+through the host channel, and [ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md)'s
+admission test — *takes what the caller already holds* — refuses exactly that. What
+may be stored is what the manifest declares: a key it does not name, a value
+outside a declared `enum`'s list and a value of the wrong type are refused rather
+than kept until an update makes them live.
+
 | Field | Security meaning |
 |---|---|
 | `capabilities` | **Exhaustive.** What is not in the manifest is not possible — not even with consent granted. An extension requires a new manifest and new consent. |
@@ -135,7 +157,7 @@ entitlement, no "read access, which is harmless anyway".
 | `core:media:read` / `:write` | Media | Writing only through `StoreBlob`, never directly into the store |
 | `core:event:emit` | Raising its own events | Only from a declared list of event types |
 | `core:event:subscribe` | Receiving events | Only the types named in the manifest |
-| `core:setting:read` | Reading its own settings | **Its own only**, never anyone else's |
+| `core:setting:read` | The core may **send** the plugin what this tenant configured | It reads nothing: since [ADR-0073](../adr/0073-a-plugin-is-configured-twice.md) the settings travel in the call envelope, so this grant is what lets them travel at all. Without it a plugin receives an empty map, however much the tenant has configured — which keeps "without a grant nothing is possible" true for the one kind of value a tenant is most likely to mind. *The row read "reading its own settings" while there was no way to read one.* |
 | `network:outbound` | Outbound network connections | Only through the egress proxy, only to the manifest's hosts. Enforced outside the plugin, never by the plugin ([ADR-0027](../adr/0027-egress-enforcement.md)) — an allowlist that untrusted code applies to itself is documentation, not a control |
 | `ui:panel` | Its own area in the UI | Served in an isolated `iframe` with its own origin and a strict CSP. The panel needs **no** `Cross-Origin-Embedder-Policy` of its own: the application does not set COEP ([ADR-0040](../adr/0040-no-cross-origin-isolation.md)), which was the one requirement a third-party author could not have guessed and would have met as a blank frame |
 | `print:target` | Appearing as a print target | |

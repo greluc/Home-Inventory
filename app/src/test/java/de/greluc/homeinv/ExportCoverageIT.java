@@ -96,6 +96,7 @@ class ExportCoverageIT extends AbstractIntegrationTest {
           Map.entry("data/authorization/role-permissions.jsonl", "authz.role_permission"),
           Map.entry("data/authorization/field-visibility.jsonl", "authz.field_visibility"),
           Map.entry("data/notification/reminder-rules.jsonl", "notification.notification_rule"),
+          Map.entry("data/plugins/plugin-settings.jsonl", "plugins.plugin_setting"),
           Map.entry("data/notification/subscriptions.jsonl", "notification.subscription"),
           Map.entry("data/search/saved-searches.jsonl", "search.saved_search"),
           Map.entry("data/portability/mapping-profiles.jsonl",
@@ -481,6 +482,21 @@ class ExportCoverageIT extends AbstractIntegrationTest {
                   """)
               .param(tenant.tenantId())
               .param(search)
+              .param(tenant.userId())
+              .param(tenant.userId())
+              .update();
+          // A plugin setting, one sealed and one not: the archive carries the key
+          // of both and the value of only the second (REQ-PLG-017, ADR-0073).
+          // Written straight into the table rather than through `PluginSettings`,
+          // because what is under test here is the export and not the validation.
+          jdbc.sql(
+                  """
+                  insert into plugins.plugin_setting
+                      (tenant_id, plugin_id, setting_key, value, sealed, created_by, updated_by)
+                  values (?, 'de.greluc.homeinv.plugin.test.export', 'preferredSource',
+                          'openlibrary', false, ?, ?)
+                  """)
+              .param(tenant.tenantId())
               .param(tenant.userId())
               .param(tenant.userId())
               .update();

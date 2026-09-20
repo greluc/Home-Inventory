@@ -46,6 +46,10 @@ public final class PluginWire {
             forTheInstance
                 ? de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE
                 : de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_TENANT)
+        // What the tenant configured, filled by the envelope and never by an
+        // adapter (ADR-0073). Empty on an instance call, because there is no
+        // tenant whose settings they would be.
+        .putAllSettings(forTheInstance ? java.util.Map.of() : context.settings())
         .build();
   }
 

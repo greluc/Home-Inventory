@@ -13,6 +13,10 @@ direction)
 
 **Depends on:** [ADR-0006](0006-plugin-runtime.md), [ADR-0070](0070-documents-are-described-not-programmed.md)
 
+> **Amended by [ADR-0073](0073-a-plugin-is-configured-twice.md)**: the "no read here" rule
+> below was immediately tested by a real need — a plugin's own settings — and it held. They
+> travel in the call envelope instead, and this channel still has one method on it.
+
 ## Context
 
 Every service in the plugin contract is served by a **plugin** and called by the **core**.

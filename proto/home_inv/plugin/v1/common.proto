@@ -96,6 +96,23 @@ message CallContext {
   // not set it means CALL_SCOPE_TENANT, which is what the field's absence meant
   // before it existed.
   CallScope scope = 4;
+
+  // WHAT THIS TENANT CONFIGURED FOR THIS PLUGIN, by the keys the manifest's
+  // `settings` block declares, with secrets opened (ADR-0073, REQ-PLG-017).
+  //
+  // It travels in the envelope rather than being fetched, because fetching it
+  // would be a READ on the host channel and ADR-0071's admission test -- "takes
+  // what the caller already holds" -- refuses exactly that.
+  //
+  // WHAT IS NOT HERE, and will not be: the operator's configuration of the
+  // plugin CONTAINER. The SMTP host and its credentials, the S3 endpoint and its
+  // keys, the OIDC client secret are mounted into the container from
+  // `deploy/services.yaml` like every other service's, and the core never holds
+  // them. A manifest describes what a TENANT may set; a container describes what
+  // an OPERATOR must set.
+  //
+  // Empty on an instance call: there is no tenant whose settings these would be.
+  map<string, string> settings = 5;
 }
 
 // AN AMOUNT AND THE CURRENCY IT IS IN.

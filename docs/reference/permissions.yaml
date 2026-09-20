@@ -130,6 +130,17 @@ permissions:
       touch this tenant's data at all. Consent is per tenant even though
       installation is instance-wide, so an installed plugin is active for one
       tenant and invisible to the next.
+  - id: plugins:setting:write
+    since: 1
+    description: >
+      Configure an installed plugin, for this tenant (`REQ-PLG-017`, ADR-0073).
+      An administrator's, and deliberately not the same permission as consent:
+      consenting says foreign code may touch this tenant's data at all,
+      configuring says what it should do once it may — and a value set here can
+      be a secret the tenant holds with somebody else, such as a webhook signing
+      key. It grants nothing over the operator's configuration of the plugin
+      container: the SMTP host, the S3 keys and the OIDC client secret are the
+      container's own environment and never pass through the core.
 
   - id: media:object:read
     since: 0
@@ -392,6 +403,7 @@ roles:
       - notification:reminder-rule:delete
       - plugins:plugin:read
       - plugins:capability:consent
+      - plugins:setting:write
       - tenancy:tenant:read
       - tenancy:tenant:update
       - tenancy:member:read

@@ -85,9 +85,9 @@ docs/architecture/08-api-contract.md:323:enforced
 docs/architecture/08-api-contract.md:411:cannot
 docs/architecture/08-api-contract.md:489:fails the build
 docs/architecture/09-extensibility-and-plugins.md:22:must never
-docs/architecture/09-extensibility-and-plugins.md:245:cannot
-docs/architecture/09-extensibility-and-plugins.md:316:cannot
-docs/architecture/09-extensibility-and-plugins.md:393:must never
+docs/architecture/09-extensibility-and-plugins.md:267:cannot
+docs/architecture/09-extensibility-and-plugins.md:338:cannot
+docs/architecture/09-extensibility-and-plugins.md:415:must never
 docs/architecture/10-identification-and-labels.md:117:cannot
 docs/architecture/10-identification-and-labels.md:155:is impossible
 docs/architecture/10-identification-and-labels.md:21:cannot

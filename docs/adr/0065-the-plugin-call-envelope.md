@@ -18,6 +18,12 @@
 > chosen by the core, and the tenant comes from the envelope rather than from anything the
 > caller asserts. Everything below stands for every call the core makes.
 
+> **Amended by [ADR-0073](0073-a-plugin-is-configured-twice.md)**: the envelope also carries
+> **what the tenant configured** — the settings its manifest declares, with secrets opened.
+> It is filled here rather than fetched there, because fetching would be a read on the host
+> channel and ADR-0071 refuses one. What the *operator* configured is not in it and never
+> will be: that is the plugin container's own environment.
+
 ## Context
 
 `REQ-PLG-002` makes out-of-process plugins over gRPC with mTLS the default for

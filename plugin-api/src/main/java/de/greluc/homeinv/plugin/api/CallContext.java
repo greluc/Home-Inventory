@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.plugin.api;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,8 +46,18 @@ import java.util.UUID;
  * @param deadlineMillis how long the caller will wait, from the moment the call was made. A plugin
  *     that cannot finish in time should stop rather than answer late: the caller has gone
  *     (REQ-PLG-007). Zero means the caller set no deadline, which the core never does
+ * @param settings what <b>this tenant</b> configured for this plugin, by the keys the manifest
+ *     declares, with secrets opened (ADR-0073, REQ-PLG-017). Never the operator's configuration of
+ *     the plugin container — the SMTP host, the S3 keys, the OIDC client secret are the
+ *     container's own environment and never pass through the core. Empty on an instance call and
+ *     whenever the manifest declares no setting, never {@code null}
  */
-public record CallContext(UUID tenantId, String traceId, String language, long deadlineMillis) {
+public record CallContext(
+    UUID tenantId,
+    String traceId,
+    String language,
+    long deadlineMillis,
+    Map<String, String> settings) {
 
   /**
    * Normalises the optional text and checks the one invariant a deadline has.
@@ -61,9 +72,36 @@ public record CallContext(UUID tenantId, String traceId, String language, long d
   public CallContext {
     traceId = traceId == null ? "" : traceId;
     language = language == null ? "" : language;
+    settings = settings == null ? Map.of() : Map.copyOf(settings);
     if (deadlineMillis < 0) {
       throw new IllegalArgumentException("A deadline in the past is not a deadline");
     }
+  }
+
+  /**
+   * A context with no settings, which is every call made before a plugin declares one.
+   *
+   * @param tenantId the tenant, or {@code null} for an instance call
+   * @param traceId the W3C trace parent, or {@code null}
+   * @param language the recipient's language, or {@code null}
+   * @param deadlineMillis how long the caller will wait
+   */
+  public CallContext(UUID tenantId, String traceId, String language, long deadlineMillis) {
+    this(tenantId, traceId, language, deadlineMillis, Map.of());
+  }
+
+  /**
+   * The same call, carrying what the tenant configured.
+   *
+   * <p>Filled in one place — the envelope every plugin call goes through — so that no caller has
+   * to remember to, and so that a plugin's settings cannot reach a call made for a different
+   * tenant.
+   *
+   * @param settings the resolved settings
+   * @return a copy carrying them
+   */
+  public CallContext withSettings(Map<String, String> settings) {
+    return new CallContext(tenantId, traceId, language, deadlineMillis, settings);
   }
 
   /** What authorised a call, and therefore what it may touch. */

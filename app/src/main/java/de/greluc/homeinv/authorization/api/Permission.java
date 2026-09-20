@@ -90,6 +90,20 @@ public enum Permission {
    * foreign code touch this tenant's data at all.
    */
   PLUGIN_CONSENT("plugins:capability:consent"),
+  /**
+   * Configure an installed plugin, for this tenant (REQ-PLG-017, ADR-0073).
+   *
+   * <p>An administrator's, and separate from {@link #PLUGIN_CONSENT} because the two decisions are
+   * different: consenting says foreign code may touch this tenant's data at all, configuring says
+   * what it should do once it may. A value set here can be a <b>secret</b> the tenant holds with
+   * somebody else — a webhook signing key, an account token — which is the other reason the two
+   * are not one permission.
+   *
+   * <p>It grants nothing over the <i>operator's</i> configuration of a plugin container: the SMTP
+   * host, the S3 keys and the OIDC client secret are the container's own environment and never pass
+   * through the core (ADR-0073).
+   */
+  PLUGIN_CONFIGURE("plugins:setting:write"),
 
   /** Read a media object's metadata and obtain a signed URL for it. */
   MEDIA_READ("media:object:read"),

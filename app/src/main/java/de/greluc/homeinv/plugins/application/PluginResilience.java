@@ -4,8 +4,10 @@
  */
 package de.greluc.homeinv.plugins.application;
 
+import de.greluc.homeinv.plugin.api.CallContext;
 import de.greluc.homeinv.plugin.api.PluginException;
 import de.greluc.homeinv.plugins.api.PluginCircuitOpened;
+import de.greluc.homeinv.plugins.api.PluginSettings;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
@@ -24,6 +26,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -61,6 +64,14 @@ public class PluginResilience {
   private final PluginRuntimeProperties properties;
   private final MeterRegistry meters;
   private final ApplicationEventPublisher events;
+
+  /**
+   * What the tenant configured, filled into the envelope of every call (ADR-0073).
+   *
+   * <p>Here rather than in each adapter for the reason everything else in this class is here: a
+   * cross-cutting concern applied in sixteen places is applied in fifteen of them.
+   */
+  private final PluginSettings settings;
 
   /** One breaker per plugin, created on first use and kept. */
   private CircuitBreakerRegistry breakers;
@@ -121,7 +132,7 @@ public class PluginResilience {
         Proxy.newProxyInstance(
             port.getClassLoader(),
             new Class<?>[] {port},
-            new Envelope(target, breaker, pool, pluginId, port.getSimpleName())));
+            new Envelope(target, breaker, pool, pluginId, port.getSimpleName(), settings)));
   }
 
   /**
@@ -185,7 +196,12 @@ public class PluginResilience {
    * @param port for the messages
    */
   private record Envelope(
-      Object target, CircuitBreaker breaker, Bulkhead pool, String pluginId, String port)
+      Object target,
+      CircuitBreaker breaker,
+      Bulkhead pool,
+      String pluginId,
+      String port,
+      PluginSettings settings)
       implements InvocationHandler {
 
     // Deliberately narrower than InvocationHandler's own `throws Throwable`.
@@ -201,10 +217,19 @@ public class PluginResilience {
         return call(method, arguments);
       }
 
+      // Before the pool and before the breaker, deliberately: reading what the
+      // tenant configured is a query against our own database, and it must
+      // neither occupy one of this plugin's concurrent slots nor count towards
+      // opening its circuit if it fails. Only the call to the plugin does.
+      // A no-argument port method arrives with null arguments, which is the one
+      // case with nothing to fill; it is answered here so the helper can take
+      // and return an array rather than something nullable.
+      Object[] withSettings = arguments == null ? null : carryingSettings(arguments);
+
       try {
         return Bulkhead.decorateCheckedSupplier(
                 pool,
-                CircuitBreaker.decorateCheckedSupplier(breaker, () -> call(method, arguments)))
+                CircuitBreaker.decorateCheckedSupplier(breaker, () -> call(method, withSettings)))
             .get();
       } catch (CallNotPermittedException open) {
         throw new PluginException(
@@ -244,6 +269,37 @@ public class PluginResilience {
      * @param arguments its arguments
      * @return whatever it returned
      */
+    /**
+     * The same arguments, with what this tenant configured filled into the envelope.
+     *
+     * <p>Every port method takes a {@link de.greluc.homeinv.plugin.api.CallContext} and none takes
+     * two, so this finds it by type rather than by position: a port added later gets the settings
+     * without anybody remembering that it should.
+     *
+     * <p>An <b>instance</b> call carries none. There is no tenant whose settings they would be, and
+     * filling them from somewhere would be exactly the confusion ADR-0066 exists to prevent.
+     *
+     * @param arguments what the caller passed, never {@code null}
+     * @return the arguments to send, the same array when there was nothing to fill
+     */
+    private Object[] carryingSettings(Object[] arguments) {
+      Object[] filled = null;
+      for (int index = 0; index < arguments.length; index++) {
+        if (!(arguments[index] instanceof CallContext context) || context.tenantId() == null) {
+          continue;
+        }
+        Map<String, String> configured = settings.effective(pluginId, context.tenantId());
+        if (configured.isEmpty()) {
+          continue;
+        }
+        if (filled == null) {
+          filled = arguments.clone();
+        }
+        filled[index] = context.withSettings(configured);
+      }
+      return filled == null ? arguments : filled;
+    }
+
     private Object call(Method method, Object[] arguments) {
       try {
         return method.invoke(target, arguments);
