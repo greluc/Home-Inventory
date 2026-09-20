@@ -73,11 +73,13 @@ services:
         aliases:
           - api-internal
       frontend: {}
+      plugin-webhook: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "api-internal"
       HOMEINV_PLUGIN_HOST_PORT: "${HOMEINV_PLUGIN_HOST_PORT:-0}"
@@ -104,6 +106,8 @@ services:
       HOMEINV_SEARCH_PASSWORD_FILE: "/run/secrets/search-password"
       HOMEINV_MTLS_CORE_FILE: "/run/secrets/mtls-core"
     secrets:
+      - source: api-plugins.yaml
+        target: /run/secrets/plugins.yaml
       - db-password
       - data-encryption-master-key
       - jwt-signing-key
@@ -161,11 +165,13 @@ services:
         aliases:
           - worker-internal
       scanner: {}
+      plugin-webhook: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "worker-internal"
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
@@ -191,6 +197,8 @@ services:
       HOMEINV_SEARCH_PASSWORD_FILE: "/run/secrets/search-password"
       HOMEINV_MTLS_CORE_FILE: "/run/secrets/mtls-core"
     secrets:
+      - source: worker-plugins.yaml
+        target: /run/secrets/plugins.yaml
       - db-password
       - data-encryption-master-key
       - url-signing-key
@@ -497,6 +505,7 @@ services:
     networks:
       scanner: {}
       egress: {}
+      plugin-webhook: {}
     secrets:
       - source: egress-proxy-egress-allowlist.conf
         target: /etc/homeinv/egress-allowlist.conf
@@ -613,7 +622,41 @@ services:
         reservations:
           memory: 256m
 
+  plugin-webhook:
+    image: ghcr.io/greluc/home-inv-plugin-webhook:latest
+    container_name: homeinv-plugin-webhook
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-webhook: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8200"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-webhook"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_WEBHOOK_TIMEOUT_SECONDS: "10"
+    secrets:
+      - mtls-plugin-webhook
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
 networks:
+  plugin-webhook:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.31.0/24
   edge:
   egress:
   internal:
@@ -633,6 +676,10 @@ volumes:
   blobdata:
 
 secrets:
+  api-plugins.yaml:
+    file: ../secrets/api-plugins.yaml
+  worker-plugins.yaml:
+    file: ../secrets/worker-plugins.yaml
   valkey-users.acl:
     file: ../secrets/valkey-users.acl
   clamav-freshclam.conf:
@@ -669,6 +716,8 @@ secrets:
     file: ../secrets/mtls-core
   mtls-blobstore:
     file: ../secrets/mtls-blobstore
+  mtls-plugin-webhook:
+    file: ../secrets/mtls-plugin-webhook
   mtls-search:
     file: ../secrets/mtls-search
   opensearch-admin-password:

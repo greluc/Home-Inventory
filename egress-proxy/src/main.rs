@@ -106,8 +106,14 @@ async fn main() -> ExitCode {
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, peer)) => {
+                    // The address the connection arrived ON, which is this
+                    // proxy's interface on the caller's segment and therefore
+                    // says which plugin is asking (ADR-0037). Never an address
+                    // the caller claims. A socket whose local address cannot be
+                    // read has no segment, so it gets the deployment half alone.
+                    let arrival = stream.local_addr().map(|address| address.ip()).ok();
                     let list = Arc::clone(&list);
-                    tokio::spawn(async move { serve(stream, peer, list).await });
+                    tokio::spawn(async move { serve(stream, peer, arrival, list).await });
                 }
                 Err(failure) => warn!(error = %failure, "a connection could not be accepted"),
             },
@@ -124,7 +130,17 @@ async fn main() -> ExitCode {
 /// Every outcome is logged with the caller, the target and what happened: that
 /// log is the source for the per-resolver disclosure REQ-ENR-009 asks for, and
 /// for the cause behind a stale-signature alert (REQ-SEC-093).
-async fn serve(stream: TcpStream, peer: SocketAddr, list: Arc<Allowlist>) {
+async fn serve(
+    stream: TcpStream,
+    peer: SocketAddr,
+    arrival: Option<std::net::IpAddr>,
+    list: Arc<Allowlist>,
+) {
+    // An unreadable local address belongs to no segment, and `UNSPECIFIED`
+    // is in no plugin's network -- so both fall back to the deployment half,
+    // which is the safe direction.
+    let arrival = arrival.unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+    let plugin = list.caller_on(arrival).unwrap_or("-").to_string();
     let mut reader = BufReader::new(stream);
 
     let mut line = String::new();
@@ -156,10 +172,12 @@ async fn serve(stream: TcpStream, peer: SocketAddr, list: Arc<Allowlist>) {
         Destination::Fetch { host, port, .. } => (host.clone(), *port),
     };
 
-    if !list.permits(&host) {
+    if !list.permits(&host, arrival) {
         // The refusal is the product, not an error: a caller reaching for a host
-        // nobody declared is exactly what this exists to stop.
-        warn!(caller = %peer.ip(), host = %host, port, outcome = "refused",
+        // nobody declared is exactly what this exists to stop. The plugin is in
+        // the line because "which plugin asked for this" is the first question an
+        // operator has, and the answer is the segment rather than a guess.
+        warn!(caller = %peer.ip(), plugin = %plugin, host = %host, port, outcome = "refused",
               "not on the allowlist");
         let _ = refuse(reader.get_mut(), "403 Forbidden").await;
         return;

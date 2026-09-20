@@ -37,6 +37,7 @@ POST /your/path HTTP/1.1
 Host: hooks.example.org
 Content-Type: application/json
 X-HomeInv-Signature: sha256=<hex>
+X-HomeInv-Timestamp: <unix seconds>
 X-HomeInv-Idempotency-Key: <key>
 ```
 
@@ -60,17 +61,31 @@ attached and can ask for it through the API.
 
 ### Checking the signature
 
-`HMAC-SHA256` over **the exact bytes of the body**, keyed with the
-`signingSecret` that tenant configured, lower-case hex, prefixed with `sha256=`.
-Compare it in constant time and reject a request whose signature does not match:
-an unsigned or unchecked webhook is one anybody who learns the URL can forge.
+`HMAC-SHA256` over **`<timestamp>.<body>`** — the value of `X-HomeInv-Timestamp`,
+a full stop, then the exact bytes of the body — keyed with the `signingSecret`
+that tenant configured, lower-case hex, prefixed with `sha256=`.
+
+**The timestamp is inside the signed material on purpose** (`REQ-API-010`): a
+captured request is otherwise a valid request for ever. Reject anything outside
+your tolerance window — five minutes is the usual choice — and compare the
+digest in constant time.
 
 ```python
-import hmac, hashlib
-expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+import hmac, hashlib, time
+
+timestamp = request.headers["X-HomeInv-Timestamp"]
+if abs(time.time() - int(timestamp)) > 300:
+    abort(401)                      # outside the window: a replay, or a clock to fix
+
+material = timestamp.encode() + b"." + body
+expected = "sha256=" + hmac.new(secret.encode(), material, hashlib.sha256).hexdigest()
 if not hmac.compare_digest(expected, request.headers["X-HomeInv-Signature"]):
     abort(401)
 ```
+
+Both headers are **reserved**: a caller cannot set either of them through the
+notification's own `headers` map, because a caller that could set the timestamp
+could make a replay look fresh.
 
 ### What an answer means
 

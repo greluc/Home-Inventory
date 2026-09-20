@@ -248,6 +248,9 @@ write_environment() {
     search_fingerprint=$(openssl x509 -in "$SECRETS/mtls-search.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
     [ -n "$search_fingerprint" ] || die "the OpenSearch certificate produced no fingerprint."
+    # Empty in `minimal`, for the reason the variable's own comment gives.
+    plugins_file="/run/secrets/plugins.yaml"
+    [ "$profile" = "minimal" ] && plugins_file=""
     cat > "$env_file" <<ENV
 # Written by deploy/setup.sh on first run. Edit freely; it is never overwritten.
 #
@@ -255,6 +258,12 @@ write_environment() {
 # deploy/secrets/ and are mounted, never interpolated.
 
 HOMEINV_PROFILE=$profile
+
+# Where the generated list of installed plugins is, inside api and worker.
+# EMPTY in `minimal`, which runs no plugin -- a complete deployment rather
+# than a degraded one (REQ-PLG-013). An instance with no list registers
+# nothing, fetches nothing, and says so once at start-up.
+HOMEINV_PLUGINS_FILE=$plugins_file
 
 # ⚠ PRINTED ONTO EVERY LABEL. Changing it later invalidates every label already
 # printed (10 §10.2.1). For anything beyond a local trial, set it before the
@@ -330,6 +339,23 @@ render_templates() {
             opensearch-*) [ "$profile" = "minimal" ] && continue ;;
         esac
         target="$SECRETS/$name"
+        # `minimal` runs no plugin, and the generated list names a certificate
+        # that is not created in that profile. The mount still has to exist --
+        # api and worker declare it in every profile -- so it is rendered EMPTY
+        # rather than skipped: an empty list is what "no plugins" looks like,
+        # and a missing file would stop the stack for a reason nobody could
+        # read.
+        case "$name" in
+            *-plugins.yaml)
+                if [ "$profile" = "minimal" ]; then
+                    printf '# The minimal profile runs no plugin (REQ-PLG-013).\nplugins: []\n' \
+                        > "$target"
+                    chmod 0444 "$target"
+                    say "  $name — empty, this profile runs no plugin"
+                    continue
+                fi
+                ;;
+        esac
         cp "$source" "$target"
         for secret in $(grep -o '@SECRET:[a-z0-9-]*@' "$source" | sed 's/@SECRET://; s/@//' | sort -u); do
             value_file="$SECRETS/$secret"
@@ -342,6 +368,23 @@ render_templates() {
             # a sed expression, and gsub takes the replacement literally enough
             # for an alphabet with no `&` in it.
             awk -v needle="@SECRET:$secret@" -v value="$value" \
+                '{ gsub(needle, value); print }' "$target" > "$target.tmp"
+            mv "$target.tmp" "$target"
+        done
+        # A FINGERPRINT is not a secret: it is the public half, and pinning is
+        # what it is for (REQ-SEC-056). It cannot be generated with the file
+        # either, because the certificate does not exist until this script
+        # makes one -- which is why the generated list carries a placeholder
+        # and this is where it is filled in.
+        for pin in $(grep -o '@FINGERPRINT:[a-z0-9-]*@' "$source" \
+                     | sed 's/@FINGERPRINT://; s/@//' | sort -u); do
+            certificate="$SECRETS/$pin.crt"
+            [ -f "$certificate" ] \
+                || die "$name pins the certificate '$pin' and it was not generated."
+            value=$(openssl x509 -in "$certificate" -noout -fingerprint -sha256 \
+                    | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
+            [ -n "$value" ] || die "the certificate '$pin' produced no fingerprint."
+            awk -v needle="@FINGERPRINT:$pin@" -v value="$value" \
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done

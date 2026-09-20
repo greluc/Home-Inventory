@@ -244,7 +244,7 @@ computed:
       on that registry's `excluded` list and are deliberately not part of the ten.
 
   - id: profileMemory
-    compute: "sums of memoryReservation / memoryLimit per profile in deploy/services.yaml, excluding lifecycle: oneShot and counting no plugin"
+    compute: "sums of memoryReservation / memoryLimit per profile in deploy/services.yaml, excluding lifecycle: oneShot and excluding role: plugin — a plugin is REQ-NFR-009's separate per-plugin adder, not part of a profile's base"
     value:
       minimalReservation: "3.7"
       minimalLimit: "7.7"

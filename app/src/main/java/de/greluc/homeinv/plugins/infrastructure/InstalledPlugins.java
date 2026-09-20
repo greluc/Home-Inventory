@@ -116,14 +116,22 @@ public class InstalledPlugins {
    */
   private boolean register(Entry entry) {
     byte[] manifest;
-    try {
-      manifest = Files.readAllBytes(Path.of(entry.manifest()));
-    } catch (IOException unreadable) {
-      log.warn(
-          "The manifest of {} at {} could not be read; it is not registered",
-          entry.id(),
-          entry.manifest());
-      return false;
+    if (entry.manifestInline() != null) {
+      // What the generator writes: the document itself, in the one file the
+      // deployment mounts. One file rather than one per plugin plus a path in
+      // each entry, and a path is a thing that can be right in the list and
+      // wrong in the mount.
+      manifest = entry.manifestInline().getBytes(StandardCharsets.UTF_8);
+    } else {
+      try {
+        manifest = Files.readAllBytes(Path.of(entry.manifest()));
+      } catch (IOException unreadable) {
+        log.warn(
+            "The manifest of {} at {} could not be read; it is not registered",
+            entry.id(),
+            entry.manifest());
+        return false;
+      }
     }
 
     PluginManifest parsed;
@@ -210,10 +218,21 @@ public class InstalledPlugins {
       if (!(element instanceof Map<?, ?> entry)) {
         throw new IllegalArgumentException("Every entry of `plugins` is a mapping");
       }
+      String path = optional(entry, "manifest");
+      String inline = optional(entry, "manifestInline");
+      if ((path == null) == (inline == null)) {
+        // Exactly one, because the two are different things and a reader that
+        // preferred one would silently ignore the other: an operator who changed
+        // the file would see nothing change.
+        throw new IllegalArgumentException(
+            "A plugin entry carries either `manifest` (a path) or `manifestInline` (the document"
+                + " itself), and exactly one of them");
+      }
       entries.add(
           new Entry(
               required(entry, "id"),
-              required(entry, "manifest"),
+              path,
+              inline,
               optional(entry, "endpoint"),
               optional(entry, "fingerprint"),
               Boolean.TRUE.equals(entry.get("signed"))));
@@ -238,12 +257,23 @@ public class InstalledPlugins {
    * One installed plugin, as the operator's list names it.
    *
    * @param id the reverse-domain id, which must match the manifest's
-   * @param manifest where the manifest file is, inside this container
+   * @param manifest where the manifest file is, inside this container, or {@code null} when the
+   *     entry carries the document itself
+   * @param manifestInline the manifest document, or {@code null} when the entry names a file. The
+   *     generated list carries it this way: one file for the deployment rather than one per plugin
+   *     plus a path in each entry, and a path is a thing that can be right in the list and wrong in
+   *     the mount
    * @param endpoint where the plugin listens, or {@code null} for an in-process one
    * @param fingerprint the certificate that may answer there, pinned like every in-deployment peer
    *     (REQ-SEC-056, ADR-0044)
    * @param signed whether the operator has verified the signature. Not verified here: {@code
    *     cosign} is the operator's tool and this is what they report having run (REQ-PLG-004)
    */
-  record Entry(String id, String manifest, String endpoint, String fingerprint, boolean signed) {}
+  record Entry(
+      String id,
+      String manifest,
+      String manifestInline,
+      String endpoint,
+      String fingerprint,
+      boolean signed) {}
 }

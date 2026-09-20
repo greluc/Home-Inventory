@@ -167,6 +167,13 @@ def profile_memory() -> dict[str, str]:
                 continue
             if service.get("lifecycle") == "oneShot":
                 continue
+            if service.get("role") == "plugin":
+                # The docstring's second convention, which had nothing to skip
+                # until 2026-09-20: `REQ-NFR-009` states a profile's base and a
+                # SEPARATE per-plugin adder ("+ 64 MB per plugin"), and folding a
+                # plugin into the base would make every restatement of the base
+                # wrong while the adder still stood beside it.
+                continue
             resources = service.get("resources") or {}
             reservation += mib(resources.get("memoryReservation"))
             limit += mib(resources.get("memoryLimit"))

@@ -1,0 +1,58 @@
+# GENERATED FROM ../services.yaml — DO NOT EDIT.
+#
+# Run `python deploy/generate.py` after changing the matrix. CI regenerates
+# this file and fails on any difference, so an edit here is lost and noticed
+# rather than lost and not (REQ-NFR-063).
+
+#
+# WHAT THE OPERATOR INSTALLED. The core reads this and nothing else: it
+# fetches nothing and it installs nothing, because installation is an
+# operator's act outside the running system (REQ-PLG-013).
+#
+# Each entry carries its manifest INLINE. The alternative -- a path per
+# entry and a file per plugin -- is a path that can be right here and
+# wrong in the mount, and nothing would say which.
+
+plugins:
+  - id: de.greluc.homeinv.plugin.webhook
+    endpoint: "plugin-webhook:8200"
+    fingerprint: "@FINGERPRINT:mtls-plugin-webhook@"
+    signed: false
+    manifestInline: |
+      apiVersion: home-inv.plugin/v1
+      metadata:
+        id: de.greluc.homeinv.plugin.webhook
+        name: Webhook
+        version: 0.1.0
+        vendor: greluc
+        license: AGPL-3.0-or-later
+        homepage: https://github.com/greluc/Home-Inventory
+        descriptions:
+          en: Delivers a notification to a URL as a signed JSON POST.
+          de: Stellt eine Benachrichtigung als signierten JSON-POST an eine URL zu.
+      spec:
+        contract: '>=1.0.0 <2.0.0'
+        runtime: out-of-process
+        implements:
+        - port: NotificationChannel
+          priority: 100
+        capabilities:
+        - id: network:outbound
+          hosts:
+          - hooks.example.org
+          reason: Delivering notifications to the receivers this deployment allows
+        - id: core:setting:read
+          reason: Reading the signing secret this tenant agreed with its receiver
+        settings:
+        - key: signingSecret
+          type: secret
+          required: true
+          label:
+            en: Signing secret
+            de: Signaturschlüssel
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+        resources:
+          memoryMiB: 32
+          timeoutSeconds: 15

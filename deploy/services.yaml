@@ -285,6 +285,11 @@ services:
       # instead of silently reaching for localhost (REQ-NFR-046).
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
+      # Where the generated plugin list is. Written by `setup.sh` as the path
+      # below in `standard` and `ha`, and EMPTY in `minimal` — which is what
+      # "minimal runs no plugin" means, and a complete deployment rather than a
+      # degraded one (REQ-PLG-013).
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "api-internal"               # the alias below, which resolves to
                                                               # this container's address on
@@ -352,6 +357,15 @@ services:
     # the matrix authenticated PostgreSQL and nothing else, so Valkey, RabbitMQ and
     # OpenSearch were reachable-and-open to anything on `internal`, and RabbitMQ could
     # not have worked at all — its `guest` account is restricted to loopback.
+    files:
+      - target: /run/secrets/plugins.yaml
+        generatedFrom: plugins
+        notes: >
+          WHAT THE OPERATOR INSTALLED, generated from the `role: plugin` services
+          in this file (REQ-PLG-013). Each entry carries its manifest inline, so
+          this is one file rather than one per plugin plus a path in each entry —
+          a path is a thing that can be right in the list and wrong in the mount.
+          The core reads it at start-up, fetches nothing and installs nothing.
     secrets:
       - db-password
       - data-encryption-master-key
@@ -398,6 +412,11 @@ services:
                                                  # cannot.
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
+      # Where the generated plugin list is. Written by `setup.sh` as the path
+      # below in `standard` and `ha`, and EMPTY in `minimal` — which is what
+      # "minimal runs no plugin" means, and a complete deployment rather than a
+      # degraded one (REQ-PLG-013).
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "worker-internal"            # as api, one segment only
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
@@ -432,6 +451,15 @@ services:
                                                              # service and every plugin, so
                                                              # trusting it alone would let any of
                                                              # them answer as the index (ADR-0044)
+    files:
+      - target: /run/secrets/plugins.yaml
+        generatedFrom: plugins
+        notes: >
+          WHAT THE OPERATOR INSTALLED, generated from the `role: plugin` services
+          in this file (REQ-PLG-013). Each entry carries its manifest inline, so
+          this is one file rather than one per plugin plus a path in each entry —
+          a path is a thing that can be right in the list and wrong in the mount.
+          The core reads it at start-up, fetches nothing and installs nothing.
     secrets:
       - db-password
       - data-encryption-master-key
@@ -889,6 +917,79 @@ services:
       weakness: the built-in `guest` account is restricted to loopback, so api and worker
       could not have connected at all. The generated stack did not start.
 
+  # ---------------------------------------------------------------------------
+  # PLUGINS
+  # ---------------------------------------------------------------------------
+  # A plugin is a container the OPERATOR declares, exactly like every other
+  # service here (REQ-PLG-013). There is no installation from inside the running
+  # system, so this block is the whole of "installing a plugin": the generator
+  # turns one entry into the container, its OWN network segment (ADR-0037), its
+  # entry in the egress allowlist (ADR-0027) and its line in the list the core
+  # reads at start-up — which is what keeps the registration and the container
+  # from disagreeing.
+  #
+  # `role: plugin` is what marks it. Everything below follows from that mark
+  # rather than from a second declaration somewhere else.
+
+  plugin-webhook:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-webhook }
+    plugin:
+      # The id the manifest carries. The core refuses a list and a manifest that
+      # disagree about who a plugin is, because a grant is recorded against the
+      # id and taking the wrong one would attach somebody's consent to the wrong
+      # plugin.
+      id: de.greluc.homeinv.plugin.webhook
+      # The manifest this deployment installs, rendered from the plugin's own
+      # with `hosts` below substituted into its `network:outbound` capability.
+      manifest: plugins/webhook/manifest.yaml
+      # WHERE THIS DEPLOYMENT ALLOWS IT TO SEND. The operator's decision and
+      # nobody else's: it is compiled into the egress proxy's allowlist, and a
+      # tenant that configures a webhook to a host outside it is refused there,
+      # visibly. The example reaches nothing real on purpose — a deployment that
+      # wants webhooks replaces it.
+      hosts: ["hooks.example.org"]
+      # Which secret's certificate the core pins. `setup.sh` computes the
+      # fingerprint when it creates the certificate and substitutes it into the
+      # generated list, because the certificate does not exist until then.
+      fingerprintFrom: mtls-plugin-webhook
+      # Whether the operator verified the signature with `cosign`. False here:
+      # nothing has been published to a registry yet, so there is nothing signed
+      # to verify, and saying otherwise would be a claim about a check nobody ran
+      # (REQ-PLG-004).
+      signed: false
+    segment:
+      # Its own network, generated from this entry. The subnet is stated rather
+      # than assigned, because it is the operator's network and because the
+      # egress proxy identifies a caller by the interface a connection arrived on
+      # — which is a subnet comparison (ADR-0037).
+      subnet: 10.89.31.0/24
+    networks: [plugin-webhook]    # generated; `api`, `worker` and `egress-proxy`
+                                  # join it through their `networksByPlugin: all`
+    ports:
+      - { container: 8200, host: null }   # gRPC over mTLS, reached by api and worker
+                                          # on this segment and by nothing else
+    env:
+      HOMEINV_PLUGIN_PORT: "8200"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-webhook"
+      # The one route out. A plugin segment is `internal: true`, so without this
+      # there is no way out at all — which is the default and the point.
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_WEBHOOK_TIMEOUT_SECONDS: "10"
+    secrets: [mtls-plugin-webhook]        # its server identity; the core pins its
+                                          # fingerprint (REQ-SEC-056)
+    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    # NO container health check, and that is not an omission: the image is
+    # `scratch`, so there is no shell to run one and no curl to call — and the
+    # core asks this plugin about itself over the contract's own `PluginHealth`
+    # service, which is a better question than "is the process up" (09 §9.5).
+    profiles: [standard, ha]
+    notes: >
+      The first first-party plugin (ADR-0072). `minimal` runs no plugin at all,
+      which is a complete deployment rather than a degraded one: without one,
+      nothing leaves the deployment and the core says so plainly rather than
+      failing silently (REQ-PLG-013, ADR-0028).
+
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
@@ -990,6 +1091,21 @@ secrets:
       Server identity for the in-deployment BlobStore, pinned by fingerprint in
       HOMEINV_BLOBSTORE_FINGERPRINT. ADR-0043 gave this service every tenant's media and
       no authentication; ADR-0044 gives it the one the plugin adapters already had.
+  mtls-plugin-webhook:
+    required: false
+    kind: mtls-server
+    # No `profiles:`. It would change nothing if it were here -- `setup.sh`
+    # creates every secret the catalogue names, in every profile, exactly as it
+    # does for `mtls-search` -- and saying it would imply a filter that does not
+    # exist. The certificate being there in `minimal` is what lets the smoke
+    # suite start this container on the minimal stack to prove its segment
+    # refuses what it must (deploy/smoke/connectivity.sh).
+    services: [plugin-webhook]
+    notes: >
+      Server identity for `plugin-webhook`. The core pins its fingerprint, which
+      `setup.sh` computes when it creates this certificate and substitutes into
+      the generated plugin list — exactly the mechanism a third party's plugin
+      uses, because a first-party one gets no privileged path (ADR-0072).
   mtls-search:
     required: true
     kind: mtls-server

@@ -194,6 +194,18 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **A deployment can install a plugin, and the first one is here.** Until now
+  the system could call plugins and there was no way to put one in a
+  deployment: one entry in the deployment description now produces the
+  container, a network of its own that reaches the application and the
+  outbound proxy and nothing else, the list of hosts it is allowed to
+  contact, and the registration the application reads when it starts.
+  **`plugin-webhook`** is the first: it posts a notification to a URL you
+  choose, signed so the receiver can tell it came from your installation and
+  is not a replay of an older one. Mail still needs a plugin that does not
+  exist yet, and an installation without one says so rather than silently
+  sending nothing.
+
 - **A plugin can be configured, and it could not be before.** Whatever a plugin
   offers to be told — which source it prefers, the key it signs with, your own
   token for a service you have an account with — is now settable per tenant,

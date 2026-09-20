@@ -18,6 +18,8 @@
 #   REQ-NFR-014   the WAL archive actually receives segments
 #   REQ-NFR-067   every container that declares a health check reports healthy
 #   ADR-0036      the scanner's signature updater actually initialised
+#   ADR-0037      a plugin's segment reaches the core and the proxy, and nothing else
+#   REQ-PLG-013   the generated topology is the one that runs
 #
 # A segment flag is a claim; a refused connection is evidence. That distinction is
 # ADR-0044's, and it is the reason this file exists rather than another grep over
@@ -161,6 +163,108 @@ if inside homeinv-api curl --silent --insecure --max-time "$CONNECT_TIMEOUT" \
     fail "the blob store answered a caller with no client certificate"
 else
     pass "the blob store refuses a caller with no client certificate"
+fi
+
+section "ADR-0037 and REQ-PLG-013: what a plugin's segment reaches"
+# The plugin runs in `standard` and `ha`; this stack is `minimal`, so it is
+# started here BY NAME. What is proved is the shape of the generated network —
+# which segment reaches what — and that shape is the same in every profile,
+# because it comes from one entry in services.yaml.
+#
+# The protocol on top of it is proved elsewhere, deliberately: `HostChannelIT`
+# drives the host channel over real TLS with real certificates, which a suite
+# that opens TCP sockets with `nc` could never do.
+plugin=homeinv-plugin-webhook
+started_here=0
+
+# Every check FROM the plugin runs in a throwaway container sharing its network
+# namespace, exactly as the datastore checks share `api`'s. It is not a
+# convenience: the plugin's image is `scratch` — no shell, no `nc`, nothing to
+# exec at all — and that is a property worth keeping rather than working around.
+from_plugin() {
+    "$RUNTIME" run --rm --network "container:$plugin" \
+        docker.io/library/postgres:18-alpine \
+        nc -w "$CONNECT_TIMEOUT" "$1" "$2" </dev/null >/dev/null 2>&1
+}
+
+refused_from_plugin() {
+    if from_plugin "$1" "$2"; then
+        fail "$3 — the connection SUCCEEDED and must not"
+    else
+        pass "$3"
+    fi
+}
+
+reaches_from_plugin() {
+    if from_plugin "$1" "$2"; then
+        pass "$3"
+    else
+        fail "$3 — the connection was refused and must not be"
+    fi
+}
+
+if ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
+    case "$RUNTIME" in
+        docker)
+            ( cd "$(dirname "$0")/../compose" \
+              && docker compose --profile minimal up -d plugin-webhook >/dev/null 2>&1 ) \
+                && started_here=1
+            ;;
+        podman)
+            systemctl --user start homeinv-plugin-webhook >/dev/null 2>&1 && started_here=1
+            ;;
+    esac
+    # The moment a container needs to be listed. There is no health check to wait
+    # for: the image is `scratch`, and the core asks this plugin about itself over
+    # the contract's own health service instead (09 §9.5).
+    waited=0
+    while [ "$waited" -lt 15 ] && ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; do
+        waited=$((waited + 1))
+        sleep 1
+    done
+fi
+
+if "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
+    # THE CORE REACHES IT. Without this the refusals below would all pass on a
+    # plugin that is simply unreachable, which is how a segment test fools itself.
+    # `curl` rather than `nc`, because the api image has one and not the other;
+    # exit 7 is "could not connect" and anything else means the socket opened —
+    # this endpoint speaks gRPC over TLS, so a TLS error IS a successful connection.
+    "$RUNTIME" exec homeinv-api curl --silent --max-time "$CONNECT_TIMEOUT" \
+        "http://plugin-webhook:8200" >/dev/null 2>&1
+    if [ "$?" -eq 7 ]; then
+        fail "api cannot reach the plugin on its segment — it would be installed and uncallable"
+    else
+        pass "api reaches the plugin on its own segment"
+    fi
+
+    # AND THE PLUGIN REACHES ALMOST NOTHING. The management port first: it is the
+    # one REQ-SEC-099 names, and it was reachable from every plugin until
+    # ADR-0037 gave each one a segment of its own.
+    refused_from_plugin api 8090 "the plugin cannot reach api's management port"
+    refused_from_plugin worker 8090 "the plugin cannot reach worker's management port"
+    refused_from_plugin postgres 5432 "the plugin cannot reach postgres"
+    refused_from_plugin valkey 6379 "the plugin cannot reach valkey"
+    refused_from_plugin rabbitmq 5672 "the plugin cannot reach rabbitmq"
+    refused_from_plugin blobstore 8100 "the plugin cannot reach the blob store"
+    refused_from_plugin clamav 3310 "the plugin cannot reach the scanner"
+    refused_from_plugin web 8080 "the plugin cannot reach the ingress"
+
+    # THE ONE ROUTE OUT is the proxy, which sits on this segment for that purpose
+    # and applies this plugin's own allowlist to what it asks for (ADR-0027).
+    reaches_from_plugin egress-proxy 8118 "the plugin reaches the egress proxy, which is its one route out"
+
+    if [ "$started_here" -eq 1 ]; then
+        case "$RUNTIME" in
+            docker)
+                ( cd "$(dirname "$0")/../compose" \
+                  && docker compose stop plugin-webhook >/dev/null 2>&1 )
+                ;;
+            podman) systemctl --user stop homeinv-plugin-webhook >/dev/null 2>&1 ;;
+        esac
+    fi
+else
+    fail "the plugin container could not be started, so its segment proved nothing"
 fi
 
 section "REQ-SEC-102: exactly two containers sit on a non-internal segment"

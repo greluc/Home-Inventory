@@ -436,6 +436,7 @@ logging:
 | | `minimal` | `standard` |
 |---|---|---|
 | Services | web, api, worker, **blobstore**, postgres, valkey, **rabbitmq**, clamav, egress-proxy | + opensearch, first-party plugins |
+| Where a plugin counts | — | in the **adder**, not the base: `plugin-webhook` reserves 32 MB and is the first one the matrix declares ([ADR-0072](../adr/0072-first-party-plugins-live-here.md)) |
 | Sum of **reservations** | ≈ **3.7 GB** | ≈ **5.2 GB** (+ 64 MB per plugin) |
 | Sum of **limits** | ≈ **7.7 GB** | ≈ **9.7 GB** (+ 256 MB per plugin) |
 | VM | ≥ 8 GB | ≥ 8 GB |

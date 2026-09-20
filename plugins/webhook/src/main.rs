@@ -26,6 +26,9 @@
 //! as at the proxy, because the URL came from a person typing into a form. It
 //! follows **no redirects**: a redirect is a target the allowlist never approved.
 //!
+//! The signature covers the **timestamp and the body** (`REQ-API-010`), so a
+//! captured request is worth a tolerance window rather than for ever.
+//!
 //! Without a signing secret it delivers nothing. An unsigned webhook is one
 //! anybody who learns the URL can forge, and "it worked without a secret" is how
 //! a deployment ends up with one.
@@ -250,11 +253,24 @@ impl NotificationChannel for Webhook {
             &attachments,
         );
 
+        // Seconds since the epoch, signed WITH the body (REQ-API-010): a captured
+        // request is otherwise a valid request for ever, and a timestamp sent
+        // beside the signature rather than inside it is one an attacker simply
+        // changes.
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|since| since.as_secs())
+            .unwrap_or(0);
+
         let mut headers = vec![
             (
                 "X-HomeInv-Signature".to_string(),
-                format!("sha256={}", signature::sign(secret.as_bytes(), &body)),
+                format!(
+                    "sha256={}",
+                    signature::sign(secret.as_bytes(), timestamp, &body)
+                ),
             ),
+            ("X-HomeInv-Timestamp".to_string(), timestamp.to_string()),
             (
                 "X-HomeInv-Idempotency-Key".to_string(),
                 message.idempotency_key.clone(),
@@ -312,8 +328,11 @@ impl NotificationChannel for Webhook {
 /// framing headers — and anything carrying a control character, which is how a
 /// header map becomes two headers.
 fn extra_headers(supplied: &std::collections::HashMap<String, String>) -> Vec<(String, String)> {
-    const RESERVED: [&str; 6] = [
+    const RESERVED: [&str; 7] = [
         "x-homeinv-signature",
+        // Reserved as hard as the signature is: a caller that could set the
+        // timestamp could make a replay look fresh to a receiver that trusts it.
+        "x-homeinv-timestamp",
         "x-homeinv-idempotency-key",
         "host",
         "content-length",
@@ -433,6 +452,9 @@ mod tests {
             "X-HomeInv-Signature".to_string(),
             "sha256=forged".to_string(),
         );
+        // As hard as the signature: a caller that could set the timestamp could
+        // make a replay look fresh to a receiver that trusts it.
+        supplied.insert("X-HomeInv-Timestamp".to_string(), "0".to_string());
         supplied.insert("Host".to_string(), "somewhere.else".to_string());
         supplied.insert("X-Team".to_string(), "kitchen".to_string());
         let headers = extra_headers(&supplied);

@@ -237,7 +237,7 @@ jobs:
       # Every one of them from the repository root. The Dockerfiles copy paths
       # like `web/package.json` and `deploy/postgres/initdb/`, so a narrower
       # context fails on a file it cannot see.
-      - name: Build the five images the deployment names
+      - name: Build the six images the deployment names
         run: |
           set -euo pipefail
           # The commit, because the image has no git of its own and an instance
@@ -251,6 +251,13 @@ jobs:
             -t ghcr.io/greluc/home-inv-blobstore:latest .
           ${{ matrix.runtime }} build -f egress-proxy/Dockerfile \
             -t ghcr.io/greluc/home-inv-egress-proxy:latest .
+          # The plugin. It runs in `standard` and `ha`, not in the profile this
+          # suite starts, and it is built anyway: the connectivity script starts
+          # it by name on the minimal stack to prove what its segment refuses
+          # (ADR-0037), and an image that is not there would make that check pass
+          # by never running.
+          ${{ matrix.runtime }} build -f plugins/webhook/Dockerfile \
+            -t ghcr.io/greluc/home-inv-plugin-webhook:latest .
 
       # REQ-NFR-028 and REQ-NFR-051: one command, from a fresh checkout to a
       # running stack, on both runtimes. Running the real script rather than a
