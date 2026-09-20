@@ -202,7 +202,7 @@ public class TypeRegistryQueries implements TypeRegistry {
             """
             select id, key, data_type, labels, help_texts, required, default_value,
                    constraints, value_list_id, visibility, field_group, display_order,
-                   searchable, sortable, facetable, sensitive, deprecated_at
+                   searchable, sortable, facetable, sensitive, expiry, deprecated_at
             from catalog.field_definition
             where tenant_id = ?
               and (item_type_version_id = ? or location_category_version_id = ?)
@@ -266,6 +266,40 @@ public class TypeRegistryQueries implements TypeRegistry {
         .list()
         .forEach(entry -> identities.put(entry.getKey(), entry.getValue()));
     return identities;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<TypeRegistry.ExpiryField> expiryFields() {
+    UUID tenantId = TenantContext.require();
+    // The same shape `queryableFields` has: grouped by key across every PUBLISHED
+    // version, because the overview is a question about the tenant rather than
+    // about one type, and two types both calling their date `expiresOn` is one
+    // key here. A draft's fields are not included -- nothing is indexed under an
+    // unpublished version, so there would be no values to find.
+    //
+    // A deprecated field keeps its values (REQ-CORE-026) and stops being offered,
+    // so it stops being collected too: an overview that kept listing a date
+    // nobody can set any more is a list of things nobody can act on.
+    return jdbc
+        .sql(
+            """
+            select f.key as key, min(f.labels::text) as labels
+            from catalog.field_definition f
+            join catalog.item_type_version v
+              on v.tenant_id = f.tenant_id and v.id = f.item_type_version_id
+            where f.tenant_id = ?
+              and v.published_at is not null
+              and f.deprecated_at is null
+              and f.expiry
+            group by f.key
+            order by f.key
+            """)
+        .param(tenantId)
+        .query(
+            (rs, rowNum) ->
+                new TypeRegistry.ExpiryField(rs.getString("key"), strings(rs.getString("labels"))))
+        .list();
   }
 
   @Override
@@ -376,7 +410,8 @@ public class TypeRegistryQueries implements TypeRegistry {
         rs.getBoolean("sortable"),
         rs.getBoolean("facetable"),
         rs.getBoolean("sensitive"),
-        rs.getTimestamp("deprecated_at") != null);
+        rs.getTimestamp("deprecated_at") != null,
+        rs.getBoolean("expiry"));
   }
 
   /**

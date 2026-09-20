@@ -57,6 +57,13 @@ class CatalogSchemaTest {
     return new SchemaAttributeValidator(
         new TypeRegistry() {
           @Override
+          public java.util.List<TypeRegistry.ExpiryField> expiryFields() {
+            // Nothing here is about expiries; the stub answers "none" so the
+            // schema assertions stay about what they are about.
+            return java.util.List.of();
+          }
+
+          @Override
           public UUID publishedItemTypeVersion(UUID itemTypeId) {
             return VERSION;
           }
@@ -154,7 +161,7 @@ class CatalogSchemaTest {
         false,
         false,
         false,
-        false);
+        false, false);
   }
 
   /**
@@ -322,7 +329,7 @@ class CatalogSchemaTest {
       FieldDefinitionView retired =
           new FieldDefinitionView(
               UUID.randomUUID(), "old", FieldDataType.TEXT, Map.of(), Map.of(), true, null,
-              FieldConstraints.NONE, null, null, null, 0, false, false, false, false, true);
+              FieldConstraints.NONE, null, null, null, 0, false, false, false, false, true, false);
       assertThat(retired.effectivelyRequired()).isFalse();
       // And its values still validate, which is the half REQ-CORE-026 is about.
       assertThat(check(retired, "{\"old\":\"kept\"}", List.of())).isEmpty();
@@ -334,7 +341,7 @@ class CatalogSchemaTest {
       FieldDefinitionView licence =
           new FieldDefinitionView(
               UUID.randomUUID(), "licenceKey", FieldDataType.SECRET, Map.of(), Map.of(), false, null,
-              FieldConstraints.NONE, null, null, null, 0, true, true, true, true, false);
+              FieldConstraints.NONE, null, null, null, 0, true, true, true, true, false, false);
       assertThat(licence.projected()).isFalse();
       assertThat(FieldDataType.SECRET.projectable()).isFalse();
     }

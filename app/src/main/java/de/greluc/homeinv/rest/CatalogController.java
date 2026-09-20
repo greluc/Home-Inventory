@@ -621,6 +621,8 @@ public class CatalogController {
    * @param sortable whether it is mirrored for ordering
    * @param facetable whether it is mirrored for counting
    * @param sensitive whether reading it needs a permission of its own
+   * @param expiry whether this date is an expiry, and so belongs in the overview of REQ-LIFE-013.
+   *     Only a {@code date} or {@code datetime} may carry it; anything else is a {@code 422}
    */
   public record FieldRequest(
       @Size(max = 64) String key,
@@ -637,7 +639,8 @@ public class CatalogController {
       boolean searchable,
       boolean sortable,
       boolean facetable,
-      boolean sensitive) {
+      boolean sensitive,
+      boolean expiry) {
 
     /**
      * The command behind this request.
@@ -660,7 +663,8 @@ public class CatalogController {
           searchable,
           sortable,
           facetable,
-          sensitive);
+          sensitive,
+          expiry);
     }
   }
 

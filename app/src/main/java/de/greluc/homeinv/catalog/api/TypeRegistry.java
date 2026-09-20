@@ -133,6 +133,31 @@ public interface TypeRegistry {
   List<QueryableField> queryableFields();
 
   /**
+   * The attribute keys a tenant has marked as expiries (REQ-LIFE-013, REQ-CORE-023).
+   *
+   * <p>Across every <b>published</b> version of every type, because the overview is a question
+   * about the tenant and not about one type. A key declared as an expiry by any of them counts:
+   * two types both calling their date {@code expiresOn} is one key here, which is what makes the
+   * overview group sensibly.
+   *
+   * <p>Read here rather than by the caller joining {@code catalog}, because no block reads
+   * another's schema (REQ-NFR-021) — and the caller is {@code inventory}, which holds the values
+   * but not the definitions.
+   *
+   * @return the expiry fields, ordered by key; empty when no type marks one
+   */
+  List<ExpiryField> expiryFields();
+
+  /**
+   * An attribute key that holds an expiry date.
+   *
+   * @param key the attribute key, as {@code item_attr_index.field_key} holds it
+   * @param labels what to call it, per language tag. Empty when the field declares none, and the
+   *     caller then shows the key — a key is a poor label and better than nothing
+   */
+  record ExpiryField(String key, java.util.Map<String, String> labels) {}
+
+  /**
    * The item-type <b>version</b> ids belonging to the types a tenant knows by these keys.
    *
    * <p>What {@code filter=type:power-tool} resolves to. A key is what a person writes, and what an

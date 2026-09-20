@@ -238,7 +238,15 @@ CREATE TABLE catalog.field_definition (
     searchable                   boolean NOT NULL DEFAULT false,
     sortable                     boolean NOT NULL DEFAULT false,
     facetable                    boolean NOT NULL DEFAULT false,
-    sensitive                    boolean NOT NULL DEFAULT false,   -- encrypted + permission-gated
+    sensitive                    boolean NOT NULL DEFAULT false,
+    -- Whether this date is an EXPIRY, and so belongs in the one overview of
+    -- REQ-LIFE-013. A fifth flag rather than a list of known keys, because
+    -- 7.13's argument applies here too: a report across every type cannot read a
+    -- field that exists only where a type happened to declare it, under whatever
+    -- name it chose. Only a `date` or `datetime` may carry it, and a sensitive
+    -- field may not -- a sealed value is never mirrored, so the marking would do
+    -- nothing (V61, decided 2026-09-20).
+    expiry                       boolean NOT NULL DEFAULT false,   -- encrypted + permission-gated
     deprecated_at                timestamptz,
     created_at                   timestamptz NOT NULL DEFAULT now(),
     updated_at                   timestamptz NOT NULL DEFAULT now(),

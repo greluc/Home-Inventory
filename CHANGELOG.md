@@ -182,6 +182,11 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **One list of everything that runs out.** Warranties, software licences and
+  best-before dates together, soonest first, including what has already lapsed.
+  A field in your own item types can join the list by being marked as an expiry,
+  so a date you invented shows up beside the ones that ship with the product.
+
 - **What is it all worth?** A report totals what you own by room, by kind of
   thing or by tag. Each room shows what is in it and what is in it *including*
   the boxes inside it, separately, because those are different questions. Purchase

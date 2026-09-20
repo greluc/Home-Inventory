@@ -6,10 +6,12 @@ package de.greluc.homeinv.rest;
 
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
+import de.greluc.homeinv.inventory.api.ExpiryOverview;
 import de.greluc.homeinv.inventory.api.ValuationReport;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReportController {
 
   private final ValuationReport reports;
+  private final ExpiryOverview expiries;
 
   /**
    * What the things in here are worth (REQ-LIFE-008).
@@ -66,6 +69,37 @@ public class ReportController {
       case TYPE -> reports.byType(limit);
       case TAG -> reports.byTag(limit);
     };
+  }
+
+  /**
+   * Everything that runs out, soonest first (REQ-LIFE-013).
+   *
+   * <p>Warranty ends, licence expiries and best-before dates in one list. The first is a column on
+   * the item; the other two are type attributes whose field is marked {@code expiry}, which is what
+   * lets a tenant's own date join the list without this endpoint knowing its name.
+   *
+   * <p>Dates that have already gone are included <b>by default</b>: a warranty that ran out last
+   * month is the one somebody most wants to know about, and an overview that quietly dropped it
+   * would forget its own point.
+   *
+   * @param upTo the last date to include, or omitted for everything. A caller wanting the next
+   *     fortnight passes today plus fourteen
+   * @param includePast whether to include what has already run out; {@code true} unless said
+   *     otherwise
+   * @param limit how many at most; capped at 200
+   * @return the entries, soonest first
+   */
+  @GetMapping(path = "/expiries", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.MALFORMED_REQUEST, ProblemType.VALIDATION_FAILED})
+  public List<ExpiryOverview.Expiring> expiries(
+      @RequestParam(required = false)
+          @org.springframework.format.annotation.DateTimeFormat(iso =
+              org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+          java.time.LocalDate upTo,
+      @RequestParam(required = false, defaultValue = "true") boolean includePast,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return expiries.due(upTo, includePast, limit);
   }
 
   /**
