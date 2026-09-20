@@ -32,6 +32,7 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
   private final TenantAccessInterceptor tenantAccessInterceptor;
   private final SecondFactorLockInterceptor secondFactorLockInterceptor;
   private final SecondFactorFreshnessInterceptor secondFactorFreshnessInterceptor;
+  private final ApiUsageInterceptor apiUsageInterceptor;
 
   /**
    * Puts the permission check in front of every handler.
@@ -50,6 +51,11 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
     // records nothing for a request the interceptors below refuse, because a
     // refused request changed nothing (REQ-SEC-068).
     registry.addInterceptor(auditTrailInterceptor);
+    // Second, so its `afterCompletion` runs second-to-last and sees the status
+    // every interceptor below it settled on -- including a refusal. A shutdown
+    // decision needs to know that a deprecated endpoint is still being CALLED,
+    // and a caller who is refused is still a caller (REQ-API-009).
+    registry.addInterceptor(apiUsageInterceptor);
     registry.addInterceptor(permissionInterceptor);
     // Before the quota, and after the permission check. A request to a tenant
     // that is suspended or waiting to be erased answers 403 and should not come

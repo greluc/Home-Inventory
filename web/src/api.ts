@@ -196,9 +196,24 @@ function cookie(name: string): string | undefined {
  * @returns the parsed body
  * @throws ApiError when the server answers with a problem document
  */
+/**
+ * What this client calls itself to the server (REQ-API-009).
+ *
+ * A header and not `User-Agent`: a browser sets that one itself and a page cannot override it on
+ * `fetch`, which is why ADR-0011's "every client sends a User-Agent with product and version" could
+ * not be honoured here. The shape is the one that ADR asked for -- product, then version -- and the
+ * server tags its usage metric with the product alone, so releases do not each become their own
+ * time series.
+ */
+const CLIENT = `web/${__APP_VERSION__}`;
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const method = (init.method ?? "GET").toUpperCase();
+
+  // On every request, including the reads: an API version is retired when nobody
+  // is calling it, and "nobody" has to include the people only reading.
+  headers.set("X-Home-Inv-Client", CLIENT);
 
   if (method !== "GET" && method !== "HEAD") {
     const token = cookie("XSRF-TOKEN");

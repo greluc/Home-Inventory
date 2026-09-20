@@ -474,4 +474,25 @@
     <Class name="de.greluc.homeinv.identity.application.DefaultPasswordPolicy"/>
   </Match>
 
+  <!--
+    SERVLET_HEADER on the API usage interceptor. The rule is right that a header
+    is untrusted input; the whole design of that tag is the answer to it.
+
+    `X-Home-Inv-Client` is read, matched against a regular expression bounded at
+    32 characters, lower-cased and then checked for membership in a CLOSED SET of
+    six product names. Anything that fails any of those three is `other`. The
+    value never reaches a query, a log line, a response or a file path - it
+    becomes one of seven constants and nothing else, which is exactly the
+    validation the rule asks for and more than it can see.
+
+    The reason it is validated so hard is not injection but CARDINALITY: a
+    Prometheus series exists per combination of tag values, so a tag a caller can
+    choose freely is an outage waiting for the right request (REQ-API-009,
+    `ApiUsageMetricIT`).
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.ApiUsageInterceptor"/>
+  </Match>
+
 </FindBugsFilter>

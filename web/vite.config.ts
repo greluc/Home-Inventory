@@ -5,6 +5,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+import { version } from "./package.json";
+
 /**
  * The build.
  *
@@ -20,6 +22,13 @@ import react from "@vitejs/plugin-react";
  */
 export default defineConfig({
   plugins: [react()],
+  // The client names itself to the server in `X-Home-Inv-Client` (REQ-API-009),
+  // and the version has to come from somewhere the build controls: a browser
+  // will not let a page set `User-Agent`, which is why ADR-0011's original
+  // arrangement could not be honoured here.
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   build: {
     cssCodeSplit: false,
     // Named, hashed files so a deployment can cache them for a year and a new

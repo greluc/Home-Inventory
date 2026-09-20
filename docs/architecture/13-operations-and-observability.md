@@ -50,7 +50,7 @@ Prometheus, Grafana and ready-made dashboards ships with the product.
 
 | Group | Metrics |
 |---|---|
-| **HTTP** | Requests per second, duration (p50/p95/p99) by route and status, error rate |
+| **HTTP** | Requests per second, duration (p50/p95/p99) by route and status, error rate. Plus `homeinv.api.requests` — usage by endpoint template, API version, client product and outcome, which is what a version shutdown is decided on (`REQ-API-009`, 08 §8). Every tag is bounded by construction: the route *template* and not the path, the product and not its version, three outcomes and not every status code |
 | **Domain** | Items per tenant, locations, media and bytes per tenant, scans per hour, print jobs by state |
 | **Database** | Connection pool utilisation, query duration, slow queries, lock wait time, table and index size, bloat, **WAL archive fill level and archiving failures** ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | **Outbox** | Unpublished entries, age of the oldest, relay throughput — **the most important metric in the system**, because a backlog here lets every derived store go stale |
