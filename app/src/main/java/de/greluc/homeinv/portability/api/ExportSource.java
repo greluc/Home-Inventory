@@ -98,5 +98,23 @@ public interface ExportSource {
      * @param bytes the content
      */
     void writeFile(String path, java.io.InputStream bytes);
+
+    /**
+     * Records that something was left out, and why.
+     *
+     * <p>For the case where an archive is deliberately incomplete. A field marked {@code sensitive}
+     * is stored sealed (ADR-0019), and an export opens only the ones the person who asked for it
+     * may read — opening more would be a way around {@code authz.field_visibility} with a download
+     * attached to it. The rest are withheld, and an archive that was silent about that would be an
+     * archive whose reader believes the field was empty.
+     *
+     * <p>Once per <b>field</b>, not once per row: visibility is decided per field key, so the
+     * answer is the same for every item, and one line per item would be a list nobody reads made
+     * out of one fact.
+     *
+     * @param what the field key, or another name for the thing left out
+     * @param why one sentence a person reading the manifest can act on
+     */
+    void withheld(String what, String why);
   }
 }

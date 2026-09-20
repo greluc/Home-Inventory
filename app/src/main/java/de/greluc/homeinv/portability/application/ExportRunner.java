@@ -4,8 +4,9 @@
  */
 package de.greluc.homeinv.portability.application;
 
-import de.greluc.homeinv.portability.api.ArchiveStore;
+import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.TenantContext;
+import de.greluc.homeinv.portability.api.ArchiveStore;
 import de.greluc.homeinv.portability.api.ExportSource;
 import de.greluc.homeinv.portability.infrastructure.ExportJobQueries;
 import java.io.IOException;
@@ -120,16 +121,14 @@ public class ExportRunner {
         writer.manifest("exportedAt", Instant.now(clock).toString());
         writer.manifest("producedBy", java.util.Map.of("version", version, "commit", commit));
 
-        int done = 0;
-        for (ExportSource source : sources) {
-          writer.beginBlock(source.block());
-          source.exportTo(writer);
-          done++;
-          // Coarse and honest: a percentage of the blocks finished. It is read by
-          // somebody deciding whether to keep waiting, and "5 of 9 blocks" is
-          // what they actually want to know.
-          jobs.progress(tenantId, jobId, done * 95 / Math.max(1, sources.size()));
-        }
+        // Built as the person who asked for it. Not to authorise the export --
+        // that was decided when they asked -- but because opening a sealed field
+        // depends on which role they hold and on how recently they proved a
+        // second factor (REQ-AUTH-011), and the worker has no caller of its own.
+        // Reconstructed from what was recorded then, so a role granted since does
+        // not widen an archive somebody asked for before they had it.
+        CallerContext.runAs(
+            callerOf(tenantId, jobId), () -> writeEveryBlock(tenantId, jobId, writer));
         archive = writer.finish();
       }
 
@@ -147,6 +146,50 @@ public class ExportRunner {
     } finally {
       deleteQuietly(temporary);
     }
+  }
+
+  /**
+   * Asks every block for its share, in a fixed order, reporting progress as it goes.
+   *
+   * @param tenantId whose export
+   * @param jobId which job, so progress lands on the right row
+   * @param writer the archive being built
+   */
+  private void writeEveryBlock(UUID tenantId, UUID jobId, ArchiveWriter writer) {
+    int done = 0;
+    for (ExportSource source : sources) {
+      writer.beginBlock(source.block());
+      source.exportTo(writer);
+      done++;
+      // Coarse and honest: a percentage of the blocks finished. It is read by
+      // somebody deciding whether to keep waiting, and "5 of 9 blocks" is
+      // what they actually want to know.
+      jobs.progress(tenantId, jobId, done * 95 / Math.max(1, sources.size()));
+    }
+  }
+
+  /**
+   * The caller the archive is built as.
+   *
+   * <p>Never null: a job requested with no caller — a schedule, a test — still has to run, and it
+   * runs as somebody who holds no role and has proved no second factor. Everything sensitive is
+   * then withheld and the manifest says so, which is the direction this must fail in.
+   *
+   * @param tenantId whose export
+   * @param jobId which job
+   * @return who to build it as
+   */
+  private CallerContext.Caller callerOf(UUID tenantId, UUID jobId) {
+    ExportJobQueries.Requester requester =
+        jobs.requesterOf(tenantId, jobId)
+            .orElse(new ExportJobQueries.Requester(null, null, null, null));
+    return new CallerContext.Caller(
+        requester.userId(),
+        tenantId,
+        requester.role(),
+        requester.roleDefinitionId(),
+        null,
+        requester.secondFactorAt());
   }
 
   /**

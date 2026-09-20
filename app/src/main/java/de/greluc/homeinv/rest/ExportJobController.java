@@ -34,9 +34,12 @@ import org.springframework.web.bind.annotation.RestController;
  * and their photographs is minutes of work, and this is the feature somebody uses when they are
  * leaving — the worst moment for it to time out.
  *
- * <p>Guarded by {@code TENANT_READ}, an administrator's. An export is every row the tenant has in
- * one file, so the question is not "may you read an item" but "may you take the lot", and those are
- * different questions even when the same person can answer yes to both.
+ * <p>Guarded by {@code TENANT_EXPORT}: an export is every row the tenant has in one file, so the
+ * question is not "may you read an item" but "may you take the lot", and those are different
+ * questions even when the same person answers yes to both. It is {@code ADMIN}'s and {@code
+ * OWNER}'s, and a membership confined to part of the location tree does not hold it whatever its
+ * role — there is no archive of a shelf. These endpoints asked for {@code TENANT_READ} until
+ * 2026-09-20, which let a scoped {@code VIEWER} download the whole inventory (ADR-0068, O27).
  */
 @RestController
 @RequestMapping("/api/v1/export-jobs")
@@ -52,7 +55,7 @@ public class ExportJobController {
    * @return {@code 202} with the queued job and a {@code Location} pointing at it
    */
   @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-  @RequiresPermission(Permission.TENANT_READ)
+  @RequiresPermission(Permission.TENANT_EXPORT)
   @CanFail(ProblemType.VALIDATION_FAILED)
   public ResponseEntity<ExportService.ExportJobView> requestExport(
       @AuthenticationPrincipal AuthenticatedUser user) {
@@ -69,7 +72,7 @@ public class ExportJobController {
    * @return the jobs
    */
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-  @RequiresPermission(Permission.TENANT_READ)
+  @RequiresPermission(Permission.TENANT_EXPORT)
   @CanFail(ProblemType.MALFORMED_REQUEST)
   public List<ExportService.ExportJobView> listJobs(
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
@@ -83,7 +86,7 @@ public class ExportJobController {
    * @return the job
    */
   @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-  @RequiresPermission(Permission.TENANT_READ)
+  @RequiresPermission(Permission.TENANT_EXPORT)
   @CanFail(ProblemType.NOT_FOUND)
   public ExportService.ExportJobView job(@PathVariable UUID id) {
     return exports.job(id);
@@ -100,7 +103,7 @@ public class ExportJobController {
    * @throws IOException when the store cannot be read
    */
   @GetMapping(path = "/{id}/content", produces = "application/zip")
-  @RequiresPermission(Permission.TENANT_READ)
+  @RequiresPermission(Permission.TENANT_EXPORT)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.EXPORT_NOT_READY})
   public ResponseEntity<InputStreamResource> content(@PathVariable UUID id) throws IOException {
     ExportService.ExportJobView job = exports.job(id);

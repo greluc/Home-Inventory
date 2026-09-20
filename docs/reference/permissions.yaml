@@ -236,6 +236,21 @@ permissions:
       rather than only different in what they may grant: erasing a tenant is the
       act nobody can undo once the grace period is over.
 
+  - id: portability:export:request
+    since: 1
+    description: >
+      Ask for an export of the tenant, and download the archive (REQ-PORT-003,
+      REQ-PORT-005). Its own permission rather than tenancy:tenant:read, because
+      taking a copy of everything is not the same act as reading things one at a
+      time.
+    notable: >
+      WHOLE-TENANT. A membership confined to part of the location tree
+      (REQ-TEN-007) does not hold it, whatever its role: there is no archive of a
+      shelf, so the only thing such a caller could be handed is an archive of
+      everything. Until 2026-09-20 these endpoints asked for tenancy:tenant:read,
+      which meant a scoped VIEWER could download the whole inventory (ADR-0068,
+      open point O27).
+
 # ---------------------------------------------------------------------------
 # BUILT-IN ROLES
 #
@@ -381,6 +396,7 @@ roles:
       - tenancy:member:update
       - tenancy:member:remove
       - identity:service-account:administer
+      - portability:export:request
 
   - name: OWNER
     rationale: >

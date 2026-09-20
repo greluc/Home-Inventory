@@ -7,6 +7,7 @@ package de.greluc.homeinv.portability.infrastructure;
 import de.greluc.homeinv.portability.api.ExportService.ExportJobView;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,26 +57,82 @@ public class ExportJobQueries {
   }
 
   /**
-   * Records a request.
+   * Records a request, together with the authority it was made under.
+   *
+   * <p>The role and the second-factor moment are copied onto the job because the caller is gone by
+   * the time the worker builds the archive, and what may be opened out of a sealed field depends on
+   * them (REQ-AUTH-011). A membership changed afterwards does not change the archive: it is of the
+   * moment it was asked for.
    *
    * @param tenantId whose
    * @param actor who asked
+   * @param role their built-in role, or null when there is no caller
+   * @param roleDefinitionId the tenant-owned role extending it, or null
+   * @param secondFactorAt when they last proved a second factor, or null
    * @return the new job's id
    */
   @Transactional
-  public UUID queue(UUID tenantId, UUID actor) {
+  public UUID queue(
+      UUID tenantId, UUID actor, String role, UUID roleDefinitionId, Instant secondFactorAt) {
     return jdbc
         .sql(
             """
-            insert into portability.export_job (tenant_id, requested_by)
-            values (?, ?)
+            insert into portability.export_job
+                (tenant_id, requested_by, caller_role, caller_role_definition_id,
+                 caller_second_factor_at)
+            values (?, ?, ?, ?, ?)
             returning id
             """)
         .param(tenantId)
         .param(actor)
+        .param(role)
+        .param(roleDefinitionId)
+        .param(secondFactorAt == null ? null : java.sql.Timestamp.from(secondFactorAt))
         .query(UUID.class)
         .single();
   }
+
+  /**
+   * The authority one job was requested under.
+   *
+   * @param tenantId whose
+   * @param jobId which job
+   * @return who asked and what they could read, or empty when the job is not this tenant's
+   */
+  @Transactional(readOnly = true)
+  public Optional<Requester> requesterOf(UUID tenantId, UUID jobId) {
+    return jdbc
+        .sql(
+            """
+            select requested_by, caller_role, caller_role_definition_id, caller_second_factor_at
+            from portability.export_job
+            where tenant_id = ? and id = ?
+            """)
+        .param(tenantId)
+        .param(jobId)
+        .query(
+            (rs, rowNum) -> {
+              java.sql.Timestamp proved = rs.getTimestamp("caller_second_factor_at");
+              return new Requester(
+                  rs.getObject("requested_by", UUID.class),
+                  rs.getString("caller_role"),
+                  rs.getObject("caller_role_definition_id", UUID.class),
+                  proved == null ? null : proved.toInstant());
+            })
+        .optional();
+  }
+
+  /**
+   * Who asked for an archive, and under what authority.
+   *
+   * @param userId the person, or null for a job requested with no caller
+   * @param role their built-in role at request time, or null
+   * @param roleDefinitionId the tenant-owned role extending it, or null
+   * @param secondFactorAt when they last proved a second factor, or null — which means a sensitive
+   *     field stays sealed (REQ-AUTH-011)
+   */
+  public record Requester(
+      UUID userId, String role, UUID roleDefinitionId, Instant secondFactorAt) {}
 
   /**
    * The oldest job still waiting, claimed for this run.

@@ -190,7 +190,15 @@ commit".
   inventory yours rather than just its contents: who had access and in what
   role, the roles you defined, the reminders you set up and the searches you
   saved. Passwords, keys and this instance's own administration stay behind,
-  and the archive lists what it left out.
+  and the archive lists what it left out. Values in fields marked sensitive
+  travel too, as far as the person asking is allowed to read them — anything
+  held back is named in the archive rather than left looking empty.
+
+- **Asking for an export is its own right now.** It used to need only
+  permission to read the tenant, which meant somebody restricted to a single
+  room could still download a copy of everything. Administrators and owners
+  can ask for one; a membership limited to part of the location tree cannot,
+  whatever its role, because there is no archive of one room.
 
 - **Photographs nothing points at are cleaned up.** When the last item using an
   uploaded file is deleted, the file itself is removed a week later — long enough
@@ -798,7 +806,7 @@ commit".
 - A requirements catalogue with 427 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 68 architecture decision records, each with its alternatives and consequences —
+- 69 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

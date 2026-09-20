@@ -57,8 +57,8 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:524:enforced
-docs/architecture/04-building-blocks.md:529:enforced
+docs/architecture/04-building-blocks.md:533:enforced
+docs/architecture/04-building-blocks.md:538:enforced
 docs/architecture/05-runtime-view.md:256:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot
@@ -99,8 +99,8 @@ docs/architecture/11-offline-synchronisation.md:170:cannot
 docs/architecture/11-offline-synchronisation.md:265:is refused
 docs/architecture/12-security.md:16:cannot
 docs/architecture/12-security.md:182:fails the build
-docs/architecture/12-security.md:205:enforced
-docs/architecture/12-security.md:330:enforced
+docs/architecture/12-security.md:218:enforced
+docs/architecture/12-security.md:343:enforced
 docs/architecture/13-operations-and-observability.md:129:cannot
 docs/architecture/13-operations-and-observability.md:73:cannot
 docs/architecture/14-quality-risks-glossary.md:117:enforces

@@ -4,15 +4,17 @@
  */
 package de.greluc.homeinv.portability.application;
 
-import de.greluc.homeinv.portability.api.ArchiveStore;
+import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
+import de.greluc.homeinv.portability.api.ArchiveStore;
 import de.greluc.homeinv.portability.api.ExportNotReadyException;
 import de.greluc.homeinv.portability.api.ExportService;
 import de.greluc.homeinv.portability.infrastructure.ExportJobQueries;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +46,22 @@ public class DefaultExportService implements ExportService {
     // Asking twice makes two archives, and that is the honest behaviour: the
     // second is of a later moment, and handing back the first would hand back an
     // archive missing whatever changed since.
-    UUID id = jobs.queue(tenantId, actor);
+    //
+    // The caller's authority is copied onto the job here, while they are still
+    // present: what an archive may open out of a sealed field depends on the
+    // role they hold and on how recently they proved a second factor
+    // (REQ-AUTH-011), and by the time the worker builds the archive there is no
+    // caller to ask. With no caller at all -- a scheduled export, a test that
+    // established none -- the three stay null and nothing sensitive is opened,
+    // which is the direction this has to fail in.
+    Optional<CallerContext.Caller> caller = CallerContext.current();
+    UUID id =
+        jobs.queue(
+            tenantId,
+            actor,
+            caller.map(CallerContext.Caller::role).orElse(null),
+            caller.map(CallerContext.Caller::roleDefinitionId).orElse(null),
+            caller.map(CallerContext.Caller::secondFactorAt).orElse(null));
     log.info("An export was requested for tenant {}", tenantId);
     return jobs.byId(tenantId, id).orElseThrow();
   }

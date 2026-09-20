@@ -12,7 +12,12 @@ import de.greluc.homeinv.identity.infrastructure.AppUserRepository;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.inventory.api.Valuation;
+import de.greluc.homeinv.catalog.api.FieldConstraints;
+import de.greluc.homeinv.catalog.api.FieldDataType;
+import de.greluc.homeinv.catalog.api.TypeAdministration;
+import de.greluc.homeinv.catalog.api.TypeKind;
 import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.portability.api.ExportNotReadyException;
 import de.greluc.homeinv.portability.api.ExportService;
@@ -65,6 +70,7 @@ class ExportJobIT extends AbstractIntegrationTest {
   @Autowired private ObjectMapper json;
   @Autowired private org.springframework.jdbc.core.simple.JdbcClient jdbc;
   @Autowired private BlobStore blobs;
+  @Autowired private TypeAdministration types;
 
   @Test
   @DisplayName("is queued at once and says so, rather than making the caller wait")
@@ -215,6 +221,77 @@ class ExportJobIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("opens a sealed value for the person who may read it, and names the ones it did not")
+  void sealedValuesTravelAsFarAsTheRequesterMayReadThem() throws Exception {
+    Tenant tenant = newTenant("export-sealed@example.org");
+    UUID type = aLicenceType(tenant);
+    UUID licence =
+        asOwner(
+            tenant,
+            () ->
+                items
+                    .create(
+                        new ItemService.CreateItemCommand(
+                            null,
+                            type,
+                            "A copy of something",
+                            null,
+                            ItemKind.DIGITAL,
+                            null,
+                            BigDecimal.ONE,
+                            null,
+                            "{\"carrier\":\"vendor account\",\"licenceKey\":\"not a real key\"}",
+                            null,
+                            null,
+                            Valuation.NONE),
+                        java.util.Optional.empty(),
+                        tenant.userId())
+                    .item()
+                    .id());
+
+    // It is ciphertext in the column: that is ADR-0019, and it is why an archive
+    // that copied the column would be an archive of something unreadable.
+    String stored =
+        inOwn(
+            tenant,
+            () ->
+                jdbc
+                    .sql("select attributes::text from inventory.item where id = ?")
+                    .param(licence)
+                    .query(String.class)
+                    .single());
+    assertThat(stored).doesNotContain("not a real key");
+
+    // Asked for by the owner, with a second factor proved just now: the value is
+    // opened into the archive, because it is theirs and an archive they cannot
+    // read is not portability (REQ-PORT-003).
+    ExportService.ExportJobView mine =
+        asOwner(tenant, () -> exports.request(tenant.userId()));
+    runner.runAsTenant(tenant.tenantId());
+    Map<String, String> opened = unzip(inOwn(tenant, () -> openQuietly(mine.id())));
+    assertThat(opened.get("data/inventory/items.jsonl")).contains("not a real key");
+
+    // Asked for with no second factor proved, which is REQ-AUTH-011's other
+    // side. The field is withheld -- and the manifest says so by name, because
+    // an archive silent about it is one whose reader believes the field was
+    // empty.
+    ExportService.ExportJobView withoutProof = inOwn(tenant, () -> exports.request(tenant.userId()));
+    runner.runAsTenant(tenant.tenantId());
+    Map<String, String> withheld = unzip(inOwn(tenant, () -> openQuietly(withoutProof.id())));
+    assertThat(withheld.get("data/inventory/items.jsonl"))
+        .doesNotContain("not a real key")
+        .contains("vendor account");
+
+    JsonNode manifest = json.readTree(withheld.get("manifest.json"));
+    assertThat(
+            manifest.get("withheld").valueStream()
+                .map(entry -> entry.get("what").asString())
+                .toList())
+        .contains("licenceKey");
+    assertThat(json.readTree(opened.get("manifest.json")).get("withheld")).isEmpty();
+  }
+
+  @Test
   @DisplayName("never contains another tenant's rows")
   void oneTenantsArchiveHoldsOnlyItsOwn() throws Exception {
     Tenant mine = newTenant("export-mine@example.org");
@@ -232,6 +309,83 @@ class ExportJobIT extends AbstractIntegrationTest {
   }
 
   // -------------------------------------------------------------------------
+
+  /**
+   * A type with a carrier and a sealed licence key — REQ-CORE-004's shape.
+   *
+   * @param tenant whose type
+   * @return the type id
+   */
+  private UUID aLicenceType(Tenant tenant) {
+    return TenantContext.callAs(
+        tenant.tenantId(),
+        () ->
+            transactions.execute(
+                status -> {
+                  TypeAdministration.ItemTypeView type =
+                      types.createItemType(
+                          new TypeAdministration.CreateItemTypeCommand(
+                              "software-licence", TypeKind.DIGITAL, null, null),
+                          tenant.userId());
+                  types.addField(
+                      type.draftVersionId(), aField("carrier", false), tenant.userId());
+                  types.addField(
+                      type.draftVersionId(), aField("licenceKey", true), tenant.userId());
+                  types.publish(type.draftVersionId(), tenant.userId());
+                  return type.id();
+                }));
+  }
+
+  /**
+   * One text field, sensitive or not.
+   *
+   * @param key its key
+   * @param sensitive whether its value is sealed
+   * @return the command
+   */
+  private TypeAdministration.FieldCommand aField(String key, boolean sensitive) {
+    return new TypeAdministration.FieldCommand(
+        key,
+        FieldDataType.TEXT,
+        Map.of("en", key),
+        Map.of(),
+        false,
+        null,
+        FieldConstraints.NONE,
+        null,
+        null,
+        null,
+        0,
+        false,
+        false,
+        false,
+        sensitive);
+  }
+
+  /**
+   * Runs a body as the tenant's owner, with a second factor proved just now.
+   *
+   * <p>Both halves matter here: the role decides whether a sensitive field may be read at all, and
+   * REQ-AUTH-011 asks for the factor to have been proved recently on top of it. An export asked for
+   * without the second half is the negative case in the test above, not a mistake.
+   *
+   * @param tenant the tenant
+   * @param body the work
+   * @param <T> what it produces
+   * @return what the body produced
+   */
+  private <T> T asOwner(Tenant tenant, Supplier<T> body) {
+    java.util.concurrent.atomic.AtomicReference<T> produced =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    TenantContext.runAs(
+        tenant.tenantId(),
+        () ->
+            CallerContext.runAs(
+                new CallerContext.Caller(
+                    tenant.userId(), tenant.tenantId(), "OWNER", null, null, Instant.now()),
+                () -> transactions.executeWithoutResult(status -> produced.set(body.get()))));
+    return produced.get();
+  }
 
   private InputStream openQuietly(UUID id) {
     try {

@@ -96,7 +96,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 68
+    value: 69
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points
@@ -215,7 +215,7 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 38
+    value: 39
     pattern: '(?:(\d+)|thirty-two)\s+(?:named\s+)?permissions?\b'
     notes: >
       Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on

@@ -181,8 +181,21 @@ decision.
 |---|---|
 | Default | **Deny.** An endpoint without `@RequiresPermission` and without an explicit `@PublicEndpoint` marker fails the build. |
 | Subtree permissions | A role can be scoped to a location subtree (e.g. "garage only") — the check uses the `ltree` path, in the application **and** in the policies on `locations.location` and `inventory.item` ([ADR-0059](../adr/0059-subtree-scope-has-two-lines.md)). An item with no place is invisible to a scoped session: a digital item is in nobody's garage. A scope that resolves to nothing — a place since deleted — yields **nothing**, never everything |
+| Whole-tenant permissions | Some acts are about the tenant rather than about things in it, and a **scoped membership holds none of them**, whatever its role. `Permission.wholeTenant` marks one and `DefaultAccessControl.holds` refuses it whenever the caller carries a `scope_location_id`. The export is the first: there is no archive of a shelf, so the only thing a scoped caller could be handed is an archive of everything — which is exactly what the scope says they may not have ([ADR-0068](../adr/0068-an-export-opens-what-its-requester-may-read.md)). It is a property of the permission and not a check in a controller, so the next tenant-wide act is one flag rather than a rule somebody has to remember |
 | Privilege escalation | Nobody can grant permissions they do not hold themselves |
 | Proof | Every endpoint has a test for "no permission → 403" and "foreign tenant → 404" |
+
+**Sealed values in an export.** A field marked `sensitive` is stored sealed
+([ADR-0019](../adr/0019-sensitive-field-encryption.md)) and an archive of ciphertext is
+one no other instance can open — data lost on the way out with nothing having failed. An
+export therefore **opens a sealed value exactly as far as the person who requested the
+archive may read it**, through the same `AttributeRedaction` port the REST layer uses, and
+names every field it withheld in the manifest
+([ADR-0068](../adr/0068-an-export-opens-what-its-requester-may-read.md)). The authority is
+copied onto the job at request time — role, tenant-owned role and the moment the second
+factor was proved — because the worker that builds the archive minutes later has no caller
+of its own. Two consequences are deliberate: a role granted **after** the request does not
+widen the archive, and a job with no caller at all opens nothing.
 
 ## 12.6 Input
 

@@ -173,12 +173,58 @@ public enum Permission {
    * the block that owns the notion owns the permission. Held by {@code ADMIN} and {@code OWNER}
    * alone — a token carries a role, so whoever may hand one out may hand out that role.
    */
-  SERVICE_ACCOUNT_ADMINISTER("identity:service-account:administer");
+  SERVICE_ACCOUNT_ADMINISTER("identity:service-account:administer"),
+
+  /**
+   * Ask for an export of the tenant, and download the archive (REQ-PORT-003, REQ-PORT-005).
+   *
+   * <p>Its own permission rather than {@code TENANT_READ}, because taking a copy of everything is
+   * not the same act as reading things one at a time. The endpoints asked for {@code TENANT_READ}
+   * until 2026-09-20, which meant a {@code VIEWER} — including one confined to a single shelf —
+   * could download an archive of the whole inventory (ADR-0068, open point O27).
+   *
+   * <p><b>Whole-tenant.</b> An export is of the tenant and cannot be of a subtree, so a membership
+   * confined to one (REQ-TEN-007) does not hold this however senior its role is. See {@link
+   * #wholeTenant()}.
+   */
+  TENANT_EXPORT("portability:export:request", true);
 
   private final String id;
 
+  /** Whether a membership confined to part of the tree is excluded from this. */
+  private final boolean wholeTenant;
+
   Permission(String id) {
+    this(id, false);
+  }
+
+  /**
+   * A permission that is about the tenant as a whole.
+   *
+   * @param id the stable identifier
+   * @param wholeTenant whether a scoped membership is excluded from it
+   */
+  Permission(String id, boolean wholeTenant) {
     this.id = id;
+    this.wholeTenant = wholeTenant;
+  }
+
+  /**
+   * Whether this permission is about the whole tenant rather than about things in it.
+   *
+   * <p>A membership may be confined to part of the location tree (REQ-TEN-007), and such a
+   * membership never holds one of these — not because of its role, but because the act has no
+   * meaning inside a subtree. An export is the first: there is no archive of a shelf, so somebody
+   * who may only see a shelf cannot ask for one and must not receive one of everything instead.
+   *
+   * <p>Deliberately a property of the <b>permission</b> rather than a check in one endpoint. The
+   * next tenant-wide act — a bulk erase, an instance-wide report — is then one flag rather than a
+   * rule somebody has to remember.
+   *
+   * @return {@code true} when a scoped membership is excluded from it
+   */
+  public boolean wholeTenant() {
+    return wholeTenant;
   }
 
   /**

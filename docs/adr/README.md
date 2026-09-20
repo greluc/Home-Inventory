@@ -89,3 +89,4 @@ Date: YYYY-MM-DD
 | [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066 |
 | [0066](0066-instance-level-capability-grants.md) | An instance-level capability grant, for what the deployment owes an account | Accepted, amended by 0067 |
 | [0067](0067-breached-passwords-from-a-shipped-list.md) | Breached passwords are checked against a shipped list, and a plugin may add to it | Accepted |
+| [0068](0068-an-export-opens-what-its-requester-may-read.md) | An export opens a sealed value exactly as far as its requester may read it | Accepted |

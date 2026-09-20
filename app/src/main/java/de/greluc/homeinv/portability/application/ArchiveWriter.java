@@ -52,6 +52,9 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
   /** One entry per file: where it is and how large. The manifest's other half. */
   private final List<Map<String, Object>> files = new ArrayList<>();
 
+  /** What the archive deliberately does not hold, so a reader is not left guessing. */
+  private final java.util.SortedMap<String, Map<String, Object>> withheld = new java.util.TreeMap<>();
+
   private final ObjectMapper json;
   private final Path file;
   private final MessageDigest digest;
@@ -126,6 +129,13 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
     }
   }
 
+  @Override
+  public void withheld(String what, String why) {
+    // Keyed by block and field, so a source that reports the same omission once
+    // per row -- which is the easy mistake -- still produces one line.
+    withheld.put(block + "/" + what, Map.of("block", block, "what", what, "why", why));
+  }
+
   /**
    * Records something the archive should say about itself.
    *
@@ -149,6 +159,7 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
   public Archive finish() throws IOException {
     manifest.put("datasets", List.copyOf(datasets));
     manifest.put("files", List.copyOf(files));
+    manifest.put("withheld", List.copyOf(withheld.values()));
     zip.putNextEntry(new ZipEntry("manifest.json"));
     zip.write(json.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
     zip.closeEntry();

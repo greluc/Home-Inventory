@@ -448,6 +448,15 @@ What is **not** in the archive is a list with a reason against every entry, and
 `ExportCoverageIT` holds it: it asks PostgreSQL for every tenant-scoped table there is,
 so a table that no block exports must be named there. The kinds that recur:
 
+**Who may ask.** All four `/api/v1/export-jobs` endpoints require
+`portability:export:request`, held by `ADMIN` and `OWNER`. It is not
+`tenancy:tenant:read`, because taking a copy of everything is not the same act as reading
+things one at a time — and a membership confined to part of the location tree holds no
+whole-tenant permission at all, whatever its role
+([ADR-0068](../adr/0068-an-export-opens-what-its-requester-may-read.md), 12 §12.5). A
+value stored sealed is opened as far as that person may read it, and whatever is held
+back is named in the manifest's `withheld` list.
+
 | Kind | Example | Why it stays |
 |---|---|---|
 | A credential or key material | `identity.service_account`, `crypto.tenant_data_key`, `tenancy.tenant.revocation_token_hash` | The receiving instance issues its own. An archive is copied onto laptops and into support tickets |

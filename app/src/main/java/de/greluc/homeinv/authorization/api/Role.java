@@ -172,7 +172,11 @@ public enum Role {
       Permission.MEMBER_INVITE,
       Permission.MEMBER_UPDATE,
       Permission.MEMBER_REMOVE,
-      Permission.SERVICE_ACCOUNT_ADMINISTER)),
+      Permission.SERVICE_ACCOUNT_ADMINISTER,
+      // An export is of the tenant, and configuring the tenant is ADMIN's
+      // band (ADR-0068). A scoped membership still does not hold it: that is
+      // decided by `Permission.wholeTenant`, not by the role.
+      Permission.TENANT_EXPORT)),
   // Deliberately NOT Permission.TENANT_DELETE: that is OWNER's, and it is what
   // makes these two different permission sets rather than only different in what
   // they may grant (REQ-TEN-011).
