@@ -182,9 +182,12 @@ started_here=0
 # convenience: the plugin's image is `scratch` — no shell, no `nc`, nothing to
 # exec at all — and that is a property worth keeping rather than working around.
 from_plugin() {
+    # `--entrypoint nc`, as the datastore checks above pass `--entrypoint sh`:
+    # this image has an entrypoint of its own, and a command handed to it is
+    # a command that may never run.
     "$RUNTIME" run --rm --network "container:$plugin" \
-        docker.io/library/postgres:18-alpine \
-        nc -w "$CONNECT_TIMEOUT" "$1" "$2" </dev/null >/dev/null 2>&1
+        --entrypoint nc docker.io/library/postgres:18-alpine \
+        -w "$CONNECT_TIMEOUT" "$1" "$2" </dev/null >/dev/null 2>&1
 }
 
 refused_from_plugin() {
@@ -203,15 +206,23 @@ reaches_from_plugin() {
     fi
 }
 
+# `if cmd; then` rather than `cmd && var=1`: under `set -e` a bare failing
+# command ends the script, and the whole point of these lines is to carry on
+# and say what happened. The first version of this section did it the other
+# way and exited before printing a single result.
 if ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
     case "$RUNTIME" in
         docker)
-            ( cd "$(dirname "$0")/../compose" \
-              && docker compose --profile minimal up -d plugin-webhook >/dev/null 2>&1 ) \
-                && started_here=1
+            if ( cd "$(dirname "$0")/../compose" \
+                 && docker compose --profile minimal up -d plugin-webhook ) >/dev/null 2>&1
+            then
+                started_here=1
+            fi
             ;;
         podman)
-            systemctl --user start homeinv-plugin-webhook >/dev/null 2>&1 && started_here=1
+            if systemctl --user start homeinv-plugin-webhook >/dev/null 2>&1; then
+                started_here=1
+            fi
             ;;
     esac
     # The moment a container needs to be listed. There is no health check to wait
@@ -230,9 +241,14 @@ if "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
     # `curl` rather than `nc`, because the api image has one and not the other;
     # exit 7 is "could not connect" and anything else means the socket opened —
     # this endpoint speaks gRPC over TLS, so a TLS error IS a successful connection.
+    #
+    # `|| reached=$?` and not a bare call: curl exits non-zero on every one of
+    # these, and under `set -e` that would end the script before the status is
+    # read.
+    reached=0
     "$RUNTIME" exec homeinv-api curl --silent --max-time "$CONNECT_TIMEOUT" \
-        "http://plugin-webhook:8200" >/dev/null 2>&1
-    if [ "$?" -eq 7 ]; then
+        "http://plugin-webhook:8200" >/dev/null 2>&1 || reached=$?
+    if [ "$reached" -eq 7 ]; then
         fail "api cannot reach the plugin on its segment — it would be installed and uncallable"
     else
         pass "api reaches the plugin on its own segment"
@@ -254,13 +270,18 @@ if "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
     # and applies this plugin's own allowlist to what it asks for (ADR-0027).
     reaches_from_plugin egress-proxy 8118 "the plugin reaches the egress proxy, which is its one route out"
 
+    # Stopped again, so the stack this suite leaves behind is the one it found
+    # -- and `|| true`, because a stop that fails must not fail the run: what
+    # was being checked has already been checked by here.
     if [ "$started_here" -eq 1 ]; then
         case "$RUNTIME" in
             docker)
                 ( cd "$(dirname "$0")/../compose" \
-                  && docker compose stop plugin-webhook >/dev/null 2>&1 )
+                  && docker compose stop plugin-webhook ) >/dev/null 2>&1 || true
                 ;;
-            podman) systemctl --user stop homeinv-plugin-webhook >/dev/null 2>&1 ;;
+            podman)
+                systemctl --user stop homeinv-plugin-webhook >/dev/null 2>&1 || true
+                ;;
         esac
     fi
 else
