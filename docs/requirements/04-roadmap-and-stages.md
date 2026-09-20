@@ -118,7 +118,7 @@ reads as authoritative.*
 | Area | Stands | Evidence, or what is missing |
 |---|---|---|
 | Type system | **Built** | Types and categories with inheritance, versioning, the generated JSON Schema, value lists and the eight shipped templates. `TypeTemplateIT`, `TypeEditorIT`, `JsonSchemaGenerator` |
-| Attribute storage | **Partly** | JSONB and `item_attr_index` are built and projected on every write (`ItemAttributesIT`, `ItemFilteringIT`). The **nightly consistency reconciliation and the `REINDEX_ATTRIBUTES` rebuild run are not** (`REQ-NFR-073`) |
+| Attribute storage | **Built** | JSONB and `item_attr_index` are built and projected on every write (`ItemAttributesIT`, `ItemFilteringIT`), and since 2026-09-20 the nightly reconciliation compares the two — and the location tree against its parents — publishing a deviation gauge each, with `REINDEX_ATTRIBUTES` rebuilding through the write path (`REQ-NFR-073`, `ReconciliationIT`) |
 | Tenants | **Built** | Creation, memberships, invitations, roles, subtree scoping, field visibility, quotas, deletion with a grace period. `TenancyIT`, `MembersAndInvitationsIT`, `TenantOwnedRolesIT`, `ItemScopeFilteringIT`, `FieldVisibilityIT`, `QuotasIT`, `TenantErasureIT` |
 | Login | **Built** | TOTP and passkeys, re-confirmation, the session overview, service accounts, password reset. `SecondFactorIT`, `SecondFactorStepUpIT`, `PasskeyIT`, `SessionOverviewIT`, `ServiceAccountIT`, `PasswordResetIT`. **OIDC federation is not** (`REQ-AUTH-005`): it is `plugin-oidc`, in the row below |
 | Tags | **Built** | Tags, groups, merging. `TagsIT`, and `TagTargetsIT` for what a tag endpoint says about a target that is not there |

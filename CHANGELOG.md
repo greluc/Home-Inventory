@@ -194,6 +194,14 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **The system now checks its own bookkeeping every night.** Two tables are
+  kept in step with your data rather than being your data — the one that
+  makes filtering exact, and the one that makes “everything in this room”
+  fast — and until now nothing compared them with the real thing. A nightly
+  run does, reports how many disagreements it found, and **changes nothing**:
+  a repair that ran automatically would hide the fault that caused it. If
+  something is ever wrong, a rebuild puts it right from your items.
+
 - **A deployment can install a plugin, and the first one is here.** Until now
   the system could call plugins and there was no way to put one in a
   deployment: one entry in the deployment description now produces the
