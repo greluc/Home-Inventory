@@ -182,6 +182,13 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **What is it all worth?** A report totals what you own by room, by kind of
+  thing or by tag. Each room shows what is in it and what is in it *including*
+  the boxes inside it, separately, because those are different questions. Purchase
+  price, current value and replacement value stay three separate columns, and
+  amounts in different currencies are never added together — you get one line per
+  currency and the report says that nothing was converted.
+
 - **Reminders.** Set a rule and be told before a warranty runs out, when
   something is due for servicing, when something you lent is overdue, or when a
   consumable has run down. An item can carry a servicing interval, counted from

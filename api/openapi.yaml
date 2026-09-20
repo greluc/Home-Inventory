@@ -952,6 +952,25 @@ components:
       required:
       - dataType
       type: object
+    Figures:
+      description: The three figures, each per currency (REQ-LIFE-015, REQ-LIFE-017).
+      properties:
+        current:
+          description: what they are worth now, per currency
+          items:
+            $ref: '#/components/schemas/MoneyJson'
+          type: array
+        purchase:
+          description: what the things cost, per currency
+          items:
+            $ref: '#/components/schemas/MoneyJson'
+          type: array
+        replacement:
+          description: what replacing them would cost, per currency
+          items:
+            $ref: '#/components/schemas/MoneyJson'
+          type: array
+      type: object
     InstanceCapabilityView:
       description: One capability, and whether the instance has granted it.
       properties:
@@ -2895,6 +2914,37 @@ components:
       required:
       - name
       type: object
+    Report:
+      description: One report.
+      properties:
+        converted:
+          description: |-
+            always `false`, and present rather than implied: REQ-LIFE-017 asks the
+            report to **state** that no conversion took place, and a field a client can render is a
+            statement where a missing field is an assumption
+          type: boolean
+        currencies:
+          description: |-
+            every currency that appears anywhere in the report, so a client can lay out
+            columns before reading a row
+          items:
+            type: string
+          type: array
+        dimension:
+          description: '`location`, `type` or `tag`'
+          type: string
+        overlapping:
+          description: |-
+            whether a thing can appear in more than one row, which is true of tags and
+            false of locations and types. A reader who adds up an overlapping column gets a number
+            that means nothing, and this is what warns them
+          type: boolean
+        rows:
+          description: one per group, largest first by the figure that is present
+          items:
+            $ref: '#/components/schemas/Row'
+          type: array
+      type: object
     ReturnRequest:
       description: The body of a return (REQ-LIFE-005).
       properties:
@@ -3009,6 +3059,33 @@ components:
           items:
             type: string
           type: array
+      type: object
+    Row:
+      description: One group's figures.
+      properties:
+        id:
+          description: the location, type or tag
+          format: uuid
+          type: string
+        label:
+          description: what to call it, in the tenant's own words
+          type: string
+        own:
+          $ref: '#/components/schemas/Figures'
+          description: the totals for things directly in this group
+        ownCount:
+          description: how many things are directly in this group
+          format: int64
+          type: integer
+        subtree:
+          $ref: '#/components/schemas/Figures'
+          description: |-
+            the totals including everything beneath it; equal to `own` where the
+            dimension has no tree
+        subtreeCount:
+          description: how many including everything beneath it
+          format: int64
+          type: integer
       type: object
     RuleRequest:
       description: The body of a reminder rule (REQ-NOTI-001).
@@ -12095,6 +12172,106 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Replaces a rule.
+  /api/v1/reports/valuation:
+    get:
+      description: |-
+        What the things in here are worth (REQ-LIFE-008).
+
+        Three figures per row, each per currency and never mixed — REQ-LIFE-017 forbids a
+        mixed-currency total "not even as an approximation", so a set spanning two currencies is two
+        lines and the answer says `converted: false` rather than leaving it to be assumed.
+
+        A location row carries **both** its own total and its subtree's, labelled: a room holds
+        boxes, and "what is this room worth" and "what is sitting directly in this room" are different
+        questions. For a type or a tag there is no tree and the two are equal.
+      operationId: valuation
+      parameters:
+      - description: '`location`, `type` or `tag`'
+        in: query
+        name: by
+        required: true
+        schema:
+          enum:
+          - LOCATION
+          - TYPE
+          - TAG
+          type: string
+      - description: |-
+          for `by=location` only: the place to report on, or omitted for the whole
+          tenant. Ignored for the other dimensions rather than refused, because a client switching
+          the dimension should not have to clear it
+        in: query
+        name: root
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: how many rows at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: the report
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What the things in here are worth (REQ-LIFE-008)
   /api/v1/roles:
     get:
       description: One page of the roles this tenant has defined.
