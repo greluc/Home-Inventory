@@ -93,8 +93,17 @@ class SecurityNotificationIT extends AbstractIntegrationTest {
                 "en",
                 "test-no-plugin-" + userId));
 
-    int attempted = dispatcher.deliverDue(Instant.now());
-    assertThat(attempted).isPositive();
+    dispatcher.deliverDue(Instant.now());
+
+    // The return value is deliberately NOT asserted on. `security_notification`
+    // is instance-wide (07 §7.1) and every test shares it, so the count belongs
+    // to whatever was queued at that moment rather than to this test -- and a
+    // delivery run in another test that happens to land between the raise above
+    // and this line attempts the row first, leaving this call nothing to do and
+    // this assertion failing for a reason that is not about the behaviour. That
+    // is what it did on 2026-09-20. What the test is actually about is the state
+    // of ITS OWN notification, which the assertions below read by id: they hold
+    // whichever run attempted it.
 
     // Not a refusal by the far side — there is no far side. So it is retried:
     // an operator who grants the capability afterwards should find the queued

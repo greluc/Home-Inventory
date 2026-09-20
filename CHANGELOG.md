@@ -182,6 +182,13 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **Reminders.** Set a rule and be told before a warranty runs out, when
+  something you lent is overdue, or when a consumable has run down. A rule says
+  what to watch, optionally which things (a saved search narrows it), how many
+  days early — or late, for an overdue loan — and on which channel. It tells you
+  **once** per thing per date, and again if the date moves. Only people who asked
+  for that kind of message receive it.
+
 - **You can record that something was sold or thrown away.** Note the price, the
   date and who it went to, and the item moves out of your everyday lists without
   disappearing — an inventory should still answer "what did we have, and what

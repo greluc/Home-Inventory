@@ -185,6 +185,18 @@ public class DefaultSavedSearches implements SavedSearches {
             limit));
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public java.util.Set<UUID> matchingIds(UUID id, int limit) {
+    // The same query, reduced to ids at this boundary rather than at the caller's.
+    // A caller outside `search` that received ItemViews in order to read `id`
+    // would depend on `inventory` for a field it discards, which is exactly the
+    // cycle the module check refuses.
+    return run(id, null, Math.clamp(limit, 1, 200)).data().stream()
+        .map(ItemView::id)
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+  }
+
   /**
    * Checks the filters against the grammar without keeping the result.
    *

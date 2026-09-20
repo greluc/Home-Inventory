@@ -59,6 +59,21 @@ public enum Permission {
   SAVED_SEARCH_DELETE("search:saved-search:delete"),
 
   /**
+   * Create or change a reminder rule (REQ-NOTI-001).
+   *
+   * <p>A member's, exactly as {@link #SAVED_SEARCH_WRITE} is and for the same reason: a rule is the
+   * tenant's and everybody in it is reminded by it, so writing one changes what everybody sees.
+   * Reading them needs only {@link #SEARCH_QUERY} — a list of rules is not more sensitive than the
+   * things it watches.
+   */
+  REMINDER_RULE_WRITE("notification:reminder-rule:write"),
+  /**
+   * Delete a reminder rule. An administrator's, because it takes a reminder away from everybody and
+   * the person who notices is the one who was relying on it.
+   */
+  REMINDER_RULE_DELETE("notification:reminder-rule:delete"),
+
+  /**
    * See which plugins the operator installed, and what this tenant has permitted them
    * (REQ-PLG-005).
    *

@@ -32,6 +32,7 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`bundle-cycle`](bundle-cycle.md) | `409` | assigned | Putting that item into that bundle would make the bundle contain itself — directly, or through a chain of bundles. |
 | [`item-lent`](item-lent.md) | `409` | assigned | The item is out on loan, and what was asked cannot be done while somebody else has it. |
 | [`item-state`](item-state.md) | `409` | assigned | The item is in a state where what was asked cannot be done -- it has been sold, disposed of or trashed. |
+| [`unserved-trigger`](unserved-trigger.md) | `422` | assigned | A reminder rule names a trigger that nothing in this installation can answer. |
 | [`invalid-move`](invalid-move.md) | `409` | assigned | A location cannot be moved where the request asks: into itself or into something it contains, or under a category that has said which categories it takes and did not name this one. |
 | [`invitation-already-open`](invitation-already-open.md) | `409` | assigned | This tenant already has an unused invitation for the address, or the person at that address is already a member of it. |
 | [`last-owner`](last-owner.md) | `409` | assigned | The change would leave the tenant without an owner — the last one cannot be demoted or removed. |

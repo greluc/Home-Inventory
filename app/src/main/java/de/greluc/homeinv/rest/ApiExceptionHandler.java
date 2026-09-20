@@ -16,6 +16,7 @@ import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemLentException;
 import de.greluc.homeinv.inventory.api.ItemStateException;
+import de.greluc.homeinv.notification.api.UnservedTriggerException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -780,6 +781,22 @@ public class ApiExceptionHandler {
   @ExceptionHandler(ItemStateException.class)
   public ProblemDetail handleItemState(ItemStateException exception, HttpServletRequest request) {
     return problem(ProblemType.ITEM_STATE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a reminder rule naming a trigger nothing serves here (REQ-NOTI-003).
+   *
+   * <p>Refused when the rule is written rather than when it runs, so the person who can still pick
+   * another trigger is the one who hears about it.
+   *
+   * @param exception the refusal, whose message names the triggers that do work
+   * @param request the request, for the instance URI
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(UnservedTriggerException.class)
+  public ProblemDetail handleUnservedTrigger(
+      UnservedTriggerException exception, HttpServletRequest request) {
+    return problem(ProblemType.UNSERVED_TRIGGER, exception.getMessage(), request);
   }
 
   /**

@@ -2821,6 +2821,49 @@ components:
           - RELATED
           type: string
       type: object
+    ReminderRuleView:
+      description: A stored rule.
+      properties:
+        channelKey:
+          description: which channel
+          type: string
+        enabled:
+          description: whether it fires
+          type: boolean
+        id:
+          description: its id
+          format: uuid
+          type: string
+        name:
+          description: what a person calls it
+          type: string
+        offsetDays:
+          description: days relative to the trigger's date
+          format: int32
+          type: integer
+        savedSearchId:
+          description: which things it watches, or `null` for all of them
+          format: uuid
+          type: string
+        trigger:
+          description: which date or condition it watches
+          enum:
+          - WARRANTY_EXPIRY
+          - MAINTENANCE_DUE
+          - LOAN_DUE
+          - MINIMUM_STOCK
+          - LICENCE_EXPIRY
+          - STOCKTAKE_DISCREPANCY
+          type: string
+        updatedAt:
+          description: when it last changed
+          format: date-time
+          type: string
+        version:
+          description: for `If-Match`
+          format: int64
+          type: integer
+      type: object
     RenameLocationRequest:
       description: The body of a rename.
       properties:
@@ -2946,6 +2989,53 @@ components:
           items:
             type: string
           type: array
+      type: object
+    RuleRequest:
+      description: The body of a reminder rule (REQ-NOTI-001).
+      properties:
+        channelKey:
+          description: which channel, as a plugin manifest names it
+          maxLength: 60
+          minLength: 0
+          type: string
+        enabled:
+          description: whether it fires; absent means it does
+          type: boolean
+        name:
+          description: what a person calls it
+          maxLength: 200
+          minLength: 0
+          type: string
+        offsetDays:
+          description: |-
+            days relative to the trigger's date: **positive warns early** (14 is a
+            fortnight before a warranty ends), **negative waits until after** (-1 fires the day
+            after a loan was due), zero fires on the day. Stored as zero for a trigger that has no
+            date, so the screen and the behaviour agree
+          format: int32
+          maximum: 365
+          minimum: -365
+          type: integer
+        savedSearchId:
+          description: which things to watch, or absent for everything the trigger finds
+          format: uuid
+          type: string
+        trigger:
+          description: |-
+            which date or condition it watches. Only a trigger this installation serves is
+            accepted; `GET /triggers` says which those are
+          enum:
+          - WARRANTY_EXPIRY
+          - MAINTENANCE_DUE
+          - LOAN_DUE
+          - MINIMUM_STOCK
+          - LICENCE_EXPIRY
+          - STOCKTAKE_DISCREPANCY
+          type: string
+      required:
+      - channelKey
+      - name
+      - trigger
       type: object
     SavedSearchRequest:
       properties:
@@ -11549,6 +11639,432 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Agrees to one capability, for this tenant
+  /api/v1/reminder-rules:
+    get:
+      description: |-
+        The tenant's reminder rules.
+
+        Bounded rather than paged: a household has a handful of rules, and a cursor over a list that
+        short is machinery nobody needs — the argument `MaintenanceLog.entriesOf` makes. The cap
+        is not optional even so, because REQ-NFR-010 applies to **every** collection without
+        exception, and a rule with exceptions is not one a check can enforce.
+      operationId: listRules
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ReminderRuleView'
+                type: array
+          description: the rules, oldest first
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tenant's reminder rules
+    post:
+      description: Creates a rule.
+      operationId: createRule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleRequest'
+        description: what to watch, which of them, when and where
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderRuleView'
+          description: the stored rule
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: No source for that trigger (`unserved-trigger`), or Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Creates a rule.
+  /api/v1/reminder-rules/triggers:
+    get:
+      description: |-
+        Which triggers this installation can actually answer (REQ-NOTI-003).
+
+        Its own endpoint so that a client offers a choice that works. Two of the six triggers have
+        no source behind them — a stocktake is stage 2 and no licence expiry is stored — and a form
+        listing them would be offering a rule that is refused on save.
+      operationId: servedTriggers
+      parameters:
+      - description: |-
+          how many at most; capped at 200, which this list cannot approach — the cap is
+          here because REQ-NFR-010 admits no exception, and an enforced rule with exceptions is not
+          enforced
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  enum:
+                  - WARRANTY_EXPIRY
+                  - MAINTENANCE_DUE
+                  - LOAN_DUE
+                  - MINIMUM_STOCK
+                  - LICENCE_EXPIRY
+                  - STOCKTAKE_DISCREPANCY
+                  type: string
+                type: array
+          description: the triggers a rule may name here
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Which triggers this installation can actually answer (REQ-NOTI-003)
+  /api/v1/reminder-rules/{id}:
+    delete:
+      description: Removes a rule.
+      operationId: removeRule
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes a rule.
+    get:
+      description: One rule.
+      operationId: rule
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderRuleView'
+          description: it
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One rule.
+    put:
+      description: Replaces a rule.
+      operationId: replaceRule
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleRequest'
+        description: what it should now say
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReminderRuleView'
+          description: the stored rule
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: No source for that trigger (`unserved-trigger`), or Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Replaces a rule.
   /api/v1/roles:
     get:
       description: One page of the roles this tenant has defined.

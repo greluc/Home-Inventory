@@ -100,6 +100,17 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
   private static final Pattern HEX_LENGTH = Pattern.compile("\\^\\[0-9a-f]\\{(\\d+)}\\$");
 
   /**
+   * The ceiling of a {@code length(x) <= n} check, as pg prints it.
+   *
+   * <p>Text columns in this schema are bounded far more often than they are patterned, and the
+   * seeder's own value is 48 characters — {@code isolation-proof-} plus a UUID without its dashes —
+   * so a column taking fewer than that could not be seeded at all. {@code
+   * notification.reminder.subject_kind} was the first, at 40.
+   */
+  private static final Pattern MAX_LENGTH =
+      Pattern.compile("length\\([^)]*\\)\\s*<=\\s*(\\d+)");
+
+  /**
    * The length of a {@code length(x) = n} check, as pg prints it.
    *
    * <p>A digest column says its size exactly rather than as a range — {@code audit.audit_entry}'s
@@ -689,7 +700,27 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         return "'" + literal.group(1) + "'";
       }
     }
-    return "'isolation-proof-" + unique + "'";
+    return "'" + bounded("isolation-proof-" + unique, check) + "'";
+  }
+
+  /**
+   * The value, shortened to whatever ceiling the column's check names.
+   *
+   * <p>Truncated from the <b>front</b> so that what survives is the unique half: two rows seeded
+   * from one literal collide on the unique indexes these tables carry, and keeping the readable
+   * prefix while dropping the entropy would be exactly the wrong half to keep.
+   *
+   * @param candidate the value the seeder would otherwise use
+   * @param check the check clause naming this column, or an empty string
+   * @return the candidate, shortened when the column says so
+   */
+  private String bounded(String candidate, String check) {
+    Matcher ceiling = MAX_LENGTH.matcher(check);
+    if (!ceiling.find()) {
+      return candidate;
+    }
+    int max = Integer.parseInt(ceiling.group(1));
+    return candidate.length() <= max ? candidate : candidate.substring(candidate.length() - max);
   }
 
   /**

@@ -128,6 +128,7 @@ class MigrationRulesTest {
           // record of what happened on each try.
           "notification.notification",
           "notification.delivery_attempt",
+          "notification.reminder",
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",
@@ -169,6 +170,7 @@ class MigrationRulesTest {
           "audit.oldest_entry_at",
           "identity.service_account_by_token",
           "notification.tenants_with_due_notifications",
+          "notification.tenants_with_enabled_rules",
           "tenancy.invitation_by_token",
           "tenancy.quotas_of_tenant",
           "tenancy.set_tenant_quota",

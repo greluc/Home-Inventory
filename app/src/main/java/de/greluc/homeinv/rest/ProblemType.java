@@ -247,6 +247,16 @@ public enum ProblemType {
   ITEM_STATE("item-state", HttpStatus.CONFLICT, "The item is not in a state for that"),
 
   /**
+   * A reminder rule names a trigger nothing can answer here (REQ-NOTI-003).
+   *
+   * <p>A {@code 422}: the request is well formed and the value is one the enum accepts — what is
+   * wrong is that this installation has nothing behind it, which is a property of the field's value
+   * and so a validation failure rather than a conflict. The detail names the triggers that do work,
+   * because the caller's next move is to pick one of them.
+   */
+  UNSERVED_TRIGGER("unserved-trigger", HttpStatus.UNPROCESSABLE_ENTITY, "No source for that trigger"),
+
+  /**
    * The move would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>A {@code 409}: nothing about the request is malformed, and the same request would work

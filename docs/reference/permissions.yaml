@@ -94,6 +94,24 @@ permissions:
       tombstone would be retention without a reason, and the revision log answers
       who removed it.
 
+  - id: notification:reminder-rule:write
+    since: 1
+    description: >
+      Create or change a reminder rule (`REQ-NOTI-001`). A member's capability,
+      exactly as `search:saved-search:write` is and for the same reason: a rule
+      belongs to the tenant and everybody in it is reminded by it, so writing one
+      is a change to what everybody sees. Reading them needs no permission of its
+      own -- `search:index:query` covers it, because a list of rules is not more
+      sensitive than the things it watches.
+
+  - id: notification:reminder-rule:delete
+    since: 1
+    description: >
+      Remove a reminder rule (`REQ-NOTI-001`). An administrator's, because it
+      takes a reminder away from everybody and the person who notices is the one
+      who was relying on it -- the argument `search:saved-search:delete` makes
+      about a smart list.
+
   - id: plugins:plugin:read
     since: 1
     description: >
@@ -314,6 +332,7 @@ roles:
       - tagging:tag:update
       - tagging:tag:assign
       - search:saved-search:write
+      - notification:reminder-rule:write
       - plugins:plugin:read
       - tenancy:tenant:read
       - tenancy:member:read
@@ -351,6 +370,8 @@ roles:
       - tagging:tag:assign
       - search:saved-search:write
       - search:saved-search:delete
+      - notification:reminder-rule:write
+      - notification:reminder-rule:delete
       - plugins:plugin:read
       - plugins:capability:consent
       - tenancy:tenant:read
