@@ -205,7 +205,7 @@ function cookie(name: string): string | undefined {
  * server tags its usage metric with the product alone, so releases do not each become their own
  * time series.
  */
-const CLIENT = `web/${__APP_VERSION__}`;
+const CLIENT = `web/${APP_VERSION}`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);

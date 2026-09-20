@@ -27,7 +27,7 @@ export default defineConfig({
   // will not let a page set `User-Agent`, which is why ADR-0011's original
   // arrangement could not be honoured here.
   define: {
-    __APP_VERSION__: JSON.stringify(version),
+    APP_VERSION: JSON.stringify(version),
   },
   build: {
     cssCodeSplit: false,
