@@ -1638,6 +1638,13 @@ components:
             (REQ-MED-002). Carried per attachment rather than implied by position, because the list is
             paged and the primary is not guaranteed to be on the page a client is looking at
           type: boolean
+        role:
+          description: |-
+            what the attachment is for — `PHOTO`, `RECEIPT`, `
+            WARRANTY_PROOF` or `OTHER` (REQ-LIFE-016). On the **attachment** rather than on the
+            file, because the same scan of a receipt may be the purchase proof of one item and an
+            ordinary document on another, and the file is stored once by content address either way
+          type: string
         scanState:
           description: where the scan stands; only `CLEAN` yields URLs
           type: string
@@ -11960,6 +11967,18 @@ paths:
         schema:
           default: false
           type: boolean
+      - description: |-
+          what the attachment is for — `PHOTO`, `RECEIPT`, `
+          WARRANTY_PROOF` or `OTHER`. It is what lets the insurance report of REQ-LIFE-016
+          attach the receipt rather than offering a list of files and leaving the reader to find it
+          (REQ-LIFE-001 was amended for this on 2026-09-20)
+        in: query
+        name: role
+        required: false
+        schema:
+          default: PHOTO
+          pattern: PHOTO|RECEIPT|WARRANTY_PROOF|OTHER
+          type: string
       requestBody:
         content:
           application/json:
@@ -12972,6 +12991,177 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Everything that runs out, soonest first (REQ-LIFE-013)
+  /api/v1/reports/insurance:
+    get:
+      description: |-
+        What an insurer asks for (REQ-LIFE-016).
+
+        Replacement value per room and in total, per currency, with the day each figure was true
+        and the evidence that backs it up. Not what a thing cost and not what it is worth now: an
+        insurer asks what buying it again would cost, which is REQ-LIFE-014's separate column.
+
+        Served as **data**. A PDF is a `DocumentRenderer` plugin's job
+        (<a href="../../../../../../../docs/adr/0070-documents-are-described-not-programmed.md">ADR-0070</a>),
+        which is why this endpoint answers JSON and CSV and the rendered document has its own path:
+        an instance with no renderer installed still produces the figures.
+      operationId: insurance
+      parameters:
+      - description: the place to report on, or omitted for everything the tenant has
+        in: query
+        name: root
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: how many items at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: the report
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What an insurer asks for (REQ-LIFE-016)
+  /api/v1/reports/insurance.csv:
+    get:
+      description: |-
+        The same report as a table, for a spreadsheet (REQ-LIFE-016).
+
+        One line per item with its room, because that is the shape somebody pastes into whatever
+        their insurer sent them. The evidence is named by id rather than embedded: a CSV has nowhere to
+        put a photograph, and pretending otherwise would produce a file no spreadsheet opens.
+      operationId: insuranceTable
+      parameters:
+      - description: the place to report on, or omitted for everything
+        in: query
+        name: root
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: how many items at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: the table
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The same report as a table, for a spreadsheet (REQ-LIFE-016)
   /api/v1/reports/valuation:
     get:
       description: |-

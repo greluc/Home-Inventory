@@ -246,7 +246,7 @@ class MediaScanIT extends AbstractIntegrationTest {
         () -> {
           try {
             return media.upload(
-                new ByteArrayInputStream(jpeg()), "ITEM", UUID.randomUUID(), false, userId);
+                new ByteArrayInputStream(jpeg()), "ITEM", UUID.randomUUID(), false, "PHOTO", userId);
           } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);
           }

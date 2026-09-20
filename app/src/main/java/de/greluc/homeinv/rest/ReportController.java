@@ -38,6 +38,7 @@ public class ReportController {
 
   private final ValuationReport reports;
   private final ExpiryOverview expiries;
+  private final de.greluc.homeinv.inventory.api.InsuranceReport insurance;
 
   /**
    * What the things in here are worth (REQ-LIFE-008).
@@ -100,6 +101,93 @@ public class ReportController {
       @RequestParam(required = false, defaultValue = "true") boolean includePast,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return expiries.due(upTo, includePast, limit);
+  }
+
+  /**
+   * What an insurer asks for (REQ-LIFE-016).
+   *
+   * <p>Replacement value per room and in total, per currency, with the day each figure was true
+   * and the evidence that backs it up. Not what a thing cost and not what it is worth now: an
+   * insurer asks what buying it again would cost, which is REQ-LIFE-014's separate column.
+   *
+   * <p>Served as <b>data</b>. A PDF is a {@code DocumentRenderer} plugin's job
+   * (<a href="../../../../../../../docs/adr/0070-documents-are-described-not-programmed.md">ADR-0070</a>),
+   * which is why this endpoint answers JSON and CSV and the rendered document has its own path:
+   * an instance with no renderer installed still produces the figures.
+   *
+   * @param root the place to report on, or omitted for everything the tenant has
+   * @param limit how many items at most; capped at 200
+   * @return the report
+   */
+  @GetMapping(path = "/insurance", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST, ProblemType.VALIDATION_FAILED})
+  public de.greluc.homeinv.inventory.api.InsuranceReport.Report insurance(
+      @RequestParam(required = false) UUID root,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return insurance.of(root, limit);
+  }
+
+  /**
+   * The same report as a table, for a spreadsheet (REQ-LIFE-016).
+   *
+   * <p>One line per item with its room, because that is the shape somebody pastes into whatever
+   * their insurer sent them. The evidence is named by id rather than embedded: a CSV has nowhere to
+   * put a photograph, and pretending otherwise would produce a file no spreadsheet opens.
+   *
+   * @param root the place to report on, or omitted for everything
+   * @param limit how many items at most; capped at 200
+   * @return the table
+   */
+  @GetMapping(path = "/insurance.csv", produces = "text/csv")
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST, ProblemType.VALIDATION_FAILED})
+  public org.springframework.http.ResponseEntity<String> insuranceTable(
+      @RequestParam(required = false) UUID root,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    de.greluc.homeinv.inventory.api.InsuranceReport.Report report = insurance.of(root, limit);
+    StringBuilder csv = new StringBuilder();
+    csv.append("room,item,quantity,replacementAmount,replacementCurrency,asOf,source,receipts")
+        .append('\n');
+    for (var room : report.rooms()) {
+      for (var line : room.lines()) {
+        csv.append(quoted(room.path()))
+            .append(',')
+            .append(quoted(line.name()))
+            .append(',')
+            .append(line.quantity() == null ? "" : line.quantity().toPlainString())
+            .append(',')
+            .append(line.replacement() == null ? "" : line.replacement().amount().toPlainString())
+            .append(',')
+            .append(line.replacement() == null ? "" : line.replacement().currency().getCurrencyCode())
+            .append(',')
+            .append(line.asOf() == null ? "" : line.asOf())
+            .append(',')
+            .append(line.source() == null ? "" : line.source())
+            .append(',')
+            .append(line.receipts().size())
+            .append('\n');
+      }
+    }
+    return org.springframework.http.ResponseEntity.ok()
+        .header(
+            org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"insurance-" + report.producedOn() + ".csv\"")
+        .body(csv.toString());
+  }
+
+  /**
+   * One cell, quoted the way RFC 4180 asks.
+   *
+   * <p>A room called {@code Office, small} would otherwise become two columns, and an inventory is
+   * full of names with commas in them.
+   *
+   * @param value the cell
+   * @return it, quoted
+   */
+  private static String quoted(String value) {
+    String text = value == null ? "" : value;
+    return '"' + text.replace("\"", "\"\"") + '"';
   }
 
   /**

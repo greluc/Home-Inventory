@@ -92,7 +92,12 @@ public class DefaultMediaService implements MediaService {
   @Override
   @Transactional
   public MediaView upload(
-      InputStream content, String targetKind, UUID targetId, boolean primaryImage, UUID actor)
+      InputStream content,
+      String targetKind,
+      UUID targetId,
+      boolean primaryImage,
+      String role,
+      UUID actor)
       throws IOException {
 
     UUID tenantId = TenantContext.require();
@@ -154,6 +159,7 @@ public class DefaultMediaService implements MediaService {
                       targetKind,
                       targetId,
                       primary,
+                      role,
                       actor,
                       now));
             });
@@ -182,7 +188,7 @@ public class DefaultMediaService implements MediaService {
         targetKind,
         targetId,
         object.getScanState());
-    return toView(object, primary);
+    return toView(object, primary, role);
   }
 
   @Override
@@ -256,7 +262,8 @@ public class DefaultMediaService implements MediaService {
                                         "Attachment "
                                             + attachment.getId()
                                             + " references a media object that is not there")),
-                        attachment.isPrimaryImage()))
+                        attachment.isPrimaryImage(),
+                        attachment.getRole()))
             .toList();
 
     // A cursor only when the page was full. A short page is the last one, and
@@ -381,6 +388,18 @@ public class DefaultMediaService implements MediaService {
    * @return the view
    */
   private MediaView toView(MediaObject object, boolean primaryImage) {
+    return toView(object, primaryImage, null);
+  }
+
+  /**
+   * Builds the published view, signing a URL per variant.
+   *
+   * @param object the stored file
+   * @param primaryImage whether this attachment is the one lists show
+   * @param role what the attachment is for, or null for {@code PHOTO}
+   * @return the view
+   */
+  private MediaView toView(MediaObject object, boolean primaryImage, String role) {
     Map<String, String> urls = new LinkedHashMap<>();
     if (object.isRetrievable()) {
       // A URL is offered only for a variant that EXISTS. `full` is produced
@@ -406,6 +425,7 @@ public class DefaultMediaService implements MediaService {
         object.getHeightPx(),
         object.getScanState().name(),
         primaryImage,
+        role == null || role.isBlank() ? "PHOTO" : role,
         Map.copyOf(urls));
   }
 }

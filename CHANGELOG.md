@@ -194,6 +194,14 @@ commit".
   travel too, as far as the person asking is allowed to read them — anything
   held back is named in the archive rather than left looking empty.
 
+- **There is a report for your insurer.** Replacement value per room and in
+  total, with the day each figure was true, the photograph and the receipt —
+  as data and as a table you can paste into whatever they sent you. It counts
+  what it left out rather than quietly omitting it: a thing nobody has valued
+  is a line that would be argued about. Attachments can now be marked as a
+  receipt or a warranty proof, which is what lets the report attach the right
+  one instead of listing everything.
+
 - **Things can lose value as they age.** Say how long something of a given
   kind is expected to last and the current value follows a straight line from
   what it cost, recomputed nightly. Nothing is assumed: until you give a type

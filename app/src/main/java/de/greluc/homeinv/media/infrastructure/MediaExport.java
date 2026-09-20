@@ -61,7 +61,7 @@ public class MediaExport implements ExportSource {
 
   private static final String ATTACHMENTS =
       """
-      select id, media_object_id, target_kind, target_id, primary_image, display_order,
+      select id, media_object_id, target_kind, target_id, primary_image, display_order, role,
              created_at, updated_at, created_by, updated_by, deleted_at, version
       from media.attachment
       order by target_kind, target_id, display_order
