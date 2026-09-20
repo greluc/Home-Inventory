@@ -281,6 +281,31 @@ public abstract class AbstractIntegrationTest {
   }
 
   /**
+   * The moment the <b>database</b> is at.
+   *
+   * <p>For a test that raises something and then asks a delivery run to pick it up. Those rows
+   * carry a {@code next_attempt_at} written by {@code now()} in PostgreSQL, and the run compares it
+   * against an instant the caller supplies — so a caller supplying {@code Instant.now()} is
+   * comparing two clocks in two processes, and a skew of a millisecond makes a row that was just
+   * written not yet due. In production the run comes round every thirty seconds and never notices;
+   * in a test it is the difference between a pass and a flake.
+   *
+   * <p>Asking the database for its own clock compares like with like. It is deliberately <b>not</b>
+   * "now plus a second": widening the window sweeps up rows other tests scheduled for the future,
+   * and this queue is shared — that was tried on 2026-09-20 and made a different test deliver
+   * somebody else's message.
+   *
+   * @return the database's current instant
+   */
+  protected java.time.Instant databaseNow() {
+    return webApplicationContext
+        .getBean(org.springframework.jdbc.core.simple.JdbcClient.class)
+        .sql("select now()")
+        .query(java.time.Instant.class)
+        .single();
+  }
+
+  /**
    * Base32 back to bytes, which only a test needs.
    *
    * @param encoded the secret as the enrolment returned it

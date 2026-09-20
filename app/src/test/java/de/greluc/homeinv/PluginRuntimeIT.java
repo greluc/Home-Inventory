@@ -184,7 +184,14 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
     // is raised for an account that belongs to no tenant, the operator has
     // granted the plugin at instance level, and the message goes out.
     AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
-    int port = startPlugin(serviceOf(seen, null, false));
+    // Every request, not only the last. `security_notification` is instance-wide
+    // (07 §7.1) and this run delivers everything due on it, so the plugin may
+    // also be handed a row an earlier test left queued -- and asserting about
+    // whichever arrived last is how this failed on 2026-09-20, with a
+    // password-reset address from somewhere else entirely.
+    java.util.List<NotificationDeliverRequest> all =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    int port = startPlugin(serviceOf(seen, null, false, all::add));
     String pluginId = PLUGIN + "accountmail";
     register(pluginId, port, fingerprint());
     registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
@@ -202,10 +209,25 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
                 "en",
                 "runtime-account-" + account));
 
-    securityDispatcher.deliverDue(java.time.Instant.now());
+    // The database's clock, not the JVM's: `next_attempt_at` was written by
+    // `now()` in PostgreSQL and the run compares against what it is given, so
+    // two clocks in two processes decide whether a just-raised row is due.
+    securityDispatcher.deliverDue(databaseNow());
 
-    assertThat(seen.get().getContext().getTenantId()).isEmpty();
-    assertThat(seen.get().getRecipient()).isEqualTo("somebody@example.org");
+    // `security_notification` is instance-wide (07 §7.1) and this run delivers
+    // everything due on it, so the plugin may also have been handed a row some
+    // earlier test left queued. The assertions are therefore about THIS
+    // message, found among what the plugin saw, rather than about whichever one
+    // happened to arrive last -- which is what failed on 2026-09-20, with a
+    // password-reset address from another test.
+    NotificationDeliverRequest mine =
+        all.stream()
+            .filter(request -> "somebody@example.org".equals(request.getRecipient()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the plugin was never handed this message"));
+    // No tenant in the call, which is the half REQ-NOTI-004 and ADR-0066 are
+    // about: an account belongs to no tenant, so the call carries none.
+    assertThat(mine.getContext().getTenantId()).isEmpty();
     assertThat(
             securityNotifications.of(account, 5).stream()
                 .filter(candidate -> candidate.id().equals(queued.id()))
@@ -451,6 +473,27 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
    */
   private static NotificationChannelGrpc.NotificationChannelImplBase serviceOf(
       AtomicReference<NotificationDeliverRequest> seen, AtomicInteger calls, boolean fail) {
+    return serviceOf(seen, calls, fail, request -> {});
+  }
+
+  /**
+   * A fake channel that also hands every request to a collector.
+   *
+   * <p>The single {@code seen} reference holds the LAST request, which is the wrong thing to assert
+   * about whenever the run that produced it delivers more than one message — and the instance-wide
+   * account queue always may.
+   *
+   * @param seen the last request, kept for the tests that only ever see one
+   * @param calls a counter, or {@code null}
+   * @param fail whether to answer every call with an error
+   * @param collector handed every delivery, so a test can find its own among them
+   * @return the service
+   */
+  private static NotificationChannelGrpc.NotificationChannelImplBase serviceOf(
+      AtomicReference<NotificationDeliverRequest> seen,
+      AtomicInteger calls,
+      boolean fail,
+      java.util.function.Consumer<NotificationDeliverRequest> collector) {
     return new NotificationChannelGrpc.NotificationChannelImplBase() {
 
       @Override
@@ -489,6 +532,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
         if (seen != null) {
           seen.set(request);
         }
+        collector.accept(request);
         observer.onNext(
             NotificationDeliverResponse.newBuilder().setProviderMessageId("accepted-1").build());
         observer.onCompleted();

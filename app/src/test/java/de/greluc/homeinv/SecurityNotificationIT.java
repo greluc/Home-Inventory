@@ -93,7 +93,7 @@ class SecurityNotificationIT extends AbstractIntegrationTest {
                 "en",
                 "test-no-plugin-" + userId));
 
-    dispatcher.deliverDue(Instant.now());
+    dispatcher.deliverDue(databaseNow());
 
     // The return value is deliberately NOT asserted on. `security_notification`
     // is instance-wide (07 §7.1) and every test shares it, so the count belongs

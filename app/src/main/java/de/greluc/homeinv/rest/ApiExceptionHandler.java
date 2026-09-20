@@ -17,6 +17,7 @@ import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemLentException;
 import de.greluc.homeinv.inventory.api.ItemStateException;
 import de.greluc.homeinv.notification.api.UnservedTriggerException;
+import de.greluc.homeinv.portability.api.ExportNotReadyException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -797,6 +798,19 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnservedTrigger(
       UnservedTriggerException exception, HttpServletRequest request) {
     return problem(ProblemType.UNSERVED_TRIGGER, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers an archive asked for before it was built (REQ-PORT-005).
+   *
+   * @param exception the refusal, whose message names the state instead
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(ExportNotReadyException.class)
+  public ProblemDetail handleExportNotReady(
+      ExportNotReadyException exception, HttpServletRequest request) {
+    return problem(ProblemType.EXPORT_NOT_READY, exception.getMessage(), request);
   }
 
   /**

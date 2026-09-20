@@ -338,6 +338,23 @@ assigned:
       - "REQ-NOTI-003: triggers at least warranty expiry, maintenance interval, return date, minimum stock, licence expiry, stocktake discrepancy"
       - "REQ-NOTI-001: reminder rules are data, not code"
 
+  - token: export-not-ready
+    status: 409
+    since: 1
+    summary: >
+      The export archive was asked for before it had been built.
+    notes: >
+      A 409 and not a 404: the job is there and the caller is looking at the
+      right thing, it is simply not finished. A 404 would send somebody looking
+      for a job they can see in their own list. The detail names the state
+      instead, because "still running" and "it failed" lead a caller somewhere
+      different -- one waits, the other asks again. Registered with
+      REQ-PORT-005's implementation, when an export first became a job rather
+      than a response.
+    sources:
+      - "REQ-PORT-005: export runs asynchronously as a job resource with progress"
+      - "08 §8.1: /export-jobs is a resource"
+
   - token: invalid-move
     status: 409
     since: 1

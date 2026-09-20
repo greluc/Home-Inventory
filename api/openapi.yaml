@@ -711,6 +711,48 @@ components:
             declares no label
           type: string
       type: object
+    ExportJobView:
+      description: An export job as a caller sees it.
+      properties:
+        byteSize:
+          description: how large the archive is, or `null` until it exists
+          format: int64
+          type: integer
+        failure:
+          description: |-
+            what went wrong, or `null`. Never a stack trace: it is shown to whoever
+            asked
+          type: string
+        finishedAt:
+          description: when it finished, or `null`
+          format: date-time
+          type: string
+        id:
+          description: its id
+          format: uuid
+          type: string
+        progress:
+          description: |-
+            how far along, 0 to 100 — coarse on purpose, because it is read by somebody
+            deciding whether to keep waiting and a number that moves is worth more to them than a
+            number that is exact
+          format: int32
+          type: integer
+        ready:
+          description: Whether the archive can be downloaded.
+          type: boolean
+        requestedAt:
+          description: when it was asked for
+          format: date-time
+          type: string
+        requestedBy:
+          description: who asked
+          format: uuid
+          type: string
+        state:
+          description: '`QUEUED`, `RUNNING`, `READY` or `FAILED`'
+          type: string
+      type: object
     Facet:
       description: |-
         How many rows a list would still hold for each value of one dimension (REQ-SRCH-002).
@@ -6543,6 +6585,243 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Adds a field to a draft.
+  /api/v1/export-jobs:
+    get:
+      description: This tenant's export jobs, newest first.
+      operationId: listJobs
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ExportJobView'
+                type: array
+          description: the jobs
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: This tenant's export jobs, newest first.
+    post:
+      description: Asks for an export (REQ-PORT-005).
+      operationId: requestExport
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobView'
+          description: '`202` with the queued job and a `Location` pointing at it'
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Asks for an export (REQ-PORT-005).
+  /api/v1/export-jobs/{id}:
+    get:
+      description: One export job, which is how progress is watched.
+      operationId: job
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobView'
+          description: the job
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One export job, which is how progress is watched.
+  /api/v1/export-jobs/{id}/content:
+    get:
+      description: |-
+        The archive itself.
+
+        Streamed rather than buffered: it is tens of megabytes, and holding it in memory to serve it
+        would put the ceiling on how much a tenant may own.
+      operationId: content
+      parameters:
+      - description: the job
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/zip:
+              schema:
+                format: binary
+                type: string
+          description: the ZIP
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: That export is not ready (`export-not-ready`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The archive itself
   /api/v1/field-visibility:
     get:
       description: |-

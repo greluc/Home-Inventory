@@ -247,6 +247,16 @@ public enum ProblemType {
   ITEM_STATE("item-state", HttpStatus.CONFLICT, "The item is not in a state for that"),
 
   /**
+   * The export archive was asked for before it existed (REQ-PORT-005).
+   *
+   * <p>A {@code 409} and not a {@code 404}: the job is there and the caller is looking at the right
+   * thing, it is simply not finished. A 404 would send somebody looking for a job they can see in
+   * their own list. The detail says which state it is in, because "still running" and "it failed"
+   * lead a caller somewhere different — one waits, the other asks again.
+   */
+  EXPORT_NOT_READY("export-not-ready", HttpStatus.CONFLICT, "That export is not ready"),
+
+  /**
    * A reminder rule names a trigger nothing can answer here (REQ-NOTI-003).
    *
    * <p>A {@code 422}: the request is well formed and the value is one the enum accepts — what is

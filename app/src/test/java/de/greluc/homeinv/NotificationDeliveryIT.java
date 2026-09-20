@@ -102,7 +102,7 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
     Notifications.QueuedNotification queued = raiseOne(tenant);
     assertThat(queued.state()).isEqualTo("QUEUED");
 
-    assertThat(dispatcher.deliverDue(Instant.now())).isGreaterThanOrEqualTo(1);
+    assertThat(dispatcher.deliverDue(databaseNow())).isGreaterThanOrEqualTo(1);
 
     assertThat(stateOf(tenant, queued.id())).isEqualTo("DELIVERED");
     List<Notifications.DeliveryAttempt> attempts = attemptsOf(tenant, queued.id());
@@ -118,7 +118,7 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
     subscribe(tenant);
 
     Notifications.QueuedNotification queued = raiseOne(tenant);
-    dispatcher.deliverDue(Instant.now());
+    dispatcher.deliverDue(databaseNow());
 
     // Still outstanding, and the attempt is on the record. A mail server that is
     // down is down for minutes, not forever.
@@ -129,7 +129,7 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
 
     // And the next attempt is in the future rather than immediately, so a broken
     // channel is not hammered.
-    assertThat(dispatcher.deliverDue(Instant.now())).isZero();
+    assertThat(dispatcher.deliverDue(databaseNow())).isZero();
   }
 
   @Test
@@ -140,7 +140,7 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
     subscribe(tenant);
 
     Notifications.QueuedNotification queued = raiseOne(tenant);
-    dispatcher.deliverDue(Instant.now());
+    dispatcher.deliverDue(databaseNow());
 
     // Dead-lettered on the first attempt. Repeating a malformed address a
     // hundred times does not make it valid, and the difference between this and

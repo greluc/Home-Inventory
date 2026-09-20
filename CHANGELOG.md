@@ -182,6 +182,12 @@ commit".
   employer; both grant rights of use rather than transfer copyright, and both say
   plainly that no lawyer has read them.
 
+- **You can ask for a copy of everything.** A request returns straight away with
+  a job you can watch, and the finished archive is a ZIP of JSON Lines with a
+  manifest saying what is in it — the shape a tenant needs to move to another
+  instance. Two of the building blocks write themselves into it so far; the rest,
+  including photographs, follow.
+
 - **Photographs nothing points at are cleaned up.** When the last item using an
   uploaded file is deleted, the file itself is removed a week later — long enough
   that moving a photograph between two items never loses it, and short enough
