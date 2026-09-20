@@ -202,6 +202,15 @@ commit".
   a repair that ran automatically would hide the fault that caused it. If
   something is ever wrong, a rebuild puts it right from your items.
 
+- **E-mail works.** The second plugin sends your notifications, invitations
+  and password resets as mail, over an authenticated, encrypted submission —
+  and it **refuses a mail server that will not encrypt**, rather than
+  quietly sending your password in the clear and delivering anyway. The
+  account's password stays with the plugin's container and never reaches the
+  rest of the system; you write it into one file before the first start, and
+  until you do, the plugin says it is not configured instead of pretending
+  to work.
+
 - **A deployment can install a plugin, and the first one is here.** Until now
   the system could call plugins and there was no way to put one in a
   deployment: one entry in the deployment description now produces the

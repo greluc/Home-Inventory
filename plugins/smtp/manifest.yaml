@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The manifest `plugin-smtp` ships as its reference.
+#
+# THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+# `deploy/services.yaml` beside the container, the network segment and the
+# egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+# carries the `host:port` of the mail server this deployment submits to, and
+# which server that is belongs to the operator and to nobody else.
+
+apiVersion: home-inv.plugin/v1
+
+metadata:
+  id: de.greluc.homeinv.plugin.smtp
+  name: "E-mail"
+  version: "0.1.0"
+  vendor: "greluc"
+  license: "AGPL-3.0-or-later"
+  homepage: "https://github.com/greluc/Home-Inventory"
+  descriptions:
+    en: "Delivers a notification as an e-mail, over an authenticated TLS submission."
+    de: "Stellt eine Benachrichtigung als E-Mail über eine authentifizierte TLS-Einlieferung zu."   # spelling-exempt: a manifest's own multilingual DATA
+
+spec:
+  contract: ">=1.0.0 <2.0.0"
+  runtime: out-of-process
+
+  implements:
+    - port: NotificationChannel
+      priority: 100
+
+  capabilities:
+    # A `tcp:` target and not a `hosts:` one, because submission is not HTTP: the
+    # proxy opens a tunnel to exactly this host and port and the plugin speaks
+    # SMTP inside it (O11, ADR-0027). The port is part of the allowance -- "the
+    # mail server, on any port" is not what an operator meant.
+    - id: network:outbound
+      tcp: ["mail.example.org:587"]
+      reason: "Submitting notifications to this deployment's mail server"
+    # Without this the sender's display name never leaves the core and messages
+    # go out with the address alone, which still works. It is declared because a
+    # tenant that sets one expects to see it (ADR-0073).
+    - id: core:setting:read
+      reason: "Reading the sender name this tenant chose"
+
+  settings:
+    # PER TENANT, and the only thing a tenant configures here. The mail server,
+    # the account and the password are the OPERATOR's, mounted into the
+    # container: a deployment's mail credential has no business in a tenant's
+    # row (ADR-0073).
+    - key: senderName
+      type: string
+      required: false
+      label:
+        en: "Sender name"
+        de: "Absendername"   # spelling-exempt: a manifest's own multilingual DATA
+
+  health:
+    endpoint: /healthz
+    intervalSeconds: 60
+
+  resources:
+    # One socket in, one socket out, and a message in memory while it is written.
+    memoryMiB: 32
+    timeoutSeconds: 45

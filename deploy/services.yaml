@@ -990,6 +990,55 @@ services:
       nothing leaves the deployment and the core says so plainly rather than
       failing silently (REQ-PLG-013, ADR-0028).
 
+  plugin-smtp:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-smtp }
+    plugin:
+      id: de.greluc.homeinv.plugin.smtp
+      manifest: plugins/smtp/manifest.yaml
+      # WHERE THIS DEPLOYMENT SUBMITS. A `tcp:` target and not a host, because
+      # submission is not HTTP: the proxy opens a tunnel to exactly this
+      # host:port and the plugin speaks SMTP inside it (O11, ADR-0027). The port
+      # is part of the allowance — "the mail server, on any port" is not what an
+      # operator meant.
+      tcp: ["mail.example.org:587"]
+      fingerprintFrom: mtls-plugin-smtp
+      signed: false
+    segment:
+      subnet: 10.89.32.0/24
+    networks: [plugin-smtp]
+    ports:
+      - { container: 8201, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8201"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-smtp"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The mail server, and it has to agree with the `tcp:` target above: one
+      # says where the plugin submits and the other says where it is ALLOWED to.
+      HOMEINV_SMTP_HOST: "${HOMEINV_SMTP_HOST:-mail.example.org}"
+      HOMEINV_SMTP_PORT: "${HOMEINV_SMTP_PORT:-587}"
+      # `starttls` for 587, `implicit` for 465. Neither is guessed at: guessing
+      # means guessing whether the credentials travel in the clear, so a value
+      # that names neither leaves the plugin NOT_CONFIGURED.
+      HOMEINV_SMTP_SECURITY: "${HOMEINV_SMTP_SECURITY:-starttls}"
+      HOMEINV_SMTP_USER: "${HOMEINV_SMTP_USER:-}"
+      HOMEINV_SMTP_SENDER: "${HOMEINV_SMTP_SENDER:-}"
+      HOMEINV_SMTP_TIMEOUT_SECONDS: "30"
+    secrets:
+      - mtls-plugin-smtp          # its server identity, pinned by the core
+      - plugin-smtp-password      # the mail account's password, the OPERATOR's
+                                  # credential — it never passes through the core
+                                  # (ADR-0073)
+    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    profiles: [standard, ha]
+    notes: >
+      The plugin a deployment misses first: an invitation, a password reset and
+      every security notification of REQ-NOTI-004 are mail or they are nothing.
+      The mail server this deployment may reach is the `tcp:` target above and
+      the `HOMEINV_SMTP_HOST` beside it, and the two have to name the same
+      server — one is what the proxy allows and the other is where the plugin
+      goes.
+
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
@@ -1106,6 +1155,24 @@ secrets:
       `setup.sh` computes when it creates this certificate and substitutes into
       the generated plugin list — exactly the mechanism a third party's plugin
       uses, because a first-party one gets no privileged path (ADR-0072).
+  mtls-plugin-smtp:
+    required: false
+    kind: mtls-server
+    services: [plugin-smtp]
+    notes: >
+      Server identity for `plugin-smtp`, pinned by the core exactly as every
+      other in-deployment peer is (REQ-SEC-056).
+  plugin-smtp-password:
+    required: false
+    kind: external
+    services: [plugin-smtp]
+    notes: >
+      THE MAIL ACCOUNT'S PASSWORD, and the first secret here that belongs to
+      somebody else's system. `setup.sh` creates it EMPTY and says so: generating
+      one would produce a value the mail server has never heard of, and the
+      failure would look like a broken plugin rather than a password nobody set.
+      Until it is filled in, the plugin reports NOT_CONFIGURED and sends nothing
+      (REQ-PLG-015). It never passes through the core (ADR-0073).
   mtls-search:
     required: true
     kind: mtls-server

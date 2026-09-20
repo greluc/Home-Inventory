@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-plugin-common"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "What every first-party Home Inventory plugin in Rust needs twice"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+# The mTLS identity a plugin presents to the core, which is `tonic`'s to
+# configure.
+tonic = { version = "0.14", features = ["tls-ring"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+tokio = { version = "1", features = ["net", "io-util", "time"] }
+
+[dev-dependencies]
+# `#[tokio::test]` needs the runtime and the macro, which the crate itself does
+# not: a plugin brings its own runtime and this is a library.
+tokio = { version = "1", features = ["rt", "macros"] }

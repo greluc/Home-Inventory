@@ -197,6 +197,17 @@ generate_secret() {
             ;;
         mtls-client) generate_mtls "$name" "api" ;;
         mtls-server) generate_mtls "$name" "$(echo "$name" | sed 's/^mtls-//')" ;;
+        external)
+            # A credential for somebody ELSE's system -- a mail account,
+            # an object store's keys. Generating one would produce a value
+            # that server has never heard of, and the failure would look
+            # like a broken plugin rather than a password nobody set. So an
+            # empty file is created and the operator is told to fill it;
+            # the plugin that reads it reports NOT_CONFIGURED until they do
+            # (REQ-PLG-015).
+            : > "$target"
+            say "  $name — EMPTY. Write the credential into $target before starting."
+            ;;
         *) die "Unknown secret kind '$kind' for $name. services.yaml and this script disagree." ;;
     esac
     # 0444 in a 0700 directory, and the directory is the protection. Compose
@@ -460,11 +471,24 @@ case "$mode" in
         # The generated files travel the same way: a secret mount is the one
         # mechanism every runtime has for getting a file into a container with a
         # read-only root filesystem and no bind mounts (ADR-0022).
-        for rendered in "$SECRETS"/*.conf "$SECRETS"/*.acl "$SECRETS"/*.yml; do
-            [ -f "$rendered" ] || continue
-            secret_name=$(basename "$rendered")
+        #
+        # Driven by what `generate.py` WROTE rather than by a list of
+        # extensions. It was `*.conf *.acl *.yml` until 2026-09-20, and the
+        # plugin list arrived as `*.yaml`: every unit mounting it failed with
+        # `no secret with name or id "worker-plugins.yaml"`, on Podman only,
+        # because Compose mounts a file and Podman needs the secret to exist
+        # first. An extension list is a list somebody has to remember; this
+        # cannot fall behind.
+        for source in "$GENERATED"/*; do
+            secret_name=$(basename "$source")
+            case "$secret_name" in
+                README.md|host-prerequisites.sh|secret-kinds.sh) continue ;;
+            esac
+            # Not rendered in this profile -- `opensearch-*` in `minimal` --
+            # is not an error: the service is not running either.
+            [ -f "$SECRETS/$secret_name" ] || continue
             podman secret exists "$secret_name" 2>/dev/null \
-                || podman secret create "$secret_name" "$rendered" >/dev/null
+                || podman secret create "$secret_name" "$SECRETS/$secret_name" >/dev/null
         done
         # The same variables Compose reads from compose/.env, in the place the
         # units name. systemd does not interpolate `${VAR}` in `Environment=`, so

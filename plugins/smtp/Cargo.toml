@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-plugin-smtp"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Delivers Home Inventory notifications by e-mail"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+# The mTLS identity, the CONNECT tunnel, base64 and the delivered-key set —
+# the four things `plugins/webhook/` had written out before this crate needed
+# them identically (ADR-0072).
+homeinv-plugin-common = { path = "../common" }
+
+# gRPC towards the core.
+tonic = { version = "0.14", features = ["tls-ring"] }
+tonic-prost = "0.14"
+prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "signal", "fs"] }
+
+# TLS towards the mail server. `rustls` directly rather than a mail library:
+# what this speaks is submission — EHLO, STARTTLS, AUTH, MAIL, RCPT, DATA — and
+# that is a hundred lines of line protocol against a dependency tree larger than
+# the image.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+# The public roots, as data: a `scratch` image has no system trust store.
+webpki-roots = "1"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+protox = "0.9"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

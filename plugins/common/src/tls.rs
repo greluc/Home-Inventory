@@ -9,10 +9,11 @@
 //! own CA or it does not get a connection. There is no unauthenticated mode and
 //! no flag to enable one: a mode that exists is a mode somebody runs.
 //!
-//! *This is the same shape as `blobstore/src/tls.rs`, and deliberately a copy
-//! rather than a shared crate today: there is one Rust plugin. The second one
-//! moves it into a crate the plugins share, which is the point at which a shared
-//! crate costs less than the duplication does ([ADR-0072](../../../docs/adr/0072-first-party-plugins-live-here.md)).*
+//! *The same shape as `blobstore/src/tls.rs`. It lived in `plugins/webhook/`
+//! until `plugins/smtp/` needed the identical eighty lines, which is the moment
+//! ADR-0072 named for moving it here: a shared crate costs less than the second
+//! copy would. `blobstore/` keeps its own, because it is a core service rather
+//! than a plugin and does not depend on this crate.*
 
 use std::path::Path;
 
@@ -94,40 +95,13 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
 /// Re-encodes a DER block as PEM, because `tonic` takes PEM and the parser hands
 /// back DER.
 fn pem_block(label: &str, der: &[u8]) -> String {
-    let encoded = base64(der);
+    let encoded = crate::encoding::base64(der);
     let mut out = format!("-----BEGIN {label}-----\n");
     for line in encoded.as_bytes().chunks(64) {
         out.push_str(std::str::from_utf8(line).expect("base64 is ascii"));
         out.push('\n');
     }
     out.push_str(&format!("-----END {label}-----\n"));
-    out
-}
-
-/// Standard base64, without a dependency for a table lookup.
-fn base64(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let triple = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
-        out.push(ALPHABET[(triple >> 18 & 0x3F) as usize] as char);
-        out.push(ALPHABET[(triple >> 12 & 0x3F) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            ALPHABET[(triple >> 6 & 0x3F) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            ALPHABET[(triple & 0x3F) as usize] as char
-        } else {
-            '='
-        });
-    }
     out
 }
 
@@ -142,9 +116,11 @@ mod tests {
     }
 
     #[test]
-    fn base64_matches_the_standard_alphabet() {
-        assert_eq!(base64(b""), "");
-        assert_eq!(base64(b"f"), "Zg==");
-        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    fn pem_blocks_wrap_at_sixty_four_characters() {
+        let pem = pem_block("CERTIFICATE", &[0_u8; 100]);
+        assert!(pem
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .all(|line| line.len() <= 64));
     }
 }

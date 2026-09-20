@@ -16,5 +16,7 @@ search-password random
 mtls-core mtls-client
 mtls-blobstore mtls-server
 mtls-plugin-webhook mtls-server
+mtls-plugin-smtp mtls-server
+plugin-smtp-password external
 mtls-search mtls-server
 opensearch-admin-password random'

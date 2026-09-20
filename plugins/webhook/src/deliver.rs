@@ -28,7 +28,12 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 
+use homeinv_plugin_common::proxy::status_line;
+
 use crate::target::Target;
+
+/// How long the tunnel itself may take to open, inside the caller's own budget.
+const TUNNEL: Duration = Duration::from_secs(10);
 
 /// How much of a response is read before the rest is dropped.
 ///
@@ -85,7 +90,12 @@ async fn exchange(
     body: &[u8],
 ) -> Result<Delivered, String> {
     let socket = match proxy {
-        Some(address) => connect_through(address, target).await?,
+        Some(address) => {
+            // The CONNECT tunnel is every plugin's one route out, so it lives in
+            // the shared crate rather than here (ADR-0072).
+            homeinv_plugin_common::proxy::connect(address, &target.host, target.port, TUNNEL)
+                .await?
+        }
         None => TcpStream::connect((target.host.as_str(), target.port))
             .await
             .map_err(|failure| format!("the target could not be reached: {failure}"))?,
@@ -159,52 +169,6 @@ async fn exchange(
     })
 }
 
-/// Opens a tunnel through the egress proxy.
-///
-/// The proxy answers `200` when the target is on this plugin's allowlist and a
-/// `4xx` when it is not — and the refusal is the useful half, because it is the
-/// one that says an operator has to add a host rather than that a receiver is
-/// down.
-async fn connect_through(proxy: &str, target: &Target) -> Result<TcpStream, String> {
-    let mut socket = TcpStream::connect(proxy).await.map_err(|failure| {
-        format!("the egress proxy at {proxy} could not be reached: {failure}")
-    })?;
-
-    let authority = format!("{}:{}", target.host, target.port);
-    let request = format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n");
-    socket
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|failure| format!("the egress proxy would not take the request: {failure}"))?;
-
-    let mut head = Vec::with_capacity(256);
-    let mut byte = [0_u8; 1];
-    while head.len() < 1024 {
-        let read = socket
-            .read(&mut byte)
-            .await
-            .map_err(|failure| format!("the egress proxy did not answer: {failure}"))?;
-        if read == 0 {
-            break;
-        }
-        head.push(byte[0]);
-        if head.ends_with(b"\r\n\r\n") {
-            break;
-        }
-    }
-
-    let line = status_line(&head)
-        .ok_or_else(|| "the egress proxy answered nothing to CONNECT".to_string())?;
-    let status = line.split_whitespace().nth(1).unwrap_or("");
-    if status != "200" {
-        return Err(format!(
-            "the egress proxy refused the target: {line}. A host this plugin may reach is one its \
-             manifest names (ADR-0027); adding one is the operator's decision."
-        ));
-    }
-    Ok(socket)
-}
-
 /// The TLS client configuration, with the public roots compiled in.
 ///
 /// A `scratch` image has no system trust store, which is why the roots are a
@@ -233,12 +197,6 @@ fn host_header(target: &Target) -> String {
     } else {
         format!("{}:{}", target.host, target.port)
     }
-}
-
-/// The first line of a response, if a whole one has arrived.
-fn status_line(bytes: &[u8]) -> Option<String> {
-    let end = bytes.windows(2).position(|pair| pair == b"\r\n")?;
-    Some(String::from_utf8_lossy(&bytes[..end]).trim().to_string())
 }
 
 #[cfg(test)]

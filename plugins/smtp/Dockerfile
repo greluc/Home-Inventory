@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# `plugin-webhook` (ADR-0072).
+# `plugin-smtp` (ADR-0072).
+#
+# Same shape as the webhook plugin's, and the same reasoning: `scratch`, one
+# statically linked binary, the public roots compiled in as data because there
+# is no system trust store to read.
 #
 # The runtime stage is `scratch`: the binary, and nothing else. No shell, no
 # package manager, no libc — so there is nothing in the image for an attacker
@@ -30,22 +34,22 @@ WORKDIR /src
 # The shared crate comes first and whole: it is a path dependency, so `cargo`
 # resolves nothing at all without it (ADR-0072).
 COPY plugins/common/ ./plugins/common/
-COPY plugins/webhook/Cargo.toml plugins/webhook/Cargo.lock ./plugins/webhook/
-RUN mkdir -p plugins/webhook/src \
-    && echo 'fn main() {}' > plugins/webhook/src/main.rs \
-    && echo 'fn main() {}' > plugins/webhook/build.rs
-WORKDIR /src/plugins/webhook
+COPY plugins/smtp/Cargo.toml plugins/smtp/Cargo.lock ./plugins/smtp/
+RUN mkdir -p plugins/smtp/src \
+    && echo 'fn main() {}' > plugins/smtp/src/main.rs \
+    && echo 'fn main() {}' > plugins/smtp/build.rs
+WORKDIR /src/plugins/smtp
 RUN cargo fetch --locked
 WORKDIR /src
 
 COPY proto/ ./proto/
-COPY plugins/webhook/ ./plugins/webhook/
+COPY plugins/smtp/ ./plugins/smtp/
 
 # Statically linked, so the runtime stage needs no libc at all.
-WORKDIR /src/plugins/webhook
+WORKDIR /src/plugins/smtp
 RUN RUSTFLAGS='-C target-feature=+crt-static' \
        cargo build --release --locked --target x86_64-unknown-linux-musl \
-    && cp target/x86_64-unknown-linux-musl/release/homeinv-plugin-webhook /homeinv-plugin-webhook
+    && cp target/x86_64-unknown-linux-musl/release/homeinv-plugin-smtp /homeinv-plugin-smtp
 WORKDIR /src
 
 # ---------------------------------------------------------------------------
@@ -53,7 +57,7 @@ WORKDIR /src
 # ---------------------------------------------------------------------------
 FROM scratch
 
-COPY --from=build --chown=10001:10001 /homeinv-plugin-webhook /homeinv-plugin-webhook
+COPY --from=build --chown=10001:10001 /homeinv-plugin-smtp /homeinv-plugin-smtp
 
 # The uid the service matrix names. A numeric uid and not a name: `scratch` has
 # no /etc/passwd to resolve one, and a rootless runtime maps it through subuid
@@ -62,6 +66,6 @@ USER 10001:10001
 
 # Documentation only; the matrix decides what is published, and a plugin never
 # is — it is reachable from its own segment and nowhere else (ADR-0037).
-EXPOSE 8200
+EXPOSE 8201
 
-ENTRYPOINT ["/homeinv-plugin-webhook"]
+ENTRYPOINT ["/homeinv-plugin-smtp"]

@@ -20,6 +20,7 @@ Requires=homeinv-egress-proxy.service
 Requires=homeinv-opensearch.service
 Requires=homeinv-rabbitmq.service
 Requires=homeinv-plugin-webhook.service
+Requires=homeinv-plugin-smtp.service
 After=homeinv-web.service
 After=homeinv-api.service
 After=homeinv-worker.service
@@ -33,6 +34,7 @@ After=homeinv-egress-proxy.service
 After=homeinv-opensearch.service
 After=homeinv-rabbitmq.service
 After=homeinv-plugin-webhook.service
+After=homeinv-plugin-smtp.service
 
 [Install]
 WantedBy=default.target

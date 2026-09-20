@@ -319,12 +319,25 @@ jobs:
           fi
           echo "Runs as 10001:10001."
 
-  plugin-webhook:
-    name: Plugin — webhook
+  plugins:
+    # One job per crate under `plugins/`, so a third and a fourth cost a line
+    # each. `common` is the shared library ADR-0072 predicted: it has tests and
+    # no image, which is the one place the steps below branch.
+    name: Plugin — ${{ matrix.crate }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: common
+            image: false
+          - crate: webhook
+            image: true
+          - crate: smtp
+            image: true
     defaults:
       run:
-        working-directory: plugins/webhook
+        working-directory: plugins/${{ matrix.crate }}
     steps:
       - uses: actions/checkout@v7
 
@@ -334,7 +347,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: plugins/webhook
+          workspaces: plugins/${{ matrix.crate }}
 
       - name: Build
         run: cargo build --release --locked
@@ -342,9 +355,10 @@ jobs:
       - name: Test
         run: cargo test --release --locked
 
-      # The same `-D warnings` the two core Rust services get. This one composes
-      # a request from a URL a person typed and signs a payload with a tenant's
-      # secret; a lint about an unchecked conversion is worth a build here.
+      # The same `-D warnings` the two core Rust services get. These compose a
+      # request from a URL a person typed, sign a payload with a tenant's secret
+      # and speak a line protocol to a mail server; a lint about an unchecked
+      # conversion is worth a build here.
       - name: Clippy
         run: cargo clippy --release --all-targets --locked -- -D warnings
 
@@ -361,28 +375,31 @@ jobs:
         run: cargo deny check
 
       - name: Image
+        if: matrix.image
         # `-f Dockerfile` with the repository root as the context, because the
-        # Dockerfile COPYs `proto/` and the crate from there.
-        run: docker build -f Dockerfile -t home-inv-plugin-webhook:ci ../..
+        # Dockerfile COPYs `proto/`, the shared crate and this one from there.
+        run: docker build -f Dockerfile -t home-inv-plugin-${{ matrix.crate }}:ci ../..
 
       # `scratch` plus one static binary, like the two core Rust services. A
       # plugin with a shell in its image is a plugin that can be used as one.
       - name: The image contains the binary and nothing else
+        if: matrix.image
         run: |
           set -euo pipefail
-          if docker run --rm --entrypoint /bin/sh home-inv-plugin-webhook:ci -c 'echo reachable' \
-             2>/dev/null; then
+          if docker run --rm --entrypoint /bin/sh home-inv-plugin-${{ matrix.crate }}:ci \
+             -c 'echo reachable' 2>/dev/null; then
             echo "::error::the runtime image contains a shell"
             exit 1
           fi
           echo "No shell in the runtime image."
 
       - name: The image does not run as root
+        if: matrix.image
         run: |
           set -euo pipefail
-          user=$(docker image inspect home-inv-plugin-webhook:ci --format '{{.Config.User}}')
+          user=$(docker image inspect home-inv-plugin-${{ matrix.crate }}:ci --format '{{.Config.User}}')
           if [ "$user" != "10001:10001" ]; then
-            echo "::error::plugin-webhook runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
+            echo "::error::plugin-${{ matrix.crate }} runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
             exit 1
           fi
           echo "Runs as 10001:10001."

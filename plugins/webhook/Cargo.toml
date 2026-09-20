@@ -12,6 +12,12 @@ repository = "https://github.com/greluc/Home-Inventory"
 publish = false
 
 [dependencies]
+# What every first-party Rust plugin needs identically: the mTLS identity it
+# presents to the core, the CONNECT tunnel that is its one route out, base64
+# and hex, and the bounded set of keys it has already delivered. It moved to a
+# crate when `plugins/smtp/` needed the same eighty lines, which is the moment
+# ADR-0072 named for it.
+homeinv-plugin-common = { path = "../common" }
 # gRPC towards the core. `tls-ring` rather than the aws-lc backend, as in
 # `blobstore/`: ring builds without a C toolchain and keeps the image smaller.
 tonic = { version = "0.14", features = ["tls-ring"] }

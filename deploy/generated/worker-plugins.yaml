@@ -56,3 +56,45 @@ plugins:
         resources:
           memoryMiB: 32
           timeoutSeconds: 15
+  - id: de.greluc.homeinv.plugin.smtp
+    endpoint: "plugin-smtp:8201"
+    fingerprint: "@FINGERPRINT:mtls-plugin-smtp@"
+    signed: false
+    manifestInline: |
+      apiVersion: home-inv.plugin/v1
+      metadata:
+        id: de.greluc.homeinv.plugin.smtp
+        name: E-mail
+        version: 0.1.0
+        vendor: greluc
+        license: AGPL-3.0-or-later
+        homepage: https://github.com/greluc/Home-Inventory
+        descriptions:
+          en: Delivers a notification as an e-mail, over an authenticated TLS submission.
+          de: Stellt eine Benachrichtigung als E-Mail über eine authentifizierte TLS-Einlieferung zu.
+      spec:
+        contract: '>=1.0.0 <2.0.0'
+        runtime: out-of-process
+        implements:
+        - port: NotificationChannel
+          priority: 100
+        capabilities:
+        - id: network:outbound
+          tcp:
+          - mail.example.org:587
+          reason: Submitting notifications to this deployment's mail server
+        - id: core:setting:read
+          reason: Reading the sender name this tenant chose
+        settings:
+        - key: senderName
+          type: string
+          required: false
+          label:
+            en: Sender name
+            de: Absendername
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+        resources:
+          memoryMiB: 32
+          timeoutSeconds: 45

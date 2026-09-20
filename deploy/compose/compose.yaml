@@ -74,6 +74,7 @@ services:
           - api-internal
       frontend: {}
       plugin-webhook: {}
+      plugin-smtp: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -166,6 +167,7 @@ services:
           - worker-internal
       scanner: {}
       plugin-webhook: {}
+      plugin-smtp: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -506,6 +508,7 @@ services:
       scanner: {}
       egress: {}
       plugin-webhook: {}
+      plugin-smtp: {}
     secrets:
       - source: egress-proxy-egress-allowlist.conf
         target: /etc/homeinv/egress-allowlist.conf
@@ -651,12 +654,52 @@ services:
         reservations:
           memory: 32m
 
+  plugin-smtp:
+    image: ghcr.io/greluc/home-inv-plugin-smtp:latest
+    container_name: homeinv-plugin-smtp
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-smtp: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8201"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-smtp"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_SMTP_HOST: "${HOMEINV_SMTP_HOST:-mail.example.org}"
+      HOMEINV_SMTP_PORT: "${HOMEINV_SMTP_PORT:-587}"
+      HOMEINV_SMTP_SECURITY: "${HOMEINV_SMTP_SECURITY:-starttls}"
+      HOMEINV_SMTP_USER: "${HOMEINV_SMTP_USER:-}"
+      HOMEINV_SMTP_SENDER: "${HOMEINV_SMTP_SENDER:-}"
+      HOMEINV_SMTP_TIMEOUT_SECONDS: "30"
+    secrets:
+      - mtls-plugin-smtp
+      - plugin-smtp-password
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
 networks:
   plugin-webhook:
     internal: true
     ipam:
       config:
         - subnet: 10.89.31.0/24
+  plugin-smtp:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.32.0/24
   edge:
   egress:
   internal:
@@ -718,6 +761,10 @@ secrets:
     file: ../secrets/mtls-blobstore
   mtls-plugin-webhook:
     file: ../secrets/mtls-plugin-webhook
+  mtls-plugin-smtp:
+    file: ../secrets/mtls-plugin-smtp
+  plugin-smtp-password:
+    file: ../secrets/plugin-smtp-password
   mtls-search:
     file: ../secrets/mtls-search
   opensearch-admin-password:

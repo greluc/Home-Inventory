@@ -37,7 +37,6 @@ mod deliver;
 mod payload;
 mod signature;
 mod target;
-mod tls;
 
 /// The generated contract from `proto/home_inv/plugin/v1/`.
 ///
@@ -49,11 +48,12 @@ mod proto {
     tonic::include_proto!("home_inv.plugin.v1");
 }
 
-use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::time::Duration;
+
+use homeinv_plugin_common::keys::Remembered;
+use homeinv_plugin_common::tls;
 
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let channel = Webhook {
         proxy: proxy.clone(),
         timeout,
-        delivered: Mutex::new(VecDeque::with_capacity(REMEMBERED_KEYS)),
+        delivered: Remembered::holding(REMEMBERED_KEYS),
     };
 
     info!(
@@ -154,33 +154,12 @@ struct Webhook {
     /// How long a delivery may take in total.
     timeout: Duration,
     /// Keys already delivered, newest last.
-    delivered: Mutex<VecDeque<String>>,
-}
-
-impl Webhook {
-    /// Whether this key has already been delivered, remembering it if not.
     ///
-    /// In memory and bounded: a restart forgets, which is stated in the `README`
-    /// rather than hidden. The core retries a delivery within minutes, so the
-    /// window that matters is far shorter than a process's life — and a plugin
-    /// that kept a durable store would be a plugin with a database.
-    fn already_delivered(&self, key: &str) -> bool {
-        if key.is_empty() {
-            return false;
-        }
-        let mut seen = self
-            .delivered
-            .lock()
-            .expect("the key list is never poisoned");
-        if seen.iter().any(|remembered| remembered == key) {
-            return true;
-        }
-        if seen.len() >= REMEMBERED_KEYS {
-            seen.pop_front();
-        }
-        seen.push_back(key.to_string());
-        false
-    }
+    /// In memory and bounded: a restart forgets, which the `README` says rather
+    /// than implying otherwise. The core retries within minutes, so the window
+    /// that matters is far shorter than a process's life — and a plugin with a
+    /// durable store would be a plugin with a database.
+    delivered: Remembered,
 }
 
 #[tonic::async_trait]
@@ -222,7 +201,7 @@ impl NotificationChannel for Webhook {
 
         let target = target::parse(&message.recipient).map_err(Status::invalid_argument)?;
 
-        if self.already_delivered(&message.idempotency_key) {
+        if self.delivered.already(&message.idempotency_key) {
             // Recognised and not sent again. The core counts these separately,
             // because a delivery log where every retry looks like a send cannot
             // answer "did this person get two messages".
@@ -424,25 +403,18 @@ mod tests {
         Webhook {
             proxy: Some("egress-proxy:8118".into()),
             timeout: Duration::from_secs(1),
-            delivered: Mutex::new(VecDeque::new()),
+            delivered: Remembered::holding(REMEMBERED_KEYS),
         }
     }
 
     #[test]
-    fn a_key_is_remembered_once() {
+    fn a_repeat_is_recognised_rather_than_sent_again() {
+        // The behaviour of the set itself is `homeinv_plugin_common::keys`'
+        // business and tested there; what this asserts is that this plugin is
+        // wired to it at all.
         let webhook = plugin();
-        assert!(!webhook.already_delivered("key-1"));
-        assert!(webhook.already_delivered("key-1"));
-        assert!(!webhook.already_delivered("key-2"));
-    }
-
-    #[test]
-    fn an_empty_key_is_never_a_duplicate() {
-        // A caller that sends no key gets no deduplication rather than one
-        // bucket everything falls into.
-        let webhook = plugin();
-        assert!(!webhook.already_delivered(""));
-        assert!(!webhook.already_delivered(""));
+        assert!(!webhook.delivered.already("key-1"));
+        assert!(webhook.delivered.already("key-1"));
     }
 
     #[test]
