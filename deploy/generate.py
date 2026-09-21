@@ -162,14 +162,23 @@ ReceiveTimeout 60
 #     Valkey held no credential at all until ADR-0044, which meant every session
 #     and every rate-limit counter was readable by anything that could open port
 #     6379 on `internal` — `web` included, at the time.
-#   * THREE CHANNELS, and they are not optional. An ACL grants no pub/sub channel
-#     at all by default, and the indexed session store subscribes to exactly
-#     three: the keyspace notifications Valkey emits when a session key is
-#     deleted or expires, and Spring Session's own "created" pattern. They are
-#     what keeps the per-account session index of REQ-AUTH-009 from filling with
-#     sessions that are gone. Without them the application does not degrade — it
-#     refuses to start, with `NOPERM No permissions to access a channel`, which is
-#     how this line came to be written.
+#   * FOUR CHANNELS, and they are not optional. An ACL grants no pub/sub channel
+#     at all by default. Three belong to the indexed session store: the keyspace
+#     notifications Valkey emits when a session key is deleted or expires, and
+#     Spring Session's own "created" pattern. They are what keeps the per-account
+#     session index of REQ-AUTH-009 from filling with sessions that are gone.
+#     Without them the application does not degrade — it refuses to start, with
+#     `NOPERM No permissions to access a channel`, which is how this line came to
+#     be written.
+#
+#     The fourth is `homeinv.live`, the live-change nudge of REQ-API-011: a change
+#     committed on one `api` replica has to reach a browser connected to another,
+#     so every replica publishes to it and every replica subscribes. It was added
+#     on 2026-09-21, after the feature had shipped without it and the smoke suite
+#     found what the unit tests could not — they run one context against a Valkey
+#     with no ACL at all. `worker` holds the same grant: it raises the events, so
+#     it publishes, and the one listener it also starts is the cheaper half of
+#     that (see `LiveChangeSubscriber`).
 #
 #     They are spelled out rather than globbed because Valkey matches them
 #     differently for the two commands: a SUBSCRIBE channel is glob-matched
@@ -184,6 +193,7 @@ VALKEY_ACL_TEMPLATE = (
     "user default off\n"
     "user {user} on >{password} ~*"
     " &__keyevent@0__:del &__keyevent@0__:expired &spring:session:event:0:created:*"
+    " &homeinv.live"
     " +@all\n"
 )
 

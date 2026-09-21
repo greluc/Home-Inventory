@@ -57,6 +57,13 @@ public class LiveChanges implements LiveStreams {
    * <p>One channel and not one per tenant: a subscription per tenant would be a subscription
    * churning as tenants come and go, and the filtering a channel name would save is a string
    * comparison on a message that already arrived.
+   *
+   * <p><b>The deployment's Valkey ACL has to grant it by name.</b> An ACL grants no pub/sub
+   * channel at all by default (ADR-0044), so a channel added here and not in
+   * {@code deploy/generate.py} does not degrade the feature — the listener fails to start and the
+   * container exits. {@code ValkeyChannelGrantTest} compares this constant against the generated
+   * file, because that is cheaper than finding out from the smoke suite, which is where it was
+   * found the first time.
    */
   public static final String CHANNEL = "homeinv.live";
 

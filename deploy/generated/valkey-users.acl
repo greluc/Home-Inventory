@@ -1,2 +1,2 @@
 user default off
-user homeinv on >@SECRET:valkey-password@ ~* &__keyevent@0__:del &__keyevent@0__:expired &spring:session:event:0:created:* +@all
+user homeinv on >@SECRET:valkey-password@ ~* &__keyevent@0__:del &__keyevent@0__:expired &spring:session:event:0:created:* &homeinv.live +@all
