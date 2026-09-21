@@ -33,6 +33,17 @@ COPY plugin-api/build.gradle.kts ./plugin-api/
 # this image does not build -- which is what it did until this line existed.
 # Its build file only: the plugin's sources are its own image's business.
 COPY plugins/oidc/build.gradle.kts ./plugins/oidc/
+# And the generated Kotlin client, which joined the build on 2026-09-21
+# (REQ-API-002). Gradle configures EVERY project in `settings.gradle.kts`
+# whatever task is asked for, and refuses one whose directory is not there --
+# which is what broke this image, and the application image, and both smoke
+# runtimes with them.
+#
+# An EMPTY DIRECTORY and not its build file: a project needs a directory to be
+# configured and a build file only to do anything. Copying the build file would
+# make this image resolve and download the whole Kotlin Multiplatform toolchain
+# to build a Java artefact that does not use it.
+RUN mkdir -p api/clients/kotlin
 RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /dev/null 2>&1 || true
 
 # The BlobStore contract. `app/build.gradle.kts` points the protobuf plugin at

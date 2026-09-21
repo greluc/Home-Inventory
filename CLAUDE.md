@@ -359,6 +359,13 @@ Treat every file as world-readable at all times.
   consumer is idempotent, because delivery is at-least-once.
 - **the plugin contract** → `buf breaking` gates it; a new major version keeps the previous
   one served for at least six months.
+- **a Gradle project** (a new `include` in `settings.gradle.kts`) → it must **exist in
+  every image that runs Gradle**. Gradle configures every project whatever task is asked
+  for and refuses one whose directory is not there, so an image building from a partial
+  context fails with a message about a task it does not run. Copy its build file where the
+  image builds it, `mkdir -p` its directory where it does not — a project needs a directory
+  to be configured and a build file only to do anything. `GradleProjectsInImagesTest`
+  refuses the omission; it cost two CI rounds before it existed.
 - **a deployment detail** → it belongs in `deploy/services.yaml`, from which the Quadlet
   units and `compose.yaml` are generated and the Helm chart is validated. Hand-editing the
   generated artifacts fails the drift check.
