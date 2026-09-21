@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -25,4 +26,4 @@ import org.springframework.modulith.events.Externalized;
  * @param toLocationId where it is now, or {@code null} when it is now nowhere
  */
 @Externalized("homeinv.inventory::item-moved.v1")
-public record ItemMoved(UUID tenantId, UUID itemId, UUID fromLocationId, UUID toLocationId) {}
+public record ItemMoved(UUID tenantId, UUID itemId, UUID fromLocationId, UUID toLocationId) implements TenantScopedEvent {}

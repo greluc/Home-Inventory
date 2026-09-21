@@ -190,6 +190,12 @@ commit".
 
 ### Added
 
+- **A page updates itself when somebody else changes something.** An open list
+  refreshes on its own instead of going stale until you reload it. What the server
+  sends is only that something of a kind changed — never an id and never the contents —
+  so the page re-reads what it is showing and sees exactly what you are allowed to
+  see, and somebody with access to part of a household learns nothing about the rest.
+
 - **The provider that signs you in now ships with the system.** `plugin-oidc` is the
   fifth and last first-party plugin: discovery, PKCE and an ID token checked against
   the provider's published keys, its issuer, its audience, its expiry and the one-time
@@ -837,7 +843,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 33 types in the shared
+- **The shared kernel is measured.** `platform` holds 34 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

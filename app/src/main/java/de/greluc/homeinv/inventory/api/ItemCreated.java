@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -32,4 +33,4 @@ import org.springframework.modulith.events.Externalized;
  */
 @Externalized("homeinv.inventory::item-created.v1")
 public record ItemCreated(
-    UUID tenantId, UUID itemId, UUID itemTypeVersionId, String name, UUID locationId) {}
+    UUID tenantId, UUID itemId, UUID itemTypeVersionId, String name, UUID locationId) implements TenantScopedEvent {}

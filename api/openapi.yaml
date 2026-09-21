@@ -3579,6 +3579,12 @@ components:
             type: string
           type: array
       type: object
+    SseEmitter:
+      properties:
+        timeout:
+          format: int64
+          type: integer
+      type: object
     Started:
       description: Where to send the browser.
       properties:
@@ -7189,6 +7195,38 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Adds a field to a draft.
+  /api/v1/events:
+    get:
+      description: 'Server-sent events carrying a kind and a moment, so an open view can refresh itself.
+        It carries no ids and no contents: a view re-reads what it shows through the ordinary API, which
+        applies the ordinary permissions.'
+      operationId: events
+      responses:
+        '200':
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SseEmitter'
+          description: the stream, which the container keeps open
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Live changes in this tenant
   /api/v1/export-jobs:
     get:
       description: This tenant's export jobs, newest first.

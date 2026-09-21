@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -21,4 +22,4 @@ import org.springframework.modulith.events.Externalized;
  * @param itemId the item
  */
 @Externalized("homeinv.inventory::item-deleted.v1")
-public record ItemDeleted(UUID tenantId, UUID itemId) {}
+public record ItemDeleted(UUID tenantId, UUID itemId) implements TenantScopedEvent {}

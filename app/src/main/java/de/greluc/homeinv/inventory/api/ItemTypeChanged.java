@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -23,4 +24,4 @@ import org.springframework.modulith.events.Externalized;
  */
 @Externalized("homeinv.inventory::item-type-changed.v1")
 public record ItemTypeChanged(
-    UUID tenantId, UUID itemId, UUID fromItemTypeVersionId, UUID toItemTypeVersionId) {}
+    UUID tenantId, UUID itemId, UUID fromItemTypeVersionId, UUID toItemTypeVersionId) implements TenantScopedEvent {}

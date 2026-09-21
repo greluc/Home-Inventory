@@ -75,7 +75,7 @@ graph TB
         REST["rest<br/>OpenAPI 3.1"]
         GQL["graphql<br/>read-only"]
         GRPC["grpc<br/>plugin contract"]
-        SSE["events-stream<br/>SSE/WebSocket"]
+        SSE["eventstream<br/>SSE"]
     end
 
     subgraph Core["Consistency-critical core (not extractable)"]
@@ -532,7 +532,7 @@ translates protocol into use-case call and back.
 | `rest` | The OpenAPI 3.1 surface under `/api/v1`, content negotiation, problem details, idempotency keys, ETag/If-Match, pagination | Its own queries, its own permission checks, entities in the response model |
 | `graphql` | Read-only query surface, batch loading against N+1, depth and cost limits, persisted queries | Mutations (see [ADR-0010](../adr/0010-api-surfaces.md)) |
 | `grpc` | Plugin contract, mTLS, capability check per call | Direct database access |
-| `events-stream` | Server-sent events for live updating of open views | Bulk data retrieval |
+| `eventstream` | Which live streams this replica holds, and what reaches them: a **kind** and a moment, never an id and never contents (`REQ-API-011`). A change publishes a nudge to Valkey when it commits, every replica's subscriber hears it, and an open view re-reads what it shows through the ordinary API. Its HTTP endpoint is `GET /api/v1/events` and lives in `rest` with every other endpoint — a `@RestController` outside it would escape `PermissionInterceptor`, which `ArchitectureRulesTest` refuses (`REQ-SEC-023`) | Bulk data retrieval, ids, contents |
 
 ## 4.5 Mapping blocks to database schemas
 

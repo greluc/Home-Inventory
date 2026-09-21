@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tagging.api;
 
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 
 /**
@@ -13,4 +14,4 @@ import java.util.UUID;
  * @param tagId the tag
  * @param name the name it was given
  */
-public record TagCreated(UUID tenantId, UUID tagId, String name) {}
+public record TagCreated(UUID tenantId, UUID tagId, String name) implements TenantScopedEvent {}

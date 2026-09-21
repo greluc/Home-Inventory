@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 
 /**
@@ -21,4 +22,4 @@ import java.util.UUID;
  * @param projected whether the field is mirrored from now on; false means its rows are removed
  */
 public record FieldSearchabilityChanged(
-    UUID tenantId, UUID versionId, UUID fieldId, String key, boolean projected) {}
+    UUID tenantId, UUID versionId, UUID fieldId, String key, boolean projected) implements TenantScopedEvent {}
