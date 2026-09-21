@@ -22,6 +22,11 @@ import java.util.UUID;
  * @param name the name
  * @param description free text, may be {@code null}
  * @param kind {@code PHYSICAL} or {@code DIGITAL}, as a string so consumers need no enum of ours
+ * @param itemTypeVersionId which type version the attributes below were written against
+ *     (REQ-CORE-002). <b>Without it a client cannot render them</b>: what an attribute key means is
+ *     the catalogue's business, and reading the schema needs its id. It was absent from this view
+ *     until 2026-09-21, while the very next line told a client to go and read that schema — one of
+ *     the two sentences had to be wrong, and the code was
  * @param locationId where it is; {@code null} for a digital item
  * @param quantity how many
  * @param quantityUnit the unit, may be {@code null}
@@ -46,6 +51,7 @@ public record ItemView(
     String name,
     String description,
     String kind,
+    UUID itemTypeVersionId,
     UUID locationId,
     BigDecimal quantity,
     String quantityUnit,

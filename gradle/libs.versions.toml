@@ -118,6 +118,22 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+# The read-only GraphQL surface of REQ-API-006. Version managed by the Boot BOM, like every
+# other starter here: graphql-java, spring-graphql and the Jackson binding have to agree, and
+# the BOM is the one place that knows which trio does.
+spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-starter-graphql" }
+# Declared rather than relied on transitively: `GraphQlPermissions` is an `@Aspect`, and
+# the weaver arrives today only because resilience4j happens to bring it. A dependency that
+# AUTHORISATION depends on is one this build names itself.
+#
+# The artefact and not `spring-boot-starter-aop`, which Spring Boot 4 no longer publishes:
+# the starter was one dependency and a piece of auto-configuration that is now always on.
+# The version comes from the Boot BOM either way.
+aspectjweaver = { module = "org.aspectj:aspectjweaver" }
+# Carrying the caller and the tenant onto a thread the request did not start on
+# (`ContextPropagation`). It is on the runtime classpath already, through Reactor and
+# Micrometer; compiling against it is what makes the accessors ours rather than theirs.
+context-propagation = { module = "io.micrometer:context-propagation" }
 
 # CSV, for the imports of REQ-PORT-001/002. No version and no new vendor: it is
 # the same Jackson 3 the whole application already speaks, from the same BOM as

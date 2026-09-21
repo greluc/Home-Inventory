@@ -1280,6 +1280,15 @@ components:
           description: the item's UUIDv7
           format: uuid
           type: string
+        itemTypeVersionId:
+          description: |-
+            which type version the attributes below were written against
+            (REQ-CORE-002). **Without it a client cannot render them**: what an attribute key means is
+            the catalogue's business, and reading the schema needs its id. It was absent from this view
+            until 2026-09-21, while the very next line told a client to go and read that schema — one of
+            the two sentences had to be wrong, and the code was
+          format: uuid
+          type: string
         kind:
           description: '`PHYSICAL` or `DIGITAL`, as a string so consumers need no enum of ours'
           type: string

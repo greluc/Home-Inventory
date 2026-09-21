@@ -47,6 +47,12 @@ spring:
 # spends less on it than on starting the container it logs in to.
 
 homeinv:
+  # The integration tests drive the GraphQL surface as a client would, and a
+  # client has no persisted queries until one is written (`web/` is REST today).
+  # ANYONE is what 08 §8.4 calls "and in development"; `GraphQlGuardIT` sets the
+  # production values back and proves both of them.
+  graphql:
+    free-form: ANYONE
   security:
     # A fixed key file for the tests. It signs cursors, and it is a test key in a
     # container that is destroyed with the suite - it is not a secret and it is

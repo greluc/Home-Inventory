@@ -101,3 +101,4 @@ Date: YYYY-MM-DD
 | [0076](0076-a-federated-sign-in-creates-an-account-only-where-a-form-could.md) | A federated sign-in creates an account exactly where a sign-up form could | Accepted |
 | [0077](0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md) | A call may carry a setting that belongs to the thing being acted on rather than to the tenant | Accepted |
 | [0078](0078-a-webhook-carries-an-id-a-live-nudge-does-not.md) | A webhook carries the type, the moment and the subject id; a live nudge carries neither id nor data | Accepted |
+| [0079](0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md) | The GraphQL surface is registered by the build, weighed by a schema directive, and checked field by field | Accepted |

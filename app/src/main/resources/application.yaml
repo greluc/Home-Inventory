@@ -232,6 +232,23 @@ logging:
     level: "%5p [${spring.application.name},%X{traceId:-},%X{tenantId:-},%X{actorId:-}]"
 
 homeinv:
+  # The read-only GraphQL surface (REQ-API-006, 08 §8.4). Every number here is a
+  # ceiling rather than a target: a query that stays under all of them is not
+  # thereby cheap, and one that exceeds any of them is refused before it runs.
+  graphql:
+    # Below the maximum location depth of 12, deliberately: a deep tree cannot be
+    # walked to its leaves in one query, and `locationTree(rootId:, depth:)` is
+    # the intended path.
+    max-depth: ${HOMEINV_GRAPHQL_MAX_DEPTH:10}
+    # The budget a query may spend against the `@cost` weights in the schema.
+    max-cost: ${HOMEINV_GRAPHQL_MAX_COST:5000}
+    # How often one field may appear. Aliasing one field fifty times executes it
+    # fifty times, and the depth and cost limits both count it once.
+    max-repeated-fields: ${HOMEINV_GRAPHQL_MAX_REPEATED_FIELDS:20}
+    # Who may send a query the build did not register, and read the schema:
+    # NEVER, ADMINISTRATORS or ANYONE. The default is what 08 §8.4 describes.
+    free-form: ${HOMEINV_GRAPHQL_FREE_FORM:ADMINISTRATORS}
+
   # The base URL that ends up printed on labels. It is the only configuration
   # value that writes itself into the physical world, and a later change breaks
   # every label already printed (CLAUDE.md rule 9).

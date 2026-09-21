@@ -56,6 +56,13 @@ import org.springframework.web.bind.annotation.RestController;
 @DisplayName("The architecture rules")
 class ArchitectureRulesTest {
 
+  /** Every annotation that turns a method into a GraphQL resolver. */
+  private static final List<Class<? extends Annotation>> RESOLVERS =
+      List.of(
+          org.springframework.graphql.data.method.annotation.QueryMapping.class,
+          org.springframework.graphql.data.method.annotation.SchemaMapping.class,
+          org.springframework.graphql.data.method.annotation.BatchMapping.class);
+
   /** Every annotation that turns a method into an HTTP handler. */
   private static final List<Class<? extends Annotation>> MAPPINGS =
       List.of(
@@ -205,6 +212,48 @@ class ArchitectureRulesTest {
         .as(
             "every handler carries @RequiresPermission, @RequiresEntitlement or an explicit "
                 + "@PublicEndpoint with a written reason; the default is deny (REQ-SEC-023)")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("declare what every GraphQL resolver needs, one field at a time")
+  void everyResolverDeclaresItsAccess() {
+    // The same rule as the endpoints above and a different mechanism, because a
+    // GraphQL request is not one handler: it is as many resolvers as the client
+    // asked for, each reaching a different block. `Item.photos` is `media`,
+    // `Item.history` is `audit`, and a check at the HTTP boundary would have to
+    // check the union of everything the schema can reach — which is no check.
+    //
+    // `GraphQlPermissions` enforces the annotation at run time; this is the half
+    // that fails in the pull request, and it is the half that matters: a resolver
+    // with no annotation would simply never be checked, and nothing about the
+    // response would say so (REQ-SEC-023, ADR-0079).
+    List<String> undeclared = new ArrayList<>();
+
+    for (JavaClass resolver : CLASSES) {
+      if (!resolver.getPackageName().startsWith("de.greluc.homeinv.graphql")) {
+        continue;
+      }
+      for (JavaMethod method : resolver.getMethods()) {
+        boolean isResolver =
+            RESOLVERS.stream().anyMatch(mapping -> method.isAnnotatedWith(mapping));
+        if (!isResolver) {
+          continue;
+        }
+        boolean declared =
+            method.isAnnotatedWith(RequiresPermission.class)
+                || method.isAnnotatedWith(PublicEndpoint.class);
+        if (!declared) {
+          undeclared.add(resolver.getSimpleName() + "." + method.getName());
+        }
+      }
+    }
+
+    assertThat(undeclared)
+        .as(
+            "every GraphQL resolver carries @RequiresPermission, or an explicit @PublicEndpoint "
+                + "with a written reason. A field nobody declared is a field nobody checks "
+                + "(REQ-SEC-023)")
         .isEmpty();
   }
 

@@ -200,6 +200,14 @@ commit".
 
 ### Added
 
+- **A GraphQL endpoint for reading.** One request can now fetch exactly what a
+  screen needs — items with their type, their place and their tags — instead of
+  four round trips. It only reads: there is no way to change anything through it,
+  by design. Expensive queries are refused before they run rather than slowing the
+  system down for everybody, and each field checks the same permissions the rest of
+  the API does, so a query that asks for something you may not see answers the rest
+  and tells you about that one field.
+
 - **Webhooks: another system can be told when something here changes.** An
   administrator adds a URL, picks which events it should hear about — an item
   created, moved, lent, disposed of, a location moved, a tag put on something —
@@ -863,7 +871,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 35 types in the shared
+- **The shared kernel is measured.** `platform` holds 36 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).
@@ -978,7 +986,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 79 architecture decision records, each with its alternatives and consequences —
+- 80 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

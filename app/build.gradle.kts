@@ -75,6 +75,21 @@ dependencies {
     // horizontally and a session must survive the instance that created it
     // (06 Deployment view).
     implementation(libs.spring.boot.starter.data.redis)
+
+    // The read-only GraphQL surface (REQ-API-006, 08 §8.4). Read-only is not a
+    // convention here: the schema declares no `Mutation` type at all, and
+    // `GraphQlSchemaTest` fails if one appears (ADR-0010).
+    implementation(libs.spring.boot.starter.graphql)
+
+    // For `GraphQlPermissions`: one aspect, so that every GraphQL resolver is checked
+    // against what it declares without every method beginning with the same line
+    // (REQ-SEC-023, ADR-0079). Boot's `AopAutoConfiguration` turns AspectJ proxying
+    // on when this is present, which is what makes `@Aspect` work.
+    implementation(libs.aspectjweaver)
+
+    // `platform.ContextPropagation`: a thread-local ends at the thread, and the
+    // GraphQL surface's DataLoader dispatches do not run on the request's.
+    implementation(libs.context.propagation)
     implementation(libs.spring.boot.session.data.redis)
 
     // The primary `SearchIndex` adapter (ADR-0008, REQ-SRCH-005). Not a Spring

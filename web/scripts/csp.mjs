@@ -255,6 +255,31 @@ server {
         # is that none of them may ever be suppressed here.
     }
 
+    # The read-only GraphQL surface (REQ-API-006). \`= /graphql\` and not a prefix:
+    # it is exactly one endpoint, and a prefix would also proxy \`/graphqlfoo\` —
+    # which the SPA fallback below would otherwise have answered with the shell,
+    # so the mistake would look like a working page rather than a 404.
+    #
+    # Its own location rather than a line in \`/api/\`, because it is not under
+    # \`/api\`: 08 §8.1 puts it at the root beside it, and Spring for GraphQL's
+    # default path is what a client library expects to find.
+    location = /graphql {
+        proxy_pass http://homeinv_api;
+        proxy_http_version 1.1;
+
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Host $host;
+
+        proxy_read_timeout ${READ_TIMEOUT};
+        proxy_send_timeout ${READ_TIMEOUT};
+
+        # A GraphQL response is one document and is not streamed. Buffering is
+        # therefore left at nginx's default, unlike \`/api/\` — the difference is
+        # the SSE stream, which lives there.
+    }
+
     # Media answers on its own hostname (REQ-MED-010) and reaches the same
     # upstream. The separation that matters is the browser's: a response from
     # \`media.<host>\` runs in a different origin from the application, whatever

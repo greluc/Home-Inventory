@@ -989,6 +989,7 @@ public class DefaultItemService implements ItemService {
         item.getName(),
         item.getDescription(),
         item.getKind().name(),
+        item.getItemTypeVersionId(),
         item.getLocationId(),
         item.getQuantity(),
         item.getQuantityUnit(),

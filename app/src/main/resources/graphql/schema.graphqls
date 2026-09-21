@@ -1,0 +1,254 @@
+"""
+The read-only query surface (REQ-API-006, 08 §8.4).
+
+READ-ONLY IS STRUCTURAL, NOT A CONVENTION. There is no `Mutation` type below and
+there will not be one: two writing surfaces mean duplicated authorisation,
+validation and idempotency logic, which is the main source of holes that get
+closed on one surface and forgotten on the other (ADR-0010). `GraphQlSchemaTest`
+fails if a `Mutation` type or a field named like a write appears here.
+
+EVERY ROOT AND EVERY FIELD THAT REACHES ANOTHER BLOCK DECLARES A PERMISSION in
+its resolver, with `@RequiresPermission`, exactly as a REST endpoint does
+(REQ-SEC-023). A caller without one gets `null` for that field and an entry in
+`errors` — the rest of the query still answers (ADR-0079).
+
+`@cost` IS WHAT THE BUDGET IS SPENT AGAINST. A field's weight is declared here,
+beside the field, so that anybody holding the schema can see what is expensive;
+a list multiplies its weight by the `first` it was asked for. The sum is computed
+BEFORE execution and a query over budget is refused without running.
+"""
+directive @cost(weight: Int! = 1) on FIELD_DEFINITION
+
+"An attribute map, exactly as ADR-0004 stores it. What a key means is the catalogue's business."
+scalar JSON
+
+"An instant in UTC, ISO-8601, as every timestamp in this system is (`REQ-NFR-035`)."
+scalar DateTime
+
+type Query {
+    "One item, or null when this tenant has no such item — which is also the answer for another tenant's (REQ-SEC-025)."
+    item(id: ID!): Item @cost(weight: 5)
+
+    """
+    A page of items.
+
+    `filter` is the SAME grammar the REST surface takes (08 §8.2):
+    `type:power-tool`, `tag:in:broken,repair`, `location:subtree:<uuid>`,
+    `attr.purchasePrice:gte:100:EUR`. A structured input object was sketched in
+    08 §8.4 and deliberately not built: it would be a second grammar for one
+    concept, parsed by a second parser, and the two would diverge on the first
+    operator somebody added to only one of them.
+    """
+    items(
+        q: String,
+        language: String = "de",
+        filter: [String!],
+        sort: String,
+        first: Int = 50,
+        after: String
+    ): ItemConnection! @cost(weight: 10)
+
+    "One location."
+    location(id: ID!): Location @cost(weight: 5)
+
+    """
+    A place and what is under it, to a depth.
+
+    The default is 3 and the ceiling is the query depth limit of 10, which is
+    BELOW the maximum location depth of 12 — so a deep tree cannot be walked to
+    its leaves in one query, and this field is the intended way to page by
+    subtree (08 §8.4).
+    """
+    locationTree(rootId: ID, depth: Int = 3): [Location!]! @cost(weight: 20)
+
+    "The tenant's item types."
+    itemTypes(first: Int = 50, after: String): ItemTypeConnection! @cost(weight: 5)
+
+    "The items a saved search finds, run now (REQ-SRCH-008)."
+    savedSearch(id: ID!, first: Int = 50, after: String): SavedSearchResult @cost(weight: 20)
+
+    """
+    How many items fall into each value of one dimension.
+
+    The same counts the REST surface returns as `facets`, asked for on their own:
+    a report asks for the counts and not for the rows.
+    """
+    stats(groupBy: StatsDimension!, q: String, language: String = "de", filter: [String!]): [StatsBucket!]!
+        @cost(weight: 20)
+}
+
+"""
+A thing in the inventory.
+
+`quantity` and `minimumStock` are Strings and not Floats, and that is not
+laziness: GraphQL's `Float` is a double, and this system forbids binary floating
+point wherever a quantity or an amount is meant (ADR-0025). The decimal travels
+as text and is parsed as a decimal.
+"""
+type Item {
+    id: ID!
+    name: String!
+    description: String
+    "`PHYSICAL` or `DIGITAL`."
+    kind: String!
+    "The type version the attributes were written against."
+    type: ItemType @cost(weight: 5)
+    location: Location @cost(weight: 5)
+    quantity: String
+    quantityUnit: String
+    """
+    The fields the item's type version declares.
+
+    Filtered by the caller's role: a `sensitive` field is REMOVED rather than
+    masked (REQ-SEC-027), so a client cannot tell a redacted value from an unset
+    one — which is the point.
+    """
+    attributes: JSON!
+    notes: String
+    minimumStock: String
+    "Where the item is in its life: `ACTIVE`, `LENT`, `DISPOSED` and the rest."
+    lifecycleState: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    "The optimistic lock, which the REST surface takes back as `If-Match`."
+    version: Int!
+
+    tags: [Tag!]! @cost(weight: 5)
+    "Its photographs and documents. Needs `media:object:read`."
+    photos(first: Int = 3): [Media!]! @cost(weight: 5)
+    "What it is related to. Needs `inventory:item:read`."
+    relations(first: Int = 20): [ItemRelation!]! @cost(weight: 5)
+    "Its revision history. Needs `tenancy:tenant:read`, because history is an administrator's view."
+    history(first: Int = 20): RevisionConnection! @cost(weight: 10)
+}
+
+"A place, or a category of places."
+type Location {
+    id: ID!
+    name: String!
+    parentId: ID
+    "0 for a root; the ceiling is 12 (04 `locations`)."
+    depth: Int!
+    "The ids from the root down to this place, which is what a breadcrumb is made of."
+    ancestors: [String!]!
+    attributes: JSON!
+    version: Int!
+    "The category this place was created against, by id. A category is not an item type and has its own listing."
+    categoryId: ID
+}
+
+"""
+An item type, as the tenant defined it.
+
+There is no `name`: what a person sees is a MULTILINGUAL LABEL and therefore
+tenant data rather than a field of the type, exactly as a field's label is. A
+client renders the type from `key` and the labels it reads with the fields.
+"""
+type ItemType {
+    id: ID!
+    key: String!
+    "`PHYSICAL` for things you can pick up, `DIGITAL` for licences and files (REQ-CORE-003/004)."
+    kind: String!
+    "Whether it came with the tenant rather than being defined in it (one built-in type per tenant, ADR-0000 open point O27)."
+    builtin: Boolean!
+    "Whether the tenant may still create items against it."
+    archived: Boolean!
+    "The version an item written today is written against."
+    publishedVersionId: ID
+    "The fields that version declares."
+    fields: [FieldDefinition!]! @cost(weight: 5)
+}
+
+"One declared field of a type version."
+type FieldDefinition {
+    id: ID!
+    key: String!
+    dataType: String!
+    required: Boolean!
+    "Whether a filter may range over it; a `sensitive` field never can (ADR-0019)."
+    searchable: Boolean!
+}
+
+type Tag {
+    id: ID!
+    name: String!
+    colour: String
+    icon: String
+    groupId: ID
+}
+
+"A stored photograph or document. The bytes are never here — a URL is."
+type Media {
+    id: ID!
+    mediaType: String!
+    byteSize: Int!
+    widthPx: Int
+    heightPx: Int
+    "`PENDING_SCAN`, `CLEAN` or `INFECTED` (REQ-MED-006)."
+    scanState: String!
+    primaryImage: Boolean!
+    role: String
+}
+
+type ItemRelation {
+    id: ID!
+    otherItemId: ID!
+    type: String!
+    "Whether the relation was declared by the other item rather than by this one."
+    inbound: Boolean!
+}
+
+"One entry of the revision log, which is the audit block's other half."
+type Revision {
+    revision: Int!
+    kind: String!
+    changedAt: DateTime!
+    changedBy: ID
+}
+
+"What a saved search finds, and what it is called."
+type SavedSearchResult {
+    id: ID!
+    name: String!
+    items: ItemConnection!
+}
+
+"How many items hold each value of a dimension."
+type StatsBucket {
+    value: String!
+    count: Int!
+}
+
+"The dimensions `stats` can group by — the same ones the REST surface counts as facets."
+enum StatsDimension {
+    TYPE
+    TAG
+    LOCATION
+}
+
+"""
+A page, keyset-paged.
+
+`endCursor` is the opaque cursor of 08 §8.2 and is never an offset: an offset
+over a moving collection skips and repeats rows, which is the defect this whole
+mechanism exists to avoid.
+"""
+type PageInfo {
+    endCursor: String
+    hasNextPage: Boolean!
+}
+
+type ItemConnection {
+    nodes: [Item!]!
+    pageInfo: PageInfo!
+}
+
+type ItemTypeConnection {
+    nodes: [ItemType!]!
+    pageInfo: PageInfo!
+}
+
+type RevisionConnection {
+    nodes: [Revision!]!
+    pageInfo: PageInfo!
+}

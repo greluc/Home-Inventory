@@ -109,6 +109,17 @@ jobs:
           pip install --quiet pyyaml
           python tools/render_problems.py --check
 
+      # REQ-API-006 and ADR-0079. In production the GraphQL surface serves only
+      # the queries the build registered, and the register is generated from the
+      # client's own documents -- so the two cannot drift, and a query the build
+      # never saw is refused here rather than in somebody's browser.
+      #
+      # `web/` speaks REST today, so the list is empty and this checks that it
+      # still is. The moment the client gains a `.graphql` document, this step is
+      # what makes the register move with it.
+      - name: The persisted-query register matches the client
+        run: python tools/persisted_queries.py --check
+
       - uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ github.token }}

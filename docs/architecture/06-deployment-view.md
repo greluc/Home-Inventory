@@ -513,8 +513,14 @@ container. Exactly two containers therefore sit on a non-internal segment, and
 **neither holds data, a credential or domain logic**:
 
 - **`web`** — the ingress. It publishes the single host port, serves the bundle
-  and the security headers, and proxies `/api`, `/graphql`, `/c/`, `/.well-known`
-  and the SSE stream to `api` over `frontend`. `api` publishes nothing and is not
+  and the security headers, and proxies `/api` (the SSE stream of `REQ-API-011`
+  with it), `/graphql` and `/media` to `api` over `frontend`. *It listed `/c/` and
+  `/.well-known` until 2026-09-21, and the application serves neither yet — the
+  public code resolution of `REQ-CORE-040` and the OIDC metadata document are the
+  features that add them, and each adds its own location when it lands. A
+  generated file that proxies a path nothing answers is a 404 with extra steps;
+  one that names a path it does not proxy is the shell served to a client
+  expecting JSON, which is worse.* `api` publishes nothing and is not
   on `edge` at all, which is stricter than the shape this replaced.
 - **`egress-proxy`** — which until the same pass sat only on internal segments and
   so could not make the one call it exists to make. That was the identical defect

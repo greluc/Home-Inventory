@@ -403,39 +403,60 @@ writing surfaces mean duplicated authorization, validation and idempotency logic
 — the main source of holes that get closed on one surface and forgotten on the
 other.
 
+> **Built on 2026-09-21.** The sketch this section carried until then is replaced by
+> what the schema actually declares —
+> [`app/src/main/resources/graphql/schema.graphqls`](../../app/src/main/resources/graphql/schema.graphqls),
+> which ships with the application and is the contract. Three differences from the
+> sketch are deliberate and are argued in
+> [ADR-0079](../adr/0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md):
+> `filter` is the **string grammar of §8.2** rather than an `ItemFilter` input object,
+> `ItemType` has no `name` because a type's display name is multilingual tenant data,
+> and `stats` takes the same `q`/`filter` a search takes.
+
 ```graphql
 type Query {
-  item(id: ID!): Item
-  items(filter: ItemFilter, sort: [ItemSort!], first: Int, after: String): ItemConnection!
-  location(id: ID!): Location
-  locationTree(rootId: ID, depth: Int = 3): [Location!]!
-  itemTypes: [ItemType!]!
-  savedSearch(id: ID!): SavedSearchResult
-  stats(groupBy: StatsDimension!, filter: ItemFilter): [StatsBucket!]!
+  item(id: ID!): Item                                   @cost(weight: 5)
+  items(q: String, language: String = "de", filter: [String!],
+        sort: String, first: Int = 50, after: String):
+        ItemConnection!                                 @cost(weight: 10)
+  location(id: ID!): Location                           @cost(weight: 5)
+  locationTree(rootId: ID, depth: Int = 3): [Location!]! @cost(weight: 20)
+  itemTypes(first: Int = 50, after: String): ItemTypeConnection! @cost(weight: 5)
+  savedSearch(id: ID!, first: Int = 50, after: String): SavedSearchResult @cost(weight: 20)
+  stats(groupBy: StatsDimension!, q: String, language: String = "de",
+        filter: [String!]): [StatsBucket!]!             @cost(weight: 20)
 }
 
 type Item {
   id: ID!
   name: String!
-  type: ItemType!
-  location: Location
-  tags: [Tag!]!
+  kind: String!                   # PHYSICAL or DIGITAL
+  type: ItemType                  @cost(weight: 5)
+  location: Location              @cost(weight: 5)
+  quantity: String                # a decimal as text: GraphQL Float is a double (ADR-0025)
   attributes: JSON!               # filtered by the role's field visibility
-  photos(first: Int = 3): [Media!]!
-  relations: [ItemRelation!]!
-  history(first: Int = 20): RevisionConnection!
+  tags: [Tag!]!                   @cost(weight: 5)
+  photos(first: Int = 3): [Media!]!            @cost(weight: 5)
+  relations(first: Int = 20): [ItemRelation!]! @cost(weight: 5)
+  history(first: Int = 20): RevisionConnection! @cost(weight: 10)
 }
 ```
 
-| Safeguard | Value |
-|---|---|
-| Depth limit | max. 10 — which is **below** the default maximum location depth of 12 ([04 `locations`](04-building-blocks.md)). A deep tree therefore cannot be walked to its leaves in one query; `locationTree(rootId:, depth:)` is the intended path and pages by subtree. The mismatch is deliberate: raising the limit to 12 would raise the cost ceiling of every other query too |
-| Cost analysis | A budget per query; field costs declared; exceeding it → rejection **before** execution |
-| Persisted queries | In production only registered queries; free-form queries only for authenticated administrators and in development |
-| Introspection | Disabled in production (the schema ships with the documentation) |
-| N+1 | `DataLoader` for every relation, guarded by a test |
-| Field visibility | The same rule as in REST — `sensitive` fields are removed per role, not masked |
-| Alias abuse | A limit on identical aliases per query |
+**There is no `Mutation` type and there will not be one** ([ADR-0010](../adr/0010-api-surfaces.md)).
+Read-only here is structural rather than a convention: `GraphQlSchemaTest` fails if a
+`Mutation` or `Subscription` type appears, so "no mutations exist" is a property of the
+file and not of somebody's restraint.
+
+| Safeguard | Value | Where it is |
+|---|---|---|
+| Depth limit | max. 10 — **below** the maximum location depth of 12 ([04 `locations`](04-building-blocks.md)), so a deep tree cannot be walked to its leaves in one query; `locationTree(rootId:, depth:)` is the intended path. *Nothing in the schema recurses today, so ten is not reachable by a valid query — the limit is for the schema as it grows, and `GraphQlGuardIT` lowers it to three to prove the mechanism* | `MaxQueryDepthInstrumentation` |
+| Cost analysis | A budget of 5 000 per query. **The weight is declared in the SDL** with `@cost(weight:)`, beside the field, and a list multiplies its children by the `first` it was asked for. Summed and refused **before** execution | `MaxQueryComplexityInstrumentation` with a calculator that reads the directive |
+| Persisted queries | In production only registered queries. The register is **generated from the client by the build** — `tools/persisted_queries.py` hashes every `.graphql` document under `web/src` — so there is no registration surface at run time. Free-form queries are for administrators, configurable to `NEVER` or, in development, `ANYONE` | `QueryGuard`, `--check` in CI |
+| Introspection | Refused for anybody who may not write a query by hand, **per request** rather than by hiding the fields: field visibility is schema-wide and this has to answer differently per caller. The schema ships with the documentation | `QueryGuard` |
+| N+1 | `Item.type` and `Item.location` resolve for a whole page at once — two calls and a de-duplicated read rather than two per item — and `GraphQlBatchingTest` **counts the calls** rather than trusting the annotation. `tags`, `photos`, `relations` and `history` are **not** batched: each carries a per-target visibility check in the block that owns it, and a batch read that skipped it would move a visibility decision into the adapter. They are bounded by the cost budget, and a batch read that keeps the check is the improvement to make (ADR-0079) | `@BatchMapping` |
+| Field visibility | The same rule as in REST — a `sensitive` field is **removed** per role, not masked — because the attributes come through the same `AttributeRedaction` the REST surface uses | `inventory` |
+| Alias abuse | No field name may appear more than 20 times in one document. Counted on the **name** and not the alias: aliasing is what makes the repetition possible and renaming is what hides it | `QueryGuard` |
+| A missing permission | Costs the **field**, not the query: `null` for it and an entry in `errors`, with the rest answered. Every resolver declares its permission and `ArchitectureRulesTest` refuses one that does not (ADR-0079) | `GraphQlPermissions` |
 
 ## 8.5 gRPC — plugins and internal services
 
