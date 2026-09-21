@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>There is no endpoint that installs anything. Installation is an operator's act outside the
  * running system (REQ-PLG-013), and an API that could install would make that sentence false.
  */
+@Tag(name = "Plugins", description = "What the operator installed, what this tenant consented to, and how each one is.")
 @RestController
 @RequestMapping("/api/v1/plugins")
 @RequiredArgsConstructor

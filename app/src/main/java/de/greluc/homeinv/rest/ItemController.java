@@ -22,6 +22,7 @@ import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.search.api.SearchService;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -72,6 +73,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>The tenant never appears in a signature here. It comes from the session, through
  * {@code TenantContext}, and a path or header carrying it would be a value the caller chooses.
  */
+@Tag(name = "Items", description = "The things in the inventory, their lifecycle and everything hanging off one.")
 @RestController
 @RequestMapping("/api/v1/items")
 @RequiredArgsConstructor

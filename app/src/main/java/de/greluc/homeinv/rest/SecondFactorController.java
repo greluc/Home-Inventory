@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -38,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  * code from it, and only then does the factor count. An enrolment that counted on the first call
  * would lock somebody out of their own account for scanning a QR code and closing the app.
  */
+@Tag(name = "Second factor", description = "Enrolling and answering the second factor (REQ-AUTH-004).")
 @RestController
 @RequestMapping("/api/v1/auth/mfa")
 @RequiredArgsConstructor

@@ -11,6 +11,15 @@ springBoot = "4.1.1"
 springModulith = "2.1.1"
 
 flyway = "13.6.0"
+
+# The generated Kotlin Multiplatform client of REQ-API-002 and what it runs on.
+# Nothing else in this repository is Kotlin: the client is generated from
+# `api/openapi.yaml` and compiled so that the contract is proved to generate into
+# the place the apps of ADR-0013 will consume it from -- `commonMain`.
+kotlin = "2.4.0"
+ktor = "3.5.1"
+kotlinxSerialization = "1.11.0"
+kotlinxDatetime = "0.8.0"
 postgresql = "42.7.13"
 
 lombok = "1.18.48"
@@ -122,6 +131,16 @@ spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boo
 # other starter here: graphql-java, spring-graphql and the Jackson binding have to agree, and
 # the BOM is the one place that knows which trio does.
 spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-starter-graphql" }
+
+# What the generated Kotlin client compiles against. The generator's own sample
+# build file names the same set; it lives here instead, because a version in a
+# generated file is a version nothing renovates (REQ-NFR-029).
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 # Declared rather than relied on transitively: `GraphQlPermissions` is an `@Aspect`, and
 # the weaver arrives today only because resilience4j happens to bring it. A dependency that
 # AUTHORISATION depends on is one this build names itself.
@@ -230,3 +249,5 @@ spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugsPlugin" }
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
 cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedxPlugin" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

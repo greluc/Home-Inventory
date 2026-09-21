@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
  * role — there is no archive of a shelf. These endpoints asked for {@code TENANT_READ} until
  * 2026-09-20, which let a scoped {@code VIEWER} download the whole inventory (ADR-0068, O27).
  */
+@Tag(name = "Export", description = "Taking a copy of everything, including the photographs.")
 @RestController
 @RequestMapping("/api/v1/export-jobs")
 @RequiredArgsConstructor

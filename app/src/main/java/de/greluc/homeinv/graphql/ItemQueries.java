@@ -302,7 +302,7 @@ public class ItemQueries {
    * @param pageInfo where the next ones are
    * @param <T> what the rows are
    */
-  public record Connection<T>(List<T> nodes, PageInfo pageInfo) {
+  public record Connection<T>(List<T> nodes, PageCursor pageInfo) {
 
     /**
      * Wraps a block's page.
@@ -313,7 +313,7 @@ public class ItemQueries {
      */
     static <T> Connection<T> of(Page<T> page) {
       return new Connection<>(
-          page.data(), new PageInfo(page.page().nextCursor(), page.page().hasMore()));
+          page.data(), new PageCursor(page.page().nextCursor(), page.page().hasMore()));
     }
   }
 
@@ -323,5 +323,5 @@ public class ItemQueries {
    * @param endCursor the opaque cursor, or {@code null} when this was the last page
    * @param hasNextPage whether asking again would return anything
    */
-  public record PageInfo(String endCursor, boolean hasNextPage) {}
+  public record PageCursor(String endCursor, boolean hasNextPage) {}
 }

@@ -184,7 +184,11 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/field-visibility").session(owner))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.purchasePrice[0].role").value("MEMBER"));
+        // A list of entries since 2026-09-21, each carrying its own field key: a
+        // JSON object with dynamic keys is the one shape a code generator cannot
+        // type (REQ-API-002).
+        .andExpect(jsonPath("$[0].fieldKey").value("purchasePrice"))
+        .andExpect(jsonPath("$[0].roles[0].role").value("MEMBER"));
 
     // The same session, without signing in again: a rule is read per request.
     mockMvc

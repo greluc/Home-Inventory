@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
@@ -52,6 +53,7 @@ import org.springframework.web.multipart.MultipartFile;
  *       anyway ({@code REQ-MED-010}).
  * </ul>
  */
+@Tag(name = "Media", description = "Photographs and documents, their derivatives and the signed URLs that serve them.")
 @RestController
 @RequiredArgsConstructor
 public class MediaController {

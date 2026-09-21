@@ -81,7 +81,7 @@ public class InsuranceReportAdapter implements InsuranceReport {
     String[] scope =
         root == null ? new String[0] : subtree.stream().map(UUID::toString).toArray(String[]::new);
 
-    List<Line> flat =
+    List<LineRow> flat =
         jdbc.sql(LINES)
             .param(root == null ? null : root.toString())
             .param(scope)
@@ -97,12 +97,12 @@ public class InsuranceReportAdapter implements InsuranceReport {
             .single();
 
     Map<UUID, List<ItemEvidence.Attached>> attached =
-        evidence.forItems(flat.stream().map(Line::itemId).toList());
+        evidence.forItems(flat.stream().map(LineRow::itemId).toList());
 
     // Grouped here rather than by the query, because a room is a place and the
     // label of a place is `locations`' answer, not a column of `inventory.item`.
     Map<UUID, List<InsuranceReport.Line>> byRoom = new LinkedHashMap<>();
-    for (Line line : flat) {
+    for (LineRow line : flat) {
       byRoom
           .computeIfAbsent(line.locationId(), any -> new ArrayList<>())
           .add(lineOf(line, attached.getOrDefault(line.itemId(), List.of())));
@@ -178,7 +178,7 @@ public class InsuranceReportAdapter implements InsuranceReport {
    * @param attached what backs it up
    * @return the line
    */
-  private static InsuranceReport.Line lineOf(Line row, List<ItemEvidence.Attached> attached) {
+  private static InsuranceReport.Line lineOf(LineRow row, List<ItemEvidence.Attached> attached) {
     Evidence photo =
         attached.stream()
             .filter(ItemEvidence.Attached::primaryImage)
@@ -220,9 +220,9 @@ public class InsuranceReportAdapter implements InsuranceReport {
    * @return it
    * @throws SQLException when it cannot be read
    */
-  private static Line toLine(ResultSet rs, int rowNum) throws SQLException {
+  private static LineRow toLine(ResultSet rs, int rowNum) throws SQLException {
     String currency = rs.getString("replacement_currency");
-    return new Line(
+    return new LineRow(
         rs.getObject("item_id", UUID.class),
         rs.getString("name"),
         rs.getBigDecimal("quantity"),
@@ -245,7 +245,7 @@ public class InsuranceReportAdapter implements InsuranceReport {
    * @param source who said so
    * @param locationId where it is
    */
-  private record Line(
+  private record LineRow(
       UUID itemId,
       String name,
       BigDecimal quantity,

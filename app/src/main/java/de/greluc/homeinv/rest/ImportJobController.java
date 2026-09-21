@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -40,6 +41,7 @@ import org.springframework.web.multipart.MultipartFile;
  * that did it would hold a connection open for minutes on behalf of whoever uploaded a file, which
  * is both a bad experience and a way to occupy the instance.
  */
+@Tag(name = "Import", description = "Reading an archive or a CSV back in, with a dry run first.")
 @RestController
 @RequestMapping("/api/v1/import-jobs")
 @RequiredArgsConstructor

@@ -536,6 +536,6 @@ send the fragment to the server, so it leaks nothing.
 | Examples in the specification are valid | Schema validation of the examples | yes |
 | GraphQL schema unbroken | Schema comparison | yes |
 | Protobuf unbroken | `buf breaking` | yes |
-| Generated clients compile | TS `tsc`, Kotlin build | yes |
+| Generated clients compile | TS `tsc` over `web/src/generated/api.d.ts`, `./gradlew :api-client-kotlin:build` | yes — and both are **committed and drift-checked**, `npm run client:check` and `tools/kotlin_client.py --check` ([ADR-0080](../adr/0080-a-generated-client-is-committed-and-the-document-must-earn-it.md)) |
 | Event schemas unbroken | Schema comparison | yes |
 | Every endpoint has an authorization test | A dedicated rule: an endpoint declaring none of `@RequiresPermission`, `@RequiresEntitlement` ([ADR-0057](../adr/0057-the-instance-operator.md)) and an explicit `@PublicEndpoint` marker fails the build, in `ArchitectureRulesTest` and again in `PermissionInterceptor` at run time | yes |

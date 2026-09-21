@@ -15,11 +15,13 @@
     "test": "vitest run",
     "csp:check": "node scripts/csp.mjs --check",
     "i18n:check": "node scripts/i18n.mjs",
-    "contract:check": "node scripts/contract.mjs",
+    "client:generate": "node scripts/client.mjs",
+    "client:check": "node scripts/client.mjs --check",
     "lint": "oxlint --deny-warnings"
   },
   "dependencies": {
     "i18next": "26.4.2",
+    "openapi-fetch": "0.17.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-i18next": "17.0.13"

@@ -30,6 +30,13 @@ include(":plugin-api")
 // than inside it.
 include(":plugins:oidc")
 
+// The generated Kotlin client of REQ-API-002, beside the document it is generated
+// from. A Gradle project because it has to COMPILE in CI -- that is the
+// requirement's acceptance criterion -- and a project of its own because it is
+// Kotlin Multiplatform and shares no toolchain with the Java above it.
+include(":api-client-kotlin")
+project(":api-client-kotlin").projectDir = file("api/clients/kotlin")
+
 dependencyResolutionManagement {
     repositories { mavenCentral() }
 }

@@ -123,3 +123,10 @@ web/dist/
 # Rendered deployment secrets: the operator's real values, substituted into the
 # templates in deploy/generated/. Never committed — the templates are.
 deploy/secrets/
+
+# Written by @openapitools/openapi-generator-cli the first time it runs, to pin
+# the generator version it downloads. `tools/kotlin_client.py` pins that version
+# itself, through OPENAPI_GENERATOR_VERSION, so this file records a fact the tool
+# already carries -- and it would otherwise appear in every working tree and in CI
+# as an untracked change nobody made.
+openapitools.json

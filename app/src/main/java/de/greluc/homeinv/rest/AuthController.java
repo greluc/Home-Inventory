@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.AuthenticationService;
@@ -47,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
  * second-factor-required} from {@code /login} — the password was right, and nothing is
  * authenticated yet — and finishes at {@code /mfa} with the code (REQ-AUTH-002).
  */
+@Tag(name = "Authentication", description = "Signing in and out, and the password reset a person starts themselves.")
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -360,16 +362,4 @@ public class AuthController {
     }
   }
 
-  /**
-   * Who the caller is.
-   *
-   * @param userId the person
-   * @param tenantId the tenant this session acts for
-   * @param email the address they logged in with
-   * @param role the membership's role. Returned so the client can decide what to *offer*; it never
-   *     decides what is allowed, which happens in the application layer on every request
-   *     (REQ-SEC-022). A UI that shows a button nobody may press teaches people to ignore errors.
-   */
-  public record SessionView(
-      UUID userId, UUID tenantId, String email, String locale, String role) {}
 }

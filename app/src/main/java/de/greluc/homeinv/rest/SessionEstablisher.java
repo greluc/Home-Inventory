@@ -132,7 +132,7 @@ public class SessionEstablisher {
    * @param secondFactorProved whether a second factor was verified as part of this login
    * @return the session view
    */
-  AuthController.SessionView establish(
+  SessionView establish(
       AuthenticatedUser user,
       HttpServletRequest request,
       HttpServletResponse response,
@@ -164,7 +164,7 @@ public class SessionEstablisher {
     SecurityContextHolder.setContext(context);
     securityContextRepository.saveContext(context, request, response);
 
-    return new AuthController.SessionView(
+    return new SessionView(
         user.userId(), user.tenantId(), user.email(), user.locale(), user.role());
   }
 }

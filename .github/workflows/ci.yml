@@ -120,6 +120,16 @@ jobs:
       - name: The persisted-query register matches the client
         run: python tools/persisted_queries.py --check
 
+      # REQ-API-002. The Kotlin Multiplatform client is generated from the same
+      # document and committed, so this is the other half of the same check the
+      # web client gets: the committed client and the document agree, or the
+      # build says which file drifted.
+      #
+      # Its COMPILATION is the `Build and test` job's -- `./gradlew build` builds
+      # every subproject, and `:api-client-kotlin` is one.
+      - name: The Kotlin client matches the API document
+        run: python tools/kotlin_client.py --check
+
       - uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ github.token }}
@@ -507,13 +517,17 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # The client is hand-written through stage 0 (REQ-API-002 generates it at
-      # stage 1), and a hand-written client drifts silently: a mistyped path is a
-      # 404 at run time on a screen nobody opened during review. `api/openapi.yaml`
-      # is generated from the running application, so this compares against the
-      # implementation.
-      - name: Every path it calls is in the API document
-        run: npm run contract:check
+      # REQ-API-002. The client's types ARE the API document, turned into
+      # TypeScript by `scripts/client.mjs` and committed — so a mistyped path, an
+      # invented parameter and a field the server does not send are compile
+      # errors in the step above rather than a 404 on a screen nobody opened.
+      #
+      # This step checks the other direction: that the committed types still
+      # match the document. It replaced `scripts/contract.mjs`, which compared
+      # the hand-written client's path strings against the document and could
+      # only ever check the paths.
+      - name: The generated client matches the API document
+        run: npm run client:check
 
       - name: Build
         run: npm run build

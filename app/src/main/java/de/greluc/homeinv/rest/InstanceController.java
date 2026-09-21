@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
@@ -54,6 +55,7 @@ import org.springframework.web.bind.annotation.RestController;
  * REQ-AUTH-011) and is wired in with the second factor itself; until then these endpoints require
  * the entitlement and write a log line naming the operator, the account and the new values.
  */
+@Tag(name = "Instance", description = "What the instance operator administers, across tenants (ADR-0057).")
 @RestController
 @RequestMapping("/api/v1/instance")
 @RequiredArgsConstructor

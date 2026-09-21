@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -53,6 +54,7 @@ import org.springframework.web.bind.annotation.RestController;
  * operator has not allowed is accepted here and refused there, visibly, in the delivery log
  * (REQ-PLG-013).
  */
+@Tag(name = "Webhooks", description = "Where a tenant's changes are sent, and what was delivered.")
 @RestController
 @RequestMapping("/api/v1/webhooks")
 @RequiredArgsConstructor

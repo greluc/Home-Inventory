@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.FieldVisibility;
 import de.greluc.homeinv.authorization.api.Permission;
@@ -45,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
  * the rows itself. A tenant with more sensitive fields than fit in one answer has a type system
  * problem, and this endpoint is where it would show.
  */
+@Tag(name = "Field visibility", description = "Which roles see which fields of a type (REQ-SEC-027).")
 @RestController
 @RequestMapping("/api/v1/field-visibility")
 @RequiredArgsConstructor
@@ -59,20 +61,46 @@ public class FieldVisibilityController {
    * field that does not appear: the second falls back to the default, and {@code OWNER} and
    * {@code ADMIN} read it.
    *
-   * @return the roles permitted per field key
+   * <p><b>A list and not a map, since 2026-09-21.</b> It answered {@code Map<String,
+   * List<RoleReference>>} — a JSON object whose keys are field names — which is valid JSON, valid
+   * OpenAPI, and the one shape in this whole contract that a code generator cannot type: an object
+   * with dynamic keys becomes a raw {@code Map} at best, and the Kotlin generator emitted
+   * {@code Map<String, List>} without an element type, which does not compile ({@code
+   * REQ-API-002}). The information is the same and the entries carry their own key.
+   *
+   * @param limit how many at most; capped at 200. It answered an object until this became a
+   *     list, and REQ-NFR-010 bounds every collection without exception — a tenant with a rule per
+   *     field of a large type system is exactly the case an unbounded list would meet first
+   * @return the roles permitted per field, one entry per field that has a rule
    */
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEMBER_READ)
   @CanFail(ProblemType.FORBIDDEN)
-  public Map<String, List<RoleReference>> rules() {
+  public List<FieldRules> rules(
+      @RequestParam(required = false, defaultValue = "200")
+          @jakarta.validation.constraints.Positive
+          @jakarta.validation.constraints.Max(200)
+          int limit) {
     Map<String, List<RoleReference>> byField = new TreeMap<>();
     for (FieldVisibility.Rule rule : visibility.rules()) {
       byField
           .computeIfAbsent(rule.fieldKey(), ignored -> new java.util.ArrayList<>())
           .add(new RoleReference(rule.builtInRole(), rule.roleDefinitionId()));
     }
-    return byField;
+    return byField.entrySet().stream()
+        .map(entry -> new FieldRules(entry.getKey(), entry.getValue()))
+        .limit(limit)
+        .toList();
   }
+
+  /**
+   * Which roles may read one field.
+   *
+   * @param fieldKey the field, as its type declares it
+   * @param roles the roles permitted to read it, possibly none — which is a rule for nobody and
+   *     not the absence of a rule
+   */
+  public record FieldRules(String fieldKey, List<RoleReference> roles) {}
 
   /**
    * Lets a role read a sensitive field.
@@ -86,7 +114,7 @@ public class FieldVisibilityController {
   @RequiresPermission(Permission.MEMBER_UPDATE)
   @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
   public void allow(
-      @Valid @RequestBody VisibilityRequest request,
+      @Valid @RequestBody FieldVisibilityRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
     visibility.allow(request.fieldKey(), refOf(request.role(), request.roleDefinitionId()),
         user.userId());
@@ -144,7 +172,7 @@ public class FieldVisibilityController {
    * @param role the built-in role to grant it to, or omitted when a tenant-owned one is named
    * @param roleDefinitionId the tenant-owned role to grant it to, or omitted
    */
-  public record VisibilityRequest(
+  public record FieldVisibilityRequest(
       @NotBlank @Size(max = 64) String fieldKey,
       @Size(max = 32) String role,
       UUID roleDefinitionId) {}

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.UserSessions;
@@ -58,6 +59,7 @@ import org.springframework.web.bind.annotation.RestController;
  * and its permissions from. The session id stays: rotating it is the answer to a privilege
  * <em>escalation</em>, and this is a move sideways between tenants the caller already belongs to.
  */
+@Tag(name = "Me", description = "The signed-in person's own profile, sessions and notification preferences.")
 @RestController
 @RequestMapping("/api/v1/me")
 @RequiredArgsConstructor
@@ -250,18 +252,4 @@ public class MeController {
    */
   public record SwitchTenantRequest(@NotNull UUID tenantId) {}
 
-  /**
-   * Who the caller is after the switch.
-   *
-   * <p>The same shape {@code GET /api/v1/auth/me} answers with, so a client has one type for "the
-   * session" however it changed.
-   *
-   * @param userId the person
-   * @param tenantId the tenant this session now acts for
-   * @param email the address they signed in with
-   * @param locale their interface language
-   * @param role the role they hold in the new tenant
-   */
-  public record SessionView(
-      UUID userId, UUID tenantId, String email, String locale, String role) {}
 }

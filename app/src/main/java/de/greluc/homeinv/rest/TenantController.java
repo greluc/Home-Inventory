@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Entitlement;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
  * administration; this controller is deliberately the creation alone, so that the entitlement gate
  * covers exactly the act nothing else can authorise.
  */
+@Tag(name = "Tenants", description = "Creating a tenant, reading it, and asking for it to be erased.")
 @RestController
 @RequestMapping("/api/v1/tenants")
 @RequiredArgsConstructor

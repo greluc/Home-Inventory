@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.LocationCategories;
 import de.greluc.homeinv.authorization.api.Permission;
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** The {@code /api/v1/locations} endpoints. An adapter; every rule lives in the service. */
+@Tag(name = "Locations", description = "Where things are, as an arbitrarily nested tree.")
 @RestController
 @RequestMapping("/api/v1/locations")
 @RequiredArgsConstructor

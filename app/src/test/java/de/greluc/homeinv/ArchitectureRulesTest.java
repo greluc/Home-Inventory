@@ -56,6 +56,15 @@ import org.springframework.web.bind.annotation.RestController;
 @DisplayName("The architecture rules")
 class ArchitectureRulesTest {
 
+  /**
+   * The one {@code @RestController} that is not in the published contract.
+   *
+   * <p>Spring's error dispatcher. It answers {@code /error} — the path the container forwards to,
+   * which no client calls and which springdoc leaves out of the document, as {@code api/openapi.yaml}
+   * shows by not containing it. A tag on it would name a group with nothing in it.
+   */
+  private static final Set<String> UNPUBLISHED = Set.of("ProblemErrorController");
+
   /** Every annotation that turns a method into a GraphQL resolver. */
   private static final List<Class<? extends Annotation>> RESOLVERS =
       List.of(
@@ -212,6 +221,43 @@ class ArchitectureRulesTest {
         .as(
             "every handler carries @RequiresPermission, @RequiresEntitlement or an explicit "
                 + "@PublicEndpoint with a written reason; the default is deny (REQ-SEC-023)")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("give every published controller a tag it chose itself")
+  void everyControllerCarriesAChosenTag() {
+    // REQ-API-002. A generated client puts one file per tag, so a document with
+    // none produces a single class with a hundred and thirty-three methods -- in
+    // TypeScript and in Kotlin alike.
+    //
+    // The tag is CHOSEN and not inferred: springdoc's default is a slug of the
+    // class name, which would publish `item-controller` into the contract and
+    // make a class rename a breaking change for every generated client. So the
+    // annotation is required here, and `OpenApiConfiguration` no longer strips
+    // what springdoc inferred -- there is nothing left to strip.
+    List<String> untagged = new ArrayList<>();
+
+    for (JavaClass controller : CLASSES) {
+      if (!controller.getPackageName().startsWith("de.greluc.homeinv.rest")) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(RestController.class)) {
+        continue;
+      }
+      if (UNPUBLISHED.contains(controller.getSimpleName())) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(io.swagger.v3.oas.annotations.tags.Tag.class)) {
+        untagged.add(controller.getSimpleName());
+      }
+    }
+
+    assertThat(untagged)
+        .as(
+            "every controller in the contract carries @Tag with a name it chose and a sentence "
+                + "describing it. Without one the generated clients of REQ-API-002 are one class "
+                + "each, and springdoc's inferred alternative publishes our class names")
         .isEmpty();
   }
 

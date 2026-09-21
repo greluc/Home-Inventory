@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.Permission;
@@ -56,6 +57,7 @@ import org.springframework.web.bind.annotation.RestController;
  * a permission they lack would only have to assign it to somebody to exercise it, so the same check
  * runs when a definition is written, not only when it is given out.
  */
+@Tag(name = "Roles", description = "Custom roles and the permissions they hold.")
 @RestController
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
@@ -118,7 +120,7 @@ public class RoleController {
     ProblemType.VALIDATION_FAILED
   })
   public ResponseEntity<RoleView> create(
-      @Valid @RequestBody RoleRequest request, @AuthenticationPrincipal AuthenticatedUser user) {
+      @Valid @RequestBody RoleDefinitionRequest request, @AuthenticationPrincipal AuthenticatedUser user) {
 
     Role base = baseOf(request.baseRole());
     Set<Permission> added = permissionsOf(request.permissions());
@@ -150,7 +152,7 @@ public class RoleController {
   })
   public RoleView update(
       @PathVariable UUID id,
-      @Valid @RequestBody RoleRequest request,
+      @Valid @RequestBody RoleDefinitionRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
 
     RoleAdministration.RoleDefinitionView existing =
@@ -264,7 +266,7 @@ public class RoleController {
    *     move everybody holding the role to a different floor
    * @param permissions the permission ids it adds beyond that base
    */
-  public record RoleRequest(
+  public record RoleDefinitionRequest(
       @NotBlank @Size(max = 64) String name,
       @Size(max = 500) String description,
       @NotNull @Size(max = 32) String baseRole,

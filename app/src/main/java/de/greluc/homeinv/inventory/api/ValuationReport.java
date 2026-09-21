@@ -33,8 +33,8 @@ import java.util.UUID;
  * <p>A location contains locations: a room holds boxes. "What is this room worth" and "what is
  * sitting directly in this room" are different questions with different answers, and a report
  * showing one number would be a number whose meaning the reader has to guess. Decided with the
- * owner on 2026-09-20. For a type or a tag there is no tree and {@link Row#subtree()} repeats
- * {@link Row#own()} rather than being absent, so one shape reads the same whichever dimension it
+ * owner on 2026-09-20. For a type or a tag there is no tree and {@link ValuationRow#subtree()} repeats
+ * {@link ValuationRow#own()} rather than being absent, so one shape reads the same whichever dimension it
  * came from.
  */
 public interface ValuationReport {
@@ -48,7 +48,7 @@ public interface ValuationReport {
    * @return the report
    * @throws de.greluc.homeinv.platform.NotFoundException when this tenant has no such location
    */
-  Report byLocation(UUID root, int limit);
+  ValuationSummary byLocation(UUID root, int limit);
 
   /**
    * What each kind of thing is worth.
@@ -60,20 +60,20 @@ public interface ValuationReport {
    * @param limit how many rows at most; capped at 200
    * @return the report
    */
-  Report byType(int limit);
+  ValuationSummary byType(int limit);
 
   /**
    * What the things carrying each tag are worth.
    *
    * <p>An item with three tags counts in three rows. That is what a tag report is for — "what are
    * the valuables worth" is a question about a tag and not a partition — and it is why these rows
-   * do <b>not</b> sum to the tenant's total. {@link Report#overlapping()} says so, rather than
+   * do <b>not</b> sum to the tenant's total. {@link ValuationSummary#overlapping()} says so, rather than
    * leaving a reader to discover it by adding the column up.
    *
    * @param limit how many rows at most; capped at 200
    * @return the report
    */
-  Report byTag(int limit);
+  ValuationSummary byTag(int limit);
 
   /**
    * One report.
@@ -89,9 +89,9 @@ public interface ValuationReport {
    *     false of locations and types. A reader who adds up an overlapping column gets a number
    *     that means nothing, and this is what warns them
    */
-  record Report(
+  record ValuationSummary(
       String dimension,
-      List<Row> rows,
+      List<ValuationRow> rows,
       List<String> currencies,
       boolean converted,
       boolean overlapping) {}
@@ -107,7 +107,7 @@ public interface ValuationReport {
    * @param ownCount how many things are directly in this group
    * @param subtreeCount how many including everything beneath it
    */
-  record Row(
+  record ValuationRow(
       UUID id, String label, Figures own, Figures subtree, long ownCount, long subtreeCount) {}
 
   /**

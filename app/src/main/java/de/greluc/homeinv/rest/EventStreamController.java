@@ -8,6 +8,7 @@ import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.eventstream.api.LiveStreams;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
@@ -50,6 +51,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * {@code deploy/} configures and [06 §6.9] explains.
  */
 @Slf4j
+@Tag(name = "Event stream", description = "The live stream an open view holds (REQ-API-011).")
 @RestController
 @RequestMapping("/api/v1/events")
 @RequiredArgsConstructor

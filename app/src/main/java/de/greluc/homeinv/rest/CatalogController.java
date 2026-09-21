@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -50,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
  * the database, the generated schema and the tenant export all use, and a client should not have to
  * know that one of them is called {@code MULTI_ENUM} inside a JVM.
  */
+@Tag(name = "Catalogue", description = "The tenant's type system: item types, location categories, fields and value lists.")
 @RestController
 @RequestMapping("/api/v1/catalog")
 @RequiredArgsConstructor

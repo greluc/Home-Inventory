@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
  * rule belongs to the tenant, and who hears about it is decided by what each person subscribed to
  * (REQ-NOTI-006), not by whoever wrote the rule.
  */
+@Tag(name = "Reminder rules", description = "What to be reminded about, and when.")
 @RestController
 @RequestMapping("/api/v1/reminder-rules")
 @RequiredArgsConstructor

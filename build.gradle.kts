@@ -21,6 +21,14 @@ allprojects {
 }
 
 subprojects {
+    // Every project here is Java except the generated Kotlin client, and the
+    // Kotlin Multiplatform plugin refuses to share a project with the `java`
+    // plugin. Named rather than detected: a second Kotlin project would be a
+    // decision, and this line is where it would be made.
+    if (name == "api-client-kotlin") {
+        return@subprojects
+    }
+
     apply(plugin = "java")
 
     extensions.configure<JavaPluginExtension> {

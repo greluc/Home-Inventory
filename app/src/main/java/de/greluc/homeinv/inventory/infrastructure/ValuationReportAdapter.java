@@ -164,7 +164,7 @@ public class ValuationReportAdapter implements ValuationReport {
 
   @Override
   @Transactional(readOnly = true)
-  public Report byLocation(UUID root, int limit) {
+  public ValuationSummary byLocation(UUID root, int limit) {
     UUID tenantId = TenantContext.require();
     Map<UUID, Figures> own = grouped(BY_LOCATION, tenantId);
     Map<UUID, Long> counts = counted(COUNT_BY_LOCATION, tenantId);
@@ -187,14 +187,14 @@ public class ValuationReportAdapter implements ValuationReport {
       }
     }
 
-    List<Row> rows = new ArrayList<>();
+    List<ValuationRow> rows = new ArrayList<>();
     for (Map.Entry<UUID, Figures> rolled : subtree.entrySet()) {
       UUID place = rolled.getKey();
       if (inScope != null && !inScope.contains(place)) {
         continue;
       }
       rows.add(
-          new Row(
+          new ValuationRow(
               place,
               labelOfPlace(place),
               own.getOrDefault(place, Figures.NONE),
@@ -207,7 +207,7 @@ public class ValuationReportAdapter implements ValuationReport {
 
   @Override
   @Transactional(readOnly = true)
-  public Report byType(int limit) {
+  public ValuationSummary byType(int limit) {
     UUID tenantId = TenantContext.require();
     Map<UUID, Figures> perVersion = grouped(BY_TYPE, tenantId);
     Map<UUID, Long> countsPerVersion = counted(COUNT_BY_TYPE, tenantId);
@@ -243,13 +243,13 @@ public class ValuationReportAdapter implements ValuationReport {
       perTypeCounts.merge(typeId, countsPerVersion.getOrDefault(version, 0L), Long::sum);
     }
 
-    List<Row> rows = new ArrayList<>();
+    List<ValuationRow> rows = new ArrayList<>();
     for (Map.Entry<UUID, Long> entry : perTypeCounts.entrySet()) {
       Figures figures = perType.getOrDefault(entry.getKey(), Figures.NONE);
       // No tree here, so `subtree` repeats `own` rather than being absent: one
       // shape reads the same whichever dimension produced it.
       rows.add(
-          new Row(
+          new ValuationRow(
               entry.getKey(),
               labels.getOrDefault(entry.getKey(), "?"),
               figures,
@@ -262,9 +262,9 @@ public class ValuationReportAdapter implements ValuationReport {
 
   @Override
   @Transactional(readOnly = true)
-  public Report byTag(int limit) {
+  public ValuationSummary byTag(int limit) {
     UUID tenantId = TenantContext.require();
-    List<Row> rows = new ArrayList<>();
+    List<ValuationRow> rows = new ArrayList<>();
 
     // ONE QUERY PER TAG, and bounded by the page rather than by the inventory.
     // `tagging` owns which things carry a tag and this block must not read its
@@ -279,7 +279,7 @@ public class ValuationReportAdapter implements ValuationReport {
       }
       Figures figures = figuresFor(tenantId, tagged);
       long count = countFor(tenantId, tagged);
-      rows.add(new Row(tag.id(), tag.name(), figures, figures, count, count));
+      rows.add(new ValuationRow(tag.id(), tag.name(), figures, figures, count, count));
     }
     // OVERLAPPING: an item with three tags is in three rows, so the column does
     // not add up to the tenant's total. The report says so rather than leaving a
@@ -381,18 +381,18 @@ public class ValuationReportAdapter implements ValuationReport {
    * @param overlapping whether a thing can be in more than one row
    * @return the report
    */
-  private static Report report(String dimension, List<Row> rows, int limit, boolean overlapping) {
-    List<Row> sorted =
+  private static ValuationSummary report(String dimension, List<ValuationRow> rows, int limit, boolean overlapping) {
+    List<ValuationRow> sorted =
         rows.stream()
             .sorted(
-                java.util.Comparator.comparingLong(Row::subtreeCount)
+                java.util.Comparator.comparingLong(ValuationRow::subtreeCount)
                     .reversed()
-                    .thenComparing(Row::label))
+                    .thenComparing(ValuationRow::label))
             .limit(Math.clamp(limit, 1, MAX_ROWS))
             .toList();
 
     Set<String> currencies = new TreeSet<>();
-    for (Row row : sorted) {
+    for (ValuationRow row : sorted) {
       for (Figures figures : List.of(row.own(), row.subtree())) {
         for (List<Money> amounts :
             List.of(figures.purchase(), figures.current(), figures.replacement())) {
@@ -403,6 +403,6 @@ public class ValuationReportAdapter implements ValuationReport {
     // `converted` is always false and is a FIELD rather than an omission:
     // REQ-LIFE-017 asks the report to state that no conversion took place, and a
     // client can render a statement where it cannot render a missing one.
-    return new Report(dimension, sorted, List.copyOf(currencies), false, overlapping);
+    return new ValuationSummary(dimension, sorted, List.copyOf(currencies), false, overlapping);
   }
 }

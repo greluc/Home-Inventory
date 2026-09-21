@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.inventory.api.ExpiryOverview;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
  * can already see, and a permission that let somebody read the sum without the parts would be a
  * disclosure rather than a restriction.
  */
+@Tag(name = "Reports", description = "Valuation, depreciation, expiry and the insurance report.")
 @RestController
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
@@ -62,7 +64,7 @@ public class ReportController {
   @GetMapping(path = "/valuation", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST, ProblemType.VALIDATION_FAILED})
-  public ValuationReport.Report valuation(
+  public ValuationReport.ValuationSummary valuation(
       @RequestParam @NotNull Dimension by,
       @RequestParam(required = false) UUID root,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {

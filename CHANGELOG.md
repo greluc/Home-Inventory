@@ -48,6 +48,10 @@ commit".
 
 ### Fixed
 
+- **The list of which roles may see which fields comes back as a list.** It was a
+  JSON object whose keys were field names, which no client library can describe;
+  each entry now carries its own field name.
+
 - **An open page now notices a rename.** It refreshed itself when something was
   created, moved or deleted, and not when somebody edited a name, lent an item,
   brought one back, or put a tag on one — nine of the thirteen kinds of change went
@@ -199,6 +203,14 @@ commit".
   refused. The token is now issued on every request.
 
 ### Added
+
+- **The clients are generated from the API description.** The web client's types
+  now come from the same document the server publishes, so a field the server
+  stops sending, or a path that moves, fails the build instead of a screen. A
+  Kotlin client for the future mobile apps is generated from it too and compiled
+  on every build. Generating them turned up six places where the published
+  description did not match what the server actually does — among them the
+  version endpoint, which was described as something else entirely.
 
 - **A GraphQL endpoint for reading.** One request can now fetch exactly what a
   screen needs — items with their type, their place and their tags — instead of
@@ -986,7 +998,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 80 architecture decision records, each with its alternatives and consequences —
+- 81 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

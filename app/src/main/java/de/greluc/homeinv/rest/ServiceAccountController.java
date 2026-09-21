@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
@@ -47,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
  * tenant a request acts for comes from the principal (REQ-SEC-004), and a path that could choose it
  * would be the second place it is decided.
  */
+@Tag(name = "Service accounts", description = "Machine tokens, for the integrations a person does not drive (REQ-AUTH-010).")
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/service-accounts")
 @RequiredArgsConstructor

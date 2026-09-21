@@ -58,8 +58,8 @@ class ValuationReportIT extends AbstractIntegrationTest {
     anItem(tenant, "A lamp", room, purchase("100.00", "EUR"));
     anItem(tenant, "A drill", box, purchase("250.00", "EUR"));
 
-    ValuationReport.Report report = inOwn(tenant, () -> reports.byLocation(null, 50));
-    ValuationReport.Row roomRow = rowFor(report, room);
+    ValuationReport.ValuationSummary report = inOwn(tenant, () -> reports.byLocation(null, 50));
+    ValuationReport.ValuationRow roomRow = rowFor(report, room);
 
     // Directly in the room: the lamp. In the room including its boxes: both.
     assertThat(only(roomRow.own().purchase())).isEqualTo(Money.of("100.00", "EUR"));
@@ -68,7 +68,7 @@ class ValuationReportIT extends AbstractIntegrationTest {
     assertThat(roomRow.subtreeCount()).isEqualTo(2);
 
     // And the box says only what is in the box.
-    ValuationReport.Row boxRow = rowFor(report, box);
+    ValuationReport.ValuationRow boxRow = rowFor(report, box);
     assertThat(only(boxRow.own().purchase())).isEqualTo(Money.of("250.00", "EUR"));
     assertThat(only(boxRow.subtree().purchase())).isEqualTo(Money.of("250.00", "EUR"));
   }
@@ -81,8 +81,8 @@ class ValuationReportIT extends AbstractIntegrationTest {
     anItem(tenant, "A desk", room, purchase("300.00", "EUR"));
     anItem(tenant, "A monitor", room, purchase("200.00", "USD"));
 
-    ValuationReport.Report report = inOwn(tenant, () -> reports.byLocation(null, 50));
-    ValuationReport.Row row = rowFor(report, room);
+    ValuationReport.ValuationSummary report = inOwn(tenant, () -> reports.byLocation(null, 50));
+    ValuationReport.ValuationRow row = rowFor(report, room);
 
     // Two lines, not one number. REQ-LIFE-017 forbids a mixed total "not even as
     // an approximation", and 500 of anything would be exactly that.
@@ -116,7 +116,7 @@ class ValuationReportIT extends AbstractIntegrationTest {
             Money.of("400.00", "EUR"),
             java.time.LocalDate.parse("2026-01-01")));
 
-    ValuationReport.Row row = rowFor(inOwn(tenant, () -> reports.byLocation(null, 50)), room);
+    ValuationReport.ValuationRow row = rowFor(inOwn(tenant, () -> reports.byLocation(null, 50)), room);
 
     // What it cost, what replacing it would cost and what it is worth now are
     // three answers to three questions (REQ-LIFE-014/015).
@@ -149,7 +149,7 @@ class ValuationReportIT extends AbstractIntegrationTest {
 
     // "What is the shed worth" that counted the mower sold in March would be
     // wrong in a way nobody could see.
-    ValuationReport.Row row = rowFor(inOwn(tenant, () -> reports.byLocation(null, 50)), room);
+    ValuationReport.ValuationRow row = rowFor(inOwn(tenant, () -> reports.byLocation(null, 50)), room);
     assertThat(only(row.own().purchase())).isEqualTo(Money.of("80.00", "EUR"));
     assertThat(row.ownCount()).isEqualTo(1);
     assertThat(kept).isNotNull();
@@ -162,14 +162,14 @@ class ValuationReportIT extends AbstractIntegrationTest {
     UUID room = aPlace(tenant, "A room", null);
     anItem(tenant, "A chair", room, purchase("60.00", "EUR"));
 
-    ValuationReport.Report byType = inOwn(tenant, () -> reports.byType(50));
+    ValuationReport.ValuationSummary byType = inOwn(tenant, () -> reports.byType(50));
     assertThat(byType.dimension()).isEqualTo("type");
     // Nothing overlaps: an item has exactly one type, so the column adds up.
     assertThat(byType.overlapping()).isFalse();
     assertThat(byType.rows()).isNotEmpty();
     assertThat(byType.rows().get(0).own()).isEqualTo(byType.rows().get(0).subtree());
 
-    ValuationReport.Report byTag = inOwn(tenant, () -> reports.byTag(50));
+    ValuationReport.ValuationSummary byTag = inOwn(tenant, () -> reports.byTag(50));
     // A thing can carry several tags, so adding this column up gives a number
     // that means nothing -- and the report says so rather than letting a reader
     // find out.
@@ -188,9 +188,9 @@ class ValuationReportIT extends AbstractIntegrationTest {
     anItem(tenant, "A kettle", kitchen, purchase("40.00", "EUR"));
     anItem(tenant, "A stove", elsewhere, purchase("500.00", "EUR"));
 
-    ValuationReport.Report report = inOwn(tenant, () -> reports.byLocation(house, 50));
+    ValuationReport.ValuationSummary report = inOwn(tenant, () -> reports.byLocation(house, 50));
 
-    assertThat(report.rows().stream().map(ValuationReport.Row::id))
+    assertThat(report.rows().stream().map(ValuationReport.ValuationRow::id))
         .contains(house, kitchen)
         .doesNotContain(elsewhere);
     assertThat(only(rowFor(report, house).subtree().purchase())).isEqualTo(Money.of("40.00", "EUR"));
@@ -203,7 +203,7 @@ class ValuationReportIT extends AbstractIntegrationTest {
     return amounts.get(0);
   }
 
-  private static ValuationReport.Row rowFor(ValuationReport.Report report, UUID id) {
+  private static ValuationReport.ValuationRow rowFor(ValuationReport.ValuationSummary report, UUID id) {
     return report.rows().stream()
         .filter(row -> row.id().equals(id))
         .findFirst()

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import java.time.Instant;
 import org.springframework.beans.factory.ObjectProvider;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  * image tag and every release page — and an instance that hid its version would not thereby be
  * harder to attack, only harder to audit.
  */
+@Tag(name = "Version", description = "What this instance is running.")
 @RestController
 @RequestMapping("/api/v1/version")
 public class VersionController {
@@ -60,14 +62,14 @@ public class VersionController {
           "The AGPL's source offer is owed to whoever uses the instance, not only to whoever has "
               + "an account on it (REQ-CON-009). It discloses the build's identity and nothing "
               + "about the data or the people on it.")
-  public VersionView version() {
+  public BuildVersion version() {
     if (build == null) {
       // A build without `bootBuildInfo`, which is a development one. Saying so
       // beats inventing a version: "unknown" is checkable and a made-up number
       // is not.
-      return new VersionView("unknown", "unknown", null, SOURCE, "AGPL-3.0-or-later");
+      return new BuildVersion("unknown", "unknown", null, SOURCE, "AGPL-3.0-or-later");
     }
-    return new VersionView(
+    return new BuildVersion(
         build.getVersion(),
         build.get("commit") == null ? "unknown" : build.get("commit"),
         build.getTime(),
@@ -85,6 +87,6 @@ public class VersionController {
    * @param source where the source is
    * @param licence the licence the source is under, so a reader knows what the offer is about
    */
-  public record VersionView(
+  public record BuildVersion(
       String version, String commit, Instant builtAt, String source, String licence) {}
 }

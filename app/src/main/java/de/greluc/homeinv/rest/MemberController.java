@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.Permission;
@@ -50,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
  * not another: an id that is not the session's is answered {@code 404}, the same answer a tenant
  * the caller does not belong to gets, because to somebody outside it the two are the same fact.
  */
+@Tag(name = "Members", description = "Who else works in the tenant, and in which role.")
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}")
 @RequiredArgsConstructor
