@@ -32,6 +32,7 @@ Network=homeinv-scanner.network:alias=worker
 Network=homeinv-plugin-webhook.network:alias=worker
 Network=homeinv-plugin-smtp.network:alias=worker
 Network=homeinv-plugin-blobstore-s3.network:alias=worker
+Network=homeinv-plugin-blobstore-nextcloud.network:alias=worker
 Tmpfs=/tmp:mode=1777
 EnvironmentFile=%h/.config/homeinv/homeinv.env
 Environment=SPRING_PROFILES_ACTIVE=worker

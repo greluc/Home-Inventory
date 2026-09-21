@@ -315,6 +315,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "homeinv-plugin-blobstore-nextcloud"
+version = "0.1.0"
+dependencies = [
+ "homeinv-plugin-common",
+ "prost",
+ "protox",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "homeinv-plugin-common"
 version = "0.1.0"
 dependencies = [
@@ -324,21 +340,6 @@ dependencies = [
  "tokio-rustls",
  "tonic",
  "webpki-roots",
-]
-
-[[package]]
-name = "homeinv-plugin-webhook"
-version = "0.1.0"
-dependencies = [
- "homeinv-plugin-common",
- "prost",
- "protox",
- "tokio",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

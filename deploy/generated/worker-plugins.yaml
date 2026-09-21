@@ -177,3 +177,63 @@ plugins:
         resources:
           memoryMiB: 64
           timeoutSeconds: 120
+  - id: de.greluc.homeinv.plugin.blobstore.nextcloud
+    endpoint: "plugin-blobstore-nextcloud:8203"
+    fingerprint: "@FINGERPRINT:mtls-plugin-blobstore-nextcloud@"
+    signed: false
+    manifestInline: |
+      apiVersion: home-inv.plugin/v1
+      metadata:
+        id: de.greluc.homeinv.plugin.blobstore.nextcloud
+        name: Nextcloud storage
+        version: 0.1.0
+        vendor: greluc
+        license: AGPL-3.0-or-later
+        homepage: https://github.com/greluc/Home-Inventory
+        descriptions:
+          en: Stores a tenant's media in a Nextcloud folder over WebDAV, with an app password.
+          de: Legt die Medien eines Mandanten per WebDAV in einem Nextcloud-Ordner ab, mit einem App-Passwort.
+      spec:
+        contract: '>=1.0.0 <2.0.0'
+        runtime: out-of-process
+        implements:
+        - port: BlobStore
+          priority: 90
+        capabilities:
+        - id: network:outbound
+          tcp:
+          - cloud.example.org:443
+          reason: Storing and reading this tenant's media in its Nextcloud
+        - id: core:setting:read
+          reason: Reading the instance, account and folder this tenant configured
+        settings:
+        - key: url
+          type: string
+          required: false
+          label:
+            en: Nextcloud address
+            de: Nextcloud-Adresse
+        - key: username
+          type: string
+          required: false
+          label:
+            en: Account
+            de: Konto
+        - key: appPassword
+          type: secret
+          required: false
+          label:
+            en: App password
+            de: App-Passwort
+        - key: folder
+          type: string
+          required: false
+          label:
+            en: Folder
+            de: Ordner
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+        resources:
+          memoryMiB: 64
+          timeoutSeconds: 120

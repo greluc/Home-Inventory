@@ -337,6 +337,8 @@ jobs:
             image: true
           - crate: blobstore-s3
             image: true
+          - crate: blobstore-nextcloud
+            image: true
     defaults:
       run:
         working-directory: plugins/${{ matrix.crate }}

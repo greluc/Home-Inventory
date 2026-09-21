@@ -1,37 +1,29 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! `plugin-blobstore-s3` — a tenant's media in S3-compatible object storage.
+//! `plugin-blobstore-nextcloud` — a tenant's media in its own Nextcloud.
 //!
-//! The third of the five first-party plugins
+//! The fourth of the five first-party plugins
 //! ([ADR-0072](../../../docs/adr/0072-first-party-plugins-live-here.md)) and the
-//! first implementation of the `BlobStore` port that is not the deployment's own
-//! service. It exists as a plugin and not as a core adapter for one reason: it
-//! opens a connection **outside** the deployment, and everything that does is a
-//! plugin on its own segment behind the egress proxy
-//! ([ADR-0026](../../../docs/adr/0026-core-outbound-via-plugins.md)).
+//! second implementation of the `BlobStore` port that is not the deployment's
+//! own service. It is the path [ADR-0007](../../../docs/adr/0007-media-storage.md)
+//! named first: photographs end up in a store that is already backed up,
+//! synchronised and shared, and the person who owns them can open the folder.
 //!
 //! # Configured twice (ADR-0073)
 //!
 //! | | Who decides | Where |
 //! |---|---|---|
-//! | the deployment's endpoint, bucket, region and keys | the operator | this container's environment and a mounted secret |
-//! | a tenant's **own** endpoint, bucket, region, prefix and keys | that tenant | the call envelope, the secret sealed in the core |
+//! | the deployment's instance, account and app password | the operator | this container's environment and a mounted secret |
+//! | a tenant's **own** instance, account, app password and folder | that tenant | the call envelope, the secret sealed in the core |
 //! | which hosts may be reached at all | the operator | the manifest's allowlist, enforced by the proxy |
-//!
-//! A tenant that configures nothing uses the deployment's bucket; the tenant id
-//! is part of every key, so one bucket holds many tenants and their addresses
-//! never collide ([ADR-0032](../../../docs/adr/0032-per-tenant-blob-addressing.md)).
 //!
 //! # What it refuses
 //!
-//! A `sha256` that is not 64 characters of lower-case hex: the address is the
-//! content hash and a store that accepted anything else would be
-//! content-addressed in name only. Bytes whose hash is not the one the core
-//! declared — verified as they stream, and an upload already begun is aborted
-//! rather than completed. A call whose envelope names a different tenant from
-//! its address, which is a bug in the caller and would put one tenant's bytes
-//! under another's key.
+//! A `sha256` that is not a content address, bytes whose hash is not the one the
+//! core declared, and a call whose envelope names a different tenant from its
+//! address — the same three refusals `plugin-blobstore-s3` makes, for the same
+//! reasons and with the same wording.
 //!
 //! # Granting this plugin moves nothing
 //!
@@ -41,8 +33,7 @@
 //! This plugin therefore answers `Head` with "no" for blobs it has never been
 //! given, and that answer is load-bearing rather than a failure.
 
-mod s3;
-mod sigv4;
+mod dav;
 mod target;
 
 /// The generated contract from `proto/home_inv/plugin/v1/`.
@@ -58,11 +49,14 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use homeinv_plugin_common::blob::is_content_address;
 use homeinv_plugin_common::encoding::hex;
+use homeinv_plugin_common::http::Body;
 use homeinv_plugin_common::mac::Running;
+use homeinv_plugin_common::time::now;
 use homeinv_plugin_common::tls;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
@@ -70,37 +64,39 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
+use crate::dav::{failure, make_collection, MAX_ERROR_BODY};
 use crate::proto::blob_store_server::{BlobStore, BlobStoreServer};
 use crate::proto::plugin_health_server::{PluginHealth, PluginHealthServer};
 use crate::proto::{
     BlobRef, CallContext, Check, DeleteRequest, DeleteResponse, GetRequest, GetResponse,
     HeadRequest, HeadResponse, HealthRequest, HealthResponse, HealthState, PutRequest, PutResponse,
 };
-use crate::s3::failure;
 use crate::target::{Defaults, Target};
-use homeinv_plugin_common::http::Body;
 
 /// The port the service matrix names for this plugin.
-const DEFAULT_PORT: u16 = 8202;
+const DEFAULT_PORT: u16 = 8203;
 
 /// Where the runtime mounts this plugin's own identity.
-const DEFAULT_IDENTITY: &str = "/run/secrets/mtls-plugin-blobstore-s3";
+const DEFAULT_IDENTITY: &str = "/run/secrets/mtls-plugin-blobstore-nextcloud";
 
-/// Where the runtime mounts the deployment's secret access key.
-const DEFAULT_SECRET_FILE: &str = "/run/secrets/plugin-blobstore-s3-secret-key";
+/// Where the runtime mounts the deployment's app password.
+const DEFAULT_PASSWORD_FILE: &str = "/run/secrets/plugin-blobstore-nextcloud-password";
 
-/// How long one request to the store may take, tunnel included.
+/// How long one request may take, tunnel included.
 const DEFAULT_TIMEOUT_SECONDS: u64 = 60;
 
-/// How large a multipart part is.
+/// How large a chunk of a chunked upload is.
 ///
-/// Above S3's five-megabyte minimum with room to spare, and small enough that
-/// two of them fit in this container's budget. An object that never reaches this
-/// size is uploaded in one request and never becomes a multipart upload at all.
-const PART: usize = 8 * 1024 * 1024;
+/// The same 8 MiB the S3 plugin uses, and for the same reason: two of them fit
+/// in this container's budget, and an object that never reaches this size is
+/// uploaded in one request and never becomes a chunked upload at all.
+const CHUNK: usize = 8 * 1024 * 1024;
 
 /// How many chunks of a download may wait for the core to read them.
 const GET_BUFFER: usize = 4;
+
+/// Numbers one upload apart from the next in this process.
+static UPLOADS: AtomicU64 = AtomicU64::new(0);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -122,9 +118,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address: SocketAddr = format!("0.0.0.0:{port}").parse()?;
     info!(
         port = port,
-        endpoint = defaults.endpoint.as_deref().unwrap_or("none"),
-        bucket = defaults.bucket.as_deref().unwrap_or("none"),
-        "plugin-blobstore-s3 is listening"
+        instance = defaults.url.as_deref().unwrap_or("none"),
+        "plugin-blobstore-nextcloud is listening"
     );
 
     let unready = unready(&defaults, proxy.as_deref());
@@ -132,12 +127,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Said once, at startup, and each one names what to set. A plugin that
         // cannot store is a plugin an operator has to be able to diagnose
         // without reading its source (REQ-PLG-015).
-        warn!("plugin-blobstore-s3 is not ready: {missing}");
+        warn!("plugin-blobstore-nextcloud is not ready: {missing}");
     }
     if !defaults.touched() {
         info!(
             "no deployment default is configured; every tenant that uses this plugin brings its \
-             own endpoint, bucket and keys (ADR-0073)"
+             own instance, account and app password (ADR-0073)"
         );
     }
 
@@ -145,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy,
         defaults,
         timeout: Duration::from_secs(
-            env("HOMEINV_S3_TIMEOUT_SECONDS")
+            env("HOMEINV_NEXTCLOUD_TIMEOUT_SECONDS")
                 .and_then(|value| value.parse().ok())
                 .unwrap_or(DEFAULT_TIMEOUT_SECONDS),
         ),
@@ -158,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(PluginHealthServer::new(health))
         .serve_with_shutdown(address, async {
             let _ = tokio::signal::ctrl_c().await;
-            info!("plugin-blobstore-s3 is stopping");
+            info!("plugin-blobstore-nextcloud is stopping");
         })
         .await?;
     Ok(())
@@ -175,23 +170,20 @@ fn env(name: &str) -> Option<String> {
 /// What the operator configured in this container.
 fn read_defaults() -> Defaults {
     Defaults {
-        endpoint: env("HOMEINV_S3_ENDPOINT"),
-        region: env("HOMEINV_S3_REGION"),
-        bucket: env("HOMEINV_S3_BUCKET"),
-        prefix: env("HOMEINV_S3_PREFIX"),
-        addressing: env("HOMEINV_S3_ADDRESSING"),
-        access_key_id: env("HOMEINV_S3_ACCESS_KEY_ID"),
-        secret_access_key: read_secret(
-            &env("HOMEINV_S3_SECRET_KEY_FILE").unwrap_or(DEFAULT_SECRET_FILE.into()),
+        url: env("HOMEINV_NEXTCLOUD_URL"),
+        username: env("HOMEINV_NEXTCLOUD_USER"),
+        password: read_secret(
+            &env("HOMEINV_NEXTCLOUD_PASSWORD_FILE").unwrap_or(DEFAULT_PASSWORD_FILE.into()),
         ),
+        folder: env("HOMEINV_NEXTCLOUD_FOLDER"),
     }
 }
 
 /// Reads a mounted secret, trimming the newline a file usually ends with.
 ///
 /// Absent and empty are the same answer here, because `setup.sh` creates this
-/// file EMPTY on purpose: a key to somebody else's storage is not one this
-/// deployment may invent.
+/// file EMPTY on purpose: a password to somebody else's Nextcloud is not one
+/// this deployment may invent.
 fn read_secret(path: &str) -> Option<String> {
     std::fs::read_to_string(Path::new(path))
         .ok()
@@ -229,6 +221,28 @@ struct Store {
     timeout: Duration,
 }
 
+/// One call's destination: where the instance is, and what this blob is called
+/// there.
+///
+/// `Debug` is derived and safe: the app password inside the target prints as
+/// `<redacted>`.
+#[derive(Debug)]
+struct Located {
+    /// Which instance and as whom.
+    target: Target,
+    /// The owning tenant, as the address carries it.
+    tenant: String,
+    /// The content address.
+    sha256: String,
+}
+
+impl Located {
+    /// The blob's WebDAV path.
+    fn path(&self) -> String {
+        self.target.path_for(&self.tenant, &self.sha256)
+    }
+}
+
 impl Store {
     /// The proxy, or the refusal that says there is no route out at all.
     fn proxy(&self) -> Result<&str, Status> {
@@ -239,7 +253,7 @@ impl Store {
         })
     }
 
-    /// Where this call's bytes go, and the key they go under.
+    /// Where this call's bytes go.
     ///
     /// # Arguments
     ///
@@ -250,12 +264,12 @@ impl Store {
     ///
     /// `INVALID_ARGUMENT` for an address that is not one, or an envelope naming
     /// a different tenant from the address. `FAILED_PRECONDITION` when nothing
-    /// says which bucket to use, listing every missing piece at once.
+    /// says which instance to use, listing every missing piece at once.
     fn resolve(
         &self,
         blob: &Option<BlobRef>,
         context: &Option<CallContext>,
-    ) -> Result<(Target, String), Status> {
+    ) -> Result<Located, Status> {
         let blob = blob
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("the request carries no blob reference"))?;
@@ -279,8 +293,7 @@ impl Store {
                 let envelope = context.tenant_id.trim();
                 if !envelope.is_empty() && envelope != tenant {
                     // A caller bug, and the one that would put one tenant's
-                    // bytes under another's key. Refused rather than resolved
-                    // towards either of them.
+                    // bytes under another's path.
                     return Err(Status::invalid_argument(format!(
                         "the envelope is for tenant {envelope} and the address is for {tenant}"
                     )));
@@ -296,8 +309,98 @@ impl Store {
                 missing.join("; ")
             ))
         })?;
-        let key = target.key_for(tenant, &blob.sha256);
-        Ok((target, key))
+        Ok(Located {
+            target,
+            tenant: tenant.to_string(),
+            sha256: blob.sha256.clone(),
+        })
+    }
+
+    /// `HEAD` on one path: its size, or `None` when it is not there.
+    async fn head_path(&self, proxy: &str, where_to: &Located) -> Result<Option<u64>, Status> {
+        let mut answer = dav::request(
+            proxy,
+            &where_to.target,
+            self.timeout,
+            "HEAD",
+            &where_to.path(),
+            &[],
+            Body::Empty,
+        )
+        .await
+        .map_err(Status::unavailable)?;
+        match answer.status {
+            404 => Ok(None),
+            status if (200..300).contains(&status) => Ok(Some(
+                answer
+                    .header("content-length")
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(0),
+            )),
+            status => {
+                let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
+                Err(Status::unavailable(failure(status, &body)))
+            }
+        }
+    }
+
+    /// Creates every collection a blob's path needs.
+    async fn make_the_way(&self, proxy: &str, where_to: &Located) -> Result<(), Status> {
+        for collection in where_to
+            .target
+            .collections_for(&where_to.tenant, &where_to.sha256)
+        {
+            make_collection(proxy, &where_to.target, self.timeout, &collection)
+                .await
+                .map_err(Status::unavailable)?;
+        }
+        Ok(())
+    }
+
+    /// The whole object in one request, making its parents if they are missing.
+    async fn put_single(
+        &self,
+        proxy: &str,
+        where_to: &Located,
+        bytes: &[u8],
+    ) -> Result<(), Status> {
+        let path = where_to.path();
+        let mut answer = dav::request(
+            proxy,
+            &where_to.target,
+            self.timeout,
+            "PUT",
+            &path,
+            &[],
+            Body::Bytes(bytes),
+        )
+        .await
+        .map_err(Status::unavailable)?;
+
+        if answer.status == 409 {
+            // The collections are not there. Nothing creates them implicitly,
+            // so they are created now and the upload is tried once more — once,
+            // because a second 409 after that is not about the parents.
+            let _ = answer.read_all(MAX_ERROR_BODY).await;
+            self.make_the_way(proxy, where_to).await?;
+            answer = dav::request(
+                proxy,
+                &where_to.target,
+                self.timeout,
+                "PUT",
+                &path,
+                &[],
+                Body::Bytes(bytes),
+            )
+            .await
+            .map_err(Status::unavailable)?;
+        }
+
+        if !(200..300).contains(&answer.status) {
+            let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
+            return Err(Status::unavailable(failure(answer.status, &body)));
+        }
+        Ok(())
     }
 }
 
@@ -314,13 +417,12 @@ impl BlobStore for Store {
             .message()
             .await?
             .ok_or_else(|| Status::invalid_argument("the upload sent no message at all"))?;
-        let (target, key) = self.resolve(&first.blob, &first.context)?;
-        let declared = first.blob.as_ref().expect("resolved above").sha256.clone();
+        let where_to = self.resolve(&first.blob, &first.context)?;
 
-        // Already there? The address is the content hash, so a key that exists
+        // Already there? The address is the content hash, so a path that exists
         // holds these exact bytes and uploading them again would spend the
-        // tenant's bandwidth to arrive at the same object (ADR-0007).
-        if let Some(size) = self.head_key(&proxy, &target, &key).await? {
+        // tenant's bandwidth to arrive at the same file (ADR-0007).
+        if let Some(size) = self.head_path(&proxy, &where_to).await? {
             drain(&mut stream).await?;
             return Ok(Response::new(PutResponse {
                 created: false,
@@ -328,7 +430,7 @@ impl BlobStore for Store {
             }));
         }
 
-        let mut buffer: Vec<u8> = Vec::with_capacity(PART);
+        let mut buffer: Vec<u8> = Vec::with_capacity(CHUNK);
         let mut running = Running::new();
         let mut total: u64 = 0;
         let mut upload: Option<Upload> = None;
@@ -338,8 +440,7 @@ impl BlobStore for Store {
         total += first.chunk.len() as u64;
 
         loop {
-            let next = stream.message().await?;
-            match next {
+            match stream.message().await? {
                 Some(message) => {
                     running.update(&message.chunk);
                     total += message.chunk.len() as u64;
@@ -347,43 +448,42 @@ impl BlobStore for Store {
                 }
                 None => break,
             }
-            while buffer.len() >= PART {
-                let part: Vec<u8> = buffer.drain(..PART).collect();
-                let started = match upload.as_mut() {
-                    Some(started) => started,
-                    None => {
-                        upload = Some(self.begin(&proxy, &target, &key).await?);
-                        upload.as_mut().expect("just set")
-                    }
-                };
-                started.add(self, &proxy, &target, &key, &part).await?;
+            while buffer.len() >= CHUNK {
+                let part: Vec<u8> = buffer.drain(..CHUNK).collect();
+                if upload.is_none() {
+                    upload = Some(Upload::begin(self, &proxy, &where_to).await?);
+                }
+                upload
+                    .as_mut()
+                    .expect("just set")
+                    .add(self, &proxy, &where_to, &part)
+                    .await?;
             }
         }
 
         let actual = hex(&running.finish());
-        if actual != declared {
+        if actual != where_to.sha256 {
             // Refused, and an upload already begun is abandoned rather than
-            // completed. A store that kept these bytes under the declared
+            // assembled. A store that kept these bytes under the declared
             // address would be content-addressed in name only, and the next read
             // would return a file that is not the one asked for.
             if let Some(started) = upload {
-                started.abort(self, &proxy, &target, &key).await;
+                started.abandon(self, &proxy, &where_to).await;
             }
             return Err(Status::invalid_argument(format!(
-                "the bytes hash to {actual} and the address says {declared}"
+                "the bytes hash to {actual} and the address says {}",
+                where_to.sha256
             )));
         }
 
         match upload {
-            None => {
-                self.put_single(&proxy, &target, &key, &buffer).await?;
-            }
+            None => self.put_single(&proxy, &where_to, &buffer).await?,
             Some(mut started) => {
                 if !buffer.is_empty() {
                     let last = std::mem::take(&mut buffer);
-                    started.add(self, &proxy, &target, &key, &last).await?;
+                    started.add(self, &proxy, &where_to, &last).await?;
                 }
-                started.complete(self, &proxy, &target, &key).await?;
+                started.assemble(self, &proxy, &where_to).await?;
             }
         }
 
@@ -398,19 +498,27 @@ impl BlobStore for Store {
     async fn get(&self, request: Request<GetRequest>) -> Result<Response<Self::GetStream>, Status> {
         let proxy = self.proxy()?.to_string();
         let message = request.into_inner();
-        let (target, key) = self.resolve(&message.blob, &message.context)?;
+        let where_to = self.resolve(&message.blob, &message.context)?;
 
-        let mut answer = s3::request(&proxy, &target, self.timeout, "GET", &key, &[], Body::Empty)
-            .await
-            .map_err(Status::unavailable)?;
+        let mut answer = dav::request(
+            &proxy,
+            &where_to.target,
+            self.timeout,
+            "GET",
+            &where_to.path(),
+            &[],
+            Body::Empty,
+        )
+        .await
+        .map_err(Status::unavailable)?;
 
         if answer.status == 404 {
-            return Err(Status::not_found(format!(
-                "{key} is not in this tenant's bucket"
-            )));
+            return Err(Status::not_found(
+                "this tenant's Nextcloud does not hold that blob",
+            ));
         }
         if !(200..300).contains(&answer.status) {
-            let body = answer.read_all(8 * 1024).await.unwrap_or_default();
+            let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
             return Err(Status::unavailable(failure(answer.status, &body)));
         }
 
@@ -441,9 +549,9 @@ impl BlobStore for Store {
     async fn head(&self, request: Request<HeadRequest>) -> Result<Response<HeadResponse>, Status> {
         let proxy = self.proxy()?.to_string();
         let message = request.into_inner();
-        let (target, key) = self.resolve(&message.blob, &message.context)?;
+        let where_to = self.resolve(&message.blob, &message.context)?;
 
-        let found = self.head_key(&proxy, &target, &key).await?;
+        let found = self.head_path(&proxy, &where_to).await?;
         Ok(Response::new(HeadResponse {
             exists: found.is_some(),
             byte_size: found.unwrap_or(0),
@@ -456,14 +564,14 @@ impl BlobStore for Store {
     ) -> Result<Response<DeleteResponse>, Status> {
         let proxy = self.proxy()?.to_string();
         let message = request.into_inner();
-        let (target, key) = self.resolve(&message.blob, &message.context)?;
+        let where_to = self.resolve(&message.blob, &message.context)?;
 
-        let mut answer = s3::request(
+        let mut answer = dav::request(
             &proxy,
-            &target,
+            &where_to.target,
             self.timeout,
             "DELETE",
-            &key,
+            &where_to.path(),
             &[],
             Body::Empty,
         )
@@ -477,209 +585,167 @@ impl BlobStore for Store {
             return Ok(Response::new(DeleteResponse { removed: false }));
         }
         if !(200..300).contains(&answer.status) {
-            let body = answer.read_all(8 * 1024).await.unwrap_or_default();
+            let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
             return Err(Status::unavailable(failure(answer.status, &body)));
         }
+        // What Nextcloud does with it afterwards is the tenant's own setting: a
+        // deleted file lands in that account's trash and is purged on that
+        // account's retention rule. The core's own deletion is two-stage for the
+        // same reason (REQ-PRIV-004 asks that nothing is lost silently, not that
+        // a store forgets instantly).
         Ok(Response::new(DeleteResponse { removed: true }))
     }
 }
 
-impl Store {
-    /// `HEAD` on one key: its size, or `None` when it is not there.
-    async fn head_key(
-        &self,
-        proxy: &str,
-        target: &Target,
-        key: &str,
-    ) -> Result<Option<u64>, Status> {
-        let mut answer = s3::request(proxy, target, self.timeout, "HEAD", key, &[], Body::Empty)
-            .await
-            .map_err(Status::unavailable)?;
-        match answer.status {
-            404 => Ok(None),
-            status if (200..300).contains(&status) => Ok(Some(
-                answer
-                    .header("content-length")
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or(0),
-            )),
-            status => {
-                let body = answer.read_all(8 * 1024).await.unwrap_or_default();
-                Err(Status::unavailable(failure(status, &body)))
-            }
+/// A chunked upload in progress.
+///
+/// Nextcloud's chunked upload: a collection under `uploads/<user>/`, one `PUT`
+/// per chunk into it, and a final `MOVE` of its `.file` onto the destination,
+/// which is when the object appears. It exists because the core streams an
+/// object whose size is not known in advance, and a single `PUT` needs a
+/// `Content-Length` before the first byte.
+struct Upload {
+    /// This upload's own name, unique within the account.
+    id: String,
+    /// How many chunks have been written.
+    chunks: usize,
+}
+
+impl Upload {
+    /// Creates the collection the chunks go into.
+    async fn begin(store: &Store, proxy: &str, where_to: &Located) -> Result<Self, Status> {
+        // Unique within the account: the address, the second, and a counter that
+        // separates two uploads of the same bytes in the same second. Two
+        // uploads sharing a collection would interleave their chunks and
+        // assemble a file that is neither.
+        let id = format!(
+            "homeinv-{}-{}-{}",
+            &where_to.sha256[..16],
+            now(),
+            UPLOADS.fetch_add(1, Ordering::Relaxed)
+        );
+        let path = where_to.target.upload_path(&id);
+        // `Destination` on the MKCOL is what the Nextcloud clients send: it lets
+        // the instance check free space and quota before the first chunk rather
+        // than after the last.
+        let headers = vec![(
+            "Destination".to_string(),
+            where_to
+                .target
+                .destination_url(&where_to.tenant, &where_to.sha256),
+        )];
+        let mut answer = dav::request(
+            proxy,
+            &where_to.target,
+            store.timeout,
+            "MKCOL",
+            &path,
+            &headers,
+            Body::Empty,
+        )
+        .await
+        .map_err(Status::unavailable)?;
+        if !matches!(answer.status, 201 | 405) {
+            let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
+            return Err(Status::unavailable(failure(answer.status, &body)));
         }
+        Ok(Self { id, chunks: 0 })
     }
 
-    /// The whole object in one request.
-    async fn put_single(
-        &self,
+    /// Writes the next chunk.
+    async fn add(
+        &mut self,
+        store: &Store,
         proxy: &str,
-        target: &Target,
-        key: &str,
+        where_to: &Located,
         bytes: &[u8],
     ) -> Result<(), Status> {
-        let mut answer = s3::request(
+        self.chunks += 1;
+        // Zero-padded, so that the order the instance assembles them in is the
+        // order they were written whether it sorts them as numbers or as text.
+        // `10` before `2` is a corrupted file that nothing reports.
+        let name = format!("{:05}", self.chunks);
+        let path = format!("{}/{name}", where_to.target.upload_path(&self.id));
+        let mut answer = dav::request(
             proxy,
-            target,
-            self.timeout,
+            &where_to.target,
+            store.timeout,
             "PUT",
-            key,
+            &path,
             &[],
             Body::Bytes(bytes),
         )
         .await
         .map_err(Status::unavailable)?;
         if !(200..300).contains(&answer.status) {
-            let body = answer.read_all(8 * 1024).await.unwrap_or_default();
+            let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
             return Err(Status::unavailable(failure(answer.status, &body)));
         }
         Ok(())
     }
 
-    /// Starts a multipart upload and returns its id.
-    async fn begin(&self, proxy: &str, target: &Target, key: &str) -> Result<Upload, Status> {
-        let mut answer = s3::request(
+    /// Moves the assembled file onto its destination, which is when it exists.
+    async fn assemble(
+        &mut self,
+        store: &Store,
+        proxy: &str,
+        where_to: &Located,
+    ) -> Result<(), Status> {
+        // The destination's parents first: `MOVE` will not create them either,
+        // and a 409 here would be about a collection rather than about the file.
+        store.make_the_way(proxy, where_to).await?;
+
+        let source = format!("{}/.file", where_to.target.upload_path(&self.id));
+        let headers = vec![
+            (
+                "Destination".to_string(),
+                where_to
+                    .target
+                    .destination_url(&where_to.tenant, &where_to.sha256),
+            ),
+            // The address is the content hash, so anything already there is
+            // these exact bytes. Overwriting it is a no-op with extra steps and
+            // is allowed rather than fought over.
+            ("Overwrite".to_string(), "T".to_string()),
+        ];
+        let mut answer = dav::request(
             proxy,
-            target,
-            self.timeout,
-            "POST",
-            key,
-            &[("uploads", String::new())],
+            &where_to.target,
+            store.timeout,
+            "MOVE",
+            &source,
+            &headers,
             Body::Empty,
         )
         .await
         .map_err(Status::unavailable)?;
-        let body = answer
-            .read_all(64 * 1024)
-            .await
-            .map_err(Status::unavailable)?;
         if !(200..300).contains(&answer.status) {
-            return Err(Status::unavailable(failure(answer.status, &body)));
-        }
-        let text = String::from_utf8_lossy(&body).to_string();
-        let id = s3::between(&text, "<UploadId>", "</UploadId>").ok_or_else(|| {
-            Status::unavailable("the store started an upload and did not say which one")
-        })?;
-        Ok(Upload {
-            id,
-            etags: Vec::new(),
-        })
-    }
-}
-
-/// A multipart upload in progress.
-struct Upload {
-    /// What the store called it.
-    id: String,
-    /// The tag of each part, in order, as the store returned them.
-    etags: Vec<String>,
-}
-
-impl Upload {
-    /// Uploads the next part.
-    async fn add(
-        &mut self,
-        store: &Store,
-        proxy: &str,
-        target: &Target,
-        key: &str,
-        bytes: &[u8],
-    ) -> Result<(), Status> {
-        let number = self.etags.len() + 1;
-        let mut answer = s3::request(
-            proxy,
-            target,
-            store.timeout,
-            "PUT",
-            key,
-            &[
-                ("partNumber", number.to_string()),
-                ("uploadId", self.id.clone()),
-            ],
-            Body::Bytes(bytes),
-        )
-        .await
-        .map_err(Status::unavailable)?;
-        if !(200..300).contains(&answer.status) {
-            let body = answer.read_all(8 * 1024).await.unwrap_or_default();
-            return Err(Status::unavailable(failure(answer.status, &body)));
-        }
-        let etag = answer
-            .header("etag")
-            .ok_or_else(|| {
-                Status::unavailable(format!("the store took part {number} and returned no ETag"))
-            })?
-            .to_string();
-        self.etags.push(etag);
-        Ok(())
-    }
-
-    /// Completes it, which is the point at which the object exists.
-    async fn complete(
-        &mut self,
-        store: &Store,
-        proxy: &str,
-        target: &Target,
-        key: &str,
-    ) -> Result<(), Status> {
-        let mut document = String::from("<CompleteMultipartUpload>");
-        for (index, etag) in self.etags.iter().enumerate() {
-            document.push_str(&format!(
-                "<Part><PartNumber>{}</PartNumber><ETag>{}</ETag></Part>",
-                index + 1,
-                etag
-            ));
-        }
-        document.push_str("</CompleteMultipartUpload>");
-
-        let mut answer = s3::request(
-            proxy,
-            target,
-            store.timeout,
-            "POST",
-            key,
-            &[("uploadId", self.id.clone())],
-            Body::Bytes(document.as_bytes()),
-        )
-        .await
-        .map_err(Status::unavailable)?;
-        let body = answer
-            .read_all(64 * 1024)
-            .await
-            .map_err(Status::unavailable)?;
-        if !(200..300).contains(&answer.status) {
-            return Err(Status::unavailable(failure(answer.status, &body)));
-        }
-        // A completion may answer 200 AND carry an error document: the store
-        // starts the response before it knows the outcome, so that a slow
-        // assembly does not look like a dead connection. A client that read the
-        // status alone would report success for a failed upload.
-        let text = String::from_utf8_lossy(&body).to_string();
-        if text.contains("<Error>") {
+            let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
             return Err(Status::unavailable(failure(answer.status, &body)));
         }
         Ok(())
     }
 
-    /// Abandons it, so the parts stop occupying the tenant's storage.
+    /// Removes the collection and its chunks.
     ///
     /// Best effort by design: this runs when something has already gone wrong,
     /// and a failure here must not replace the reason the caller is being told
-    /// about. A store that never hears it expires the upload by its own lifecycle
-    /// rule, which is what that rule is for.
-    async fn abort(self, store: &Store, proxy: &str, target: &Target, key: &str) {
-        let outcome = s3::request(
+    /// about. An instance that never hears it cleans the upload up on its own
+    /// schedule, which is what that schedule is for.
+    async fn abandon(self, store: &Store, proxy: &str, where_to: &Located) {
+        let path = where_to.target.upload_path(&self.id);
+        let outcome = dav::request(
             proxy,
-            target,
+            &where_to.target,
             store.timeout,
             "DELETE",
-            key,
-            &[("uploadId", self.id.clone())],
+            &path,
+            &[],
             Body::Empty,
         )
         .await;
         if let Err(reason) = outcome {
-            warn!("an incomplete upload of {key} could not be abandoned: {reason}");
+            warn!("an incomplete upload could not be abandoned: {reason}");
         }
     }
 }
@@ -738,20 +804,20 @@ impl PluginHealth for Health {
 mod tests {
     use super::*;
 
+    const HASH: &str = "ab00000000000000000000000000000000000000000000000000000000000000";
+
     fn defaults() -> Defaults {
         Defaults {
-            endpoint: Some("objects.example.org".into()),
-            region: Some("eu-central-1".into()),
-            bucket: Some("home-inv".into()),
-            access_key_id: Some("KEY".into()),
-            secret_access_key: Some("secret".into()),
-            ..Default::default()
+            url: Some("https://cloud.example.org".into()),
+            username: Some("inventory".into()),
+            password: Some("app-password".into()),
+            folder: Some("HomeInventory".into()),
         }
     }
 
     fn store() -> Store {
         Store {
-            proxy: Some("egress-proxy:3128".into()),
+            proxy: Some("egress-proxy:8118".into()),
             defaults: defaults(),
             timeout: Duration::from_secs(60),
         }
@@ -776,44 +842,40 @@ mod tests {
     }
 
     #[test]
-    fn a_resolved_call_names_the_deployment_bucket_and_the_tenants_key() {
-        let (target, key) = store()
-            .resolve(
-                &blob("tenant-a", &"ab".repeat(32)),
-                &envelope("tenant-a", &[]),
-            )
+    fn a_resolved_call_names_the_deployment_account_and_the_tenants_path() {
+        let where_to = store()
+            .resolve(&blob("tenant-a", HASH), &envelope("tenant-a", &[]))
             .expect("resolves");
-        assert_eq!(target.bucket, "home-inv");
-        assert!(key.starts_with("sha256/tenant-a/ab/ab/"));
+        assert_eq!(where_to.target.username, "inventory");
+        assert!(where_to
+            .path()
+            .ends_with(&format!("/HomeInventory/sha256/tenant-a/ab/00/{HASH}")));
     }
 
     #[test]
-    fn a_tenants_own_bucket_wins_over_the_deployments() {
-        let (target, _) = store()
+    fn a_tenants_own_account_wins_over_the_deployments() {
+        let where_to = store()
             .resolve(
-                &blob("tenant-b", &"cd".repeat(32)),
+                &blob("tenant-b", HASH),
                 &envelope(
                     "tenant-b",
                     &[
-                        ("bucket", "mine"),
-                        ("accessKeyId", "MINE"),
-                        ("secretAccessKey", "also-mine"),
+                        ("url", "https://cloud.tenant.example"),
+                        ("username", "them"),
+                        ("appPassword", "theirs"),
                     ],
                 ),
             )
             .expect("resolves");
-        assert_eq!(target.bucket, "mine");
-        assert_eq!(target.credentials.access_key_id, "MINE");
+        assert_eq!(where_to.target.host, "cloud.tenant.example");
+        assert_eq!(where_to.target.username, "them");
     }
 
     #[test]
     fn an_envelope_for_another_tenant_is_refused() {
-        // The one that would put one tenant's bytes under another's key.
+        // The one that would put one tenant's bytes under another's path.
         let failure = store()
-            .resolve(
-                &blob("tenant-a", &"ab".repeat(32)),
-                &envelope("tenant-b", &[]),
-            )
+            .resolve(&blob("tenant-a", HASH), &envelope("tenant-b", &[]))
             .expect_err("mismatched");
         assert_eq!(failure.code(), tonic::Code::InvalidArgument);
         assert!(failure.message().contains("tenant-b"));
@@ -832,49 +894,46 @@ mod tests {
     #[test]
     fn an_unconfigured_tenant_is_told_what_is_missing() {
         let store = Store {
-            proxy: Some("egress-proxy:3128".into()),
+            proxy: Some("egress-proxy:8118".into()),
             defaults: Defaults::default(),
             timeout: Duration::from_secs(60),
         };
         let failure = store
-            .resolve(
-                &blob("tenant-a", &"ab".repeat(32)),
-                &envelope("tenant-a", &[]),
-            )
+            .resolve(&blob("tenant-a", HASH), &envelope("tenant-a", &[]))
             .expect_err("nothing configured");
         assert_eq!(failure.code(), tonic::Code::FailedPrecondition);
-        assert!(failure.message().contains("no bucket"));
-        assert!(failure.message().contains("no endpoint"));
+        assert!(failure.message().contains("no instance"));
+        assert!(failure.message().contains("no account"));
     }
 
     #[test]
-    fn a_call_without_an_envelope_still_works_on_the_deployments_bucket() {
+    fn a_call_without_an_envelope_still_works_on_the_deployments_account() {
         // The in-deployment service was the only implementation when this
         // contract was written and sent no envelope. A plugin that refused one
         // would refuse a caller that is still correct.
-        let (target, _) = store()
-            .resolve(&blob("tenant-a", &"ab".repeat(32)), &None)
+        let where_to = store()
+            .resolve(&blob("tenant-a", HASH), &None)
             .expect("resolves");
-        assert_eq!(target.bucket, "home-inv");
+        assert_eq!(where_to.target.username, "inventory");
     }
 
     #[test]
     fn a_deployment_that_configures_nothing_is_ready() {
         // Every tenant brings its own account, which is a supported way to run
         // this and not a half-configured one.
-        assert!(unready(&Defaults::default(), Some("egress-proxy:3128")).is_empty());
+        assert!(unready(&Defaults::default(), Some("egress-proxy:8118")).is_empty());
     }
 
     #[test]
     fn a_deployment_that_configures_half_is_not() {
         let half = Defaults {
-            endpoint: Some("objects.example.org".into()),
+            url: Some("https://cloud.example.org".into()),
             ..Default::default()
         };
-        let missing = unready(&half, Some("egress-proxy:3128"));
+        let missing = unready(&half, Some("egress-proxy:8118"));
         assert!(missing
             .iter()
-            .any(|line| line.contains("HOMEINV_S3_BUCKET")));
+            .any(|line| line.contains("HOMEINV_NEXTCLOUD_USER")));
     }
 
     #[test]

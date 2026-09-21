@@ -76,6 +76,7 @@ services:
       plugin-webhook: {}
       plugin-smtp: {}
       plugin-blobstore-s3: {}
+      plugin-blobstore-nextcloud: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -170,6 +171,7 @@ services:
       plugin-webhook: {}
       plugin-smtp: {}
       plugin-blobstore-s3: {}
+      plugin-blobstore-nextcloud: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -512,6 +514,7 @@ services:
       plugin-webhook: {}
       plugin-smtp: {}
       plugin-blobstore-s3: {}
+      plugin-blobstore-nextcloud: {}
     secrets:
       - source: egress-proxy-egress-allowlist.conf
         target: /etc/homeinv/egress-allowlist.conf
@@ -728,6 +731,39 @@ services:
         reservations:
           memory: 64m
 
+  plugin-blobstore-nextcloud:
+    image: ghcr.io/greluc/home-inv-plugin-blobstore-nextcloud:latest
+    container_name: homeinv-plugin-blobstore-nextcloud
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-blobstore-nextcloud: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8203"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-nextcloud"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_NEXTCLOUD_URL: "${HOMEINV_NEXTCLOUD_URL:-}"
+      HOMEINV_NEXTCLOUD_USER: "${HOMEINV_NEXTCLOUD_USER:-}"
+      HOMEINV_NEXTCLOUD_FOLDER: "${HOMEINV_NEXTCLOUD_FOLDER:-}"
+      HOMEINV_NEXTCLOUD_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-nextcloud
+      - plugin-blobstore-nextcloud-password
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+
 networks:
   plugin-webhook:
     internal: true
@@ -744,6 +780,11 @@ networks:
     ipam:
       config:
         - subnet: 10.89.33.0/24
+  plugin-blobstore-nextcloud:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.34.0/24
   edge:
   egress:
   internal:
@@ -805,6 +846,10 @@ secrets:
     file: ../secrets/mtls-blobstore
   mtls-plugin-webhook:
     file: ../secrets/mtls-plugin-webhook
+  mtls-plugin-blobstore-nextcloud:
+    file: ../secrets/mtls-plugin-blobstore-nextcloud
+  plugin-blobstore-nextcloud-password:
+    file: ../secrets/plugin-blobstore-nextcloud-password
   mtls-plugin-blobstore-s3:
     file: ../secrets/mtls-plugin-blobstore-s3
   plugin-blobstore-s3-secret-key:

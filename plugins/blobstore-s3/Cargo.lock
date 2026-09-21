@@ -322,14 +322,12 @@ dependencies = [
  "prost",
  "protox",
  "tokio",
- "tokio-rustls",
  "tokio-stream",
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
  "tracing",
  "tracing-subscriber",
- "webpki-roots",
 ]
 
 [[package]]

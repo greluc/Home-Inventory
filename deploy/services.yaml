@@ -1096,6 +1096,53 @@ services:
       this does not grow with the size of the object. It is REQ-NFR-009's
       per-plugin adder exactly: 64 MB reserved, 256 MB limit.
 
+  plugin-blobstore-nextcloud:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-blobstore-nextcloud }
+    plugin:
+      id: de.greluc.homeinv.plugin.blobstore.nextcloud
+      manifest: plugins/blobstore-nextcloud/manifest.yaml
+      # EVERY NEXTCLOUD THIS DEPLOYMENT MAY REACH, for the reason the S3
+      # plugin's list gives: a tenant may configure its own instance and one
+      # that is not here gets a refusal from the proxy rather than a
+      # connection (ADR-0027, ADR-0073).
+      tcp: ["cloud.example.org:443"]
+      fingerprintFrom: mtls-plugin-blobstore-nextcloud
+      signed: false
+    segment:
+      subnet: 10.89.34.0/24
+    networks: [plugin-blobstore-nextcloud]
+    ports:
+      - { container: 8203, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8203"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-nextcloud"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The deployment's own account, used by every tenant that did not name
+      # its own. Empty is a valid deployment: each tenant then brings its own
+      # instance, account and app password.
+      HOMEINV_NEXTCLOUD_URL: "${HOMEINV_NEXTCLOUD_URL:-}"
+      HOMEINV_NEXTCLOUD_USER: "${HOMEINV_NEXTCLOUD_USER:-}"
+      HOMEINV_NEXTCLOUD_FOLDER: "${HOMEINV_NEXTCLOUD_FOLDER:-}"
+      HOMEINV_NEXTCLOUD_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-nextcloud          # its server identity, pinned by the core
+      - plugin-blobstore-nextcloud-password      # the deployment's APP password, the
+                                                 # OPERATOR's credential — it never passes
+                                                 # through the core (ADR-0073). A TENANT's
+                                                 # own is sealed in the core instead
+    resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
+    profiles: [standard, ha]
+    notes: >
+      A tenant's media in its own Nextcloud, which is the path ADR-0007 named
+      first: the photographs land in a store that is already backed up and
+      synchronised, and the person who owns them can open the folder. Granting
+      it routes the tenant's NEXT bytes here and moves none of the old ones
+      (ADR-0074). Below 8 MiB one PUT; above it a chunked upload assembled by a
+      MOVE, because WebDAV needs a Content-Length the core cannot give in
+      advance. It is REQ-NFR-009's per-plugin adder exactly: 64 MB reserved,
+      256 MB limit.
+
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
@@ -1212,6 +1259,25 @@ secrets:
       `setup.sh` computes when it creates this certificate and substitutes into
       the generated plugin list — exactly the mechanism a third party's plugin
       uses, because a first-party one gets no privileged path (ADR-0072).
+  mtls-plugin-blobstore-nextcloud:
+    required: false
+    kind: mtls-server
+    services: [plugin-blobstore-nextcloud]
+    notes: >
+      Server identity for `plugin-blobstore-nextcloud`, pinned by the core exactly
+      as every other in-deployment peer is (REQ-SEC-056).
+  plugin-blobstore-nextcloud-password:
+    required: false
+    kind: external
+    services: [plugin-blobstore-nextcloud]
+    notes: >
+      THE DEPLOYMENT'S NEXTCLOUD APP PASSWORD, and the third secret here that
+      belongs to somebody else's system. `setup.sh` creates it EMPTY and says so;
+      under Podman it is also not INSTALLED until it is filled in, because a
+      Podman secret cannot be empty. An APP password and not an account password:
+      it carries no web session and revoking it revokes exactly this integration.
+      A TENANT's own never appears here at all — it is sealed in the core and
+      travels in the call envelope (ADR-0073, ADR-0019).
   mtls-plugin-blobstore-s3:
     required: false
     kind: mtls-server

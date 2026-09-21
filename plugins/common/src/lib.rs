@@ -21,7 +21,9 @@
 //! a shared crate between the two sides would be the dependency the licence
 //! separation exists to prevent.
 
+pub mod blob;
 pub mod encoding;
+pub mod http;
 pub mod keys;
 pub mod mac;
 pub mod proxy;

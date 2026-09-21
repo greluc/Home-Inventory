@@ -22,6 +22,7 @@ Requires=homeinv-rabbitmq.service
 Requires=homeinv-plugin-webhook.service
 Requires=homeinv-plugin-smtp.service
 Requires=homeinv-plugin-blobstore-s3.service
+Requires=homeinv-plugin-blobstore-nextcloud.service
 After=homeinv-web.service
 After=homeinv-api.service
 After=homeinv-worker.service
@@ -37,6 +38,7 @@ After=homeinv-rabbitmq.service
 After=homeinv-plugin-webhook.service
 After=homeinv-plugin-smtp.service
 After=homeinv-plugin-blobstore-s3.service
+After=homeinv-plugin-blobstore-nextcloud.service
 
 [Install]
 WantedBy=default.target

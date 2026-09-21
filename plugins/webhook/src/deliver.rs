@@ -10,30 +10,25 @@
 //! conversation here is: `CONNECT` to the proxy, TLS to the target inside that
 //! tunnel, one HTTP/1.1 request, one response.
 //!
-//! # Why this is written out rather than delegated to a client library
+//! # Where the exchange itself lives
 //!
-//! The same reason `egress-proxy/` writes the other end of it: two request
-//! shapes and a status line are forty lines, against a dependency tree that
-//! would be the largest thing in the image. What this does not do is as
-//! important as what it does — **no redirects are followed**. A redirect is a
-//! new target, chosen by the far side, and following one would send a signed
-//! payload somewhere the allowlist never approved.
+//! In `homeinv_plugin_common::http`, since `plugins/blobstore-s3/` and
+//! `plugins/blobstore-nextcloud/` need the identical tunnel, handshake, request
+//! writer and framed body reader
+//! ([ADR-0072](../../../docs/adr/0072-first-party-plugins-live-here.md)). What
+//! stays here is what is specific to a webhook: one `POST` of JSON, a bounded
+//! read of whatever comes back, and a status line for the delivery log.
+//!
+//! **No redirect is followed**, which the shared transport guarantees rather
+//! than promises: it has no redirect handling at all. A redirect is a new target
+//! chosen by the far side, and following one would send a signed payload
+//! somewhere the allowlist never approved.
 
-use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tokio_rustls::rustls::pki_types::ServerName;
-use tokio_rustls::rustls::{ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
-
-use homeinv_plugin_common::proxy::status_line;
+use homeinv_plugin_common::http::{self, Body, Endpoint, Request};
 
 use crate::target::Target;
-
-/// How long the tunnel itself may take to open, inside the caller's own budget.
-const TUNNEL: Duration = Duration::from_secs(10);
 
 /// How much of a response is read before the rest is dropped.
 ///
@@ -73,154 +68,54 @@ pub async fn post(
     body: &[u8],
     timeout: Duration,
 ) -> Result<Delivered, String> {
-    tokio::time::timeout(timeout, exchange(proxy, target, headers, body))
-        .await
-        .map_err(|_| {
-            format!(
-                "the target did not answer within {} seconds",
-                timeout.as_secs()
-            )
-        })?
-}
+    let host_header = http::host_header(&target.host, target.port);
+    let mut all = vec![("Content-Type".to_string(), "application/json".to_string())];
+    all.extend_from_slice(headers);
 
-async fn exchange(
-    proxy: Option<&str>,
-    target: &Target,
-    headers: &[(String, String)],
-    body: &[u8],
-) -> Result<Delivered, String> {
-    let socket = match proxy {
-        Some(address) => {
-            // The CONNECT tunnel is every plugin's one route out, so it lives in
-            // the shared crate rather than here (ADR-0072).
-            homeinv_plugin_common::proxy::connect(address, &target.host, target.port, TUNNEL)
-                .await?
-        }
-        None => TcpStream::connect((target.host.as_str(), target.port))
-            .await
-            .map_err(|failure| format!("the target could not be reached: {failure}"))?,
-    };
-    socket
-        .set_nodelay(true)
-        .map_err(|failure| format!("the connection could not be configured: {failure}"))?;
+    let mut answer = http::send(
+        &Endpoint {
+            proxy,
+            host: &target.host,
+            port: target.port,
+            timeout,
+        },
+        &Request {
+            method: "POST",
+            target: &target.path,
+            host_header: &host_header,
+            headers: &all,
+            body: Body::Bytes(body),
+        },
+    )
+    .await?;
 
-    let name = ServerName::try_from(target.host.clone())
-        .map_err(|_| "the target's host is not a name TLS can verify".to_string())?;
-    let mut stream = connector()?
-        .connect(name, socket)
-        .await
-        .map_err(|failure| format!("the target's TLS handshake failed: {failure}"))?;
+    // Read and discard, bounded: the status is all this acts on, and reading
+    // some of the body is what lets the far side see a complete exchange rather
+    // than a reset.
+    let _ = answer.read_all(MAX_RESPONSE).await;
 
-    let mut request = format!(
-        "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
-         Content-Length: {}\r\nConnection: close\r\n",
-        target.path,
-        host_header(target),
-        body.len()
-    );
-    for (name, value) in headers {
-        request.push_str(name);
-        request.push_str(": ");
-        request.push_str(value);
-        request.push_str("\r\n");
-    }
-    request.push_str("\r\n");
-
-    stream
-        .write_all(request.as_bytes())
-        .await
-        .map_err(|failure| format!("the request could not be sent: {failure}"))?;
-    stream
-        .write_all(body)
-        .await
-        .map_err(|failure| format!("the request body could not be sent: {failure}"))?;
-    stream
-        .flush()
-        .await
-        .map_err(|failure| format!("the request could not be flushed: {failure}"))?;
-
-    let mut answer = Vec::with_capacity(1024);
-    let mut chunk = [0_u8; 1024];
-    loop {
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .map_err(|failure| format!("the answer could not be read: {failure}"))?;
-        if read == 0 || answer.len() >= MAX_RESPONSE {
-            break;
-        }
-        answer.extend_from_slice(&chunk[..read]);
-        if status_line(&answer).is_some() && answer.len() > 512 {
-            // The status is all this acts on. Everything after it is read only
-            // so that the far side sees a complete exchange rather than a reset.
-            break;
-        }
-    }
-
-    let line = status_line(&answer).ok_or_else(|| "the target answered nothing".to_string())?;
-    let status = line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|code| code.parse::<u16>().ok())
-        .ok_or_else(|| format!("the target answered '{line}', which is not an HTTP status"))?;
     Ok(Delivered {
-        status,
-        detail: line,
+        status: answer.status,
+        detail: answer.status_line,
     })
-}
-
-/// The TLS client configuration, with the public roots compiled in.
-///
-/// A `scratch` image has no system trust store, which is why the roots are a
-/// crate. The provider is named rather than taken from a process-wide default:
-/// a default that is installed somewhere else is a default that can change
-/// somewhere else.
-fn connector() -> Result<TlsConnector, String> {
-    let mut roots = RootCertStore::empty();
-    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-    let config = ClientConfig::builder_with_provider(Arc::new(
-        tokio_rustls::rustls::crypto::ring::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()
-    .map_err(|failure| format!("TLS could not be configured: {failure}"))?
-    .with_root_certificates(roots)
-    .with_no_client_auth();
-
-    Ok(TlsConnector::from(Arc::new(config)))
-}
-
-/// `Host:` as it goes on the wire — without the port when it is the default.
-fn host_header(target: &Target) -> String {
-    if target.port == 443 {
-        target.host.clone()
-    } else {
-        format!("{}:{}", target.host, target.port)
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use homeinv_plugin_common::http::host_header;
+    use homeinv_plugin_common::proxy::status_line;
 
     #[test]
     fn the_host_header_omits_the_default_port() {
-        let target = Target {
-            host: "hooks.example.org".into(),
-            port: 443,
-            path: "/in".into(),
-        };
-        assert_eq!(host_header(&target), "hooks.example.org");
+        assert_eq!(host_header("hooks.example.org", 443), "hooks.example.org");
     }
 
     #[test]
     fn the_host_header_carries_any_other_port() {
-        let target = Target {
-            host: "hooks.example.org".into(),
-            port: 8443,
-            path: "/in".into(),
-        };
-        assert_eq!(host_header(&target), "hooks.example.org:8443");
+        assert_eq!(
+            host_header("hooks.example.org", 8443),
+            "hooks.example.org:8443"
+        );
     }
 
     #[test]

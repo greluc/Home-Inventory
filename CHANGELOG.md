@@ -183,6 +183,14 @@ commit".
 
 ### Added
 
+- **Your photographs can live in your own Nextcloud.** `plugin-blobstore-nextcloud`
+  stores a tenant's media in a folder of a Nextcloud account over WebDAV, with an
+  app password rather than the account password — so revoking it revokes this and
+  nothing else. The person who owns the photographs can open the folder and see
+  them. As with S3, the installation can point at one instance and any tenant can
+  use its own instead; a file larger than 8 MiB is uploaded in chunks and assembled
+  by Nextcloud, and a file already there is not sent twice.
+
 - **Your photographs can live in your own S3 bucket.** `plugin-blobstore-s3` is
   the third first-party plugin: MinIO, Garage, Backblaze or AWS, signed with
   Signature Version 4. The person running the installation can point the whole

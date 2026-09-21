@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 [package]
-name = "homeinv-plugin-blobstore-s3"
+name = "homeinv-plugin-blobstore-nextcloud"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.90"
-description = "Stores a tenant's media in S3-compatible object storage"
+description = "Stores a tenant's media in a Nextcloud over WebDAV"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/greluc/Home-Inventory"
 publish = false
