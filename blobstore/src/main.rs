@@ -22,6 +22,13 @@ mod store;
 mod tls;
 
 /// The generated contract from `proto/home_inv/plugin/v1/blob_store.proto`.
+///
+/// `dead_code` is allowed here and nowhere else. The contract gained a `CallContext`
+/// on 2026-09-21, which pulled `common.proto` into this module with every message
+/// it carries — `Money`, `Check`, `Problem` and the rest, none of which this service
+/// constructs and all of which a plugin does. The alternative would be a second
+/// generated module per service, which is a build that knows what each consumer uses.
+#[allow(dead_code)]
 mod proto {
     tonic::include_proto!("home_inv.plugin.v1");
 }

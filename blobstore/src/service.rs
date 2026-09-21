@@ -13,8 +13,8 @@ use tracing::{debug, warn};
 
 use crate::proto::blob_store_server::BlobStore;
 use crate::proto::{
-    BlobRef as BlobRefMessage, DeleteRequest, DeleteResponse, GetRequest, GetResponse, HeadRequest,
-    HeadResponse, PutRequest, PutResponse,
+    BlobRef as BlobRefMessage, CallContext, DeleteRequest, DeleteResponse, GetRequest, GetResponse,
+    HeadRequest, HeadResponse, PutRequest, PutResponse,
 };
 use crate::store::BlobRef;
 
@@ -36,9 +36,33 @@ impl FilesystemBlobStore {
         Self { root }
     }
 
-    /// Validates the reference a request carries.
-    fn reference(message: Option<&BlobRefMessage>) -> Result<BlobRef, Status> {
+    /// Validates the reference a request carries, against the envelope beside it.
+    ///
+    /// The two say different things and always about the same tenant: the
+    /// reference is the ADDRESS, which contains the tenant because addressing is
+    /// per tenant (ADR-0032), and the envelope is WHO THE CALL IS FOR (ADR-0073).
+    /// This service needs nothing from the envelope — it is configured once for
+    /// the whole deployment — and it checks the one thing it can: that a caller
+    /// which sent both did not name two different tenants. The contract asks
+    /// every store to refuse that, and this is the reference implementation the
+    /// others are compared to.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` — the address
+    /// * `context` — the envelope, absent from a caller older than 2026-09-21
+    fn reference(
+        message: Option<&BlobRefMessage>,
+        context: Option<&CallContext>,
+    ) -> Result<BlobRef, Status> {
         let message = message.ok_or_else(|| Status::invalid_argument("blob is required"))?;
+        if let Some(envelope) = context.map(|context| context.tenant_id.trim()) {
+            if !envelope.is_empty() && envelope != message.tenant_id.trim() {
+                return Err(Status::invalid_argument(
+                    "the envelope and the address name different tenants",
+                ));
+            }
+        }
         BlobRef::parse(&message.tenant_id, &message.sha256)
             .map_err(|failure| Status::invalid_argument(failure.message()))
     }
@@ -57,7 +81,7 @@ impl BlobStore for FilesystemBlobStore {
             .await
             .transpose()?
             .ok_or_else(|| Status::invalid_argument("the stream carried no frames"))?;
-        let reference = Self::reference(first.blob.as_ref())?;
+        let reference = Self::reference(first.blob.as_ref(), first.context.as_ref())?;
         let target = reference.path_under(&self.root);
 
         if tokio::fs::try_exists(&target).await.unwrap_or(false) {
@@ -154,7 +178,8 @@ impl BlobStore for FilesystemBlobStore {
     >;
 
     async fn get(&self, request: Request<GetRequest>) -> Result<Response<Self::GetStream>, Status> {
-        let reference = Self::reference(request.into_inner().blob.as_ref())?;
+        let message = request.into_inner();
+        let reference = Self::reference(message.blob.as_ref(), message.context.as_ref())?;
         let path = reference.path_under(&self.root);
 
         let mut file = tokio::fs::File::open(&path).await.map_err(|failure| {
@@ -183,7 +208,8 @@ impl BlobStore for FilesystemBlobStore {
     }
 
     async fn head(&self, request: Request<HeadRequest>) -> Result<Response<HeadResponse>, Status> {
-        let reference = Self::reference(request.into_inner().blob.as_ref())?;
+        let message = request.into_inner();
+        let reference = Self::reference(message.blob.as_ref(), message.context.as_ref())?;
         let path = reference.path_under(&self.root);
 
         match tokio::fs::metadata(&path).await {
@@ -207,7 +233,8 @@ impl BlobStore for FilesystemBlobStore {
         &self,
         request: Request<DeleteRequest>,
     ) -> Result<Response<DeleteResponse>, Status> {
-        let reference = Self::reference(request.into_inner().blob.as_ref())?;
+        let message = request.into_inner();
+        let reference = Self::reference(message.blob.as_ref(), message.context.as_ref())?;
         let path = reference.path_under(&self.root);
 
         match tokio::fs::remove_file(&path).await {
@@ -220,5 +247,68 @@ impl BlobStore for FilesystemBlobStore {
             }
             Err(failure) => Err(Status::internal(failure.to_string())),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HASH: &str = "ab00000000000000000000000000000000000000000000000000000000000000";
+    const TENANT: &str = "0191e2aa-0000-7000-8000-000000000001";
+
+    fn address(tenant: &str) -> BlobRefMessage {
+        BlobRefMessage {
+            tenant_id: tenant.to_string(),
+            sha256: HASH.to_string(),
+        }
+    }
+
+    fn envelope(tenant: &str) -> CallContext {
+        CallContext {
+            tenant_id: tenant.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_envelope_naming_the_same_tenant_is_accepted() {
+        assert!(
+            FilesystemBlobStore::reference(Some(&address(TENANT)), Some(&envelope(TENANT))).is_ok()
+        );
+    }
+
+    #[test]
+    fn an_envelope_naming_another_tenant_is_refused() {
+        // The one that would write one tenant's bytes under another's address.
+        let failure = FilesystemBlobStore::reference(
+            Some(&address(TENANT)),
+            Some(&envelope("0191e2aa-0000-7000-8000-000000000002")),
+        )
+        .expect_err("two tenants");
+        assert_eq!(failure.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn no_envelope_at_all_is_still_a_correct_caller() {
+        // The contract had no envelope before 2026-09-21, and the field is
+        // additive: a caller that sends none is old, not wrong.
+        assert!(FilesystemBlobStore::reference(Some(&address(TENANT)), None).is_ok());
+        assert!(
+            FilesystemBlobStore::reference(Some(&address(TENANT)), Some(&envelope(""))).is_ok()
+        );
+    }
+
+    #[test]
+    fn an_address_that_is_not_one_is_refused_whatever_the_envelope_says() {
+        let failure = FilesystemBlobStore::reference(
+            Some(&BlobRefMessage {
+                tenant_id: TENANT.to_string(),
+                sha256: "not-a-digest".to_string(),
+            }),
+            Some(&envelope(TENANT)),
+        )
+        .expect_err("not an address");
+        assert_eq!(failure.code(), tonic::Code::InvalidArgument);
     }
 }

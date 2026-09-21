@@ -112,7 +112,8 @@ change, and why the gap was invisible for as long as it was.
   may choose ([ADR-0073](0073-a-plugin-is-configured-twice.md)) cannot be told which
   tenant it is acting for without one. `blob.tenant_id` keeps its own meaning: it is
   part of the address, not the envelope, and a store that finds the two disagreeing
-  refuses the call rather than choosing one of them.
+  refuses the call rather than choosing one of them — which the in-deployment
+  service does as well, because it is the implementation the others are compared to.
 - **A tenant's two stores stay two stores.** Nothing in this record moves a blob, and nothing
   in the system reports a blob as being in the wrong place, because both places are right.
 - **`TenantBlobStoreIT`** holds all four rows of the decision table against a real plugin over
