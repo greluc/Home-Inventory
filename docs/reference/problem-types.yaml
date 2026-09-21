@@ -777,6 +777,86 @@ assigned:
       - "04 §4.3 `tenancy`: Tenant states; 05 §5.9: access blocked immediately"
       - "REQ-TEN-011, REQ-SEC-082"
 
+  - token: federated-flow-unknown
+    status: 410
+    since: 1
+    summary: >
+      The sign-in this callback belongs to is unknown, expired or already
+      finished; start again from the sign-in page.
+    notes: >
+      The `state` parameter carries a single-use handle to server-side flow state
+      (ADR-0029), and this is what a replayed callback gets — which is the property
+      REQ-AUTH-005 is verified by. Also what an expired one gets, after ten minutes.
+      410 rather than 400: the handle was well-formed and is gone, and the caller's
+      way out is to begin again rather than to correct anything.
+
+      It says nothing about whether the handle ever existed. A token that
+      distinguished "never seen" from "already spent" would let somebody probe for
+      sign-ins in flight.
+    sources:
+      - "REQ-AUTH-005, ADR-0029"
+
+  - token: federated-identity-unlinked
+    status: 403
+    since: 1
+    summary: >
+      The provider verified who you are and no account here is linked to that
+      identity; sign in and link it from your account settings.
+    notes: >
+      The refusal REQ-AUTH-006 exists for. A verified address that matches an
+      existing account is NOT permission to sign in as it, so an unlinked identity is
+      refused even when the address is one this instance knows — and the message is
+      the same either way, because a different one would be an account oracle.
+
+      An instance with `HOMEINV_REGISTRATION_MODE=open` may instead CREATE an account
+      here (REQ-AUTH-004); this token is what the other two modes answer.
+    sources:
+      - "REQ-AUTH-005, REQ-AUTH-006, REQ-SEC-020"
+
+  - token: federated-address-taken
+    status: 409
+    since: 1
+    summary: >
+      This instance creates accounts, and the address the provider verified
+      already has one; sign in with it and link the provider deliberately.
+    notes: >
+      Only reachable on an `open` instance, where the alternative would have been to
+      create a second account on an address that already has one. Linking the
+      existing account instead is a decision for the person who owns it, taken while
+      signed in and re-confirmed (REQ-AUTH-006) — never a consequence of somebody
+      arriving with a token that carries the same string.
+    sources:
+      - "REQ-AUTH-004, REQ-AUTH-006"
+
+  - token: federated-address-unverified
+    status: 403
+    since: 1
+    summary: >
+      The provider did not confirm the address it reported, so no account can
+      be created from it.
+    notes: >
+      An unverified address is a claim about somebody else: a provider that lets a
+      person type any address and hands it on unverified would otherwise create an
+      account here in that person's name. The core treats an unverified address as
+      absent, which is what the `IdentityProvider` port's own contract says.
+
+      It refuses only the CREATION. An identity already linked to an account signs in
+      whatever the address says, because the link is on `(issuer, subject)`.
+    sources:
+      - "REQ-AUTH-004, REQ-AUTH-006"
+
+  - token: federated-identity-linked-elsewhere
+    status: 409
+    since: 1
+    summary: >
+      That provider identity is already linked to another account here.
+    notes: >
+      A link is unique on `(issuer, subject)` instance-wide: two accounts on one
+      foreign identity would make every later sign-in ambiguous, and an ambiguity
+      resolved by taking the first row is an account takeover with an ordering bug in
+      front of it. The way out is to unlink it on the account that holds it.
+    sources:
+      - "REQ-AUTH-005, REQ-AUTH-006"
 # ---------------------------------------------------------------------------
 # NOT REGISTERED YET — conditions the corpus describes without fixing a status
 # code. The list is EMPTY as of 2026-09-11: the three entries that stood here were

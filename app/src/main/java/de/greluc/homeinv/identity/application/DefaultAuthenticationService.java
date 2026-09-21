@@ -159,6 +159,48 @@ public class DefaultAuthenticationService implements AuthenticationService {
         membership.get().scopeLocationId());
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public AuthenticatedUser signInFederated(UUID userId, String clientIp) {
+    AppUser user =
+        users
+            .findById(userId)
+            .filter(AppUser::canAuthenticate)
+            .orElseThrow(
+                () -> {
+                  // Logged with the reason and answered without it, exactly as a
+                  // password login is: an account that is locked must not be
+                  // distinguishable from one that was never linked (REQ-SEC-110).
+                  log.info(
+                      "Refused a federated sign-in for {} from {}: the account cannot authenticate",
+                      userId,
+                      clientIp);
+                  return new InvalidCredentialsException();
+                });
+
+    // The same resolution a password login does, and the same statement about
+    // belonging to no tenant: it is a state rather than a failure.
+    Optional<MembershipLookup.Membership> membership =
+        memberships.primaryMembershipOf(user.getId());
+    if (membership.isEmpty()) {
+      log.info("User {} signed in federated and belongs to no tenant", user.getId());
+      return new AuthenticatedUser(user.getId(), null, user.getEmail(), user.getLocale(), null);
+    }
+    log.info(
+        "User {} signed in federated for tenant {} as {}",
+        user.getId(),
+        membership.get().tenantId(),
+        membership.get().role());
+    return new AuthenticatedUser(
+        user.getId(),
+        membership.get().tenantId(),
+        user.getEmail(),
+        user.getLocale(),
+        membership.get().role(),
+        membership.get().roleDefinitionId(),
+        membership.get().scopeLocationId());
+  }
+
   /**
    * Re-hashes the password when the stored hash was made with a lower cost than the current one.
    *

@@ -190,6 +190,16 @@ commit".
 
 ### Added
 
+- **You can sign in with an account you already have elsewhere.** An instance that
+  installs an identity provider offers it on the sign-in page: the provider says who
+  you are, and this instance decides whether that is an account here. **A matching
+  e-mail address is never enough** — an identity is linked deliberately, from your
+  own account settings and behind the second factor, so nobody walks into an account
+  by asserting its address. An instance that creates accounts (`open`) can create one
+  from a provider-confirmed address, and refuses when the address is taken or unconfirmed.
+  A second factor is still asked for: the provider proved who you are, not that you
+  hold the authenticator this instance knows about.
+
 - **Your photographs can live in your own Nextcloud.** `plugin-blobstore-nextcloud`
   stores a tenant's media in a folder of a Nextcloud account over WebDAV, with an
   app password rather than the account password — so revoking it revokes this and
@@ -934,7 +944,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 76 architecture decision records, each with its alternatives and consequences —
+- 77 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -97,3 +97,4 @@ Date: YYYY-MM-DD
 | [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted |
 | [0074](0074-granting-a-store-routes-and-does-not-move.md) | Granting a storage plugin routes the next bytes and moves none of the old ones | Accepted |
 | [0075](0075-the-one-jvm-plugin-has-its-own-line-in-the-budget.md) | The one JVM plugin gets its own line in the memory budget | Accepted |
+| [0076](0076-a-federated-sign-in-creates-an-account-only-where-a-form-could.md) | A federated sign-in creates an account exactly where a sign-up form could | Accepted |

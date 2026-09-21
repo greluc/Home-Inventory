@@ -45,7 +45,10 @@ import java.util.UUID;
  *     plugin composes itself. Empty when the call has no human reader
  * @param deadlineMillis how long the caller will wait, from the moment the call was made. A plugin
  *     that cannot finish in time should stop rather than answer late: the caller has gone
- *     (REQ-PLG-007). Zero means the caller set no deadline, which the core never does
+ *     (REQ-PLG-007). Zero means the caller named none here, which is what the core passes:
+ *     what actually bounds a call is the manifest's {@code timeoutSeconds}, applied to the
+ *     channel by the envelope (ADR-0065). <i>This said "which the core never does" until
+ *     2026-09-21, while every caller in the core passed zero.</i>
  * @param settings what <b>this tenant</b> configured for this plugin, by the keys the manifest
  *     declares, with secrets opened (ADR-0073, REQ-PLG-017). Never the operator's configuration of
  *     the plugin container — the SMTP host, the S3 keys, the OIDC client secret are the

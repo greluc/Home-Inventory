@@ -505,4 +505,23 @@
     <Class name="de.greluc.homeinv.rest.ApiUsageInterceptor"/>
   </Match>
 
+  <!--
+    SERVLET_HEADER on the federated callback. The rule is right that a header is
+    untrusted input; what this one decides is not a security question.
+
+    `Accept` is read to tell two kinds of caller apart: a BROWSER following a
+    provider's redirect, which must land on the sign-in page rather than on a JSON
+    document, and a client that reads `application/problem+json` like every other
+    endpoint's. The value is tested for one substring and is never reflected, never
+    logged, never stored and never part of a query.
+
+    It cannot widen anything either: BOTH branches are the same refusal, and the
+    redirect carries the same problem token the document would. A caller choosing
+    the other shape gets the other shape of the answer they were going to get.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.FederatedAuthController"/>
+  </Match>
+
 </FindBugsFilter>

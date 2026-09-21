@@ -7,6 +7,7 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.InvalidSecondFactorException;
+import de.greluc.homeinv.identity.api.FederatedSignIn;
 import de.greluc.homeinv.identity.api.RegistrationClosedException;
 import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.idempotency.api.IdempotencyKeyConflictException;
@@ -564,6 +565,56 @@ public class ApiExceptionHandler {
   public ProblemDetail handleRegistrationClosed(
       RegistrationClosedException exception, HttpServletRequest request) {
     return problem(ProblemType.REGISTRATION_CLOSED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a federated callback whose flow is gone (REQ-AUTH-005).
+   *
+   * <p>Unknown, expired and already spent are one answer. Telling them apart would let
+   * somebody probe for sign-ins in flight, and the caller's way out is the same in all three:
+   * begin again.
+   *
+   * @param exception what was raised
+   * @param request the request, for the instance URI
+   * @return the problem document
+   */
+  @ExceptionHandler(FederatedSignIn.UnknownFlowException.class)
+  public ProblemDetail handleUnknownFederatedFlow(
+      FederatedSignIn.UnknownFlowException exception, HttpServletRequest request) {
+    return problem(ProblemType.FEDERATED_FLOW_UNKNOWN, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a federated sign-in with no provider to perform it (REQ-PLG-007).
+   *
+   * <p>Not installed and installed-but-unreachable are one answer, because what a stranger at
+   * a login page learns from the difference is something about the deployment rather than
+   * about their own request.
+   *
+   * @param exception what was raised
+   * @param request the request, for the instance URI
+   * @return the problem document
+   */
+  @ExceptionHandler(FederatedSignIn.NoIdentityProviderException.class)
+  public ProblemDetail handleNoIdentityProvider(
+      FederatedSignIn.NoIdentityProviderException exception, HttpServletRequest request) {
+    return problem(ProblemType.PLUGIN_UNAVAILABLE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a federated flow that finished and is refused (REQ-AUTH-006).
+   *
+   * <p>The refusal already knows which of the four it is; this turns it into the document, so
+   * that every error on this surface keeps one shape (REQ-API-003).
+   *
+   * @param exception what was raised, carrying the type
+   * @param request the request, for the instance URI
+   * @return the problem document
+   */
+  @ExceptionHandler(FederatedAuthController.FederatedRefusedException.class)
+  public ProblemDetail handleFederatedRefusal(
+      FederatedAuthController.FederatedRefusedException exception, HttpServletRequest request) {
+    return problem(exception.type(), exception.getMessage(), request);
   }
 
   /**

@@ -214,6 +214,29 @@ public abstract class AbstractIntegrationTest {
               throw new AssertionError("No second factor was enrolled for " + email);
             });
 
+    answerTheSecondFactor(session, userId);
+    return session;
+  }
+
+  /**
+   * Answers the second factor for a login that is waiting on it.
+   *
+   * <p>The half after the password — or, for a federated sign-in, after the provider: both
+   * stop at the same place, because a provider proved who somebody is and not that they hold
+   * the authenticator this instance knows about (REQ-AUTH-002).
+   *
+   * @param session the session carrying the pending login
+   * @param userId whose account it is
+   * @throws Exception when the call fails, which is the test failing
+   */
+  protected void answerTheSecondFactor(MockHttpSession session, UUID userId)
+      throws Exception {
+    String secret =
+        secondFactorSecrets.computeIfAbsent(
+            userId,
+            id -> {
+              throw new AssertionError("No second factor was enrolled for " + id);
+            });
     rewindSecondFactor(userId);
     String code =
         de.greluc.homeinv.identity.application.TotpCodes.generate(
@@ -231,7 +254,6 @@ public abstract class AbstractIntegrationTest {
                 .content("{\"code\":\"" + code + "\"}"))
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
-    return session;
   }
 
   /**

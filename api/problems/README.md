@@ -61,3 +61,8 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`internal-error`](internal-error.md) | `500` | assigned | Something failed that the application does not have a specific answer for. The request may be repeatable; nothing about what went wrong is disclosed. |
 | [`plugin-unavailable`](plugin-unavailable.md) | `503` | assigned | A plugin the requested ACTION depends on cannot be reached — its circuit is open, its deadline expired, or it is disabled. |
 | [`tenant-inaccessible`](tenant-inaccessible.md) | `403` | assigned | The tenant is suspended, or pending deletion within its grace period. One token for both states, deliberately. |
+| [`federated-flow-unknown`](federated-flow-unknown.md) | `410` | assigned | The sign-in this callback belongs to is unknown, expired or already finished; start again from the sign-in page. |
+| [`federated-identity-unlinked`](federated-identity-unlinked.md) | `403` | assigned | The provider verified who you are and no account here is linked to that identity; sign in and link it from your account settings. |
+| [`federated-address-taken`](federated-address-taken.md) | `409` | assigned | This instance creates accounts, and the address the provider verified already has one; sign in with it and link the provider deliberately. |
+| [`federated-address-unverified`](federated-address-unverified.md) | `403` | assigned | The provider did not confirm the address it reported, so no account can be created from it. |
+| [`federated-identity-linked-elsewhere`](federated-identity-linked-elsewhere.md) | `409` | assigned | That provider identity is already linked to another account here. |

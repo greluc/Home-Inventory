@@ -88,6 +88,15 @@ class MigrationRulesTest {
           // exist yields zero rows rather than an error, which would make the
           // request look successful while nothing happened.
           "identity.password_reset",
+          // A sign-in happens before any tenant is known: the person arrives at
+          // a login page, and which tenants they belong to is what the session
+          // goes on to decide (REQ-AUTH-005). Keyed on (issuer, subject) and
+          // never on an address, which is REQ-AUTH-006 in the schema.
+          "identity.federated_identity",
+          // The sign-in in progress, for the same reason one step earlier: the
+          // flow begins before there is a session at all. Held server-side
+          // rather than in a cookie (ADR-0029) and spent within ten minutes.
+          "identity.federated_login",
           // What the deployment owes an ACCOUNT rather than a tenant
           // (REQ-NOTI-004, ADR-0066). The recipient may be a member of nothing,
           // and a policy would hide the queue from the run that has to empty it.
@@ -144,6 +153,15 @@ class MigrationRulesTest {
           // rests on — and the single-use guarantee comes from the column and a
           // partial unique index rather than from an optimistic lock.
           "identity.password_reset",
+          // A sign-in in flight is the flow's own bookkeeping: `consumed_at`
+          // is the spend, nothing else about the row ever changes, and an
+          // `updated_by` would name whoever presented the handle -- who is
+          // anonymous at that moment, which is what the flow rests on.
+          "identity.federated_login",
+          // A link is made once and used afterwards. `last_used_at` is the
+          // use, `linked_at` is the making, and both are facts about the
+          // mechanism rather than an edit somebody made.
+          "identity.federated_identity",
           // The account queue, the same shape as the tenant queue next to it:
           // its state and next attempt are the delivery mechanism's bookkeeping,
           // and its attempts are an append-only record of what happened.

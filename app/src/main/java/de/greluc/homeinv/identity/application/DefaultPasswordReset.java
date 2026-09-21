@@ -120,8 +120,8 @@ public class DefaultPasswordReset implements PasswordReset {
     // Minted before the account is looked up, and always. The work is then the
     // same either way, which is what makes the two cases indistinguishable from
     // outside — including in how long they take.
-    String token = newToken();
-    String tokenHash = hash(token);
+    String token = SingleUseTokens.mint();
+    String tokenHash = SingleUseTokens.hash(token);
 
     Optional<AppUser> account = users.findByEmail(email);
     if (account.isEmpty() || !account.get().canAuthenticate()) {
@@ -161,7 +161,7 @@ public class DefaultPasswordReset implements PasswordReset {
     Instant now = clock.instant();
     PasswordResetQueries.OpenReset reset =
         resets
-            .find(hash(token), now)
+            .find(SingleUseTokens.hash(token), now)
             .orElseThrow(InvalidResetTokenException::new);
 
     // Spent first. Two redemptions racing each other both find the row open, and
@@ -227,31 +227,4 @@ public class DefaultPasswordReset implements PasswordReset {
     return CHANGED_BODY.replace("{sessions}", sessions);
   }
 
-  /**
-   * A fresh token.
-   *
-   * @return 256 bits of randomness, base64url without padding
-   */
-  private static String newToken() {
-    byte[] bytes = new byte[TOKEN_BYTES];
-    RANDOM.nextBytes(bytes);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-  }
-
-  /**
-   * The SHA-256 of a token, in lower-case hexadecimal.
-   *
-   * @param token the token as presented
-   * @return the hash the table stores
-   */
-  private static String hash(String token) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
-    } catch (NoSuchAlgorithmException impossible) {
-      // Every JVM ships SHA-256; the checked exception is a relic of an era when
-      // that was not true. Failing loudly beats pretending to have hashed.
-      throw new IllegalStateException("SHA-256 is not available in this JVM", impossible);
-    }
-  }
 }

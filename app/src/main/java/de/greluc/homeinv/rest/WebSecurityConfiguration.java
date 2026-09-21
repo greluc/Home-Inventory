@@ -86,6 +86,13 @@ public class WebSecurityConfiguration {
                         })
                     .ignoringRequestMatchers(
                         "/api/v1/auth/login",
+                        // Starting a federated sign-in, for the same reason as the
+                        // login beside it: the caller has no session, so there is no
+                        // CSRF token to carry and nothing a forged one could reach.
+                        // It creates a ten-minute flow record and says where to send
+                        // a browser (REQ-AUTH-005). LINKING is NOT here: that one has
+                        // a session and changes an account.
+                        "/api/v1/auth/federated/begin",
                         "/api/v1/invitations/*/accept",
                         // Withdrawing an erasure is the same case again: the
                         // caller has no session because the pending deletion is
@@ -109,6 +116,20 @@ public class WebSecurityConfiguration {
                     // unreachable from here (REQ-SEC-099).
                     .requestMatchers(
                         "/api/v1/auth/login", "/actuator/health/**", "/livez", "/readyz")
+                    .permitAll()
+                    // Federated sign-in, the halves a stranger performs
+                    // (REQ-AUTH-005). The list says what this instance offers, `begin`
+                    // starts a flow and `callback` finishes one — and the caller has no
+                    // session at any of the three, because that is what the third one is
+                    // for. What stands in for one is the single-use handle the callback
+                    // has to present, checked against its stored hash (ADR-0029).
+                    // Exactly these paths: `/link` and `/links` administer an account
+                    // and need a session like everything else.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/federated")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/federated/begin")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/federated/callback")
                     .permitAll()
                     // The second half of a login (REQ-AUTH-002). The caller has no
                     // session to be authenticated by yet — that is what this call

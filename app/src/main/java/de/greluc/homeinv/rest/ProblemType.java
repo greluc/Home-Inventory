@@ -99,6 +99,53 @@ public enum ProblemType {
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 
   /**
+   * The sign-in a callback belongs to is unknown, expired or already finished
+   * (REQ-AUTH-005).
+   *
+   * <p>What a REPLAYED callback gets, which is the property the requirement is verified by,
+   * and what an expired one gets after ten minutes. It says nothing about whether the handle
+   * ever existed: a token that distinguished "never seen" from "already spent" would let
+   * somebody probe for sign-ins in flight.
+   */
+  FEDERATED_FLOW_UNKNOWN(
+      "federated-flow-unknown", HttpStatus.GONE, "Sign-in no longer available"),
+
+  /**
+   * The provider said who somebody is and no account here is linked to that identity
+   * (REQ-AUTH-006).
+   *
+   * <p>Given even when the verified address matches an account this instance has: that match
+   * is not permission to sign in as it, and a different answer for a known address would be
+   * an account oracle.
+   */
+  FEDERATED_IDENTITY_UNLINKED(
+      "federated-identity-unlinked", HttpStatus.FORBIDDEN, "Identity not linked"),
+
+  /**
+   * An `open` instance would have created an account, and the verified address already
+   * has one (REQ-AUTH-004, REQ-AUTH-006).
+   */
+  FEDERATED_ADDRESS_TAKEN(
+      "federated-address-taken", HttpStatus.CONFLICT, "Address already registered"),
+
+  /**
+   * An `open` instance would have created an account, and the provider did not confirm the
+   * address it reported.
+   *
+   * <p>An unverified address is a claim about somebody else. It refuses the creation only:
+   * an identity already linked signs in whatever the address says, because the link is on
+   * {@code (issuer, subject)}.
+   */
+  FEDERATED_ADDRESS_UNVERIFIED(
+      "federated-address-unverified", HttpStatus.FORBIDDEN, "Address not confirmed"),
+
+  /** That provider identity is already linked to another account here (REQ-AUTH-006). */
+  FEDERATED_IDENTITY_LINKED_ELSEWHERE(
+      "federated-identity-linked-elsewhere",
+      HttpStatus.CONFLICT,
+      "Identity linked elsewhere"),
+
+  /**
    * A quota would be exceeded by this operation (REQ-TEN-009).
    *
    * <p>Carries the current and the permitted amount, because a client that has to parse the
@@ -265,6 +312,20 @@ public enum ProblemType {
    */
   NO_DOCUMENT_RENDERER(
       "no-document-renderer", HttpStatus.CONFLICT, "No document renderer is installed"),
+
+  /**
+   * A plugin the requested ACTION depends on cannot be reached (O25, REQ-PLG-007).
+   *
+   * <p>Its circuit is open, its deadline expired, it is disabled, or nothing implementing
+   * that port is installed at all. Nothing happened, which is what separates this from a
+   * {@code degradedReason}: there the action succeeded and something derived from it is
+   * poorer.
+   *
+   * <p><i>Registered since the set was written and without a constant here until 2026-09-21,
+   * so no endpoint could answer with it — which the federated sign-in needed and found.</i>
+   */
+  PLUGIN_UNAVAILABLE(
+      "plugin-unavailable", HttpStatus.SERVICE_UNAVAILABLE, "Plugin unavailable"),
 
   /**
    * A reminder rule names a trigger nothing can answer here (REQ-NOTI-003).
