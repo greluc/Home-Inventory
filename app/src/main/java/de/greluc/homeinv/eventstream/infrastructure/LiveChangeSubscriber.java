@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import de.greluc.homeinv.eventstream.application.LiveChanges;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.listener.ChannelTopic;
@@ -22,9 +23,29 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
  * one hands the nudge to the streams <b>this</b> replica holds. With a single replica the two are
  * a round trip through Valkey that could have been a method call; with two they are the difference
  * between a feature that works and one that works for half the people using it.
+ *
+ * <h2>Not in the two roles that have no Valkey</h2>
+ *
+ * <p>{@code migrate} and {@code bootstrap} are one-shot roles on the {@code internal} segment that
+ * <b>talk to PostgreSQL and to nothing else</b> — {@code deploy/services.yaml} says so for both.
+ * A listener container is a {@code SmartLifecycle} bean that <b>connects when the context
+ * starts</b>, and a connection it cannot make is an exception that cancels the refresh. So this
+ * bean, loaded in {@code migrate}, dialled {@code localhost:6379}, was refused, and took the
+ * migration down with it — which took the whole profile down, because {@code api} and {@code
+ * worker} start only when {@code migrate} exits zero.
+ *
+ * <p><i>That is what it did on 2026-09-21, between the feature landing and the next smoke run.
+ * The unit tests could not see it: they run one context with Valkey present. The rootless smoke
+ * suite is the gate that can, and did, under both runtimes.</i>
+ *
+ * <p>{@code worker} keeps it although it holds no streams: it has Valkey, the subscription costs
+ * one connection, and a delivery there finds an empty map and returns. Naming {@code api} instead
+ * would be more precise and would put a test profile into production code — {@code EventStreamIT}
+ * runs under {@code test} and exists to prove this hop works.
  */
 @Slf4j
 @Configuration(proxyBeanMethods = false)
+@Profile("!migrate & !bootstrap")
 public class LiveChangeSubscriber {
 
   /**

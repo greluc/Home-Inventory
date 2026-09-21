@@ -588,4 +588,53 @@ class ArchitectureRulesTest {
                 + "that stops being true")
         .isEmpty();
   }
+
+  @Test
+  @DisplayName("keeps what dials a datastore at startup out of the one-shot roles")
+  void nothingThatConnectsAtStartupLoadsInMigrateOrBootstrap() {
+    // `migrate` and `bootstrap` are one-shot roles on the `internal` segment and
+    // `deploy/services.yaml` says the same thing about both: "it talks to
+    // PostgreSQL and to nothing else". They have no Valkey, no broker and no
+    // search.
+    //
+    // A `SmartLifecycle` bean that CONNECTS when the context starts therefore
+    // does not merely idle there -- it throws, the refresh is cancelled, and the
+    // process exits non-zero. For `migrate` that stops the whole deployment,
+    // because `api` and `worker` start only when it exits zero.
+    //
+    // That is what `liveChangeListener` did on 2026-09-21: a listener container
+    // loaded in every profile, dialled `localhost:6379` in `migrate`, and took
+    // the rootless smoke suite down under both runtimes. The unit tests could not
+    // see it -- they run one context with everything present -- so the rule is
+    // written here, where a second such bean will meet it before CI does.
+    List<String> offenders = new ArrayList<>();
+    Pattern container = Pattern.compile("RedisMessageListenerContainer\\s+\\w+\\s*\\(");
+    Pattern excluded = Pattern.compile("@Profile\\(\"[^\"]*!\\s*migrate[^\"]*\"\\)");
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String code = Files.readString(file);
+                  if (container.matcher(code).find() && !excluded.matcher(code).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "a bean that opens a connection when the context starts must not load in `migrate` or "
+                + "`bootstrap`: both talk to PostgreSQL and nothing else, and a refused connection "
+                + "there is not a degraded feature but a deployment that does not come up")
+        .isEmpty();
+  }
 }
