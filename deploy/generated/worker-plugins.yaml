@@ -98,3 +98,82 @@ plugins:
         resources:
           memoryMiB: 32
           timeoutSeconds: 45
+  - id: de.greluc.homeinv.plugin.blobstore.s3
+    endpoint: "plugin-blobstore-s3:8202"
+    fingerprint: "@FINGERPRINT:mtls-plugin-blobstore-s3@"
+    signed: false
+    manifestInline: |
+      apiVersion: home-inv.plugin/v1
+      metadata:
+        id: de.greluc.homeinv.plugin.blobstore.s3
+        name: S3 object storage
+        version: 0.1.0
+        vendor: greluc
+        license: AGPL-3.0-or-later
+        homepage: https://github.com/greluc/Home-Inventory
+        descriptions:
+          en: Stores a tenant's media in an S3-compatible bucket, signed with Signature Version 4.
+          de: Legt die Medien eines Mandanten in einem S3-kompatiblen Bucket ab, signiert mit Signature Version
+            4.
+      spec:
+        contract: '>=1.0.0 <2.0.0'
+        runtime: out-of-process
+        implements:
+        - port: BlobStore
+          priority: 100
+        capabilities:
+        - id: network:outbound
+          tcp:
+          - objects.example.org:443
+          reason: Storing and reading this tenant's media in its bucket
+        - id: core:setting:read
+          reason: Reading the bucket and keys this tenant configured
+        settings:
+        - key: endpoint
+          type: string
+          required: false
+          label:
+            en: Endpoint
+            de: Endpunkt
+        - key: bucket
+          type: string
+          required: false
+          label:
+            en: Bucket
+            de: Bucket
+        - key: region
+          type: string
+          required: false
+          label:
+            en: Region
+            de: Region
+        - key: prefix
+          type: string
+          required: false
+          label:
+            en: Key prefix
+            de: Schlüsselpräfix
+        - key: addressingStyle
+          type: string
+          required: false
+          label:
+            en: Addressing style (path or virtual)
+            de: Adressierung (path oder virtual)
+        - key: accessKeyId
+          type: string
+          required: false
+          label:
+            en: Access key id
+            de: Zugriffsschlüssel-ID
+        - key: secretAccessKey
+          type: secret
+          required: false
+          label:
+            en: Secret access key
+            de: Geheimer Zugriffsschlüssel
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+        resources:
+          memoryMiB: 64
+          timeoutSeconds: 120

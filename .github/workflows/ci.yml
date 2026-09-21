@@ -335,6 +335,8 @@ jobs:
             image: true
           - crate: smtp
             image: true
+          - crate: blobstore-s3
+            image: true
     defaults:
       run:
         working-directory: plugins/${{ matrix.crate }}

@@ -18,18 +18,15 @@
 //! sending the timestamp beside it would be worse than not sending one, because
 //! an attacker would simply change it.
 //!
-//! # Why this is thirty lines rather than a dependency
+//! # Where the arithmetic lives
 //!
-//! RFC 2104 is `H((K ^ opad) || H((K ^ ipad) || message))` and nothing else. The
-//! `hmac` crate would pin a `digest` version that has to match the one `sha2`
-//! brings, a coupling that breaks on every digest release for no gain — and this
-//! container is budgeted the way the two other Rust services are. The RFC 4231
-//! vectors are below; an implementation that passes them is the algorithm.
+//! In `homeinv_plugin_common::mac`, since `plugins/blobstore-s3/` became the
+//! second plugin to need HMAC-SHA256 — Signature Version 4 is a chain of four of
+//! them. What stays here is what is specific to a webhook: WHICH bytes are
+//! signed, which is the part a receiver has to reproduce.
 
-use sha2::{Digest, Sha256};
-
-/// How many bytes SHA-256 consumes at a time. The key is padded to it.
-const BLOCK: usize = 64;
+use homeinv_plugin_common::encoding::hex;
+use homeinv_plugin_common::mac::hmac_sha256;
 
 /// Signs a timestamp and a body.
 ///
@@ -61,84 +58,9 @@ fn sign_raw(secret: &[u8], message: &[u8]) -> String {
     hex(&hmac_sha256(secret, message))
 }
 
-/// HMAC-SHA256, RFC 2104.
-fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
-    // A key longer than the block is hashed first; a shorter one is padded with
-    // zeroes. Both are the RFC's own rule rather than a choice.
-    let mut block = [0_u8; BLOCK];
-    if key.len() > BLOCK {
-        let digest = Sha256::digest(key);
-        block[..digest.len()].copy_from_slice(&digest);
-    } else {
-        block[..key.len()].copy_from_slice(key);
-    }
-
-    let mut inner_key = [0_u8; BLOCK];
-    let mut outer_key = [0_u8; BLOCK];
-    for index in 0..BLOCK {
-        inner_key[index] = block[index] ^ 0x36;
-        outer_key[index] = block[index] ^ 0x5c;
-    }
-
-    let mut inner = Sha256::new();
-    inner.update(inner_key);
-    inner.update(message);
-    let inner_digest = inner.finalize();
-
-    let mut outer = Sha256::new();
-    outer.update(outer_key);
-    outer.update(inner_digest);
-
-    let mut out = [0_u8; 32];
-    out.copy_from_slice(&outer.finalize());
-    out
-}
-
-/// Lower-case hex, which is how every webhook receiver spells a digest.
-fn hex(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(char::from_digit((byte >> 4) as u32, 16).expect("nibble"));
-        out.push(char::from_digit((byte & 0x0f) as u32, 16).expect("nibble"));
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// RFC 4231, test case 1.
-    #[test]
-    fn rfc_4231_case_one() {
-        let key = [0x0b_u8; 20];
-        assert_eq!(
-            sign_raw(&key, b"Hi There"),
-            "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
-        );
-    }
-
-    /// RFC 4231, test case 2: a key shorter than the block, a longer message.
-    #[test]
-    fn rfc_4231_case_two() {
-        assert_eq!(
-            sign_raw(b"Jefe", b"what do ya want for nothing?"),
-            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
-        );
-    }
-
-    /// RFC 4231, test case 6: a key LONGER than the block, which is hashed first.
-    #[test]
-    fn rfc_4231_case_six() {
-        let key = [0xaa_u8; 131];
-        assert_eq!(
-            sign_raw(
-                &key,
-                b"Test Using Larger Than Block-Size Key - Hash Key First"
-            ),
-            "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
-        );
-    }
 
     #[test]
     fn the_signature_changes_with_the_body() {
@@ -176,10 +98,5 @@ mod tests {
             sign(b"secret", 1_700_000_000, b"body"),
             sign_raw(b"secret", b"1700000000.body")
         );
-    }
-
-    #[test]
-    fn hex_is_lower_case_and_two_characters_per_byte() {
-        assert_eq!(hex(&[0x00, 0x0f, 0xff]), "000fff");
     }
 }

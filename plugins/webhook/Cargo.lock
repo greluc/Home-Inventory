@@ -319,8 +319,11 @@ name = "homeinv-plugin-common"
 version = "0.1.0"
 dependencies = [
  "rustls-pki-types",
+ "sha2",
  "tokio",
+ "tokio-rustls",
  "tonic",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -331,7 +334,6 @@ dependencies = [
  "prost",
  "protox",
  "rustls-pki-types",
- "sha2",
  "tokio",
  "tokio-rustls",
  "tonic",

@@ -54,7 +54,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * its port: what is asserted is the contract between the core and a storage plugin, and a mocked
  * stub would assert the mock.
  *
- * <p>Four properties, and the third is the one that would otherwise be found by a tenant:
+ * <p>Five properties, and the third is the one that would otherwise be found by a tenant:
  *
  * <ul>
  *   <li>a tenant that granted no storage plugin uses the deployment's store;
@@ -62,7 +62,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       never sees them;
  *   <li>a photograph uploaded <b>before</b> the grant is still readable after it — granting a store
  *       is not a migration, and without the fallback it would be a silent loss;
- *   <li>a deletion removes the blob from both, because it may live in either.
+ *   <li>a deletion removes the blob from both, because it may live in either;
+ *   <li>the call envelope reaches the plugin, carrying the tenant and what that tenant
+ *       configured — without it a storage plugin has an address and no way to know whose
+ *       storage to put it in.
  * </ul>
  */
 @DisplayName("A tenant's blob store")
@@ -77,6 +80,10 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
   /** What the plugin holds, by tenant and address. The test reads it to see where bytes went. */
   private static final Map<String, byte[]> IN_THE_PLUGIN = new ConcurrentHashMap<>();
 
+  /** The envelope of the last upload, so the test can see what reached the plugin. */
+  private static final AtomicReference<de.greluc.homeinv.plugin.v1.CallContext> ENVELOPE =
+      new AtomicReference<>();
+
   @Autowired private BlobStore blobs;
   @Autowired private DeploymentBlobStore deployment;
   @Autowired private DefaultPluginRegistry registrations;
@@ -84,6 +91,7 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
+  @Autowired private de.greluc.homeinv.plugins.api.PluginSettings settings;
 
   @AfterAll
   static void stopTheStore() {
@@ -92,6 +100,7 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
       running.shutdownNow();
     }
     IN_THE_PLUGIN.clear();
+    ENVELOPE.set(null);
   }
 
   @Test
@@ -174,6 +183,26 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
     assertThat(IN_THE_PLUGIN).doesNotContainKey(key(tenant, newer));
   }
 
+  @Test
+  @DisplayName("tells the plugin which tenant it is for, and what that tenant configured")
+  void theEnvelopeTravelsWithTheBytes() throws Exception {
+    UUID tenant = aTenant("envelope");
+    install(tenant);
+    String address = "f".repeat(64);
+
+    // What a tenant with its own bucket would set. Without it on the wire a
+    // storage plugin has the address and no way to know WHOSE storage to put
+    // it in (ADR-0073, ADR-0074).
+    inTenant(tenant, () -> settings.set(PLUGIN, "bucket", "just-mine", UUID.randomUUID()));
+
+    inTenant(tenant, () -> blobs.store(tenant, address, bytes("into the tenant's bucket")));
+
+    de.greluc.homeinv.plugin.v1.CallContext envelope = ENVELOPE.get();
+    assertThat(envelope).isNotNull();
+    assertThat(envelope.getTenantId()).isEqualTo(tenant.toString());
+    assertThat(envelope.getSettingsMap()).containsEntry("bucket", "just-mine");
+  }
+
   // -------------------------------------------------------------------------
 
   /** A body that may throw, run with a tenant in context. */
@@ -228,7 +257,16 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
         identity().fingerprint(),
         true);
     TenantContext.runAs(
-        tenantId, () -> registrations.grant(PLUGIN, "network:outbound", UUID.randomUUID()));
+        tenantId,
+        () -> {
+          registrations.grant(PLUGIN, "network:outbound", UUID.randomUUID());
+          // Both, because they are separate consents: one lets the plugin
+          // reach outside at all, the other lets it read what this tenant
+          // configured. Without the second the envelope arrives with an EMPTY
+          // settings map, which is what the core did here until the grant was
+          // added to this test.
+          registrations.grant(PLUGIN, "core:setting:read", UUID.randomUUID());
+        });
   }
 
   /**
@@ -268,6 +306,7 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
         public void onNext(PutRequest part) {
           if (part.hasBlob()) {
             address = addressOf(part.getBlob().getTenantId(), part.getBlob().getSha256());
+            ENVELOPE.set(part.getContext());
           } else {
             content.writeBytes(part.getChunk().toByteArray());
           }
@@ -357,6 +396,14 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
             - id: network:outbound
               tcp: ["objects.example.org:443"]
               reason: "Putting the bytes where the tenant keeps them"
+            - id: core:setting:read
+              reason: "Reading the bucket this tenant configured"
+          settings:
+            - key: bucket
+              type: string
+              required: false
+              label:
+                en: "Bucket"
         """
         .formatted(PLUGIN);
   }

@@ -16,6 +16,8 @@ search-password random
 mtls-core mtls-client
 mtls-blobstore mtls-server
 mtls-plugin-webhook mtls-server
+mtls-plugin-blobstore-s3 mtls-server
+plugin-blobstore-s3-secret-key external
 mtls-plugin-smtp mtls-server
 plugin-smtp-password external
 mtls-search mtls-server

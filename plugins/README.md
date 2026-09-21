@@ -19,14 +19,15 @@ sensibly do without:
 |---|---|---|---|---|
 | [`smtp/`](smtp/) | `NotificationChannel` | An SMTP submission server | Rust | **built** |
 | [`webhook/`](webhook/) | `NotificationChannel` | A URL a tenant configured, signed with an HMAC | Rust | **built** |
-| `blobstore-s3/` | `BlobStore` | An S3-compatible endpoint | Rust | stage 1, not written |
+| [`blobstore-s3/`](blobstore-s3/) | `BlobStore` | An S3-compatible endpoint | Rust | **built** |
 | `blobstore-nextcloud/` | `BlobStore` | A Nextcloud instance over WebDAV | Rust | stage 1, not written |
 | `oidc/` | `IdentityProvider` | An OIDC provider: discovery, JWKS, PKCE | Java | stage 1, not written |
 
 [`common/`](common/) is not a plugin: it is the library the Rust ones share —
 the mTLS identity they present to the core, the `CONNECT` tunnel that is their
-one route out, base64 and hex, and the bounded set of keys already delivered. It
-appeared with the second plugin, which is the moment
+one route out, the TLS handshake at the far end of it, base64 and hex,
+HMAC-SHA256, the calendar arithmetic behind a UTC stamp, and the bounded set of
+keys already delivered. It appeared with the second plugin, which is the moment
 [ADR-0072](../docs/adr/0072-first-party-plugins-live-here.md) named for it.
 
 The language per plugin and the reasoning behind each choice are in

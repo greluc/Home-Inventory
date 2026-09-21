@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-plugin-blobstore-s3"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Stores a tenant's media in S3-compatible object storage"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+# The mTLS identity, the CONNECT tunnel, base64 and hex, HMAC-SHA256 and the
+# calendar arithmetic behind `x-amz-date` (ADR-0072).
+homeinv-plugin-common = { path = "../common" }
+
+# gRPC towards the core.
+tonic = { version = "0.14", features = ["tls-ring"] }
+tonic-prost = "0.14"
+prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "signal", "fs"] }
+# A `Get` answers with a stream of chunks, and the bytes arrive from the far end
+# while it is being written. A channel is the shape that fits; `tokio-stream`
+# turns its receiver into the `Stream` tonic wants, and it is already in the tree
+# as tonic's own dependency.
+tokio-stream = "0.1"
+
+# TLS towards the object store, inside the proxy's tunnel. `rustls` directly
+# rather than an HTTP client: what this speaks is five requests of HTTP/1.1 with
+# a signature, and a client library would bring a connection pool, a redirect
+# policy and a DNS resolver that a plugin on an internal segment cannot use.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+# The public roots, as data: a `scratch` image has no system trust store.
+webpki-roots = "1"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+# The protobuf compiler as a library, so no `protoc` binary has to be installed
+# anywhere. The same reasoning as `blobstore/build.rs`.
+protox = "0.9"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

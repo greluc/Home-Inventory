@@ -19,6 +19,7 @@
 //! against a date library, in a container budgeted at 32 MB.
 
 use homeinv_plugin_common::encoding::base64_wrapped;
+use homeinv_plugin_common::time::{civil_from_days, DAY};
 
 /// The line length RFC 2045 asks of a base64 body.
 const WRAP: usize = 76;
@@ -263,8 +264,8 @@ pub fn rfc5322_date(seconds: u64) -> String {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
 
-    let days = (seconds / 86_400) as i64;
-    let time = seconds % 86_400;
+    let days = (seconds / DAY) as i64;
+    let time = seconds % DAY;
     let (year, month, day) = civil_from_days(days);
     // 1970-01-01 was a Thursday, which is why the table starts there.
     let weekday = DAYS[(days.rem_euclid(7)) as usize];
@@ -279,24 +280,6 @@ pub fn rfc5322_date(seconds: u64) -> String {
         (time % 3600) / 60,
         time % 60
     )
-}
-
-/// Days since the epoch to a civil date.
-///
-/// Howard Hinnant's `civil_from_days`, which is the algorithm every date library
-/// uses and is twenty lines. Correct for every date after 1970, which is every
-/// date this will ever be asked about.
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
 #[cfg(test)]

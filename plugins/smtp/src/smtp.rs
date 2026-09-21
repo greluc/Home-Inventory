@@ -18,15 +18,12 @@
 //! 5321 — routing, relaying, address rewriting — into a container that is one
 //! socket in and one socket out.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use homeinv_plugin_common::encoding::base64;
+use homeinv_plugin_common::tls::client_handshake;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio_rustls::rustls::pki_types::ServerName;
-use tokio_rustls::rustls::{ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
 
 /// What the conversation runs over: the tunnel, or TLS inside it.
 ///
@@ -150,7 +147,9 @@ async fn exchange(
             .await?;
 
     let mut stream = match server.security {
-        Security::Implicit => Connection::Tls(Box::new(upgrade(tunnel, &server.host).await?)),
+        Security::Implicit => {
+            Connection::Tls(Box::new(client_handshake(tunnel, &server.host).await?))
+        }
         Security::StartTls => Connection::Plain(tunnel),
     };
 
@@ -180,7 +179,7 @@ async fn exchange(
         // usually appears only after.
         stream = match stream {
             Connection::Plain(socket) => {
-                Connection::Tls(Box::new(upgrade(socket, &server.host).await?))
+                Connection::Tls(Box::new(client_handshake(socket, &server.host).await?))
             }
             already => already,
         };
@@ -282,30 +281,6 @@ async fn authenticate(
         return Err(refusal("AUTH LOGIN", &reply));
     }
     Ok(())
-}
-
-/// Wraps a socket in TLS, verified against the public roots.
-async fn upgrade(
-    socket: TcpStream,
-    host: &str,
-) -> Result<tokio_rustls::client::TlsStream<TcpStream>, String> {
-    let mut roots = RootCertStore::empty();
-    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-    let config = ClientConfig::builder_with_provider(Arc::new(
-        tokio_rustls::rustls::crypto::ring::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()
-    .map_err(|failure| format!("TLS could not be configured: {failure}"))?
-    .with_root_certificates(roots)
-    .with_no_client_auth();
-
-    let name = ServerName::try_from(host.to_string())
-        .map_err(|_| "the mail server's host is not a name TLS can verify".to_string())?;
-    TlsConnector::from(Arc::new(config))
-        .connect(name, socket)
-        .await
-        .map_err(|failure| format!("the mail server's TLS handshake failed: {failure}"))
 }
 
 /// Sends one command and reads one reply.

@@ -183,6 +183,16 @@ commit".
 
 ### Added
 
+- **Your photographs can live in your own S3 bucket.** `plugin-blobstore-s3` is
+  the third first-party plugin: MinIO, Garage, Backblaze or AWS, signed with
+  Signature Version 4. The person running the installation can point the whole
+  deployment at one bucket, and any tenant can override that with its own
+  endpoint, bucket and keys — the secret key sealed, never shown again and never
+  written to a log. Uploads larger than 8 MiB are streamed in parts, an upload
+  whose content does not match its address is refused, and a file already there
+  is not sent twice. *Plugin contract: the `BlobStore` requests carry the call
+  envelope. Additive.*
+
 - **Your photographs can live in your own storage.** A tenant that installs a storage
   plugin has every new upload written there and nowhere else, while everything stored
   before it stays readable exactly as it was — choosing a store is a routing decision,

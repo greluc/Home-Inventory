@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Mutual TLS towards the core, from the one file the runtime mounts.
+//! TLS in both directions: towards the core, and towards whatever the plugin reaches.
 //!
 //! A plugin is called by the core and by nothing else. The core pins this
 //! plugin's certificate by fingerprint at registration (`REQ-SEC-056`); this is
@@ -16,7 +16,12 @@
 //! than a plugin and does not depend on this crate.*
 
 use std::path::Path;
+use std::sync::Arc;
 
+use tokio::net::TcpStream;
+use tokio_rustls::rustls::pki_types::ServerName;
+use tokio_rustls::rustls::{ClientConfig, RootCertStore};
+use tokio_rustls::TlsConnector;
 use tonic::transport::{Certificate, Identity, ServerTlsConfig};
 
 use rustls_pki_types::pem::PemObject;
@@ -103,6 +108,46 @@ fn pem_block(label: &str, der: &[u8]) -> String {
     }
     out.push_str(&format!("-----END {label}-----\n"));
     out
+}
+
+/// Wraps an already-opened socket in TLS, verifying the far end's certificate.
+///
+/// The other direction from [`server_config`]: an ordinary TLS client against a
+/// server on the public internet, reached through the tunnel the egress proxy
+/// opened. The roots come from `webpki-roots` as DATA, because a `scratch` image
+/// has no system trust store to read and a plugin that skipped verification would
+/// be handing this deployment's credentials to whatever answered.
+///
+/// # Arguments
+///
+/// * `socket` — the tunnel, already connected to `host`
+/// * `host` — the name the certificate has to match
+///
+/// # Errors
+///
+/// A sentence for a log line: a host that is not a name TLS can verify, or a
+/// handshake the far end refused.
+pub async fn client_handshake(
+    socket: TcpStream,
+    host: &str,
+) -> Result<tokio_rustls::client::TlsStream<TcpStream>, String> {
+    let mut roots = RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    let config = ClientConfig::builder_with_provider(Arc::new(
+        tokio_rustls::rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|failure| format!("TLS could not be configured: {failure}"))?
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+
+    let name = ServerName::try_from(host.to_string())
+        .map_err(|_| format!("{host} is not a name TLS can verify"))?;
+    TlsConnector::from(Arc::new(config))
+        .connect(name, socket)
+        .await
+        .map_err(|failure| format!("the TLS handshake with {host} failed: {failure}"))
 }
 
 #[cfg(test)]

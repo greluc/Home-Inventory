@@ -31,6 +31,7 @@ Network=homeinv-internal.network:alias=api,alias=api-internal
 Network=homeinv-frontend.network:alias=api
 Network=homeinv-plugin-webhook.network:alias=api
 Network=homeinv-plugin-smtp.network:alias=api
+Network=homeinv-plugin-blobstore-s3.network:alias=api
 Tmpfs=/tmp:mode=1777
 EnvironmentFile=%h/.config/homeinv/homeinv.env
 Environment=SPRING_PROFILES_ACTIVE=api

@@ -106,6 +106,13 @@ change, and why the gap was invisible for as long as it was.
   `media` already established one; the single place that did not was an assertion in `MediaScanIT`.
 - **A read of an older blob costs one extra round trip** — a `Head` to the plugin that
   answers "no" — and that is the price of the first property in the table above.
+- **The `BlobStore` contract carries the call envelope**, added 2026-09-21 and additive
+  on the wire. It was absent while the only implementation was the in-deployment service,
+  which needs nothing beyond the address — and a store whose bucket and keys a TENANT
+  may choose ([ADR-0073](0073-a-plugin-is-configured-twice.md)) cannot be told which
+  tenant it is acting for without one. `blob.tenant_id` keeps its own meaning: it is
+  part of the address, not the envelope, and a store that finds the two disagreeing
+  refuses the call rather than choosing one of them.
 - **A tenant's two stores stay two stores.** Nothing in this record moves a blob, and nothing
   in the system reports a blob as being in the wrong place, because both places are right.
 - **`TenantBlobStoreIT`** holds all four rows of the decision table against a real plugin over

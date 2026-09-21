@@ -75,6 +75,7 @@ services:
       frontend: {}
       plugin-webhook: {}
       plugin-smtp: {}
+      plugin-blobstore-s3: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -168,6 +169,7 @@ services:
       scanner: {}
       plugin-webhook: {}
       plugin-smtp: {}
+      plugin-blobstore-s3: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -509,6 +511,7 @@ services:
       egress: {}
       plugin-webhook: {}
       plugin-smtp: {}
+      plugin-blobstore-s3: {}
     secrets:
       - source: egress-proxy-egress-allowlist.conf
         target: /etc/homeinv/egress-allowlist.conf
@@ -689,6 +692,42 @@ services:
         reservations:
           memory: 32m
 
+  plugin-blobstore-s3:
+    image: ghcr.io/greluc/home-inv-plugin-blobstore-s3:latest
+    container_name: homeinv-plugin-blobstore-s3
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-blobstore-s3: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8202"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-s3"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_S3_ENDPOINT: "${HOMEINV_S3_ENDPOINT:-}"
+      HOMEINV_S3_BUCKET: "${HOMEINV_S3_BUCKET:-}"
+      HOMEINV_S3_REGION: "${HOMEINV_S3_REGION:-us-east-1}"
+      HOMEINV_S3_PREFIX: "${HOMEINV_S3_PREFIX:-}"
+      HOMEINV_S3_ADDRESSING: "${HOMEINV_S3_ADDRESSING:-path}"
+      HOMEINV_S3_ACCESS_KEY_ID: "${HOMEINV_S3_ACCESS_KEY_ID:-}"
+      HOMEINV_S3_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-s3
+      - plugin-blobstore-s3-secret-key
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+
 networks:
   plugin-webhook:
     internal: true
@@ -700,6 +739,11 @@ networks:
     ipam:
       config:
         - subnet: 10.89.32.0/24
+  plugin-blobstore-s3:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.33.0/24
   edge:
   egress:
   internal:
@@ -761,6 +805,10 @@ secrets:
     file: ../secrets/mtls-blobstore
   mtls-plugin-webhook:
     file: ../secrets/mtls-plugin-webhook
+  mtls-plugin-blobstore-s3:
+    file: ../secrets/mtls-plugin-blobstore-s3
+  plugin-blobstore-s3-secret-key:
+    file: ../secrets/plugin-blobstore-s3-secret-key
   mtls-plugin-smtp:
     file: ../secrets/mtls-plugin-smtp
   plugin-smtp-password:

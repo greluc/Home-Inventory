@@ -1,0 +1,30 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory plugin-blobstore-s3
+
+[Container]
+ContainerName=homeinv-plugin-blobstore-s3
+Image=ghcr.io/greluc/home-inv-plugin-blobstore-s3:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-plugin-blobstore-s3.network:alias=plugin-blobstore-s3
+EnvironmentFile=%h/.config/homeinv/homeinv.env
+Environment=HOMEINV_PLUGIN_PORT=8202
+Environment=HOMEINV_MTLS_PLUGIN_FILE=/run/secrets/mtls-plugin-blobstore-s3
+Environment=HOMEINV_EGRESS_PROXY=egress-proxy:8118
+Environment=HOMEINV_S3_TIMEOUT_SECONDS=60
+Secret=mtls-plugin-blobstore-s3,type=mount
+Secret=plugin-blobstore-s3-secret-key,type=mount
+
+[Service]
+MemoryMax=256M
+MemoryLow=64M
+Restart=on-failure

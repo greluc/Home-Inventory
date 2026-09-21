@@ -19,6 +19,8 @@ syntax = "proto3";
 
 package home_inv.plugin.v1;
 
+import "home_inv/plugin/v1/common.proto";
+
 option java_multiple_files = true;
 option java_package = "de.greluc.homeinv.plugin.v1";
 option java_outer_classname = "BlobStoreProto";
@@ -94,6 +96,23 @@ message PutRequest {
 
   // Present on every message after the first.
   bytes chunk = 2;
+
+  // WHO THE CALL IS FOR, and what that tenant configured for this plugin.
+  //
+  // Added 2026-09-21. It was absent while the only implementation was the
+  // in-deployment service, which needs nothing beyond the address -- and then
+  // `plugin-blobstore-s3` arrived, whose bucket, endpoint and keys a TENANT may
+  // choose (ADR-0073, ADR-0074), and a store that could not be told which tenant
+  // it was acting for could not read them.
+  //
+  // `blob.tenant_id` stays where it is and keeps its meaning: it is part of the
+  // ADDRESS (ADR-0032), which a store needs even when it is configured once for
+  // the whole deployment. This field is the ENVELOPE. They always name the same
+  // tenant; a store that finds them disagreeing should refuse the call.
+  //
+  // On the first message only, with `blob`. A sender that repeated it on every
+  // chunk would be sending the tenant's settings once per 256 KiB.
+  CallContext context = 3;
 }
 
 // The result of a write.
@@ -110,6 +129,20 @@ message PutResponse {
 // Which blob to read.
 message GetRequest {
   BlobRef blob = 1;
+
+  // WHO THE CALL IS FOR, and what that tenant configured for this plugin.
+  //
+  // Added 2026-09-21. It was absent while the only implementation was the
+  // in-deployment service, which needs nothing beyond the address -- and then
+  // `plugin-blobstore-s3` arrived, whose bucket, endpoint and keys a TENANT may
+  // choose (ADR-0073, ADR-0074), and a store that could not be told which tenant
+  // it was acting for could not read them.
+  //
+  // `blob.tenant_id` stays where it is and keeps its meaning: it is part of the
+  // ADDRESS (ADR-0032), which a store needs even when it is configured once for
+  // the whole deployment. This field is the ENVELOPE. They always name the same
+  // tenant; a store that finds them disagreeing should refuse the call.
+  CallContext context = 2;
 }
 
 // One frame of a read.
@@ -120,6 +153,20 @@ message GetResponse {
 // Which blob to ask about.
 message HeadRequest {
   BlobRef blob = 1;
+
+  // WHO THE CALL IS FOR, and what that tenant configured for this plugin.
+  //
+  // Added 2026-09-21. It was absent while the only implementation was the
+  // in-deployment service, which needs nothing beyond the address -- and then
+  // `plugin-blobstore-s3` arrived, whose bucket, endpoint and keys a TENANT may
+  // choose (ADR-0073, ADR-0074), and a store that could not be told which tenant
+  // it was acting for could not read them.
+  //
+  // `blob.tenant_id` stays where it is and keeps its meaning: it is part of the
+  // ADDRESS (ADR-0032), which a store needs even when it is configured once for
+  // the whole deployment. This field is the ENVELOPE. They always name the same
+  // tenant; a store that finds them disagreeing should refuse the call.
+  CallContext context = 2;
 }
 
 // What is known about a blob without reading it.
@@ -131,6 +178,20 @@ message HeadResponse {
 // Which blob to remove.
 message DeleteRequest {
   BlobRef blob = 1;
+
+  // WHO THE CALL IS FOR, and what that tenant configured for this plugin.
+  //
+  // Added 2026-09-21. It was absent while the only implementation was the
+  // in-deployment service, which needs nothing beyond the address -- and then
+  // `plugin-blobstore-s3` arrived, whose bucket, endpoint and keys a TENANT may
+  // choose (ADR-0073, ADR-0074), and a store that could not be told which tenant
+  // it was acting for could not read them.
+  //
+  // `blob.tenant_id` stays where it is and keeps its meaning: it is part of the
+  // ADDRESS (ADR-0032), which a store needs even when it is configured once for
+  // the whole deployment. This field is the ENVELOPE. They always name the same
+  // tenant; a store that finds them disagreeing should refuse the call.
+  CallContext context = 2;
 }
 
 // The result of a removal.

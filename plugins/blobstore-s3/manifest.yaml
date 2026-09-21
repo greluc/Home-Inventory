@@ -1,0 +1,110 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The manifest `plugin-blobstore-s3` ships as its reference.
+#
+# THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+# `deploy/services.yaml` beside the container, the network segment and the
+# egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+# carries the `host:port` of every object store this deployment may reach, and
+# a tenant that configures an endpoint outside that list gets a refusal from the
+# proxy rather than a connection (ADR-0027).
+
+apiVersion: home-inv.plugin/v1
+
+metadata:
+  id: de.greluc.homeinv.plugin.blobstore.s3
+  name: "S3 object storage"
+  version: "0.1.0"
+  vendor: "greluc"
+  license: "AGPL-3.0-or-later"
+  homepage: "https://github.com/greluc/Home-Inventory"
+  descriptions:
+    en: "Stores a tenant's media in an S3-compatible bucket, signed with Signature Version 4."
+    de: "Legt die Medien eines Mandanten in einem S3-kompatiblen Bucket ab, signiert mit Signature Version 4."   # spelling-exempt: a manifest's own multilingual DATA
+
+spec:
+  contract: ">=1.0.0 <2.0.0"
+  runtime: out-of-process
+
+  implements:
+    - port: BlobStore
+      priority: 100
+
+  capabilities:
+    # A `tcp:` target and not a `hosts:` one: what runs inside the tunnel is
+    # HTTPS this plugin terminates itself, so the proxy sees a host and a port
+    # and never a URL (O11, ADR-0027). The port is part of the allowance --
+    # "the object store, on any port" is not what an operator meant.
+    - id: network:outbound
+      tcp: ["objects.example.org:443"]
+      reason: "Storing and reading this tenant's media in its bucket"
+    # Without this the plugin has only the deployment's bucket to write to, and
+    # a tenant that configured its own account would be storing in the
+    # operator's (ADR-0073, ADR-0074).
+    - id: core:setting:read
+      reason: "Reading the bucket and keys this tenant configured"
+
+  settings:
+    # PER TENANT, and every one of them optional: a tenant that sets none uses
+    # the deployment's bucket, where the tenant id is already part of every key
+    # (ADR-0032). A tenant that wants its own account sets `endpoint`, `bucket`
+    # and BOTH credential fields -- half a pair is refused rather than mixed
+    # with the deployment's other half.
+    - key: endpoint
+      type: string
+      required: false
+      label:
+        en: "Endpoint"
+        de: "Endpunkt"   # spelling-exempt: a manifest's own multilingual DATA
+    - key: bucket
+      type: string
+      required: false
+      label:
+        en: "Bucket"
+        de: "Bucket"
+    - key: region
+      type: string
+      required: false
+      label:
+        en: "Region"
+        de: "Region"
+    - key: prefix
+      type: string
+      required: false
+      label:
+        en: "Key prefix"
+        de: "Schlüsselpräfix"   # spelling-exempt: a manifest's own multilingual DATA
+    - key: addressingStyle
+      type: string
+      required: false
+      label:
+        en: "Addressing style (path or virtual)"
+        de: "Adressierung (path oder virtual)"   # spelling-exempt: a manifest's own multilingual DATA
+    - key: accessKeyId
+      type: string
+      required: false
+      label:
+        en: "Access key id"
+        de: "Zugriffsschlüssel-ID"   # spelling-exempt: a manifest's own multilingual DATA
+    # SEALED in the core and opened only into the envelope of this plugin's own
+    # calls (ADR-0019, ADR-0073). It is never returned by any read endpoint and
+    # never appears in a log line.
+    - key: secretAccessKey
+      type: secret
+      required: false
+      label:
+        en: "Secret access key"
+        de: "Geheimer Zugriffsschlüssel"   # spelling-exempt: a manifest's own multilingual DATA
+
+  health:
+    endpoint: /healthz
+    intervalSeconds: 60
+
+  resources:
+    # Two multipart parts of 8 MiB, the connection buffers around them, and the
+    # runtime. An upload larger than one part is streamed part by part rather
+    # than held, so this does not grow with the size of the object -- which is
+    # what lets it fit REQ-NFR-009's per-plugin adder of 64 MB.
+    memoryMiB: 64
+    timeoutSeconds: 120

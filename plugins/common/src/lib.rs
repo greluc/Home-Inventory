@@ -6,7 +6,9 @@
 //! ADR-0072 said when this crate would exist: *"The second one moves it into a
 //! crate the plugins share, which is the point at which a shared crate costs
 //! less than the duplication does."* `plugins/smtp/` is that second one, and
-//! these are the four pieces both of them had written out.
+//! these are the pieces more than one of them had written out: the mTLS identity,
+//! the CONNECT tunnel, base64 and hex, the delivered-key set, HMAC-SHA256 and the
+//! calendar arithmetic behind a UTC stamp.
 //!
 //! What is deliberately **not** here: anything about what a plugin does. The
 //! contract types are generated per crate from `proto/`, the ports are each
@@ -21,5 +23,7 @@
 
 pub mod encoding;
 pub mod keys;
+pub mod mac;
 pub mod proxy;
+pub mod time;
 pub mod tls;

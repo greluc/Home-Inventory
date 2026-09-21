@@ -36,11 +36,6 @@ rustls-pki-types = { version = "1", features = ["std"] }
 # which is the whole reason this is a crate rather than a file path.
 webpki-roots = "1"
 
-# The signature. `sha2` alone: HMAC is thirty lines of RFC 2104 over it, and the
-# `hmac` crate would pin a `digest` version that has to match this one's — a
-# coupling that breaks on every digest release for no gain.
-sha2 = "0.11"
-
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 

@@ -1039,6 +1039,63 @@ services:
       server — one is what the proxy allows and the other is where the plugin
       goes.
 
+  plugin-blobstore-s3:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-blobstore-s3 }
+    plugin:
+      id: de.greluc.homeinv.plugin.blobstore.s3
+      manifest: plugins/blobstore-s3/manifest.yaml
+      # EVERY OBJECT STORE THIS DEPLOYMENT MAY REACH. A `tcp:` target and not a
+      # host, because what runs inside the tunnel is HTTPS the plugin terminates
+      # itself: the proxy sees a host and a port and never a URL (ADR-0027).
+      #
+      # A TENANT may configure its own endpoint (ADR-0073), and one that is not
+      # on this list gets a refusal from the proxy rather than a connection. That
+      # is the division: the tenant chooses where its data goes, the operator
+      # chooses which places this deployment may reach at all.
+      tcp: ["objects.example.org:443"]
+      fingerprintFrom: mtls-plugin-blobstore-s3
+      signed: false
+    segment:
+      subnet: 10.89.33.0/24
+    networks: [plugin-blobstore-s3]
+    ports:
+      - { container: 8202, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8202"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-s3"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The deployment's own bucket, used by every tenant that did not name
+      # its own. Empty is a valid deployment: each tenant then brings its own
+      # endpoint, bucket and keys, and the plugin says so once at start-up.
+      HOMEINV_S3_ENDPOINT: "${HOMEINV_S3_ENDPOINT:-}"
+      HOMEINV_S3_BUCKET: "${HOMEINV_S3_BUCKET:-}"
+      HOMEINV_S3_REGION: "${HOMEINV_S3_REGION:-us-east-1}"
+      HOMEINV_S3_PREFIX: "${HOMEINV_S3_PREFIX:-}"
+      # `path` puts the bucket in the path, `virtual` in the hostname. Path by
+      # default: a self-hosted store rarely has a wildcard certificate, and with
+      # `virtual` the operator would have to allow one host per bucket.
+      HOMEINV_S3_ADDRESSING: "${HOMEINV_S3_ADDRESSING:-path}"
+      HOMEINV_S3_ACCESS_KEY_ID: "${HOMEINV_S3_ACCESS_KEY_ID:-}"
+      HOMEINV_S3_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-s3        # its server identity, pinned by the core
+      - plugin-blobstore-s3-secret-key  # the deployment's secret access key, the
+                                        # OPERATOR's credential — it never passes
+                                        # through the core (ADR-0073). A TENANT's
+                                        # own key is a different thing and is
+                                        # sealed in the core instead
+    resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
+    profiles: [standard, ha]
+    notes: >
+      A tenant's media in S3-compatible storage. Granting it routes the tenant's
+      NEXT bytes here and moves none of the old ones (ADR-0074): what was stored
+      before stays in the deployment's own blobstore and is still served from
+      there. Two multipart parts of 8 MiB are what the memory reservation is for --
+      an upload larger than one part is streamed part by part rather than held, so
+      this does not grow with the size of the object. It is REQ-NFR-009's
+      per-plugin adder exactly: 64 MB reserved, 256 MB limit.
+
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
@@ -1155,6 +1212,25 @@ secrets:
       `setup.sh` computes when it creates this certificate and substitutes into
       the generated plugin list — exactly the mechanism a third party's plugin
       uses, because a first-party one gets no privileged path (ADR-0072).
+  mtls-plugin-blobstore-s3:
+    required: false
+    kind: mtls-server
+    services: [plugin-blobstore-s3]
+    notes: >
+      Server identity for `plugin-blobstore-s3`, pinned by the core exactly as
+      every other in-deployment peer is (REQ-SEC-056).
+  plugin-blobstore-s3-secret-key:
+    required: false
+    kind: external
+    services: [plugin-blobstore-s3]
+    notes: >
+      THE DEPLOYMENT'S SECRET ACCESS KEY, and the second secret here that belongs
+      to somebody else's system. `setup.sh` creates it EMPTY and says so:
+      generating one would produce a key the object store has never heard of, and
+      the failure would look like a broken plugin rather than a key nobody set.
+      Under Podman it is also not INSTALLED until then, because a Podman secret
+      cannot be empty. A TENANT's own key never appears here at all — it is sealed
+      in the core and travels in the call envelope (ADR-0073, ADR-0019).
   mtls-plugin-smtp:
     required: false
     kind: mtls-server

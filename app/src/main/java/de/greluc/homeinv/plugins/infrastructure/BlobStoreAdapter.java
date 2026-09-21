@@ -48,6 +48,15 @@ import org.springframework.stereotype.Component;
  * it reads them, and {@code get} hands back a stream that pulls the next chunk when the caller asks
  * for it.
  *
+ * <h2>The envelope travels with the address</h2>
+ *
+ * <p>Every request carries the {@code CallContext} as well as the {@link BlobRef}, and the
+ * two say different things: the reference is the ADDRESS, which contains the tenant because
+ * addressing is per tenant (ADR-0032), and the envelope is WHO THE CALL IS FOR, carrying what
+ * that tenant configured for this plugin (ADR-0073). A store whose bucket and keys a tenant
+ * chooses cannot work without the second one — which is why the contract gained it in
+ * 2026-09-21, additively (ADR-0074).
+ *
  * <p>The read side uses a pipe rather than a collected buffer. A blocking-stub iterator is the
  * natural gRPC shape and an {@link InputStream} is what {@code media} expects, so one thread feeds
  * the other — which is also what makes the deadline mean something: a plugin that stops sending
@@ -109,7 +118,11 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
         // The first message carries the reference and no bytes, which is the
         // contract's own framing: a store can create its target before the
         // first chunk arrives.
-        requests.onNext(PutRequest.newBuilder().setBlob(refOf(context, sha256)).build());
+        requests.onNext(
+            PutRequest.newBuilder()
+                .setBlob(refOf(context, sha256))
+                .setContext(PluginWire.contextOf(context))
+                .build());
 
         byte[] buffer = new byte[CHUNK];
         int read;
@@ -139,7 +152,11 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
         chunks =
             BlobStoreGrpc.newBlockingStub(channel)
                 .withDeadlineAfter(deadlineMillis, TimeUnit.MILLISECONDS)
-                .get(GetRequest.newBuilder().setBlob(refOf(context, sha256)).build());
+                .get(
+                    GetRequest.newBuilder()
+                        .setBlob(refOf(context, sha256))
+                        .setContext(PluginWire.contextOf(context))
+                        .build());
       } catch (StatusRuntimeException failure) {
         throw PluginWire.failureOf(failure, channel.authority());
       }
@@ -181,7 +198,11 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
         HeadResponse response =
             BlobStoreGrpc.newBlockingStub(channel)
                 .withDeadlineAfter(deadlineMillis, TimeUnit.MILLISECONDS)
-                .head(HeadRequest.newBuilder().setBlob(refOf(context, sha256)).build());
+                .head(
+                    HeadRequest.newBuilder()
+                        .setBlob(refOf(context, sha256))
+                        .setContext(PluginWire.contextOf(context))
+                        .build());
         return response.getExists() ? Optional.of(response.getByteSize()) : Optional.empty();
       } catch (StatusRuntimeException failure) {
         throw PluginWire.failureOf(failure, channel.authority());
@@ -193,7 +214,11 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
       try {
         BlobStoreGrpc.newBlockingStub(channel)
             .withDeadlineAfter(deadlineMillis, TimeUnit.MILLISECONDS)
-            .delete(DeleteRequest.newBuilder().setBlob(refOf(context, sha256)).build());
+            .delete(
+                DeleteRequest.newBuilder()
+                    .setBlob(refOf(context, sha256))
+                    .setContext(PluginWire.contextOf(context))
+                    .build());
       } catch (StatusRuntimeException failure) {
         throw PluginWire.failureOf(failure, channel.authority());
       }
