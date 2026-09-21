@@ -21,6 +21,13 @@ commit".
 
 ### Changed
 
+- **Sizing a machine: the federated-login plugin costs more than the others.**
+  The documented budget was 64 MB of reserved memory per installed plugin, which is
+  what the four written in Rust use. `plugin-oidc` runs on a JVM — deliberately, so
+  that ID-token validation uses an audited library rather than a second
+  implementation of it — and reserves 192 MB with a 512 MB ceiling. The figure was
+  corrected before that plugin was written rather than after.
+
 - **Every dependency is on its current stable release.** Valkey moves to 9,
   i18next to 26, react-i18next to 17, vitest to 5, gRPC to 1.84, protobuf to
   4.36, sha2 to 0.11, and seven GitHub Actions to their new majors. The smoke
@@ -927,7 +934,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 75 architecture decision records, each with its alternatives and consequences —
+- 76 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

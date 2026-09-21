@@ -107,6 +107,13 @@ privileged path fails the build on the commit that writes it.
 - **The memory budget stays checkable.** Four small Rust containers and one JVM fit the
   reservation sums `REQ-NFR-009` is measured against; five JVMs would not have, and the
   budget would have been amended to fit the implementation rather than the other way round.
+
+  > **Amended by [ADR-0075](0075-the-one-jvm-plugin-has-its-own-line-in-the-budget.md)** —
+  > the sums were right and the per-plugin adder beside them was one figure. A JRE with
+  > gRPC, Netty and Nimbus does not live in the 64 MB written for a small Rust container,
+  > so `REQ-NFR-009` now carries two adders and `plugin-oidc` reserves 192 MB. The
+  > requirement was amended **before** the plugin was written, which is the order that
+  > makes it a budget rather than a description.
 - **`plugin-sdk/` is still stage 3 and still empty**, and these five are written against
   the protobuf contract directly. That is deliberate: they are the first users of the
   contract a third party gets, so they find its rough edges before an SDK papers over

@@ -93,6 +93,7 @@ Date: YYYY-MM-DD
 | [0069](0069-an-import-merges-by-id-and-writes-no-people.md) | An import merges by id, matches the catalogue by key, and writes no people | Accepted |
 | [0070](0070-documents-are-described-not-programmed.md) | A document is described, not programmed, and rendering it is a plugin's job | Accepted |
 | [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted, amended by 0073 |
-| [0072](0072-first-party-plugins-live-here.md) | The first-party plugins live in this repository, one language each | Accepted |
+| [0072](0072-first-party-plugins-live-here.md) | The first-party plugins live in this repository, one language each | Accepted, amended by 0075 |
 | [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted |
 | [0074](0074-granting-a-store-routes-and-does-not-move.md) | Granting a storage plugin routes the next bytes and moves none of the old ones | Accepted |
+| [0075](0075-the-one-jvm-plugin-has-its-own-line-in-the-budget.md) | The one JVM plugin gets its own line in the memory budget | Accepted |

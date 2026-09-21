@@ -437,8 +437,8 @@ logging:
 |---|---|---|
 | Services | web, api, worker, **blobstore**, postgres, valkey, **rabbitmq**, clamav, egress-proxy | + opensearch, first-party plugins |
 | Where a plugin counts | — | in the **adder**, not the base: `plugin-webhook` reserves 32 MB and is the first one the matrix declares ([ADR-0072](../adr/0072-first-party-plugins-live-here.md)) |
-| Sum of **reservations** | ≈ **3.7 GB** | ≈ **5.2 GB** (+ 64 MB per plugin) |
-| Sum of **limits** | ≈ **7.7 GB** | ≈ **9.7 GB** (+ 256 MB per plugin) |
+| Sum of **reservations** | ≈ **3.7 GB** | ≈ **5.2 GB** (+ 64 MB per Rust plugin, + 192 MB for `plugin-oidc`) |
+| Sum of **limits** | ≈ **7.7 GB** | ≈ **9.7 GB** (+ 256 MB per Rust plugin, + 512 MB for `plugin-oidc`) |
 | VM | ≥ 8 GB | ≥ 8 GB |
 
 **The reservations are the budget; the limits deliberately over-commit.** That is
@@ -754,7 +754,7 @@ about 3 GB.
 | Profile | `search` | Events | Media | Plugins | RAM (reserved) | Purpose |
 |---|---|---|---|---|---|---|
 | `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ≈ 3.7 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
-| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ≈ 5.2 GB (+ 64 MB per plugin) | **The profile of this installation** |
+| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ≈ 5.2 GB (+ 64 MB per Rust plugin, + 192 MB for `plugin-oidc`) | **The profile of this installation** |
 | `ha` | OpenSearch cluster | RabbitMQ cluster | S3 via plugin | as `standard` | ≥ 16 GB | Kubernetes, multiple instances |
 
 > **`minimal` opens exactly one connection outside the deployment, and it is the
