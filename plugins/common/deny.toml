@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# `cargo deny` runs in CI. Two of its checks are the point:
+#
+#   * ADVISORIES — a crate with a known vulnerability fails the build, which is
+#     REQ-SEC-075 applied to the dependency tree this crate actually pulls in.
+#   * LICENCES — everything here ends up inside an AGPL-3.0-or-later binary, and
+#     a crate under a licence that cannot combine with it would make that
+#     statement false. An allowlist rather than a denylist, so a licence nobody
+#     has considered is a failure rather than a silent acceptance.
+#
+# This is the crate's own copy rather than a shared one: `cargo deny` reads a
+# file beside the manifest it checks, and a crate with no file beside it is
+# checked against cargo-deny's DEFAULTS, which allow no licence at all. That is
+# how this crate failed CI on 2026-09-20 with `MIT OR Apache-2.0` rejected.
+#
+# `common` ships in no image of its own -- it is the TLS, proxy and encoding
+# code the other first-party plugins link -- so every crate listed here also
+# lands in a binary that is AGPL-3.0-or-later (ADR-0072). The allow list is
+# therefore the same set the two core Rust services use.
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+# Every permissive licence that is compatible with AGPL-3.0-or-later when
+# combined into it. GPL-2.0-only is deliberately absent: it is the one common
+# copyleft licence AGPL-3.0 cannot absorb.
+allow = [
+# The crate's OWN licence, and the reason this list failed on its first real run:
+# every dependency was allowed and the thing being built was not. `cargo deny`
+# checks the whole graph including the root, so a project that is AGPL-3.0-or-later
+# has to say so here. ADR-0018 makes the core AGPL, and ADR-0072 makes a first-party plugin AGPL too.
+    "AGPL-3.0-or-later",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+# The Mozilla root certificate data that `webpki-roots` ships. A `scratch`
+# image has no system trust store to read, so the public roots are a crate,
+# and the crate is DATA under the Community Data License Agreement rather than
+# code: it grants use, modification and distribution and asks for a disclaimer
+# notice, with no reciprocal obligation of any kind. Considered rather than
+# waved through, which is what this list is for.
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.9
+
+[[licenses.clarify]]
+# `ring` carries its own licence file that names several upstreams. The
+# clarification is the project's own documented answer and is why an explicit
+# entry is better than raising the confidence threshold until it passes.
+crate = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
