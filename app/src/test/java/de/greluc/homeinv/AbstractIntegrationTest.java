@@ -77,7 +77,19 @@ public abstract class AbstractIntegrationTest {
               "/docker-entrypoint-initdb.d/00-roles.sql")
           .withCopyFileToContainer(
               MountableFile.forClasspathResource("db/test-roles.sql"),
-              "/docker-entrypoint-initdb.d/01-test-roles.sql");
+              "/docker-entrypoint-initdb.d/01-test-roles.sql")
+          // One container serves the whole suite, and every test class that
+          // needs its own application context -- a different property, an extra
+          // bean -- brings a pool of ten connections with it. PostgreSQL's
+          // default ceiling is 100 with a handful held back for the superuser,
+          // so the suite grew into `FATAL: remaining connection slots are
+          // reserved` on adding the twelfth context, as a context that failed to
+          // start rather than as anything resembling its cause.
+          //
+          // Raised here rather than by shrinking the pools: the pool size is the
+          // production one and a test that runs against a smaller one is testing
+          // something else.
+          .withCommand("postgres", "-c", "max_connections=300");
 
   /** Valkey, where sessions and the login throttle live. */
   @SuppressWarnings("resource")

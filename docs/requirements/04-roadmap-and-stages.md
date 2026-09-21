@@ -132,12 +132,12 @@ reads as authoritative.*
 | Audit | **Built** | The append-only log with its per-tenant hash chain, the hourly anchor, the history queries and the `homeinv_housekeeping` role with the truncation marker. `AuditLogIT`, `AuditChainVerificationIT`, `AuditCoverageIT` |
 | Notifications | **Built** | Rules as data with four columns, five of the six triggers served — the sixth needs stocktake, which is stage 2 — subscriptions per person, kind and channel, retries that widen and then dead-letter, and the security notifications no tenant may switch off. `ReminderRuleIT`, `NotificationDeliveryIT`, `SecurityNotificationIT`. **What actually delivers is a plugin**, and the two that do are [`plugins/smtp/`](../../plugins/smtp/) and [`plugins/webhook/`](../../plugins/webhook/) — written since 2026-09-20, and since 2026-09-21 chosen by the **channel the row names** rather than by plugin priority, which they both declare as 100 |
 | Import/export | **Built** | The archive of ten blocks including the photographs, sealed values opened as far as their requester may read, an archive read back into another tenant, and a CSV from Homebox or InvenTree with a dry run and recorded provenance. `ExportCoverageIT`, `ExportJobIT`, `ArchiveMoveIT`, `CsvImportIT`, `PersonalDataIT` |
+| Observability | **Partly** | ECS log lines, the Prometheus endpoint on its own bound management listener, the health groups and the schema check are stage 0 and built (`LogFormatIT`, `ApiUsageMetricIT`). **Tracing is built** since 2026-09-21 (`REQ-NFR-044`, [ADR-0082](../adr/0082-tracing-is-a-library-and-the-sampling-is-the-operators.md)): libraries rather than the Java agent 13 §13.4 had named, one knob (`HOMEINV_TRACING_ENDPOINT`) that is empty by default, the broker hop through the AMQP observations and the plugin hop carried by hand because nothing instruments it. `TracingIT` and `TracingOffIT` cover configured and not. What is **not** here is the operator view and the load suite, both below |
 
 **Cross-cutting, and each one its own piece of work:** there is no load suite, so
 the four latency budgets and the migration lock budget are unmeasured
 (`REQ-NFR-001`/`002`/`003`/`005`/`057`) — it will be **Gatling in the Gradle
-build**, decided with the owner on 2026-09-20; OpenTelemetry is not wired
-(`REQ-NFR-044`); JaCoCo covers `Money` alone rather than the domain thresholds
+build**, decided with the owner on 2026-09-20; JaCoCo covers `Money` alone rather than the domain thresholds
 (`REQ-NFR-025`); the operator view is **partly** there — `/api/v1/instance`
 answers accounts, operators, quotas, erasures and the plugin list, and not
 dependency state, queue backlog or the last backup (`REQ-NFR-072`); the smoke

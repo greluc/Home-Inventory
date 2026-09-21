@@ -19,6 +19,18 @@ The project is in its design phase; nothing is released. This section records th
 groundwork so that the first release has a history rather than a single "initial
 commit".
 
+### Added
+
+- **Distributed tracing, off unless you ask for it.** Set
+  `HOMEINV_TRACING_ENDPOINT` to an OpenTelemetry collector on the deployment's
+  internal network and a slow or failed request becomes one trace from the
+  browser's call through the database, the broker, the worker and any plugin
+  involved. Leave it empty — the default — and nothing changes: no spans, no
+  overhead, and the `traceId` in the logs and in every error message stays
+  exactly as it was. The collector is yours to run and to point at whatever you
+  already use; an example configuration ships in
+  [`docs/reference/otel-collector.yaml`](docs/reference/otel-collector.yaml).
+
 ### Changed
 
 - **Sizing a machine: the federated-login plugin costs more than the others.**
@@ -889,7 +901,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 36 types in the shared
+- **The shared kernel is measured.** `platform` holds 39 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).
@@ -1004,7 +1016,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 82 architecture decision records, each with its alternatives and consequences —
+- 83 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

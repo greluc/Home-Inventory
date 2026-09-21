@@ -107,6 +107,22 @@ public record CallContext(
     return new CallContext(tenantId, traceId, language, deadlineMillis, settings);
   }
 
+  /**
+   * The same call, carrying the trace it belongs to.
+   *
+   * <p>Filled in the same one place as the settings, and for the same reason: a caller that had to
+   * remember it would be a caller who sometimes did not, and a trace with a hole in it where the
+   * plugin hop should be is worse than an honest absence. The core passes the W3C
+   * {@code traceparent} of the span the call is made from; {@code ""} says nothing is being traced,
+   * which is what every deployment without a collector reports.
+   *
+   * @param traceParent the W3C trace parent, or {@code null} for none
+   * @return a copy carrying it
+   */
+  public CallContext withTraceId(String traceParent) {
+    return new CallContext(tenantId, traceParent, language, deadlineMillis, settings);
+  }
+
   /** What authorised a call, and therefore what it may touch. */
   public enum Scope {
     /** One tenant granted the capability, and {@link CallContext#tenantId()} names it. */

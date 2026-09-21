@@ -95,6 +95,18 @@ dependencies {
     // with several starters anyway; naming it is what keeps the contract from
     // depending on which of them happens to be on the classpath.
     implementation(libs.jakarta.annotation.api)
+
+    // Tracing (REQ-NFR-044). Three modules and not the starter, which would also
+    // bring an OTLP METRICS registry that pushes to localhost by default -- see
+    // the note in the version catalogue. The first carries Boot's
+    // auto-configuration, the bridge turns Micrometer's observations -- which
+    // Spring Boot already creates for the web layer, scheduling and AMQP -- into
+    // OpenTelemetry spans, and the exporter sends them. All three do NOTHING until
+    // an endpoint is configured, which is what "inactive when unconfigured" means
+    // here and what `TracingEnvironment` makes true.
+    implementation(libs.spring.boot.micrometer.tracing.opentelemetry)
+    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.opentelemetry.exporter.otlp)
     implementation(libs.spring.boot.session.data.redis)
 
     // The primary `SearchIndex` adapter (ADR-0008, REQ-SRCH-005). Not a Spring

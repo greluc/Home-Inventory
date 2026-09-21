@@ -318,6 +318,21 @@ HOMEINV_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 # the direction of a call reverses.
 HOMEINV_PLUGIN_HOST_PORT=0
 
+# Where the operator's OTLP collector listens (REQ-NFR-044, 13 §13.4). EMPTY is
+# the default and means NO TRACING AT ALL: no tracer, no spans, no sampler, and
+# the `traceId` in the logs and in every error document is unchanged. Set it and
+# `api` and `worker` export spans there.
+#
+# It names a collector INSIDE the deployment, on the `internal` segment. These
+# containers have no route to the internet (ADR-0026) and this does not give them
+# one; what your collector forwards to afterwards is yours to decide. The
+# sampling policy of 13 §13.4 -- everything that failed or was slow, a fraction
+# of the rest -- belongs there too: the application sends everything, because a
+# tail decision can only be made where the whole trace is.
+#
+#   HOMEINV_TRACING_ENDPOINT=http://otel-collector:4318/v1/traces
+HOMEINV_TRACING_ENDPOINT=
+
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint
 

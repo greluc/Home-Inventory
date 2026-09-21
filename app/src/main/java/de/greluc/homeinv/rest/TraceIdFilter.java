@@ -27,12 +27,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * carries it on every line of the request, and {@link Problems} copies it into every problem
  * document.
  *
- * <h2>Why not the tracing library</h2>
+ * <h2>It steps aside when the deployment traces</h2>
  *
- * <p>Because distributed tracing is stage 1 (REQ-NFR-044) and the {@code traceId} is stage 0. When
- * the OpenTelemetry agent arrives it populates the same MDC key from the same W3C id, so the log
- * format, the error documents and anything reading them stay as they are; this filter then becomes
- * a fallback for the case that requirement already names, "inactive when unconfigured".
+ * <p>Since 2026-09-21 tracing exists (REQ-NFR-044) and, when a collector is configured, the tracer
+ * puts the <b>same MDC key</b> there from the span it started — the real W3C trace id of a trace
+ * that spans core, broker, worker and plugin. Two mechanisms writing one key would give one request
+ * two ids, so this one yields: it runs <i>after</i> Spring's observation filter and fills the key
+ * only when that found nothing to put there.
+ *
+ * <p>That is not a degraded mode. Tracing is off unless an operator names a collector — the
+ * requirement's own "inactive when unconfigured" — so on most deployments this filter is still the
+ * whole of the mechanism, exactly as it was at stage 0. What it stopped being is the only one.
  *
  * <h2>An incoming traceparent is adopted</h2>
  *
@@ -43,10 +48,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * gets a newline in it.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+// HIGHEST_PRECEDENCE + 2, and the two matter. Spring registers
+// `ServerHttpObservationFilter` at HIGHEST_PRECEDENCE + 1 and opens the
+// observation's scope around the rest of the chain, which is where a tracer puts
+// its ids into the MDC. Sitting before it, this filter would write a random id
+// that the tracer then shadowed for the length of the request and un-shadowed
+// afterwards -- one request, two ids, and the one in the error document would
+// not be the one in the log lines around it.
+@Order(Ordered.HIGHEST_PRECEDENCE + 2)
 public class TraceIdFilter extends OncePerRequestFilter {
 
-  /** The MDC key. The same one OpenTelemetry's logging integration uses. */
+  /** The MDC key. The same one Micrometer Tracing's SLF4J integration uses. */
   static final String TRACE_ID = "traceId";
 
   /** W3C trace-context: 32 lowercase hex characters, and not the all-zero id. */
@@ -63,6 +75,15 @@ public class TraceIdFilter extends OncePerRequestFilter {
       @NonNull HttpServletResponse response,
       @NonNull FilterChain chain)
       throws ServletException, IOException {
+
+    String traced = MDC.get(TRACE_ID);
+    if (traced != null && !traced.isBlank()) {
+      // A tracer is running and has already said what this request's id is.
+      // Whatever this filter put there instead would be a second answer, and
+      // removing it in the `finally` below would take the tracer's with it.
+      chain.doFilter(request, response);
+      return;
+    }
 
     MDC.put(TRACE_ID, traceIdOf(request));
     try {

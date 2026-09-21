@@ -1,5 +1,10 @@
 # Secrets arrive as files and are read before anything else resolves a property.
 # `spring.datasource.password` is resolved while the data source is built, long
 # before any bean of ours exists, so this has to be a post-processor.
+#
+# Tracing is here for the same reason a step earlier: whether a tracer exists at
+# all is decided by auto-configuration conditions, which read properties before
+# any bean of ours could correct one (REQ-NFR-044).
 org.springframework.boot.EnvironmentPostProcessor=\
-  de.greluc.homeinv.platform.SecretFiles
+  de.greluc.homeinv.platform.SecretFiles,\
+  de.greluc.homeinv.platform.TracingEnvironment

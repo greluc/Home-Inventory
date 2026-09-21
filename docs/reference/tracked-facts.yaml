@@ -96,7 +96,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 82
+    value: 83
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points
@@ -105,7 +105,7 @@ computed:
 
   - id: platformTypes
     compute: "count of app/src/main/java/de/greluc/homeinv/platform/*.java"
-    value: 36
+    value: 39
     pattern: '(?:(\d+)|twenty-two)\s+types?\s+in\s+(?:the\s+)?(?:shared\s+kernel|`?platform`?)'
     notes: >
       REQ-NFR-024 asks for the shared kernel's size to be monitored, with a figure per

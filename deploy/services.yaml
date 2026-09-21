@@ -290,6 +290,21 @@ services:
       # "minimal runs no plugin" means, and a complete deployment rather than a
       # degraded one (REQ-PLG-013).
       HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
+      HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
+                                                 # Where the operator's OTLP collector listens, and
+                                                 # the whole of the tracing configuration
+                                                 # (REQ-NFR-044, 13 §13.4). EMPTY is the default and
+                                                 # means no tracing at all -- no tracer, no spans, no
+                                                 # sampler -- which is the requirement's "inactive
+                                                 # when unconfigured". The empty string cannot be
+                                                 # passed as "absent" by either runtime, so
+                                                 # `TracingEnvironment` turns it into one.
+                                                 #
+                                                 # The collector is INSIDE the deployment: this
+                                                 # container has no outbound route (ADR-0026) and
+                                                 # this does not give it one. The operator attaches
+                                                 # their collector to `internal`; where it forwards
+                                                 # to afterwards is theirs.
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "api-internal"               # the alias below, which resolves to
                                                               # this container's address on
@@ -417,6 +432,21 @@ services:
       # "minimal runs no plugin" means, and a complete deployment rather than a
       # degraded one (REQ-PLG-013).
       HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
+      HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
+                                                 # Where the operator's OTLP collector listens, and
+                                                 # the whole of the tracing configuration
+                                                 # (REQ-NFR-044, 13 §13.4). EMPTY is the default and
+                                                 # means no tracing at all -- no tracer, no spans, no
+                                                 # sampler -- which is the requirement's "inactive
+                                                 # when unconfigured". The empty string cannot be
+                                                 # passed as "absent" by either runtime, so
+                                                 # `TracingEnvironment` turns it into one.
+                                                 #
+                                                 # The collector is INSIDE the deployment: this
+                                                 # container has no outbound route (ADR-0026) and
+                                                 # this does not give it one. The operator attaches
+                                                 # their collector to `internal`; where it forwards
+                                                 # to afterwards is theirs.
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "worker-internal"            # as api, one segment only
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"

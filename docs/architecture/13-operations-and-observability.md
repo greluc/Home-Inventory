@@ -17,8 +17,8 @@ time*.
 |---|---|
 | Format | JSON lines, one event per line, to `stdout`, in **ECS** (`logging.structured.format.console: ecs`) — the schema the log shippers a self-hoster is likely to already run understand, and the one that carries the MDC as top-level fields rather than inside the message. `LogFormatIT` encodes an event and parses the result, which is REQ-NFR-041's "format verified" |
 | Collection | Podman/Quadlet: **journald** (`journalctl --user -u homeinv-api`) · Docker: `json-file` with rotation · Kubernetes: container logs. The operations documentation gives the commands for each way of running it. |
-| Mandatory fields | `timestamp`, `level`, `logger`, `message`, `traceId`, `tenantId`, `actorId`. `spanId` and `requestId` arrive with the tracing agent at stage 1 (REQ-NFR-044): a span id without spans would be a field with nothing in it. *This row listed all seven as if they existed — corrected 2026-09-12.* |
-| Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation. It is a 128-bit W3C trace id, put in the MDC by `TraceIdFilter` and adopted from an incoming `traceparent` when there is one, so the OpenTelemetry agent of stage 1 fills the same field with the same shape and nothing downstream changes |
+| Mandatory fields | `timestamp`, `level`, `logger`, `message`, `traceId`, `tenantId`, `actorId`, and `spanId` **on a deployment that traces** (REQ-NFR-044) — the tracer writes it into the same MDC the ECS encoder reads, so it appears without anything here changing, and is absent where there are no spans to name. *This row listed all seven as if they existed — corrected 2026-09-12; the seventh, `requestId`, was dropped on 2026-09-21, because tracing arrived and nothing produces it: `traceId` already is the per-request identifier.* |
+| Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation. It is a 128-bit W3C trace id, adopted from an incoming `traceparent` when there is one. Two things can fill it and they agree by construction: the tracer when a collector is configured, `TraceIdFilter` when there is none. `TracingIT` asserts that the id in the error document is the id of the trace the request produced, which is a stronger statement than both being present |
 | Levels | `ERROR` only when someone must act · `WARN` for degraded operation · `INFO` for state changes · `DEBUG` off, switchable per logger at runtime |
 | Personal data | No passwords, tokens, keys or `sensitive` values. A test with known test values verifies this. IP addresses removed after 7 days. |
 | Tenant separation | `tenantId` on every line, so that analysis can be tenant-scoped |
@@ -65,20 +65,27 @@ Prometheus, Grafana and ready-made dashboards ships with the product.
 
 ## 13.4 Distributed tracing
 
-Stage 1. The `traceId` of [13.2](#132-logging) exists from stage 0 without it and
-is its own thing: a per-request identifier, generated in a filter, so that a user
-report and a log line can be connected on a deployment that runs nothing else.
-Spans, and therefore the chains below, need the agent.
+**Built 2026-09-21** ([ADR-0082](../adr/0082-tracing-is-a-library-and-the-sampling-is-the-operators.md),
+`REQ-NFR-044`). A trace spans: HTTP ingress → use case → database → outbox →
+RabbitMQ → worker → plugin call. Exactly the chains you cannot reconstruct
+without tracing.
 
-OpenTelemetry (Java agent, automatic). A trace spans: HTTP ingress → use case →
-database → outbox → RabbitMQ → worker → plugin call. Exactly the chains you
-cannot reconstruct without tracing.
+The `traceId` of [13.2](#132-logging) exists without any of it and is its own
+thing: a per-request identifier so that a user report and a log line can be
+connected on a deployment that traces nothing. When a collector *is* configured
+the tracer owns that field instead, with the same shape and the same name —
+`TraceIdFilter` runs behind Spring's observation filter and fills it only when it
+finds nothing there, so one request has one id (`TracingIT`).
 
 | Decision | |
 |---|---|
-| Sampling | 100 % for errors and slow requests, 5 % otherwise |
-| Enrichment | `tenantId`, `actorId`, plugin ID as attributes — never domain data |
-| Target | Configurable over OTLP; inactive when unconfigured |
+| How | **Micrometer Tracing and the OTLP exporter, as libraries** — three modules in the version catalogue, in the SBOM, gated by the licence check. *This row said "Java agent, automatic" until 2026-09-21: an agent is a binary fetched at image build time, outside all three of those, and it instruments whether or not anything is exported* |
+| Configuration | **`HOMEINV_TRACING_ENDPOINT`, and nothing else.** Empty is the default and means inactive — no span processor, no exporter, nothing recorded (`TracingOffIT`) |
+| Where the collector is | **On `internal`, run by the operator.** `api` and `worker` still reach nothing outside the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); what the collector forwards to afterwards is theirs. We ship no collector container and an example configuration instead: [`docs/reference/otel-collector.yaml`](../reference/otel-collector.yaml) |
+| Sampling | **The application sends everything; the collector decides.** Keep every trace that failed or took over a second, and 5 % of the rest — a **tail** policy, taken when the trace is complete. *This row read "100 % for errors and slow requests, 5 % otherwise" as though the application did it, and a 5 % head sample discards 95 % of the errors before anything can see that they were errors* |
+| Enrichment | `tenantId`, `actorId` and the plugin id as attributes — **never domain data**, because spans leave the deployment and outlive a log line. As *high-cardinality* key values, so they reach spans and never become meter tags (`TraceEnrichment`, `TracingIT`) |
+| The plugin hop | Ours to carry, because no library instruments it: one span per call (`homeinv.plugin.call`), the W3C `traceparent` in `CallContext.trace_id` **and** in the call's gRPC metadata, exactly as the contract already promised |
+| The broker hop | `spring.rabbitmq.template.observation-enabled` and `listener.simple.observation-enabled`, on in both roles — the publisher writes the context into the message and the consumer picks it up |
 
 ## 13.5 Health endpoints
 

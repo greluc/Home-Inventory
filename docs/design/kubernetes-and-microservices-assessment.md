@@ -110,13 +110,17 @@ Three facts frame everything that follows.
    ([ADR-0037](../adr/0037-per-plugin-network-segments.md),
    [ADR-0042](../adr/0042-edge-is-not-internal.md),
    [ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md), `REQ-SEC-102`).
-3. **Stage 1 is only partly built** ([04 Roadmap](../requirements/04-roadmap-and-stages.md),
-   status dated 2026-09-14): the plugin runtime does not exist, notifications do
-   not exist, OpenSearch is not wired, the audit hash chain is not built,
-   import/export is not built, there is no load suite, OpenTelemetry is not
-   wired, and `deploy/` carries no backup tooling. Risk **R1** — "scope too large
-   for one person" — is rated *high* in the register. Every hour spent on
-   infrastructure is an hour not spent there.
+3. **Stage 1 is only partly built.** The list belongs to
+   [04 Roadmap](../requirements/04-roadmap-and-stages.md) and is not repeated
+   here, because a second copy of a moving status is a second thing to keep
+   right — and this one was wrong within a week of being written. *It read "the
+   plugin runtime does not exist, notifications do not exist, OpenSearch is not
+   wired, the audit hash chain is not built, import/export is not built, there is
+   no load suite, OpenTelemetry is not wired, and `deploy/` carries no backup
+   tooling", dated 2026-09-14; six of those eight were built in the following
+   week, and the argument below never depended on which.* Risk **R1** — "scope
+   too large for one person" — is rated *high* in the register. Every hour spent
+   on infrastructure is an hour not spent there.
 
 ---
 

@@ -177,9 +177,11 @@ class ErrorContractIT extends AbstractIntegrationTest {
             .andReturn();
 
     String traceId = problemOf(result).get("traceId").asString();
-    // The W3C shape, because an OpenTelemetry agent will supply the same field at
-    // stage 1 (REQ-NFR-044) and a client that learned to quote a 16-character id
-    // would have to learn again.
+    // The W3C shape, whichever of the two filled it: since 2026-09-21 a
+    // deployment with a collector configured has the tracer supply this field
+    // and one without it has `TraceIdFilter`, and the shape is the reason the
+    // two are interchangeable (REQ-NFR-044, `TracingIT`). A client that had
+    // learned to quote a 16-character id would have had to learn again.
     assertThat(traceId).matches("[0-9a-f]{32}");
   }
 

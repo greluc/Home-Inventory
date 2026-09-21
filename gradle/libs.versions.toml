@@ -145,6 +145,21 @@ spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-s
 # accessor or constructor parameter -- where the schema resolver looks. Jakarta's declares
 # no `@Target` at all and is therefore on all four.
 jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api" }
+# Distributed tracing (REQ-NFR-044, 13 §13.4). Micrometer's OpenTelemetry bridge and the
+# OTLP exporter, as LIBRARIES rather than the Java agent 13.4 originally named: they are in
+# the version catalogue, in the SBOM, and inert without a configured endpoint, where an
+# agent is a binary fetched at image build time that instruments whether or not anything
+# is exported (ADR-0082). Versions come from the Boot BOM.
+#
+# The three modules and not `spring-boot-starter-opentelemetry`, which would be shorter and
+# would also drag in `micrometer-registry-otlp`: that registry PUSHES METRICS to
+# `http://localhost:4318/v1/metrics` by default, on a schedule, with nobody having asked
+# for it. A core container that periodically opens a connection nobody configured is the
+# one thing ADR-0026 exists to prevent, and "it only reaches localhost" is not an answer
+# when the point is that it was never decided.
+spring-boot-micrometer-tracing-opentelemetry = { module = "org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry" }
+micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }

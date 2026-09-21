@@ -104,3 +104,4 @@ Date: YYYY-MM-DD
 | [0079](0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md) | The GraphQL surface is registered by the build, weighed by a schema directive, and checked field by field | Accepted |
 | [0080](0080-a-generated-client-is-committed-and-the-document-must-earn-it.md) | A generated client is committed, and the document has to earn it | Accepted, amended by 0081 |
 | [0081](0081-the-contract-says-which-values-may-be-null.md) | The contract says which values may be null, from an annotation rather than from prose | Accepted |
+| [0082](0082-tracing-is-a-library-and-the-sampling-is-the-operators.md) | Tracing is a library, and the sampling decision belongs to the operator | Accepted |

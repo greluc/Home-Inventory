@@ -101,6 +101,21 @@ spring:
     port: ${HOMEINV_MQ_PORT:5672}
     username: ${HOMEINV_MQ_USER:homeinv}
     password: ${homeinv.secret.mq-password:}
+    # The broker hop, observed on both sides (REQ-NFR-044). This is what makes a
+    # trace continue across it: the publisher writes the W3C context into the
+    # message headers and the consumer picks it up, so a thumbnail that never
+    # appeared is one trace from the upload request to the encode that failed —
+    # which is the chain 13 §13.4 exists for and the one nothing else can
+    # reconstruct.
+    #
+    # On in both roles rather than under the worker profile: `api` publishes and
+    # `worker` consumes, and a publisher that did not write the context would
+    # leave the consumer starting a new trace with nothing to attach it to.
+    template:
+      observation-enabled: true
+    listener:
+      simple:
+        observation-enabled: true
 
   servlet:
     multipart:
@@ -170,6 +185,39 @@ management:
     # (REQ-SEC-099, ADR-0037).
     port: ${MANAGEMENT_SERVER_PORT:8090}
     address: ${MANAGEMENT_SERVER_ADDRESS:127.0.0.1}
+  tracing:
+    # OFF unless the operator names a collector. `HOMEINV_TRACING_ENDPOINT` is
+    # the one knob, and `TracingEnvironment` turns its emptiness into the
+    # absence an environment variable cannot express -- without which every
+    # default deployment would build an exporter for the address "" and fail to
+    # start. Unset, it switches OpenTelemetry off AND excludes the three
+    # auto-configurations that build the observation-to-span bridge -- because
+    # Boot disabled still installs an SDK that records spans into a processor
+    # which discards them. So unset means no tracer, no spans and no sampler,
+    # and the `traceId` of 13 §13.2 goes on coming from `TraceIdFilter`, exactly
+    # as at stage 0 (REQ-NFR-044).
+    sampling:
+      # EVERYTHING, on purpose, and this is not a placeholder for "tune later".
+      # The sampling decision of 13 §13.4 -- all errors and slow requests, a
+      # fraction of the rest -- is a TAIL decision: it can only be made once a
+      # trace is complete, so it belongs in the operator's collector and the
+      # collector can only see what was sent to it. A head sample of 5% here
+      # would throw away 95% of the errors before anything could decide they
+      # were errors.
+      #
+      # Lowering this is therefore a real trade: it buys bandwidth to the
+      # collector and it costs the tail policy its input.
+      probability: ${HOMEINV_TRACING_SAMPLE_RATE:1.0}
+    propagation:
+      # W3C, because the plugin contract says so. `CallContext.trace_id` is
+      # specified as a W3C `traceparent` (proto/home_inv/plugin/v1/common.proto),
+      # and producing B3 here would not merely change a header -- it would put a
+      # B3 identifier in a published field that promises otherwise.
+      #
+      # Only what we PRODUCE is pinned. What we accept stays Boot's default,
+      # which also reads B3: being liberal about an incoming id costs nothing
+      # and joins a trace that started in front of a proxy we did not choose.
+      produce: [W3C]
   endpoints:
     web:
       exposure:
@@ -229,9 +277,20 @@ logging:
     # For the console when a developer overrides the structured format to read it.
     # The MDC fields are named here too so that switching the format back does not
     # silently drop them from the line (REQ-NFR-041).
-    level: "%5p [${spring.application.name},%X{traceId:-},%X{tenantId:-},%X{actorId:-}]"
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-},%X{tenantId:-},%X{actorId:-}]"
 
 homeinv:
+  tracing:
+    # Where the operator's OTLP collector listens, and the whole of the tracing
+    # configuration (REQ-NFR-044, 13 §13.4). Empty -- the default -- means no
+    # tracing at all.
+    #
+    # It names a collector INSIDE the deployment. `api` and `worker` have no
+    # outbound route to the internet (ADR-0026) and this does not give them one:
+    # the operator places a collector on a segment they are already on, and what
+    # that collector forwards to afterwards is theirs and outside this topology.
+    endpoint: ${HOMEINV_TRACING_ENDPOINT:}
+
   # The read-only GraphQL surface (REQ-API-006, 08 §8.4). Every number here is a
   # ceiling rather than a target: a query that stays under all of them is not
   # thereby cheap, and one that exceeds any of them is refused before it runs.
