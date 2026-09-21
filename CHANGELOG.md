@@ -41,6 +41,15 @@ commit".
 
 ### Fixed
 
+- **A rootless Podman install no longer stops at the first secret you have to
+  supply yourself.** `setup.sh` creates the mail plugin's password as an empty
+  file for the operator to fill in, and Podman refuses to store an empty secret,
+  so the install ended after copying the units with nothing started. That file is
+  now named and skipped, and the unit that mounts it stays down until the
+  credential is there. The script also stopped printing a stray `minimal: not
+  found` while writing `compose/.env`, which had swallowed a word from one of the
+  comments in it.
+
 - **The malware scanner updates its signatures again.** Under Podman the
   updater failed to start and said so only in a line nobody read: the scanner
   itself came up on the signatures shipped in the image and scanned every
@@ -893,7 +902,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 74 architecture decision records, each with its alternatives and consequences —
+- 75 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

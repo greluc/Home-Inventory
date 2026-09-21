@@ -1172,7 +1172,10 @@ secrets:
       one would produce a value the mail server has never heard of, and the
       failure would look like a broken plugin rather than a password nobody set.
       Until it is filled in, the plugin reports NOT_CONFIGURED and sends nothing
-      (REQ-PLG-015). It never passes through the core (ADR-0073).
+      (REQ-PLG-015). It never passes through the core (ADR-0073). Under Podman it
+      is also not INSTALLED until then: a Podman secret cannot be empty, so
+      `setup.sh` names the file and moves on, and the unit that mounts it stays
+      down until the credential is there.
   mtls-search:
     required: true
     kind: mtls-server

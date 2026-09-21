@@ -224,6 +224,27 @@ generate_secret() {
     say "  $name — generated ($kind)"
 }
 
+# Installs one secret into Podman's store, if there is one to install.
+#
+# `podman secret create` refuses an EMPTY file -- "secret data must be larger
+# than 0 and less than 512000 bytes" -- and the `external` kind deliberately
+# writes an empty one: a credential this deployment does not own is not a
+# credential this script may invent. The two met on 2026-09-20 and ended the
+# run at exit 125, with the units copied and nothing started.
+#
+# So an empty file is reported and skipped rather than fatal. The unit that
+# mounts it refuses to start until the operator writes the credential and runs
+# this script again -- which is what a missing secret is supposed to do: stop,
+# and say which file it is waiting for.
+install_secret() {
+    if [ ! -s "$SECRETS/$1" ]; then
+        say "  $1 — NOT installed: it is empty. Write the credential into $SECRETS/$1 and run this script again."
+        return 0
+    fi
+    podman secret exists "$1" 2>/dev/null \
+        || podman secret create "$1" "$SECRETS/$1" >/dev/null
+}
+
 # ---------------------------------------------------------------------------
 # 2b. The deployment's own variables
 # ---------------------------------------------------------------------------
@@ -271,7 +292,7 @@ write_environment() {
 HOMEINV_PROFILE=$profile
 
 # Where the generated list of installed plugins is, inside api and worker.
-# EMPTY in `minimal`, which runs no plugin -- a complete deployment rather
+# EMPTY in \`minimal\`, which runs no plugin -- a complete deployment rather
 # than a degraded one (REQ-PLG-013). An instance with no list registers
 # nothing, fetches nothing, and says so once at start-up.
 HOMEINV_PLUGINS_FILE=$plugins_file
@@ -465,8 +486,7 @@ case "$mode" in
         done
         echo "$SECRET_KINDS" | while read -r name _; do
             [ -z "$name" ] && continue
-            podman secret exists "$name" 2>/dev/null \
-                || podman secret create "$name" "$SECRETS/$name" >/dev/null
+            install_secret "$name"
         done
         # The generated files travel the same way: a secret mount is the one
         # mechanism every runtime has for getting a file into a container with a
@@ -487,8 +507,7 @@ case "$mode" in
             # Not rendered in this profile -- `opensearch-*` in `minimal` --
             # is not an error: the service is not running either.
             [ -f "$SECRETS/$secret_name" ] || continue
-            podman secret exists "$secret_name" 2>/dev/null \
-                || podman secret create "$secret_name" "$SECRETS/$secret_name" >/dev/null
+            install_secret "$secret_name"
         done
         # The same variables Compose reads from compose/.env, in the place the
         # units name. systemd does not interpolate `${VAR}` in `Environment=`, so
