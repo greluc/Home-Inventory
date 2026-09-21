@@ -76,7 +76,8 @@ forbids database and repository access from the access blocks.
 ├── /plugins     {id} {id}/capabilities/{capability}   (PUT to consent, DELETE to withdraw)
 │                {id}/health {id}/enable {id}/disable
 ├── /audit       log queries
-└── /webhooks    delivery targets and delivery attempts
+├── /events      the live stream an open view holds (SSE, REQ-API-011)
+└── /webhooks    {id} {id}/deliveries  /event-types
 ```
 
 Non-CRUD operations use the form `POST /resource/{id}/action` — `{id}/archive`,
@@ -97,6 +98,26 @@ in a path.
 > of that building block. Clients are registered by the operator
 > (`/auth/clients`); there is no dynamic client registration, because every client
 > here is one the operator installed.
+
+### The two surfaces that push rather than answer
+
+Everything above is asked for. Two things are **sent**, and they carry
+deliberately different amounts, because the party at the other end is a different
+party ([ADR-0078](../adr/0078-a-webhook-carries-an-id-a-live-nudge-does-not.md)).
+
+| | `GET /api/v1/events` (`REQ-API-011`) | `/webhooks` (`REQ-API-010`) |
+|---|---|---|
+| Who receives it | a **member** holding an open view, whose role may be confined to part of the location tree | a URL a **tenant administrator** entered, with the secret it is signed with |
+| What travels | the **kind** and a moment — `item`, `location`, `tag`, `type`, `media` — and `heartbeat` every 30 s | the **event type**, the moment and the **subject's id**: `item.moved`, and which item |
+| Why not more | the id would tell a scoped member that a thing they may not see just changed | an integration that must re-read the whole inventory to find one change is not an integration |
+| Transport | `text/event-stream`, fanned out through Valkey so it works with more than one `api` replica | a signed `POST` made by `plugin-webhook` from its own segment; the core opens no connection ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) |
+| If it is lost | one late refresh | nothing: the delivery row is written in the transaction that made the change, retried with a widening gap and then dead-lettered, in the same log a person's notifications are in (`REQ-NOTI-005`) |
+
+The event types are the list in
+[`event-types.yaml`](../reference/event-types.yaml), and the noun before the dot
+is what the live stream sends: `item.moved` and `item.type-changed` both reach an
+open view as `item`. `GET /api/v1/webhooks/event-types` returns the list this
+deployment raises, so a form offers a subscription that works.
 
 ### Querying, pagination, sorting
 

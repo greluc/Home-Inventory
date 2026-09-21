@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -25,4 +27,25 @@ import org.springframework.modulith.events.Externalized;
  */
 @Externalized("homeinv.inventory::item-updated.v1")
 public record ItemUpdated(
-    UUID tenantId, UUID itemId, String name, boolean attributesChanged) {}
+    UUID tenantId, UUID itemId, String name, boolean attributesChanged) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.updated
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_UPDATED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that was edited
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

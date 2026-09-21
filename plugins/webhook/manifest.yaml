@@ -48,19 +48,17 @@ spec:
     # is what the capability means: not "the plugin may fetch its settings" --
     # nothing fetches -- but "the core may send them". Without it the signing
     # secret never leaves the core and this plugin delivers nothing.
+    #
+    # THERE IS NO `settings:` BLOCK BELOW, AND THIS CAPABILITY IS STILL THE GATE.
+    # The signing secret is per webhook TARGET and not per tenant (ADR-0077): one
+    # secret for a tenant would let every receiver that tenant configured forge a
+    # delivery to every other one. It therefore lives beside the target, in
+    # `notification.webhook_target`, and the core lays it over this plugin's
+    # settings in the envelope of the one call that delivers to that target --
+    # under this capability, which a tenant can still withdraw. A `settings:`
+    # entry for it would show an administrator a field that changes nothing.
     - id: core:setting:read
-      reason: "Reading the signing secret this tenant agreed with its receiver"
-
-  settings:
-    # PER TENANT, and the only thing a tenant configures here. The target URL is
-    # not a setting: it is the subscription's address, which belongs to the
-    # subscription (ADR-0073).
-    - key: signingSecret
-      type: secret
-      required: true
-      label:
-        en: "Signing secret"
-        de: "Signaturschlüssel"   # spelling-exempt: a manifest's own multilingual DATA
+      reason: "Sending the signing secret a tenant agreed with the receiver of one target"
 
   health:
     endpoint: /healthz

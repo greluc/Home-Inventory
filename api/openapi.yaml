@@ -3001,6 +3001,31 @@ components:
           description: the stable key the `begin` call names
           type: string
       type: object
+    QueuedNotification:
+      description: A notification waiting to be delivered.
+      properties:
+        address:
+          description: where
+          type: string
+        attempts:
+          description: how many tries have been made
+          format: int32
+          type: integer
+        channelKey:
+          description: which channel it is going out on
+          type: string
+        id:
+          description: its id
+          format: uuid
+          type: string
+        nextAttemptAt:
+          description: when the next one is due, or `null` once it is finished
+          format: date-time
+          type: string
+        state:
+          description: '`QUEUED`, `DELIVERED` or `DEAD_LETTERED`'
+          type: string
+      type: object
     QuotaRequest:
       description: The body of a quota change.
       properties:
@@ -3707,6 +3732,46 @@ components:
           description: the name a person reads, unique per tenant among the live ones
           type: string
       type: object
+    TargetRequest:
+      description: The body of a webhook target (REQ-API-010).
+      properties:
+        description:
+          description: what a person calls it, or absent
+          maxLength: 300
+          minLength: 0
+          type: string
+        enabled:
+          description: whether it receives anything; absent means it does
+          type: boolean
+        eventTypes:
+          description: |-
+            which events it wants, by the names `GET /event-types` lists. At least
+            one: a target that subscribes to nothing would never be delivered to
+          items:
+            type: string
+          maxItems: 50
+          minItems: 0
+          type: array
+          uniqueItems: true
+        signingSecret:
+          description: |-
+            what to sign with, at least 32 characters. Required when creating; on a
+            replace, absent keeps the stored one — a form that cannot show a secret must not clear it
+            by being saved
+          maxLength: 200
+          minLength: 0
+          type: string
+        url:
+          description: |-
+            where to post. `https` only, and checked three times over — here, by the
+            column, and by the plugin including the address it resolves to (REQ-SEC-034)
+          maxLength: 500
+          minLength: 0
+          type: string
+      required:
+      - eventTypes
+      - url
+      type: object
     TemplateList:
       description: |-
         The templates this build ships.
@@ -4144,6 +4209,59 @@ components:
             what it is compared against, as the JSON text of a scalar (`true`, `3`,
             `"new"`). Ignored by {@link Operator#PRESENT Operator#PRESENT} and {@link Operator#ABSENT Operator#ABSENT}
           type: string
+      type: object
+    WebhookTargetView:
+      description: A stored target, without its secret.
+      properties:
+        createdAt:
+          description: when it was added
+          format: date-time
+          type: string
+        description:
+          description: what a person calls it, or `null`
+          type: string
+        enabled:
+          description: whether it receives anything
+          type: boolean
+        eventTypes:
+          description: which events it receives
+          items:
+            enum:
+            - ITEM_CREATED
+            - ITEM_UPDATED
+            - ITEM_MOVED
+            - ITEM_TYPE_CHANGED
+            - ITEM_DELETED
+            - ITEM_RESTORED
+            - ITEM_PURGED
+            - ITEM_LENT
+            - ITEM_RETURNED
+            - ITEM_DISPOSED
+            - LOCATION_MOVED
+            - TAG_CREATED
+            - TAG_ASSIGNED
+            - TAG_UNASSIGNED
+            - TYPE_CREATED
+            - TYPE_FIELD_SEARCHABILITY_CHANGED
+            - MEDIA_OBJECT_STORED
+            type: string
+          type: array
+          uniqueItems: true
+        id:
+          description: its id
+          format: uuid
+          type: string
+        updatedAt:
+          description: when it last changed
+          format: date-time
+          type: string
+        url:
+          description: where deliveries go
+          type: string
+        version:
+          description: for `If-Match`
+          format: int64
+          type: integer
       type: object
 info:
   contact:
@@ -16498,6 +16616,509 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: The build's identity.
+  /api/v1/webhooks:
+    get:
+      description: |-
+        The tenant's webhook targets.
+
+        Bounded rather than paged, like the reminder rules: a tenant has a handful of integrations,
+        and a cursor over a list that short is machinery nobody needs. The cap is not optional even so,
+        because REQ-NFR-010 applies to every collection without exception.
+      operationId: listTargets
+      parameters:
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/WebhookTargetView'
+                type: array
+          description: the targets, oldest first, never with a secret
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: The tenant's webhook targets
+    post:
+      description: Adds a target.
+      operationId: createTarget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetRequest'
+        description: where, what for, and the secret to sign with
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookTargetView'
+          description: the stored target, without its secret
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Resource exists (`resource-exists`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Adds a target.
+  /api/v1/webhooks/event-types:
+    get:
+      description: |-
+        Which events this deployment raises (REQ-API-010).
+
+        Its own endpoint so that a form offers a subscription that works, exactly as `
+        /reminder-rules/triggers` does. The list is the one in `
+        docs/reference/event-types.yaml`, and a name absent from it is refused on save.
+      operationId: eventTypes
+      parameters:
+      - description: |-
+          how many at most; capped at 200, which this list cannot approach — the cap is
+          here because REQ-NFR-010 admits no exception, and an enforced rule with exceptions is not
+          enforced
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  type: string
+                type: array
+          description: every event type a target may subscribe to
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Which events this deployment raises (REQ-API-010)
+  /api/v1/webhooks/{id}:
+    delete:
+      description: Removes a target and everything delivered to it.
+      operationId: removeTarget
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Removes a target and everything delivered to it.
+    get:
+      description: One target.
+      operationId: target
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookTargetView'
+          description: it
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: One target.
+    put:
+      description: Replaces a target.
+      operationId: replaceTarget
+      parameters:
+      - description: which one
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetRequest'
+        description: what it should now say; an absent secret keeps the stored one
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookTargetView'
+          description: the stored target
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Resource exists (`resource-exists`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '428':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: If-Match is required (`precondition-required`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Replaces a target.
+  /api/v1/webhooks/{id}/deliveries:
+    get:
+      description: |-
+        What has been delivered to one target (REQ-NOTI-005).
+
+        The same delivery log a person's notifications are in, filtered to this target: state,
+        attempts and when the next one is due. What each attempt said is in the notification's own
+        attempt list.
+      operationId: deliveries
+      parameters:
+      - description: which target
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: how many at most; capped at 200
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 200
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/QueuedNotification'
+                type: array
+          description: the deliveries, newest first
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What has been delivered to one target (REQ-NOTI-005)
   /media/{tenantId}/{sha256}/{variant}:
     get:
       description: |-

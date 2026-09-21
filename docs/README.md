@@ -28,6 +28,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | the **project website** | [`website/`](../website/), with the pre-render request in [design/](design/website-prerender-request.md) |
 | the **error and degradation tokens** clients branch on | [`problem-types.yaml`](reference/problem-types.yaml) · [`degraded-reasons.yaml`](reference/degraded-reasons.yaml) |
 | the **plugin states** an operator sees | [`plugin-health-states.yaml`](reference/plugin-health-states.yaml) |
+| the **domain events** a webhook target may subscribe to | [`event-types.yaml`](reference/event-types.yaml) |
 | which **numbers and spellings are checked** rather than trusted | [`tracked-facts.yaml`](reference/tracked-facts.yaml) |
 
 ## Layout

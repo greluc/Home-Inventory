@@ -194,28 +194,20 @@ public class LiveChanges implements LiveStreams {
   /**
    * The kind an event belongs to, which is what a view listens for.
    *
-   * <p>Derived from the event's own type rather than declared on it: a new event of a known kind
-   * should not need a second decision, and an event of an unknown kind is still worth a nudge —
-   * a view that refreshes once too often is right, and one that never hears is wrong.
+   * <p>The noun in front of the dot of {@link TenantScopedEvent#eventType()}: {@code item.moved}
+   * and {@code item.type-changed} are both {@code item}, because a view showing items refreshes
+   * for either and there is nothing it would do differently.
+   *
+   * <p><i>Until 2026-09-21 this matched on the event's class name, with {@code "change"} for
+   * anything it did not recognise. Nine of the thirteen events did not implement {@link
+   * TenantScopedEvent} at all then, so a rename — the commonest change there is — reached no open
+   * view; and a class rename would silently have moved an event to another kind.</i>
    *
    * @param event the event
    * @return one word, lower case
    */
   static String kindOf(TenantScopedEvent event) {
-    String name = event.getClass().getSimpleName();
-    if (name.startsWith("Item")) {
-      return "item";
-    }
-    if (name.startsWith("Location")) {
-      return "location";
-    }
-    if (name.startsWith("Tag")) {
-      return "tag";
-    }
-    if (name.startsWith("Type") || name.startsWith("Field")) {
-      return "type";
-    }
-    return "change";
+    return event.eventType().noun();
   }
 
 }

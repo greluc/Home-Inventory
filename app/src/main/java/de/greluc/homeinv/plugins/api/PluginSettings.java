@@ -54,6 +54,25 @@ public interface PluginSettings {
   Map<String, String> effective(String pluginId, UUID tenantId);
 
   /**
+   * Whether this tenant has agreed that the core may send this plugin configuration at all.
+   *
+   * <p>{@link #effective} already refuses without the grant, and answers the same empty map when a
+   * plugin simply declares no setting — which is the right answer for a caller assembling a map and
+   * the wrong one for a caller asking whether it <b>may</b> send something the manifest does not
+   * declare.
+   *
+   * <p>That caller exists since ADR-0077: a value can belong to the thing being acted on rather
+   * than to the tenant — a webhook target's signing secret is per target, because one secret for a
+   * tenant lets every receiver it configured forge a delivery to every other one. It is still the
+   * tenant's configuration leaving the core, so it is still this capability that decides.
+   *
+   * @param pluginId the plugin
+   * @param tenantId the tenant whose grant decides
+   * @return whether {@code core:setting:read} is granted here
+   */
+  boolean maySendSettings(String pluginId, UUID tenantId);
+
+  /**
    * What this tenant has configured, for a surface to show.
    *
    * <p>A secret's value is <b>never</b> returned: {@link Setting#value()} is {@code null} for one,

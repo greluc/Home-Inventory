@@ -94,7 +94,10 @@ Date: YYYY-MM-DD
 | [0070](0070-documents-are-described-not-programmed.md) | A document is described, not programmed, and rendering it is a plugin's job | Accepted |
 | [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted, amended by 0073 |
 | [0072](0072-first-party-plugins-live-here.md) | The first-party plugins live in this repository, one language each | Accepted, amended by 0075 |
-| [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted |
+
+| [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted, amended by 0077 |
 | [0074](0074-granting-a-store-routes-and-does-not-move.md) | Granting a storage plugin routes the next bytes and moves none of the old ones | Accepted |
 | [0075](0075-the-one-jvm-plugin-has-its-own-line-in-the-budget.md) | The one JVM plugin gets its own line in the memory budget | Accepted |
 | [0076](0076-a-federated-sign-in-creates-an-account-only-where-a-form-could.md) | A federated sign-in creates an account exactly where a sign-up form could | Accepted |
+| [0077](0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md) | A call may carry a setting that belongs to the thing being acted on rather than to the tenant | Accepted |
+| [0078](0078-a-webhook-carries-an-id-a-live-nudge-does-not.md) | A webhook carries the type, the moment and the subject id; a live nudge carries neither id nor data | Accepted |

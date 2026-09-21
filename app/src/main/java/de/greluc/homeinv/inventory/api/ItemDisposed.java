@@ -5,6 +5,8 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.time.LocalDate;
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -25,4 +27,25 @@ import org.springframework.modulith.events.Externalized;
  * @param on when it went
  */
 @Externalized("homeinv.inventory::item-disposed.v1")
-public record ItemDisposed(UUID tenantId, UUID itemId, ItemState state, LocalDate on) {}
+public record ItemDisposed(UUID tenantId, UUID itemId, ItemState state, LocalDate on) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.disposed
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_DISPOSED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that left the inventory
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

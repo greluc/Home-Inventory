@@ -57,8 +57,10 @@ public interface LiveStreams {
     /**
      * Sends one nudge.
      *
-     * @param kind what changed — {@code item}, {@code location}, {@code tag}, {@code type}, or
-     *     {@code heartbeat} for the one that only keeps the connection open
+     * @param kind what changed: the noun of a {@link de.greluc.homeinv.platform.EventType} —
+     *     {@code item}, {@code location}, {@code tag}, {@code type}, {@code media} — or {@code
+     *     heartbeat} for the one that only keeps the connection open. The list follows
+     *     {@code docs/reference/event-types.yaml} rather than being decided here
      * @param at when, ISO-8601
      */
     void send(String kind, String at);

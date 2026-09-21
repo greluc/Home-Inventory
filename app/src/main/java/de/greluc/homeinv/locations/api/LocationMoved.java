@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.locations.api;
 
+import de.greluc.homeinv.platform.EventType;
 import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 
@@ -24,4 +25,25 @@ import java.util.UUID;
  *     when it says what just happened
  */
 public record LocationMoved(
-    UUID tenantId, UUID locationId, UUID fromParentId, UUID toParentId, int subtreeSize) implements TenantScopedEvent {}
+    UUID tenantId, UUID locationId, UUID fromParentId, UUID toParentId, int subtreeSize) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return location.moved
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.LOCATION_MOVED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the location that was moved
+   */
+  @Override
+  public UUID subjectId() {
+    return locationId;
+  }
+}

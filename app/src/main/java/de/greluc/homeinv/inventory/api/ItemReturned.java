@@ -5,6 +5,8 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.time.LocalDate;
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -21,4 +23,25 @@ import org.springframework.modulith.events.Externalized;
  * @param returnedOn when it came back
  */
 @Externalized("homeinv.inventory::item-returned.v1")
-public record ItemReturned(UUID tenantId, UUID itemId, UUID loanId, LocalDate returnedOn) {}
+public record ItemReturned(UUID tenantId, UUID itemId, UUID loanId, LocalDate returnedOn) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.returned
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_RETURNED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that came back from a loan
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

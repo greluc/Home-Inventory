@@ -206,7 +206,34 @@ public enum Permission {
    * confined to one (REQ-TEN-007) does not hold this however senior its role is. See {@link
    * #wholeTenant()}.
    */
-  TENANT_EXPORT("portability:export:request", true);
+  TENANT_EXPORT("portability:export:request", true),
+
+  /**
+   * See the tenant's webhook targets and what has been delivered to them (REQ-API-010).
+   *
+   * <p>An administrator's, and deliberately not a member's the way {@link #PLUGIN_READ} is. What a
+   * plugin may reach is a fact about the deployment that everybody working here has an interest in;
+   * a webhook target is an integration with a system outside it, and its delivery log says which of
+   * this tenant's changes reached a stranger's server and when.
+   *
+   * <p><b>Whole-tenant.</b> A target receives every change of the tenant and cannot receive the
+   * changes of a subtree, so a membership confined to one (REQ-TEN-007) does not hold this however
+   * senior its role is — the argument {@link #TENANT_EXPORT} makes about an archive.
+   */
+  WEBHOOK_READ("notification:webhook:read", true),
+
+  /**
+   * Add, change or remove a webhook target (REQ-API-010).
+   *
+   * <p>One permission for all three, which is a departure from {@link #REMINDER_RULE_WRITE} and
+   * {@link #REMINDER_RULE_DELETE} beside it. Those are split because they are held by different
+   * roles — a member writes a rule, an administrator takes one away from everybody. Here both are
+   * an administrator's already, so a second permission would draw a line no role sits on.
+   *
+   * <p><b>Whole-tenant</b>, for the reason {@link #WEBHOOK_READ} is: configuring where every change
+   * in the tenant is sent is not an act inside a subtree.
+   */
+  WEBHOOK_WRITE("notification:webhook:write", true);
 
   private final String id;
 

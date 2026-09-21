@@ -177,7 +177,12 @@ public enum Role {
       // An export is of the tenant, and configuring the tenant is ADMIN's
       // band (ADR-0068). A scoped membership still does not hold it: that is
       // decided by `Permission.wholeTenant`, not by the role.
-      Permission.TENANT_EXPORT)),
+      Permission.TENANT_EXPORT,
+      // Where every change in this tenant is sent, and the log of what reached
+      // it. An integration with somebody else's system, so ADMIN's band and not
+      // a member's -- and whole-tenant, so a scoped membership holds neither.
+      Permission.WEBHOOK_READ,
+      Permission.WEBHOOK_WRITE)),
   // Deliberately NOT Permission.TENANT_DELETE: that is OWNER's, and it is what
   // makes these two different permission sets rather than only different in what
   // they may grant (REQ-TEN-011).

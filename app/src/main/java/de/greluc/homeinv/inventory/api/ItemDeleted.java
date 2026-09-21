@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.EventType;
 import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
@@ -22,4 +23,25 @@ import org.springframework.modulith.events.Externalized;
  * @param itemId the item
  */
 @Externalized("homeinv.inventory::item-deleted.v1")
-public record ItemDeleted(UUID tenantId, UUID itemId) implements TenantScopedEvent {}
+public record ItemDeleted(UUID tenantId, UUID itemId) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.deleted
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_DELETED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that went to the bin
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

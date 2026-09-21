@@ -84,7 +84,15 @@ public class SecurityDeliveryRunner {
     int attemptNo = notification.attempts() + 1;
 
     Optional<NotificationChannel> channel =
-        extensions.lookupForInstance(NotificationChannel.class);
+        extensions
+            .lookupForInstance(NotificationChannel.class)
+            // The row names its channel and the instance grant names a plugin,
+            // and the two have to agree. An operator who granted
+            // `plugin-webhook` an instance-level capability would otherwise have
+            // every password reset posted to a URL as an event document -- it
+            // would fail, because a mail address is not an https target, but it
+            // would fail after leaving the deployment rather than before.
+            .filter(candidate -> servesChannel(candidate, notification.channelKey()));
     if (channel.isEmpty()) {
       // Not a refusal by the far side — there is no far side. Retried, because
       // an operator who grants the capability afterwards should find the queued
@@ -138,6 +146,25 @@ public class SecurityDeliveryRunner {
         // "That is not an address" does not become one by being repeated.
         deadLetter(notification.id(), attemptNo);
       }
+    }
+  }
+
+  /**
+   * Whether this channel calls itself by the key the row asks for.
+   *
+   * <p>A plugin that cannot answer is treated as not serving the channel: it is the same state as
+   * not being installed, and it is retried for the same reason.
+   *
+   * @param channel the instance-granted channel
+   * @param channelKey what the row asks for
+   * @return whether they agree
+   */
+  private boolean servesChannel(NotificationChannel channel, String channelKey) {
+    try {
+      return channelKey.equals(channel.describe(CallContext.forInstance("", "", 0)).channelKey());
+    } catch (PluginException unavailable) {
+      log.debug("The instance notification channel could not say what it is", unavailable);
+      return false;
     }
   }
 

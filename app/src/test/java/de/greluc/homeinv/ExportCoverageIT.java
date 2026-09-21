@@ -213,6 +213,15 @@ class ExportCoverageIT extends AbstractIntegrationTest {
                   + "It would put a third party's address in a file handed to somebody else, and "
                   + "the token would still open a door on the instance being left"),
           Map.entry(
+              "notification.webhook_target",
+              "Where this tenant's changes are sent, and the secret each delivery is signed with. "
+                  + "Two reasons, either of which would be enough: the secret is sealed and no "
+                  + "person can read it, so what travelled would be a target that can never "
+                  + "deliver; and importing one would point a tenant's changes at a URL the "
+                  + "RECEIVING deployment's operator never put on an egress allowlist (ADR-0027). "
+                  + "An integration is agreed between two live systems and is set up again on the "
+                  + "instance being moved to"),
+          Map.entry(
               "tenancy.quota_usage", "A counter derived from the rows the archive already carries"),
           Map.entry(
               "tenancy.tenant_quota",

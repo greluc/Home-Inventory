@@ -265,6 +265,38 @@ permissions:
       which meant a scoped VIEWER could download the whole inventory (ADR-0068,
       open point O27).
 
+  - id: notification:webhook:read
+    since: 1
+    description: >
+      See the tenant's webhook targets and what has been delivered to them
+      (REQ-API-010). An administrator's, and deliberately not a member's the way
+      plugins:plugin:read is: what a plugin may reach is a fact about the
+      deployment that everybody working here has an interest in, while a webhook
+      target is an integration with a system outside it, and its delivery log
+      says which of this tenant's changes reached a stranger's server and when.
+    notable: >
+      WHOLE-TENANT, for the reason portability:export:request is. A target
+      receives every change in the tenant and cannot receive the changes of a
+      subtree, so a membership confined to one (REQ-TEN-007) holds neither this
+      nor the write beside it, whatever its role.
+
+  - id: notification:webhook:write
+    since: 1
+    description: >
+      Add, change or remove a webhook target (REQ-API-010): where every change in
+      this tenant is sent, which events go there, and the secret each delivery is
+      signed with. Level-1 configuration (09 §9.1), so an administrator does it
+      without a release.
+    notable: >
+      ONE PERMISSION FOR ALL THREE ACTS, which is a departure from the
+      notification:reminder-rule pair beside it. Those are split because
+      different roles hold them — a member writes a rule, an administrator takes
+      one away from everybody. Both halves of this are an administrator's
+      already, so a second permission would draw a line no role sits on.
+      Removing a target removes its delivery log with it, which is stated in the
+      API rather than given its own permission: pausing is what `enabled` is for.
+      WHOLE-TENANT, like the read above.
+
 # ---------------------------------------------------------------------------
 # BUILT-IN ROLES
 #
@@ -412,6 +444,8 @@ roles:
       - tenancy:member:remove
       - identity:service-account:administer
       - portability:export:request
+      - notification:webhook:read
+      - notification:webhook:write
 
   - name: OWNER
     rationale: >

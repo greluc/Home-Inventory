@@ -109,6 +109,15 @@ public class DefaultPluginSettings implements PluginSettings {
   }
 
   @Override
+  public boolean maySendSettings(String pluginId, UUID tenantId) {
+    // The tenant is the ambient one -- `registrations.permits` reads a grant
+    // under row-level security -- and the parameter is here so that a caller
+    // cannot ask about one tenant while acting for another without saying so.
+    return TenantContext.current().filter(tenantId::equals).isPresent()
+        && registrations.permits(pluginId, CAPABILITY);
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public List<PluginSettings.Setting> configured(String pluginId) {
     // `declared` and not `declaredOrNothing`: this is a surface, and a plugin id

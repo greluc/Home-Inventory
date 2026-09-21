@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import de.greluc.homeinv.platform.EventType;
 import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 
@@ -19,4 +20,25 @@ import java.util.UUID;
  * @param key the stable key it was given
  * @param category whether it is a location category rather than an item type
  */
-public record TypeCreated(UUID tenantId, UUID ownerId, String key, boolean category) implements TenantScopedEvent {}
+public record TypeCreated(UUID tenantId, UUID ownerId, String key, boolean category) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return type.created
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.TYPE_CREATED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item type or location category that was defined
+   */
+  @Override
+  public UUID subjectId() {
+    return ownerId;
+  }
+}

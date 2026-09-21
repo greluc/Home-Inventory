@@ -355,7 +355,19 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         continue;
       }
       Map<UUID, UUID> rows = seeded.getOrDefault(reference.getValue(), Map.of());
-      UUID parent = rows.getOrDefault(tenant, rows.values().stream().findFirst().orElse(null));
+      // THIS TENANT'S ROW, and another tenant's only when the target is
+      // instance-wide and has no tenant to belong to. A reference between two
+      // tenant-scoped tables is tenant-qualified (07 §7.5), so a parent seeded
+      // for a different tenant is not a weaker choice but an impossible one --
+      // the composite foreign key refuses it, and the refusal names a constraint
+      // `relax` cannot do anything about, so the table fails to seed.
+      // `notification.notification.webhook_target_id` is where that first showed,
+      // on 2026-09-21; every earlier nullable reference happened to point at a
+      // table seeded for every tenant before it.
+      UUID parent =
+          rows.containsKey(tenant) || hasColumn(superuser, reference.getValue(), "tenant_id")
+              ? rows.get(tenant)
+              : rows.values().stream().findFirst().orElse(null);
       if (parent != null) {
         columns.add(reference.getKey());
         values.add("'" + parent + "'");
@@ -650,6 +662,19 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     if ("tenant_id".equals(column.name())) {
       return "'" + tenant + "'";
     }
+    // THE ROW'S OWN ID, and not a fresh one. The caller records `id` as what it
+    // seeded and later rows point their foreign keys at it, so a second random
+    // value here produces a row nothing can reference -- and the failure appears
+    // in a DIFFERENT table, as a foreign key naming an id that was never written.
+    //
+    // It only arises where `id` has no column default and therefore arrives in
+    // the required columns rather than being appended afterwards.
+    // `notification.webhook_target` is the first such table (2026-09-21): its id
+    // is assigned by the application because the signing secret is sealed against
+    // it, so the row has to know its id before it exists.
+    if ("id".equals(column.name())) {
+      return "'" + id + "'";
+    }
     String target = foreignTargets.get(column.name());
     if (target != null) {
       Map<UUID, UUID> rows = seeded.getOrDefault(target, Map.of());
@@ -688,6 +713,13 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       // type; here that is `ltree`, and the only one is `location.path`, whose
       // check ties it to `depth`. One label, depth zero, no parent.
       case "user-defined" -> "text2ltree('n" + id.toString().replace("-", "") + "')";
+      // `ARRAY` is what information_schema calls any array column, whatever it
+      // holds -- the element type is in `element_types`, which this proof does
+      // not read because one element of one value is all a seed needs. One
+      // element, not none: `webhook_target.event_types` is the first array here
+      // and it carries `cardinality(...) BETWEEN 1 AND 50`, so an empty array
+      // would be refused for a reason that has nothing to do with isolation.
+      case "array" -> "array['isolation-proof-" + id.toString().replace("-", "") + "']";
       default -> textValue(check, id);
     };
   }
@@ -716,14 +748,26 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       // Verified rather than guessed: the candidates are tried against the column's
       // own expression and the first that matches wins. A shape none of them fits
       // fails here by name, which is the signal to add a candidate.
-      String expression = regex.group(1);
-      for (String candidate : List.of("ip" + unique, unique, "isolation-proof-" + unique)) {
-        if (candidate.matches(expression)) {
+      //
+      // `find` and not `matches`, since 2026-09-21: PostgreSQL's `~` asks whether
+      // the value CONTAINS a match, and `String.matches` asks whether the whole
+      // value is one. Every regex in the schema was fully anchored until
+      // `webhook_target.url ~ '^https://'`, where the two differ -- and there the
+      // stricter reading is unsatisfiable, because no string both starts with
+      // `https://` and is nothing else.
+      Pattern expression = Pattern.compile(regex.group(1));
+      for (String candidate :
+          List.of(
+              "ip" + unique,
+              unique,
+              "isolation-proof-" + unique,
+              "https://isolation-proof.example/" + unique)) {
+        if (expression.matcher(candidate).find()) {
           return "'" + candidate + "'";
         }
       }
       throw new AssertionError(
-          "The isolation proof has no seed value matching " + expression + ". Add one to the "
+          "The isolation proof has no seed value matching " + expression.pattern() + ". Add one to the "
               + "candidates in textValue rather than relaxing the constraint.");
     }
     if (check.contains("= ANY")) {

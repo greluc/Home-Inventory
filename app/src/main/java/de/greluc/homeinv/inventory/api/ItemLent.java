@@ -5,6 +5,8 @@
 package de.greluc.homeinv.inventory.api;
 
 import java.time.LocalDate;
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -22,4 +24,25 @@ import org.springframework.modulith.events.Externalized;
  * @param dueOn when it is due back, or {@code null} when nothing was agreed
  */
 @Externalized("homeinv.inventory::item-lent.v1")
-public record ItemLent(UUID tenantId, UUID itemId, UUID loanId, LocalDate dueOn) {}
+public record ItemLent(UUID tenantId, UUID itemId, UUID loanId, LocalDate dueOn) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.lent
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_LENT;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that went out on loan
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

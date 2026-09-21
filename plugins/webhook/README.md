@@ -19,8 +19,19 @@ what a **tenant** decides arrives in the call envelope.
 | `HOMEINV_MTLS_PLUGIN_FILE` | operator | container environment | `/run/secrets/mtls-plugin-webhook` |
 | `HOMEINV_EGRESS_PROXY` | operator | container environment | none — and without it nothing can be delivered |
 | `HOMEINV_WEBHOOK_TIMEOUT_SECONDS` | operator | container environment | `10` |
-| `signingSecret` | **each tenant** | the call envelope, sealed at rest in the core | none — and without it nothing is sent |
-| the target URL | **each tenant** | the subscription's address, which is the call's `recipient` | — |
+| `signingSecret` | **each target** | the call envelope, sealed at rest in the core | none — and without it nothing is sent |
+| the target URL | **each target** | the target's address, which is the call's `recipient` | — |
+
+`signingSecret` is **per target, not per tenant**
+([ADR-0077](../../docs/adr/0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md)):
+one secret for a whole tenant would let every receiver that tenant configured
+forge a delivery to every other one. It is stored beside the target in
+`notification.webhook_target`, sealed with the envelope encryption of ADR-0019,
+and laid over this plugin's settings in the envelope of the one call that
+delivers to that target. Nothing here changes: the key is read from the call's
+settings exactly as before. What changed is where the core takes it from — which
+is why the manifest declares no `settings:` entry for it and still declares
+`core:setting:read`, the capability a tenant can withdraw to stop it being sent.
 
 The **hosts this deployment may reach** are neither: they are the
 `network:outbound` capability of the manifest the operator mounts, compiled into
@@ -59,11 +70,46 @@ X-HomeInv-Idempotency-Key: <key>
 travels is the name, the type and the size, so a receiver knows something was
 attached and can ask for it through the API.
 
+### A domain event, inside the same envelope
+
+That example is a *notification* — something a person asked to be told. The
+other thing this plugin delivers is a **domain event** a tenant subscribed a
+target to (`REQ-API-010`). The envelope is identical; what differs is what the
+core puts in two of its fields:
+
+* `subject` is the **event type**, as
+  [`docs/reference/event-types.yaml`](../../docs/reference/event-types.yaml)
+  lists it;
+* `text` is a JSON **document**, so a receiver parses it rather than reading it.
+
+```json
+{
+  "id": "<idempotency key>",
+  "tenantId": "<uuid>",
+  "subject": "item.moved",
+  "text": "{\"type\":\"item.moved\",\"at\":\"2026-09-21T09:14:02.117Z\",\"id\":\"<uuid>\"}",
+  "html": "",
+  "language": "en",
+  "attachments": []
+}
+```
+
+**The type, the moment and the subject's id — and nothing else**
+([ADR-0078](../../docs/adr/0078-a-webhook-carries-an-id-a-live-nudge-does-not.md)).
+Not the name, not a field, not the previous value. A receiver reads what it
+needs through the ordinary API, which applies the ordinary permissions; a
+payload that carried the data would be a second copy of the inventory that goes
+stale, on a server this deployment knows nothing about.
+
+The document is nested rather than merged into the envelope so that **one
+receiver parses one shape**. A notification and an event arrive with the same
+keys in the same order, and the signature covers the same bytes either way.
+
 ### Checking the signature
 
 `HMAC-SHA256` over **`<timestamp>.<body>`** — the value of `X-HomeInv-Timestamp`,
 a full stop, then the exact bytes of the body — keyed with the `signingSecret`
-that tenant configured, lower-case hex, prefixed with `sha256=`.
+of **that target**, lower-case hex, prefixed with `sha256=`.
 
 **The timestamp is inside the signed material on purpose** (`REQ-API-010`): a
 captured request is otherwise a valid request for ever. Reject anything outside

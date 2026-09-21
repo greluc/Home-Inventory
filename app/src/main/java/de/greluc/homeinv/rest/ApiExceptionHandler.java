@@ -43,6 +43,7 @@ import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
+import de.greluc.homeinv.notification.api.WebhookTargets;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.StaleVersionException;
@@ -488,6 +489,24 @@ public class ApiExceptionHandler {
     ProblemDetail problem = problem(ProblemType.NAME_TAKEN, exception.getMessage(), request);
     problem.setProperty("name", exception.getName());
     return problem;
+  }
+
+  /**
+   * Answers a webhook target at an address the tenant already uses (REQ-API-010).
+   *
+   * <p>A {@code 409} rather than the constraint violation reaching the surface as a {@code 500}.
+   * The address is the tenant's own configuration and reaches the response as it was sent, which is
+   * what makes the message actionable — and it is not a secret: the signing secret is the secret,
+   * and it is in a different column and in no response at all.
+   *
+   * @param exception the refusal, carrying the address
+   * @param request the request
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(WebhookTargets.WebhookTargetUrlTakenException.class)
+  public ProblemDetail handleWebhookTargetUrlTaken(
+      WebhookTargets.WebhookTargetUrlTakenException exception, HttpServletRequest request) {
+    return problem(ProblemType.RESOURCE_EXISTS, exception.getMessage(), request);
   }
 
   /**

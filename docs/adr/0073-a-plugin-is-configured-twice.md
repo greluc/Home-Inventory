@@ -104,6 +104,14 @@ amended; the first three do not.
 - **It is filled in one place**: `PluginResilience`, the envelope every plugin call already
   goes through, before the bulkhead and before the breaker — reading our own database must
   not occupy a plugin's concurrency slot or count towards opening its circuit.
+
+  > **Amended by [ADR-0077](0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md)**
+  > — the one place is still one place, and what it does there changed on 2026-09-21. It
+  > **replaced** whatever the caller had put in the context, on the assumption that every
+  > setting belongs to the tenant; `plugin-webhook`'s signing secret belongs to one
+  > **target**, because one secret for a tenant lets every receiver it configured forge a
+  > delivery to every other one. The tenant's configuration is now the base and the core
+  > caller's is laid over it, under the same `core:setting:read` grant.
 - **A tenant administrator gets a permission of their own**, `plugins:setting:write`, separate
   from consent: consenting says foreign code may touch this tenant's data at all, configuring
   says what it should do once it may.

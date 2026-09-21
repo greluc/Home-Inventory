@@ -32,7 +32,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *
  * <p>A kind and a moment. <b>No id and no contents</b> — the view re-reads what it is showing
  * through the ordinary API, which applies the ordinary permissions. {@link LiveChanges} says why
- * that is the design rather than a simplification.
+ * that is the design rather than a simplification, and ADR-0078 says why a <b>webhook</b> carries
+ * the id that this deliberately does not: the party at the other end of this stream is a member
+ * whose role may be confined to part of the location tree.
+ *
+ * <p>The kind is the noun of the event's declared type — {@code item.moved} and {@code
+ * item.type-changed} both arrive as {@code item} — so the set is
+ * {@code docs/reference/event-types.yaml}'s and is not decided here.
  *
  * <h2>What holds the connection open</h2>
  *

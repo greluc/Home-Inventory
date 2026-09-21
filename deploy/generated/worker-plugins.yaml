@@ -42,14 +42,7 @@ plugins:
           - hooks.example.org
           reason: Delivering notifications to the receivers this deployment allows
         - id: core:setting:read
-          reason: Reading the signing secret this tenant agreed with its receiver
-        settings:
-        - key: signingSecret
-          type: secret
-          required: true
-          label:
-            en: Signing secret
-            de: Signaturschlüssel
+          reason: Sending the signing secret a tenant agreed with the receiver of one target
         health:
           endpoint: /healthz
           intervalSeconds: 60

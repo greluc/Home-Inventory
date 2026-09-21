@@ -48,6 +48,16 @@ commit".
 
 ### Fixed
 
+- **An open page now notices a rename.** It refreshed itself when something was
+  created, moved or deleted, and not when somebody edited a name, lent an item,
+  brought one back, or put a tag on one — nine of the thirteen kinds of change went
+  unannounced.
+
+- **A notification goes out on the channel it was written for.** With both the mail
+  and the webhook plugins installed, whichever the system happened to resolve first
+  took everything — so a webhook could have been posted to the mail server.
+
+
 - **A rootless Podman install no longer stops at the first secret you have to
   supply yourself.** `setup.sh` creates the mail plugin's password as an empty
   file for the operator to fill in, and Podman refuses to store an empty secret,
@@ -189,6 +199,16 @@ commit".
   refused. The token is now issued on every request.
 
 ### Added
+
+- **Webhooks: another system can be told when something here changes.** An
+  administrator adds a URL, picks which events it should hear about — an item
+  created, moved, lent, disposed of, a location moved, a tag put on something —
+  and gives it a signing secret. Each delivery is signed with **that target's own
+  secret**, so two receivers in one household cannot forge messages to each other.
+  What is sent is the kind of event, when it happened and which thing it happened
+  to; the receiver reads the details through the ordinary API, with the ordinary
+  permissions. Failed deliveries are retried with a widening gap and then listed,
+  with what the far side said, under the target.
 
 - **A page updates itself when somebody else changes something.** An open list
   refreshes on its own instead of going stale until you reload it. What the server
@@ -843,7 +863,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 34 types in the shared
+- **The shared kernel is measured.** `platform` holds 35 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).
@@ -958,7 +978,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 77 architecture decision records, each with its alternatives and consequences —
+- 79 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

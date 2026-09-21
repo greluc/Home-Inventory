@@ -96,7 +96,7 @@ computed:
 
   - id: adrCount
     compute: "count of docs/adr/[0-9]{4}-*.md"
-    value: 77
+    value: 79
     pattern: '(\d+)\s+(?:architecture\s+)?decision\s+records?'
     notes: >
       Includes ADR-0000, which is a record like any other — it holds the decided points
@@ -105,7 +105,7 @@ computed:
 
   - id: platformTypes
     compute: "count of app/src/main/java/de/greluc/homeinv/platform/*.java"
-    value: 34
+    value: 35
     pattern: '(?:(\d+)|twenty-two)\s+types?\s+in\s+(?:the\s+)?(?:shared\s+kernel|`?platform`?)'
     notes: >
       REQ-NFR-024 asks for the shared kernel's size to be monitored, with a figure per
@@ -215,14 +215,15 @@ computed:
 
   - id: permissionCount
     compute: "length of `permissions` in docs/reference/permissions.yaml"
-    value: 40
+    value: 42
     pattern: '(?:(\d+)|thirty-two)\s+(?:named\s+)?permissions?\b'
     notes: >
       Twelve at stage 0; the type editor's seven, the tag block's four and the item purge arrived on
       2026-09-13, the tenancy block's six with the member administration the same day,
       `identity:service-account:administer` with the machine tokens of REQ-AUTH-010, the two saved
       search permissions with REQ-SRCH-008, and the two plugin ones with the consent surface of
-      REQ-PLG-005 on 2026-09-14.
+      REQ-PLG-005 on 2026-09-14. The two webhook ones arrived with REQ-API-010's core half on
+      2026-09-21, and both are whole-tenant.
       `AuthorizationRegistryTest` already proves the registry and the `Permission` enum name the same
       set on every build; this is the third copy — the number as it appears in prose — and it is
       tracked on the same principle as the rest: a fact stated twice is checked, not trusted.

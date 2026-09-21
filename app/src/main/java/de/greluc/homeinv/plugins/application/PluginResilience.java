@@ -279,6 +279,18 @@ public class PluginResilience {
      * <p>An <b>instance</b> call carries none. There is no tenant whose settings they would be, and
      * filling them from somewhere would be exactly the confusion ADR-0066 exists to prevent.
      *
+     * <h3>A setting the caller brought wins (ADR-0077)</h3>
+     *
+     * <p>The tenant's configuration is the base and what the <b>core caller</b> put in the context
+     * is laid over it. Until 2026-09-21 this replaced the context's settings outright, which was
+     * right while every setting belonged to the tenant and wrong the moment one belonged to the
+     * <i>thing being acted on</i>: a webhook signing secret is per target, because one secret for a
+     * tenant lets every receiver it configured forge a delivery to every other one (REQ-API-010).
+     *
+     * <p>What this does <b>not</b> open is a way across a tenant boundary. The context's own tenant
+     * still decides whose settings are read, and only core code can put anything in a context — a
+     * plugin never sees one it did not receive.
+     *
      * @param arguments what the caller passed, never {@code null}
      * @return the arguments to send, the same array when there was nothing to fill
      */
@@ -289,13 +301,23 @@ public class PluginResilience {
           continue;
         }
         Map<String, String> configured = settings.effective(pluginId, context.tenantId());
-        if (configured.isEmpty()) {
+        Map<String, String> fromCaller =
+            context.settings().isEmpty()
+                    || settings.maySendSettings(pluginId, context.tenantId())
+                ? context.settings()
+                // Not consented to. The same answer `effective` gives, for the
+                // same reason: what a tenant has not agreed to send does not
+                // leave the core because a core caller happened to know it.
+                : Map.<String, String>of();
+        if (configured.isEmpty() && fromCaller.isEmpty()) {
           continue;
         }
+        Map<String, String> merged = new java.util.LinkedHashMap<>(configured);
+        merged.putAll(fromCaller);
         if (filled == null) {
           filled = arguments.clone();
         }
-        filled[index] = context.withSettings(configured);
+        filled[index] = context.withSettings(merged);
       }
       return filled == null ? arguments : filled;
     }
