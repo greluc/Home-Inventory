@@ -49,6 +49,7 @@ import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.StaleVersionException;
 import de.greluc.homeinv.platform.PayloadTooLargeException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -699,17 +700,6 @@ public class ApiExceptionHandler {
   }
 
   /**
-   * Answers a login the throttle is holding back.
-   *
-   * <p>Carries {@code Retry-After} in seconds, so a client waits the right amount instead of
-   * retrying immediately and making the delay grow. Distinct from a wrong password on purpose: a
-   * client that cannot tell them apart will hammer.
-   *
-   * @param exception the throttle decision, carrying the remaining wait
-   * @param request the request
-   * @return a {@code 429} problem detail with the wait in seconds
-   */
-  /**
    * Answers a reset token that is unknown, expired or already spent (REQ-SEC-018).
    *
    * <p>One answer for all three. Telling them apart would tell somebody holding a stolen token
@@ -742,13 +732,63 @@ public class ApiExceptionHandler {
     return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(), request);
   }
 
+  /**
+   * Answers a login the throttle is holding back (REQ-SEC-012).
+   *
+   * <p>Carries {@code Retry-After} in seconds, so a client waits the right amount instead of
+   * retrying immediately and making the delay grow. Distinct from a wrong password on purpose: a
+   * client that cannot tell them apart will hammer.
+   *
+   * <p>The header <b>and</b> the property, because they are read by different things: a browser
+   * and every HTTP library know what {@code Retry-After} means without being told, and a problem
+   * document is what a client of this API parses. Until 2026-09-21 only the property was written,
+   * which made the requirement's "the response is 429 with {@code Retry-After}" false of the one
+   * endpoint that had a throttle at all.
+   *
+   * @param exception the throttle decision, carrying the remaining wait
+   * @param request the request
+   * @param response the response, which is where a header can still be set from here
+   * @return a {@code 429} problem detail with the wait in seconds
+   */
   @ExceptionHandler(TooManyAttemptsException.class)
   public ProblemDetail handleTooManyAttempts(
-      TooManyAttemptsException exception, HttpServletRequest request) {
+      TooManyAttemptsException exception,
+      HttpServletRequest request,
+      HttpServletResponse response) {
     ProblemDetail problem =
         problem(ProblemType.RATE_LIMITED, "Too many attempts. Try again shortly.",
             request);
-    problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
+    long seconds = exception.getRetryAfter().toSeconds();
+    problem.setProperty("retryAfterSeconds", seconds);
+    response.setHeader("Retry-After", Long.toString(seconds));
+    return problem;
+  }
+
+  /**
+   * Answers a caller who is simply going too fast (REQ-SEC-064).
+   *
+   * <p>The same problem type as the login throttle above, and that is deliberate: which limit was
+   * reached — the per-user one, the per-tenant one, the per-address one or the stricter one on the
+   * authentication endpoints — is an operational detail, and what a client does about any of them
+   * is identical. The {@code RateLimit} headers the interceptor already wrote say which scope it
+   * was, for anybody who wants to know.
+   *
+   * @param exception the refusal, carrying the wait and the scope
+   * @param request the request
+   * @param response the response, for {@code Retry-After}
+   * @return a {@code 429} problem detail
+   */
+  @ExceptionHandler(RateLimitedException.class)
+  public ProblemDetail handleRateLimited(
+      RateLimitedException exception, HttpServletRequest request, HttpServletResponse response) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.RATE_LIMITED,
+            "Too many requests. Wait for the time in Retry-After and try again.",
+            request);
+    long seconds = Math.max(1, exception.getRetryAfter().toSeconds());
+    problem.setProperty("retryAfterSeconds", seconds);
+    response.setHeader("Retry-After", Long.toString(seconds));
     return problem;
   }
 

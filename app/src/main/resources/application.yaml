@@ -280,6 +280,23 @@ logging:
     level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-},%X{tenantId:-},%X{actorId:-}]"
 
 homeinv:
+  # What one caller may ask for in a minute (REQ-SEC-064, 12 §12). Three scopes
+  # that each answer a question the others do not: one account, one tenant
+  # across all of its accounts, and one address -- which is the only one that
+  # applies before anybody has signed in. The fourth is stricter and covers
+  # `/api/v1/auth/**`, where an attacker spends their requests and an honest
+  # client makes a handful a day.
+  #
+  # Set so that NO honest client meets them: opening a list view with its
+  # facets, the location tree and twenty thumbnails is about thirty requests.
+  # They bound what a loop can do; the monthly allowance is REQ-TEN-009 and
+  # answers 403, which is a different thing to tell somebody.
+  rate-limit:
+    per-user-per-minute: ${HOMEINV_RATE_LIMIT_USER:600}
+    per-tenant-per-minute: ${HOMEINV_RATE_LIMIT_TENANT:3000}
+    per-address-per-minute: ${HOMEINV_RATE_LIMIT_ADDRESS:1200}
+    auth-per-minute: ${HOMEINV_RATE_LIMIT_AUTH:30}
+
   tracing:
     # Where the operator's OTLP collector listens, and the whole of the tracing
     # configuration (REQ-NFR-044, 13 §13.4). Empty -- the default -- means no

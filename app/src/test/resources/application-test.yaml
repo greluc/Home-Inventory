@@ -47,6 +47,21 @@ spring:
 # spends less on it than on starting the container it logs in to.
 
 homeinv:
+  # The whole suite arrives from one address -- MockMvc's `127.0.0.1` -- and
+  # signs in hundreds of times in a few minutes, so the shipped limits of
+  # REQ-SEC-064 would refuse the suite rather than the flood they exist for. In
+  # a deployment the addresses are the clients' own, resolved from the forwarded
+  # chain by `TrustedForwardedHeaderFilter` (REQ-SEC-103).
+  #
+  # Raised rather than switched off, because there is no switch: a limiter that
+  # could be disabled by configuration is one that would be, on the machine
+  # where it mattered. `RateLimitIT` lowers them again for itself and is the
+  # only place the behaviour is asserted.
+  rate-limit:
+    per-user-per-minute: 1000000
+    per-tenant-per-minute: 1000000
+    per-address-per-minute: 1000000
+    auth-per-minute: 1000000
   # The integration tests drive the GraphQL surface as a client would, and a
   # client has no persisted queries until one is written (`web/` is REST today).
   # ANYONE is what 08 §8.4 calls "and in development"; `GraphQlGuardIT` sets the

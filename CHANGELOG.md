@@ -21,6 +21,14 @@ commit".
 
 ### Added
 
+- **Rate limiting, and every response says where you stand.** One account, one
+  organisation or one address can no longer spend the instance on a runaway
+  script or a stolen session: too many requests in a minute answers `429` with a
+  `Retry-After`, and the authentication endpoints have a much stricter limit than
+  everything else. The figures are set so that nobody using the application ever
+  meets them, and every response carries `RateLimit` headers, so a client can see
+  what is left without having to be refused first.
+
 - **A field pattern can no longer take the instance down.** A type's validation
   pattern is written by a tenant administrator and every item of that tenant is
   matched against it — and a pattern like `(a+)+` takes longer than the age of
