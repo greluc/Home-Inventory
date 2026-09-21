@@ -28,7 +28,7 @@ Date: YYYY-MM-DD
 | [0004](0004-attribute-storage-model.md) | JSONB plus an application-maintained index side table | Accepted |
 | [0005](0005-identity.md) | An own identity core with optional OIDC federation | Accepted |
 | [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted |
-| [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032, 0052 |
+| [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032, 0052, 0074 |
 | [0008](0008-search.md) | OpenSearch as a derived read model | Accepted, amended by 0039, 0047 |
 | [0009](0009-messaging-and-events.md) | RabbitMQ with a transactional outbox | Accepted, extended (O13) |
 | [0010](0010-api-surfaces.md) | REST and read-only GraphQL outward, gRPC for plugins | Accepted |
@@ -95,3 +95,4 @@ Date: YYYY-MM-DD
 | [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted, amended by 0073 |
 | [0072](0072-first-party-plugins-live-here.md) | The first-party plugins live in this repository, one language each | Accepted |
 | [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted |
+| [0074](0074-granting-a-store-routes-and-does-not-move.md) | Granting a storage plugin routes the next bytes and moves none of the old ones | Accepted |

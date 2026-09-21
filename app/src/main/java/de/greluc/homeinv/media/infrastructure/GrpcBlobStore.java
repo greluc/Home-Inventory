@@ -5,7 +5,7 @@
 package de.greluc.homeinv.media.infrastructure;
 
 import com.google.protobuf.ByteString;
-import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.media.api.DeploymentBlobStore;
 import de.greluc.homeinv.plugin.v1.BlobRef;
 import de.greluc.homeinv.plugin.v1.BlobStoreGrpc;
 import de.greluc.homeinv.plugin.v1.DeleteRequest;
@@ -59,7 +59,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class GrpcBlobStore implements BlobStore {
+public class GrpcBlobStore implements DeploymentBlobStore {
 
   /** How much travels in one frame. Matches the server's own chunking. */
   private static final int CHUNK_BYTES = 256 * 1024;

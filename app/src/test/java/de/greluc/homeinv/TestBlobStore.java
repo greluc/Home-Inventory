@@ -4,7 +4,7 @@
  */
 package de.greluc.homeinv;
 
-import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.media.api.DeploymentBlobStore;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
 /**
- * The blob store the integration tests use.
+ * The DEPLOYMENT's blob store, as the integration tests provide it.
  *
  * <h2>Why this one is in memory and PostgreSQL is not</h2>
  *
@@ -43,13 +43,18 @@ public class TestBlobStore {
    * <p>{@code @Primary}, so it wins over the gRPC client — which is still constructed, because its
    * constructor refuses without a pin and an identity and that refusal is itself under test.
    *
+   * <p>It stands in for the <b>deployment's</b> store and not for the port: what {@code media}
+   * injects is {@code TenantBlobStore}, which asks whether this tenant granted a storage plugin and
+   * falls back to this one. A test that replaced the port instead would never exercise that choice
+   * (REQ-MED-009).
+   *
    * @return the in-memory store
    */
   @Bean
   @Primary
-  public BlobStore inMemoryBlobStore() {
+  public DeploymentBlobStore inMemoryBlobStore() {
     Map<String, byte[]> stored = new ConcurrentHashMap<>();
-    return new BlobStore() {
+    return new DeploymentBlobStore() {
 
       @Override
       public boolean store(UUID tenantId, String sha256, InputStream content) throws IOException {

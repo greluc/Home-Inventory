@@ -142,7 +142,14 @@ class MediaScanIT extends AbstractIntegrationTest {
               assertThat(object.isRetrievable()).isFalse();
               // The decisive one. A row that says INFECTED next to bytes still in
               // the store is one signed URL away from being served.
-              assertThat(blobs.exists(tenantId, object.getSha256())).isFalse();
+              //
+              // In the tenant's context, like every caller in `media`: which store holds
+              // a tenant's bytes depends on that tenant's plugin grants, and grants are
+              // read under row-level security (ADR-0074).
+              assertThat(
+                      TenantContext.callAs(
+                          tenantId, () -> blobs.exists(tenantId, object.getSha256())))
+                  .isFalse();
               // And nothing was derived from it.
               assertThat(object.getThumbSha256()).isNull();
               assertThat(object.getPreviewSha256()).isNull();

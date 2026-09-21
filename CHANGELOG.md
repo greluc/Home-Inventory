@@ -183,6 +183,13 @@ commit".
 
 ### Added
 
+- **Your photographs can live in your own storage.** A tenant that installs a storage
+  plugin has every new upload written there and nowhere else, while everything stored
+  before it stays readable exactly as it was — choosing a store is a routing decision,
+  not a migration, and nothing is copied or lost. Deleting a file clears it from both
+  places. The port was declared and never connected until now: a storage plugin could
+  be installed and granted, and every byte still went to the deployment's own store.
+
 - **Contributing needs a signed agreement, once.** A pull request from anybody
   but the maintainer is blocked until its author has signed the Contributor
   Licence Agreement — comment the sentence the bot names and it is recorded, on a
