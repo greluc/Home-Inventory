@@ -129,7 +129,11 @@ const policy = [
 //     markup it cannot parse. 64 MB against the API's 25 MB upload ceiling, so
 //     the rejection always comes from the application;
 //   * a read timeout below the API's 30 s ceiling (08 §8.2) means `web` emits its
-//     own 504 instead of the handled response.
+//     own 504 instead of the handled response;
+//   * a read timeout below the SSE heartbeat (`homeinv.events.heartbeat-seconds`,
+//     30 s) closes every live stream on a quiet tenant — and quiet is the normal
+//     state of a home inventory, so it would look like a flaky connection rather
+//     than like a misconfiguration (REQ-API-011).
 const BODY_LIMIT = "64m";
 const READ_TIMEOUT = "60s";
 
@@ -229,6 +233,11 @@ server {
 
         # Above the API's own 30 s ceiling, so a slow response is answered by the
         # application rather than replaced by this proxy's 504.
+        #
+        # It is also what the SSE heartbeat is measured against: the stream sends
+        # one every 30 s (\`homeinv.events.heartbeat-seconds\`), and a quiet stream
+        # is closed by this timeout if the heartbeat is ever made slower than it.
+        # A home inventory is quiet for hours, so the quiet case is the normal one.
         proxy_read_timeout ${READ_TIMEOUT};
         proxy_send_timeout ${READ_TIMEOUT};
 
