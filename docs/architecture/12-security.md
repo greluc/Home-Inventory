@@ -207,7 +207,7 @@ widen the archive, and a job with no caller at all opens nothing.
 | User text in Markdown | A permitted subset, sanitised server-side, no HTML, no `javascript:` targets |
 | URLs from user input | `http`/`https` only, no internal address ranges, output with `rel="noopener noreferrer"`, never fetched server-side |
 | File names | Never taken from input; storage happens under the hash |
-| Regular expressions from field definitions | Checked for catastrophic backtracking, executed with a time limit |
+| Regular expressions from field definitions | Checked for catastrophic backtracking when the definition is saved (`PatternSafety`) **and** executed under a 100 ms budget (`BoundedRegularExpressions`, wired into the schema validator). Two lines because the set of patterns that explode is larger than the set of shapes anybody has written down; a match that runs out of budget reads as not matching, which is a `422` on the value rather than a `500` on the definition (`REQ-SEC-035`, `PatternSafetyTest`) |
 
 ## 12.7 Uploads
 

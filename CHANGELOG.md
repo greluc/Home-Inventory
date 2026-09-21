@@ -21,6 +21,14 @@ commit".
 
 ### Added
 
+- **A field pattern can no longer take the instance down.** A type's validation
+  pattern is written by a tenant administrator and every item of that tenant is
+  matched against it — and a pattern like `(a+)+` takes longer than the age of
+  the universe on input that nearly matches. Patterns of that shape are now
+  refused as they are saved, with a sentence saying what to change, and every
+  match runs under a time limit so a shape nobody anticipated costs a
+  hundredth of a second instead of a request.
+
 - **The coverage floor is a build failure rather than a sentence.** Domain logic
   is held to 80 % of lines and every `domain` package to 90 %, checked by
   `./gradlew build` wherever it runs. It found two packages below the floor on

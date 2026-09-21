@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.infrastructure;
 
+import de.greluc.homeinv.catalog.domain.PatternSafety;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.AttributeUsage;
 import de.greluc.homeinv.catalog.api.FieldAdded;
@@ -1403,6 +1404,18 @@ public class TypeAdministrationAdapter implements TypeAdministration {
    * @throws IllegalArgumentException when an enumeration names no list, or a non-enumeration does
    */
   private void requireFieldShape(FieldCommand command) {
+    // The pattern is tenant data that every item of this tenant is then matched
+    // against, and Java's regular expressions backtrack. Refused where it is
+    // written rather than met later as "saving an item hangs" (REQ-SEC-035,
+    // PatternSafety); the time limit in `BoundedRegularExpressions` is the other
+    // half, for the shapes this does not know about.
+    if (command.constraints() != null) {
+      PatternSafety.refuses(command.constraints().pattern())
+          .ifPresent(
+              reason -> {
+                throw new IllegalArgumentException(reason);
+              });
+    }
     if (command.labels() == null || command.labels().isEmpty()) {
       throw new IllegalArgumentException(
           "A field needs a label in at least one language: nothing else can name it on a form.");
