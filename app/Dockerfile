@@ -27,6 +27,12 @@ COPY app/build.gradle.kts ./app/
 # difference between an image that builds and one that does not. Its build file
 # comes with the other declarations; its sources follow below.
 COPY plugin-api/build.gradle.kts ./plugin-api/
+# And `plugins/oidc`, which joined the build on 2026-09-21 (ADR-0072). Gradle
+# configures EVERY project in `settings.gradle.kts` whatever task is asked for,
+# so a missing directory fails `:app:bootJar` with a message about a project
+# this image does not build -- which is what it did until this line existed.
+# Its build file only: the plugin's sources are its own image's business.
+COPY plugins/oidc/build.gradle.kts ./plugins/oidc/
 RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /dev/null 2>&1 || true
 
 # The BlobStore contract. `app/build.gradle.kts` points the protobuf plugin at
