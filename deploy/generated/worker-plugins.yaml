@@ -237,3 +237,36 @@ plugins:
         resources:
           memoryMiB: 64
           timeoutSeconds: 120
+  - id: de.greluc.homeinv.plugin.oidc
+    endpoint: "plugin-oidc:8204"
+    fingerprint: "@FINGERPRINT:mtls-plugin-oidc@"
+    signed: false
+    manifestInline: |
+      apiVersion: home-inv.plugin/v1
+      metadata:
+        id: de.greluc.homeinv.plugin.oidc
+        name: Single sign-on
+        version: 0.1.0
+        vendor: greluc
+        license: AGPL-3.0-or-later
+        homepage: https://github.com/greluc/Home-Inventory
+        descriptions:
+          en: Signs somebody in against an OIDC provider, with PKCE and a verified ID token.
+          de: Meldet jemanden bei einem OIDC-Anbieter an, mit PKCE und einem geprüften ID-Token.
+      spec:
+        contract: '>=1.0.0 <2.0.0'
+        runtime: out-of-process
+        implements:
+        - port: IdentityProvider
+          priority: 100
+        capabilities:
+        - id: network:outbound
+          hosts:
+          - provider.example
+          reason: Discovery, the signing key set and the token exchange
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+        resources:
+          memoryMiB: 192
+          timeoutSeconds: 30

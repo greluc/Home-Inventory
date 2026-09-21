@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The manifest `plugin-oidc` ships as its reference.
+#
+# THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+# `deploy/services.yaml` beside the container, the network segment and the
+# egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+# carries the host of the provider this deployment federates with, and which
+# provider that is belongs to the operator and to nobody else.
+
+apiVersion: home-inv.plugin/v1
+
+metadata:
+  id: de.greluc.homeinv.plugin.oidc
+  name: "Single sign-on"
+  version: "0.1.0"
+  vendor: "greluc"
+  license: "AGPL-3.0-or-later"
+  homepage: "https://github.com/greluc/Home-Inventory"
+  descriptions:
+    en: "Signs somebody in against an OIDC provider, with PKCE and a verified ID token."
+    de: "Meldet jemanden bei einem OIDC-Anbieter an, mit PKCE und einem geprüften ID-Token."   # spelling-exempt: a manifest's own multilingual DATA
+
+spec:
+  contract: ">=1.0.0 <2.0.0"
+  runtime: out-of-process
+
+  implements:
+    - port: IdentityProvider
+      priority: 100
+
+  capabilities:
+    # A `hosts:` target and not a `tcp:` one: what this speaks is HTTPS, three
+    # times -- discovery, the key set and the token endpoint -- and the proxy
+    # sees the host it is tunnelling to.
+    - id: network:outbound
+      hosts: ["provider.example"]
+      reason: "Discovery, the signing key set and the token exchange"
+
+  # NO `settings:` BLOCK, and that is the difference from every other
+  # first-party plugin.
+  #
+  # ADR-0073 splits configuration by who decides, and a sign-in has no tenant to
+  # decide anything: it happens BEFORE any tenant is known -- it is the step
+  # that decides which memberships a session may act on. So the issuer, the
+  # client and its secret are the operator's, in this container's environment,
+  # and the core resolves this plugin through the instance operator's grant
+  # rather than a tenant's (ADR-0066).
+
+  health:
+    endpoint: /healthz
+    intervalSeconds: 60
+
+  resources:
+    # A JRE with gRPC, Netty and Nimbus. REQ-NFR-009's per-plugin adder carries
+    # a second figure for exactly this container since ADR-0075, amended before
+    # the plugin was written rather than after: the heap is the smallest part of
+    # the problem, and metaspace, the code cache and the direct buffers all sit
+    # outside what `-XX:MaxRAMPercentage` bounds.
+    memoryMiB: 192
+    timeoutSeconds: 30

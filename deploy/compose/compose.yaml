@@ -77,6 +77,7 @@ services:
       plugin-smtp: {}
       plugin-blobstore-s3: {}
       plugin-blobstore-nextcloud: {}
+      plugin-oidc: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -172,6 +173,7 @@ services:
       plugin-smtp: {}
       plugin-blobstore-s3: {}
       plugin-blobstore-nextcloud: {}
+      plugin-oidc: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
@@ -515,6 +517,7 @@ services:
       plugin-smtp: {}
       plugin-blobstore-s3: {}
       plugin-blobstore-nextcloud: {}
+      plugin-oidc: {}
     secrets:
       - source: egress-proxy-egress-allowlist.conf
         target: /etc/homeinv/egress-allowlist.conf
@@ -764,6 +767,41 @@ services:
         reservations:
           memory: 64m
 
+  plugin-oidc:
+    image: ghcr.io/greluc/home-inv-plugin-oidc:latest
+    container_name: homeinv-plugin-oidc
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-oidc: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8204"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-oidc"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_OIDC_ISSUER: "${HOMEINV_OIDC_ISSUER:-}"
+      HOMEINV_OIDC_CLIENT_ID: "${HOMEINV_OIDC_CLIENT_ID:-}"
+      HOMEINV_OIDC_PROVIDER_KEY: "${HOMEINV_OIDC_PROVIDER_KEY:-oidc}"
+      HOMEINV_OIDC_DISPLAY_NAME: "${HOMEINV_OIDC_DISPLAY_NAME:-Single sign-on}"
+      HOMEINV_OIDC_SCOPES: "${HOMEINV_OIDC_SCOPES:-openid email profile}"
+      HOMEINV_OIDC_TIMEOUT_SECONDS: "20"
+    secrets:
+      - mtls-plugin-oidc
+      - plugin-oidc-client-secret
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 192m
+
 networks:
   plugin-webhook:
     internal: true
@@ -785,6 +823,11 @@ networks:
     ipam:
       config:
         - subnet: 10.89.34.0/24
+  plugin-oidc:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.35.0/24
   edge:
   egress:
   internal:
@@ -846,6 +889,10 @@ secrets:
     file: ../secrets/mtls-blobstore
   mtls-plugin-webhook:
     file: ../secrets/mtls-plugin-webhook
+  mtls-plugin-oidc:
+    file: ../secrets/mtls-plugin-oidc
+  plugin-oidc-client-secret:
+    file: ../secrets/plugin-oidc-client-secret
   mtls-plugin-blobstore-nextcloud:
     file: ../secrets/mtls-plugin-blobstore-nextcloud
   plugin-blobstore-nextcloud-password:

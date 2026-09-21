@@ -91,6 +91,21 @@ snakeyaml = "2.6"
 junit = "6.0.3"
 assertj = "3.27.7"
 
+# What `plugins/oidc` is built with. It is a container of its own rather than part
+# of the application, so it cannot reach the versions Spring Boot's platform pins
+# for `:app` -- it names its own, the way `plugin-api` does.
+#
+# Nimbus JOSE+JWT is the whole reason that plugin is in Java (ADR-0072): ID-token
+# validation is where an audited library outweighs an image size, and a subtle
+# verification bug written by hand is how a federated login becomes an
+# authentication bypass. Apache-2.0.
+nimbusJose = "10.9.1"
+# A plugin is a plain process: no Spring Boot, so no starter to bring logging
+# along. slf4j is what grpc-java and Nimbus log through, and logback is the
+# implementation behind it.
+slf4j = "2.0.18"
+logback = "1.5.38"
+
 testcontainers = "2.0.5"
 archunit = "1.5.0"
 
@@ -158,6 +173,9 @@ protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "p
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
 grpc-protoc-gen-java = { module = "io.grpc:protoc-gen-grpc-java", version.ref = "grpc" }
 javax-annotation-api = { module = "javax.annotation:javax.annotation-api", version.ref = "javaxAnnotation" }
+nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbusJose" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 # --- Test ------------------------------------------------------------------
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }

@@ -1143,6 +1143,55 @@ services:
       advance. It is REQ-NFR-009's per-plugin adder exactly: 64 MB reserved,
       256 MB limit.
 
+  plugin-oidc:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-oidc }
+    plugin:
+      id: de.greluc.homeinv.plugin.oidc
+      manifest: plugins/oidc/manifest.yaml
+      # THE PROVIDER THIS DEPLOYMENT FEDERATES WITH. A `hosts:` target and not
+      # a `tcp:` one: what the plugin speaks is HTTPS, three times -- discovery,
+      # the key set and the token endpoint -- and the proxy sees the host it is
+      # tunnelling to (ADR-0027).
+      hosts: ["provider.example"]
+      fingerprintFrom: mtls-plugin-oidc
+      signed: false
+    segment:
+      subnet: 10.89.35.0/24
+    networks: [plugin-oidc]
+    ports:
+      - { container: 8204, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8204"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-oidc"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The provider, and it has to agree with the `hosts:` target above: one
+      # says where the plugin goes and the other says where it is ALLOWED to.
+      HOMEINV_OIDC_ISSUER: "${HOMEINV_OIDC_ISSUER:-}"
+      HOMEINV_OIDC_CLIENT_ID: "${HOMEINV_OIDC_CLIENT_ID:-}"
+      HOMEINV_OIDC_PROVIDER_KEY: "${HOMEINV_OIDC_PROVIDER_KEY:-oidc}"
+      HOMEINV_OIDC_DISPLAY_NAME: "${HOMEINV_OIDC_DISPLAY_NAME:-Single sign-on}"
+      HOMEINV_OIDC_SCOPES: "${HOMEINV_OIDC_SCOPES:-openid email profile}"
+      HOMEINV_OIDC_TIMEOUT_SECONDS: "20"
+    secrets:
+      - mtls-plugin-oidc            # its server identity, pinned by the core
+      - plugin-oidc-client-secret   # the client secret the PROVIDER issued, the
+                                    # operator's credential -- it never passes
+                                    # through the core (ADR-0073), and an empty
+                                    # one means a public client authenticating
+                                    # with PKCE alone
+    resources: { memoryReservation: 192Mi, memoryLimit: 512Mi }
+    profiles: [standard, ha]
+    notes: >
+      Federated sign-in (REQ-AUTH-005). The ONE plugin with a JVM in it, because
+      ID-token validation is where an audited library outweighs an image size
+      (ADR-0072) -- and the reason REQ-NFR-009 carries two per-plugin adders
+      since ADR-0075: 64 MB for a Rust plugin, 192 MB for this one, amended
+      before it was written rather than after. It is configured ONCE, by the
+      operator: a sign-in happens before any tenant is known, so there is no
+      tenant whose settings could be read, and the core resolves it through the
+      instance operator's grant (ADR-0066).
+
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
@@ -1259,6 +1308,24 @@ secrets:
       `setup.sh` computes when it creates this certificate and substitutes into
       the generated plugin list — exactly the mechanism a third party's plugin
       uses, because a first-party one gets no privileged path (ADR-0072).
+  mtls-plugin-oidc:
+    required: false
+    kind: mtls-server
+    services: [plugin-oidc]
+    notes: >
+      Server identity for `plugin-oidc`, pinned by the core exactly as every other
+      in-deployment peer is (REQ-SEC-056).
+  plugin-oidc-client-secret:
+    required: false
+    kind: external
+    services: [plugin-oidc]
+    notes: >
+      THE CLIENT SECRET THE PROVIDER ISSUED, and the fourth secret here that
+      belongs to somebody else's system. `setup.sh` creates it EMPTY and says so;
+      under Podman it is also not INSTALLED until it is filled in, because a
+      Podman secret cannot be empty. An empty one is a VALID configuration: a
+      public client authenticates with PKCE alone, which is what binds the
+      authorization code to this deployment.
   mtls-plugin-blobstore-nextcloud:
     required: false
     kind: mtls-server

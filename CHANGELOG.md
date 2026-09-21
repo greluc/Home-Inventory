@@ -190,6 +190,14 @@ commit".
 
 ### Added
 
+- **The provider that signs you in now ships with the system.** `plugin-oidc` is the
+  fifth and last first-party plugin: discovery, PKCE and an ID token checked against
+  the provider's published keys, its issuer, its audience, its expiry and the one-time
+  value this instance minted. It works with Keycloak, Authentik, Authelia, Zitadel or
+  a hosted provider, with a client secret or as a public client using PKCE alone.
+  It is the one plugin with a JVM in it, which is why it reserves more memory than
+  the other four.
+
 - **You can sign in with an account you already have elsewhere.** An instance that
   installs an identity provider offers it on the sign-in page: the provider says who
   you are, and this instance decides whether that is an account here. **A matching

@@ -21,7 +21,7 @@ sensibly do without:
 | [`webhook/`](webhook/) | `NotificationChannel` | A URL a tenant configured, signed with an HMAC | Rust | **built** |
 | [`blobstore-s3/`](blobstore-s3/) | `BlobStore` | An S3-compatible endpoint | Rust | **built** |
 | [`blobstore-nextcloud/`](blobstore-nextcloud/) | `BlobStore` | A Nextcloud instance over WebDAV | Rust | **built** |
-| `oidc/` | `IdentityProvider` | An OIDC provider: discovery, JWKS, PKCE | Java | stage 1, not written |
+| [`oidc/`](oidc/) | `IdentityProvider` | An OIDC provider: discovery, JWKS, PKCE | Java | **built** |
 
 [`common/`](common/) is not a plugin: it is the library the Rust ones share —
 the mTLS identity they present to the core, the `CONNECT` tunnel that is their

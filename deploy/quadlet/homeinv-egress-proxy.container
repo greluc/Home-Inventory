@@ -21,6 +21,7 @@ Network=homeinv-plugin-webhook.network:alias=egress-proxy
 Network=homeinv-plugin-smtp.network:alias=egress-proxy
 Network=homeinv-plugin-blobstore-s3.network:alias=egress-proxy
 Network=homeinv-plugin-blobstore-nextcloud.network:alias=egress-proxy
+Network=homeinv-plugin-oidc.network:alias=egress-proxy
 Tmpfs=/tmp:mode=1777
 Tmpfs=/var/run:mode=1777
 Secret=egress-proxy-egress-allowlist.conf,type=mount,target=/etc/homeinv/egress-allowlist.conf

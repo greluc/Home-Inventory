@@ -16,6 +16,8 @@ search-password random
 mtls-core mtls-client
 mtls-blobstore mtls-server
 mtls-plugin-webhook mtls-server
+mtls-plugin-oidc mtls-server
+plugin-oidc-client-secret external
 mtls-plugin-blobstore-nextcloud mtls-server
 plugin-blobstore-nextcloud-password external
 mtls-plugin-blobstore-s3 mtls-server

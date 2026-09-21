@@ -1,0 +1,30 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory plugin-oidc
+
+[Container]
+ContainerName=homeinv-plugin-oidc
+Image=ghcr.io/greluc/home-inv-plugin-oidc:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-plugin-oidc.network:alias=plugin-oidc
+EnvironmentFile=%h/.config/homeinv/homeinv.env
+Environment=HOMEINV_PLUGIN_PORT=8204
+Environment=HOMEINV_MTLS_PLUGIN_FILE=/run/secrets/mtls-plugin-oidc
+Environment=HOMEINV_EGRESS_PROXY=egress-proxy:8118
+Environment=HOMEINV_OIDC_TIMEOUT_SECONDS=20
+Secret=mtls-plugin-oidc,type=mount
+Secret=plugin-oidc-client-secret,type=mount
+
+[Service]
+MemoryMax=512M
+MemoryLow=192M
+Restart=on-failure

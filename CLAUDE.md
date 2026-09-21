@@ -229,13 +229,19 @@ negotiable:
   repository until 2026-09-12, when the proxy the topology had always named was finally
   written.*
 - **`plugins/` holds the plugins this project builds itself** — `smtp`, `webhook`,
-  `oidc`, `blobstore-s3`, `blobstore-nextcloud` — and they are **AGPL-3.0-or-later**
+  `oidc`, `blobstore-s3`, `blobstore-nextcloud`, **all five written** as of
+  2026-09-21 — and they are **AGPL-3.0-or-later**
   like the rest of the first-party code, written in Rust except `oidc`, which is
   Java because token validation is where an audited library outweighs an image
   size ([ADR-0072](docs/adr/0072-first-party-plugins-live-here.md)). Being in this
   repository buys them **nothing**: manifest, pinned fingerprint, per-tenant
   capability grants and an egress allowlist, exactly like a third party's, and no
-  code path asks whether a plugin is ours.
+  code path asks whether a plugin is ours. `plugins/common/` is not a plugin: it
+  is the library the four Rust ones share — the mTLS identity, the `CONNECT`
+  tunnel and the TLS at the far end of it, one HTTP/1.1 exchange over both,
+  base64 and hex, HMAC-SHA256 and the calendar arithmetic behind a UTC stamp.
+  `oidc` is a Gradle subproject rather than a cargo crate, so `./gradlew build`
+  builds and gates it with the rest of the JVM code.
 - **`deploy/services.yaml` is the source of truth** for the deployment topology.
   The Quadlet units and `compose.yaml` are generated from it; editing them by
   hand fails the drift check.

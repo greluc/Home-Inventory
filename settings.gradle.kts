@@ -21,6 +21,15 @@ include(":app")
 // becomes something a build can check instead of something a reviewer has to.
 include(":plugin-api")
 
+// The one first-party plugin in Java (ADR-0072). A Gradle project rather than a
+// package, for the same reason `plugin-api` is one: it ships as its own container,
+// it compiles against the protobuf contract in `proto/` and it depends on nothing
+// in the core -- which a project makes checkable and a package would not.
+//
+// The other four plugins are Rust and are built by cargo, beside this build rather
+// than inside it.
+include(":plugins:oidc")
+
 dependencyResolutionManagement {
     repositories { mavenCentral() }
 }
