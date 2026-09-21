@@ -56,7 +56,7 @@ like "nicely maintainable" deliberately do not appear.
 
 | Level | Scope | Tools | Goal |
 |---|---|---|---|
-| **Domain logic** | Aggregates, invariants, resolution rules — **without** Spring, without a database | JUnit 5, AssertJ | Fast and numerous; ≥ 90 % in `domain` |
+| **Domain logic** | Aggregates, invariants, resolution rules — **without** Spring, without a database | JUnit 5, AssertJ | Fast and numerous; ≥ 90 % of lines in **each** `domain` package and ≥ 80 % over the bundle, enforced by `jacocoTestCoverageVerification` from `check` since 2026-09-21 (`REQ-NFR-025`) |
 | **Building block** | One block with its neighbours stubbed | `@ApplicationModuleTest` | The boundaries hold |
 | **Integration** | A real database, a real broker, a real index | Testcontainers with **the same digests** as production | No illusion from stubs |
 | **Contract** | OpenAPI, GraphQL, protobuf, event schemas | `oasdiff`, `buf breaking`, schema comparison | No unannounced break |

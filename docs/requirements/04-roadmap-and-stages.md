@@ -137,8 +137,7 @@ reads as authoritative.*
 **Cross-cutting, and each one its own piece of work:** there is no load suite, so
 the four latency budgets and the migration lock budget are unmeasured
 (`REQ-NFR-001`/`002`/`003`/`005`/`057`) — it will be **Gatling in the Gradle
-build**, decided with the owner on 2026-09-20; JaCoCo covers `Money` alone rather than the domain thresholds
-(`REQ-NFR-025`); the operator view is **partly** there — `/api/v1/instance`
+build**, decided with the owner on 2026-09-20; the operator view is **partly** there — `/api/v1/instance`
 answers accounts, operators, quotas, erasures and the plugin list, and not
 dependency state, queue backlog or the last backup (`REQ-NFR-072`); the smoke
 matrix runs rootless Podman and Docker but not `kind` (`REQ-NFR-064`); there is

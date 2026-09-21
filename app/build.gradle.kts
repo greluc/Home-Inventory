@@ -268,9 +268,70 @@ jacoco {
     toolVersion = "0.8.13"
 }
 
+// What coverage is measured over. The generated protobuf classes are NOT code
+// anybody wrote or could test: `de.greluc.homeinv.plugin.v1` is 34 000 of the
+// 49 000 lines here, at 13 % -- so measured with them, "the domain logic" reads
+// 34 % and means nothing at all. Excluded, the same tests measure 84 %, which is
+// the number REQ-NFR-025 is about.
+//
+// Nothing else is excluded. A hand-written class that is hard to test is a class
+// with a coverage problem, not a class with an exclusion.
+val coveredClasses: FileCollection =
+    fileTree(layout.buildDirectory.dir("classes/java/main")) {
+        exclude("de/greluc/homeinv/plugin/v1/**")
+    }
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+    classDirectories.setFrom(coveredClasses)
+    reports {
+        // XML because a machine reads it: the gate below, and anything an
+        // operator of this repository points at a report. HTML because a person
+        // does.
+        xml.required = true
+        html.required = true
+    }
+}
+
+// REQ-NFR-025: the domain logic at 80 %, the `domain` packages at 90 %,
+// "measured in CI; falling below fails the build". Until 2026-09-21 neither half
+// was true -- one rule existed, covering ONE class, and no job ever ran the task
+// that would have checked it. Wired into `check` below, so it runs wherever
+// `./gradlew build` runs and not only where somebody remembered a CI step.
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.named("test"))
+    classDirectories.setFrom(coveredClasses)
     violationRules {
+        // LINE, and that is a reading of the requirement rather than a
+        // restatement of it: it says "test coverage" and names no counter.
+        // Lines are what the number means to a person looking at a report.
+        // BRANCH is deliberately not the gate -- it is 61 % in `domain` today
+        // and a gate set there would be a gate somebody lowers.
+        rule {
+            element = "BUNDLE"
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = BigDecimal("0.80")
+            }
+        }
+
+        // PER PACKAGE and not aggregated: `catalog.domain` sat at 74 % while the
+        // six domain packages together were over 90, and it is the small
+        // packages that carry the rules nobody exercised.
+        rule {
+            element = "PACKAGE"
+            includes = listOf("de.greluc.homeinv.*.domain")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = BigDecimal("0.90")
+            }
+        }
+
+        // Money is arithmetic that throws across currencies, and every branch of
+        // it is a refusal somebody would otherwise meet in production
+        // (ADR-0025).
         rule {
             element = "CLASS"
             includes = listOf("de.greluc.homeinv.platform.Money")
@@ -281,6 +342,10 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
             }
         }
     }
+}
+
+tasks.named("check") {
+    dependsOn(tasks.named("jacocoTestCoverageVerification"))
 }
 
 tasks.named("check") {

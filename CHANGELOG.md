@@ -21,6 +21,13 @@ commit".
 
 ### Added
 
+- **The coverage floor is a build failure rather than a sentence.** Domain logic
+  is held to 80 % of lines and every `domain` package to 90 %, checked by
+  `./gradlew build` wherever it runs. It found two packages below the floor on
+  the day it was switched on, both of them rules about what a tenant may not do:
+  widening an inherited field, and the invariants an account holds.
+
+
 - **Distributed tracing, off unless you ask for it.** Set
   `HOMEINV_TRACING_ENDPOINT` to an OpenTelemetry collector on the deployment's
   internal network and a slow or failed request becomes one trace from the
