@@ -63,7 +63,7 @@ data class LocationView (
     @SerialName(value = "name") @Required val name: kotlin.String,
 
     /* the parent, or `null` for a root */
-    @SerialName(value = "parentId") @Required val parentId: kotlin.String,
+    @SerialName(value = "parentId") @Required val parentId: kotlin.String?,
 
     @SerialName(value = "version") @Required val version: kotlin.Long
 

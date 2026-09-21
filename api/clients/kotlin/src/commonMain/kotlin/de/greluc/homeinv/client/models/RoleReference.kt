@@ -39,10 +39,10 @@ import kotlinx.serialization.encoding.*
 data class RoleReference (
 
     /* the built-in role's name, or null */
-    @SerialName(value = "role") @Required val role: kotlin.String,
+    @SerialName(value = "role") @Required val role: kotlin.String?,
 
     /* the tenant-owned role, or null */
-    @SerialName(value = "roleDefinitionId") @Required val roleDefinitionId: kotlin.String
+    @SerialName(value = "roleDefinitionId") @Required val roleDefinitionId: kotlin.String?
 
 ) {
 

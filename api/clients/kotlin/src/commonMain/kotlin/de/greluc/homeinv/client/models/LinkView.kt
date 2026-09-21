@@ -43,7 +43,7 @@ import kotlinx.serialization.encoding.*
 data class LinkView (
 
     /* the address at linking, or null */
-    @SerialName(value = "email") @Required val email: kotlin.String,
+    @SerialName(value = "email") @Required val email: kotlin.String?,
 
     /* the link, for unlinking */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -52,7 +52,7 @@ data class LinkView (
     @SerialName(value = "issuer") @Required val issuer: kotlin.String,
 
     /* when it last signed somebody in, or null */
-    @SerialName(value = "lastUsedAt") @Required val lastUsedAt: kotlin.String,
+    @SerialName(value = "lastUsedAt") @Required val lastUsedAt: kotlin.String?,
 
     /* when it was made, ISO-8601 */
     @SerialName(value = "linkedAt") @Required val linkedAt: kotlin.String,

@@ -49,7 +49,7 @@ data class MappingProfile (
     @SerialName(value = "defaultCurrency") @Required val defaultCurrency: kotlin.String,
 
     /* which item type the rows are written against, or null for the tenant's built-in `general` */
-    @SerialName(value = "itemTypeKey") @Required val itemTypeKey: kotlin.String,
+    @SerialName(value = "itemTypeKey") @Required val itemTypeKey: kotlin.String?,
 
     /* how the profile is named in a request — `homebox`, `inventree` */
     @SerialName(value = "key") @Required val key: kotlin.String,

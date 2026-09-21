@@ -62,7 +62,7 @@ data class AccountView (
     @SerialName(value = "mayCreateTenants") @Required val mayCreateTenants: kotlin.Boolean,
 
     /* their own limit, or null when the instance-wide default applies */
-    @SerialName(value = "tenantLimit") @Required val tenantLimit: kotlin.Int
+    @SerialName(value = "tenantLimit") @Required val tenantLimit: kotlin.Int?
 
 ) {
 

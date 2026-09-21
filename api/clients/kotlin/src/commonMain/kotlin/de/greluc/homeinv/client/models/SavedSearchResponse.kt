@@ -57,10 +57,10 @@ data class SavedSearchResponse (
     @SerialName(value = "name") @Required val name: kotlin.String,
 
     /* the text to search for, or `null` */
-    @SerialName(value = "q") @Required val q: kotlin.String,
+    @SerialName(value = "q") @Required val q: kotlin.String?,
 
     /* the sort key, or `null` */
-    @SerialName(value = "sort") @Required val sort: kotlin.String,
+    @SerialName(value = "sort") @Required val sort: kotlin.String?,
 
     /* when it last changed */
     @SerialName(value = "updatedAt") @Required val updatedAt: kotlin.time.Instant,

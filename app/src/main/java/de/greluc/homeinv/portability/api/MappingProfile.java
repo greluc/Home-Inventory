@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.portability.api;
 
+import jakarta.annotation.Nullable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,7 @@ public record MappingProfile(
     String source,
     Map<String, String> columns,
     String defaultCurrency,
-    String itemTypeKey) {
+    @Nullable String itemTypeKey) {
 
   /**
    * The targets a column may be mapped to.

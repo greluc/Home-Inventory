@@ -3340,7 +3340,7 @@ export interface components {
              * Format: int32
              * @description their own limit, or null when the instance-wide default applies
              */
-            tenantLimit: number;
+            tenantLimit: number | null;
         };
         /** @description A value to add to a list. */
         AddEntryRequest: {
@@ -3373,7 +3373,7 @@ export interface components {
              *     `SELECT` on the log and nothing else (`REQ-SEC-069`), so the log outlives the erasure
              *     and is removed by the retention run under `homeinv_housekeeping`
              */
-            note: string;
+            note: string | null;
             /**
              * Format: int64
              * @description how many rows went
@@ -3399,7 +3399,7 @@ export interface components {
              * Format: date-time
              * @description when it was built, or `null` when the build carried no information
              */
-            builtAt: string;
+            builtAt: string | null;
             /**
              * @description the exact commit it was built from, or `unknown` where the build had no
              *     git directory and was given no override
@@ -3427,12 +3427,12 @@ export interface components {
              *     `null` to skip the check for this entry. In the body and not in `If-Match`,
              *     because a header cannot carry 500 of them
              */
-            version?: number;
+            version?: number | null;
         };
         /** @description What became of one entry. */
         BulkEntryStatus: {
             /** @description what went wrong in prose, or `null` when nothing did */
-            detail: string;
+            detail: string | null;
             /**
              * Format: uuid
              * @description the item this line is about
@@ -3444,9 +3444,9 @@ export interface components {
              */
             status: number;
             /** @description the stable name of the condition, or `null` when the entry was applied */
-            title: string;
+            title: string | null;
             /** @description the problem type URI, or `null` when the entry was applied */
-            type: string;
+            type: string | null;
         };
         /** @description One change, its target, and the items it applies to. */
         BulkRequest: {
@@ -3524,9 +3524,9 @@ export interface components {
              * Format: uuid
              * @description the version being edited, or `null`
              */
-            draftVersionId: string;
+            draftVersionId: string | null;
             /** @description an icon name for the client, or `null` */
-            icon: string;
+            icon: string | null;
             /**
              * Format: uuid
              * @description the category
@@ -3544,7 +3544,7 @@ export interface components {
              * Format: uuid
              * @description the newest published version, or `null`
              */
-            publishedVersionId: string;
+            publishedVersionId: string | null;
         };
         /** @description The options one side of a ceremony needs. */
         CeremonyView: {
@@ -3671,7 +3671,7 @@ export interface components {
              * Format: uuid
              * @description the client's chosen UUIDv7, or `null` to have one assigned
              */
-            id?: string;
+            id?: string | null;
             /**
              * Format: uuid
              * @description the type, or omitted — the server then uses the tenant's built-in type, which
@@ -3810,7 +3810,7 @@ export interface components {
              * Format: date-time
              * @description when it was confirmed, or null
              */
-            enrolledAt: string;
+            enrolledAt: string | null;
             /** @description the registered passkeys, oldest first */
             passkeys: components["schemas"]["PasskeyView"][];
             /**
@@ -3882,17 +3882,17 @@ export interface components {
              * Format: int64
              * @description how large the archive is, or `null` until it exists
              */
-            byteSize: number;
+            byteSize: number | null;
             /**
              * @description what went wrong, or `null`. Never a stack trace: it is shown to whoever
              *     asked
              */
-            failure: string;
+            failure: string | null;
             /**
              * Format: date-time
              * @description when it finished, or `null`
              */
-            finishedAt: string;
+            finishedAt: string | null;
             /**
              * Format: uuid
              * @description its id
@@ -4021,7 +4021,7 @@ export interface components {
              */
             dataType: "TEXT" | "MULTILINE" | "INTEGER" | "DECIMAL" | "MONEY" | "BOOLEAN" | "DATE" | "DATETIME" | "ENUM" | "MULTI_ENUM" | "URL" | "EMAIL" | "QUANTITY" | "REFERENCE" | "SECRET" | "FILE";
             /** @description the JSON text of the value a new item starts with, or `null` */
-            defaultValue: string;
+            defaultValue: string | null;
             /** @description whether it is hidden from new input while its values remain (REQ-CORE-026) */
             deprecated: boolean;
             /**
@@ -4037,7 +4037,7 @@ export interface components {
             /** @description whether it is mirrored for counting */
             facetable: boolean;
             /** @description the form section the tenant put it in, or `null` */
-            group: string;
+            group: string | null;
             /** @description the explanatory line per language tag, empty when the tenant wrote none */
             helpTexts: {
                 [key: string]: string;
@@ -4078,7 +4078,7 @@ export interface components {
              * @description the list an `enum` or `multi-enum` draws from, `null`
              *     otherwise
              */
-            valueListId: string;
+            valueListId: string | null;
             /**
              * @description the one condition that decides whether a client shows this field, or `
              *     null` when it is always shown
@@ -4189,12 +4189,12 @@ export interface components {
             /** @description whether the work was thrown away at the end */
             dryRun: boolean;
             /** @description what went wrong, or null. One sentence, never a stack trace */
-            failure: string;
+            failure: string | null;
             /**
              * Format: date-time
              * @description when it ended, or null
              */
-            finishedAt: string;
+            finishedAt: string | null;
             /**
              * Format: uuid
              * @description its id
@@ -4210,7 +4210,7 @@ export interface components {
              *     many rows were inserted, how many overwritten and how many deliberately skipped, plus the
              *     sentences saying what an import never writes
              */
-            report: string;
+            report: string | null;
             /**
              * Format: date-time
              * @description when it was uploaded
@@ -4318,9 +4318,9 @@ export interface components {
              * Format: uuid
              * @description the version being edited, or `null` when none is
              */
-            draftVersionId: string;
+            draftVersionId: string | null;
             /** @description the icon name, or `null` */
-            icon: string;
+            icon: string | null;
             /**
              * Format: uuid
              * @description the type
@@ -4337,12 +4337,12 @@ export interface components {
              * Format: uuid
              * @description the type it inherits from, or `null`
              */
-            parentId: string;
+            parentId: string | null;
             /**
              * Format: uuid
              * @description the newest published version, or `null` when none is published
              */
-            publishedVersionId: string;
+            publishedVersionId: string | null;
             /** Format: int32 */
             usefulLifeMonths: number;
         };
@@ -4369,7 +4369,7 @@ export interface components {
              */
             createdAt: string;
             /** @description free text, may be `null` */
-            description: string;
+            description: string | null;
             /**
              * Format: uuid
              * @description the item's UUIDv7
@@ -4397,15 +4397,15 @@ export interface components {
              * Format: uuid
              * @description where it is; `null` for a digital item
              */
-            locationId: string;
+            locationId: string | null;
             /**
              * Format: int32
              * @description how often it needs servicing, in days, or `null` when
              *     nothing reminds about it (REQ-LIFE-004)
              */
-            maintenanceIntervalDays: number;
+            maintenanceIntervalDays: number | null;
             /** @description the level below which this consumable needs restocking, or `null` */
-            minimumStock: number;
+            minimumStock: number | null;
             /** @description the name */
             name: string;
             /** @description the paragraph a person wrote, in limited Markdown with the HTML already removed */
@@ -4413,7 +4413,7 @@ export interface components {
             /** @description how many */
             quantity: number;
             /** @description the unit, may be `null` */
-            quantityUnit: string;
+            quantityUnit: string | null;
             /**
              * Format: date-time
              * @description when it last changed
@@ -4455,7 +4455,7 @@ export interface components {
         /** @description One linked identity, as the account page shows it. */
         LinkView: {
             /** @description the address at linking, or null */
-            email: string;
+            email: string | null;
             /**
              * Format: uuid
              * @description the link, for unlinking
@@ -4464,7 +4464,7 @@ export interface components {
             /** @description the provider that said so */
             issuer: string;
             /** @description when it last signed somebody in, or null */
-            lastUsedAt: string;
+            lastUsedAt: string | null;
             /** @description when it was made, ISO-8601 */
             linkedAt: string;
             /** @description which configuration it was made through */
@@ -4504,17 +4504,17 @@ export interface components {
         /** @description One loan, open or closed. */
         LoanView: {
             /** @description the name that was typed, or `null` */
-            borrowerName: string;
+            borrowerName: string | null;
             /**
              * Format: uuid
              * @description the member who has it, or `null`
              */
-            borrowerUserId: string;
+            borrowerUserId: string | null;
             /**
              * Format: date
              * @description when it is due back, or `null`
              */
-            dueOn: string;
+            dueOn: string | null;
             /**
              * Format: date
              * @description when it went out
@@ -4531,7 +4531,7 @@ export interface components {
              */
             itemId: string;
             /** @description anything else worth knowing, or `null` */
-            note: string;
+            note: string | null;
             /** @description Whether the item is still out. */
             open: boolean;
             /**
@@ -4548,7 +4548,7 @@ export interface components {
              * Format: date
              * @description when it came back, or `null` while it is still out
              */
-            returnedOn: string;
+            returnedOn: string | null;
         };
         /**
          * @description A kind of place a location can be: a room, a shelf, a box.
@@ -4572,7 +4572,7 @@ export interface components {
          */
         LocationCategoryView: {
             /** @description an icon name for the client, or `null` */
-            icon: string;
+            icon: string | null;
             /**
              * Format: uuid
              * @description the category, which is what a location references
@@ -4627,7 +4627,7 @@ export interface components {
              * Format: uuid
              * @description the parent, or `null` for a root
              */
-            parentId: string;
+            parentId: string | null;
             /** Format: int64 */
             version: number;
         };
@@ -4658,7 +4658,7 @@ export interface components {
             /** @description what kind of work */
             kind: string;
             /** @description anything else worth knowing, or `null` */
-            note: string;
+            note: string | null;
             /**
              * Format: date
              * @description when it was done
@@ -4728,7 +4728,7 @@ export interface components {
              * @description which item type the rows are written against, or null for the tenant's
              *     built-in `general`
              */
-            itemTypeKey: string;
+            itemTypeKey: string | null;
             /** @description how the profile is named in a request — `homebox`, `inventree` */
             key: string;
             /** @description what it is called in a list */
@@ -4760,7 +4760,7 @@ export interface components {
              * Format: int32
              * @description the height for an image, or `null`
              */
-            heightPx: number;
+            heightPx: number | null;
             /**
              * Format: uuid
              * @description the media object
@@ -4791,7 +4791,7 @@ export interface components {
              * Format: int32
              * @description the width for an image, or `null`
              */
-            widthPx: number;
+            widthPx: number | null;
         };
         /** @description A member of the tenant. */
         MemberView: {
@@ -4810,7 +4810,7 @@ export interface components {
              * Format: uuid
              * @description the tenant-owned role extending it (REQ-TEN-006), or null
              */
-            roleDefinitionId: string;
+            roleDefinitionId: string | null;
             /**
              * @description what to call the role: the tenant-owned role's name where there is one,
              *     otherwise the built-in name. A member list shows this rather than making a client join
@@ -4821,7 +4821,7 @@ export interface components {
              * @description the part of the tree they are confined to (REQ-TEN-007), or null for the
              *     whole tenant
              */
-            scopeLocationId: string;
+            scopeLocationId: string | null;
             /**
              * Format: uuid
              * @description the account
@@ -4839,12 +4839,12 @@ export interface components {
              * @description a stable token from `docs/reference/degraded-reasons.yaml`, or
              *     `null` when nothing is degraded
              */
-            degradedReason: string;
+            degradedReason: string | null;
             /**
              * Format: int64
              * @description how many milliseconds the request took, or `null` before the edge fills it in
              */
-            took: number;
+            took: number | null;
         };
         /**
          * @description The JSON shape of an amount of money (REQ-NFR-070).
@@ -4860,7 +4860,7 @@ export interface components {
             amount?: string;
             /** @description the ISO 4217 code, three letters */
             currency?: string;
-        };
+        } | null;
         /** @description Where a location is to be moved. */
         MoveLocationRequest: {
             /**
@@ -4869,7 +4869,7 @@ export interface components {
              *     everything" says so with null rather than with an absent field, and both are read the same
              *     way
              */
-            parentId?: string;
+            parentId?: string | null;
         };
         /** @description One open session, as its owner sees it. */
         OpenSession: {
@@ -5110,7 +5110,7 @@ export interface components {
              *     counted. Explicitly an estimate — an exact total over a million rows costs more than it is
              *     worth (08 §8.2) — and absent rather than wrong where counting is not cheap
              */
-            estimatedTotal: number;
+            estimatedTotal: number | null;
             /**
              * @description whether a following page exists. Derived from the cursor rather than passed, so
              *     the two cannot disagree
@@ -5120,7 +5120,7 @@ export interface components {
              * @description an opaque, signed cursor for the following page, or `null` when this was
              *     the last. Never an offset: offsets skip and duplicate rows on data that changes under them
              */
-            nextCursor: string;
+            nextCursor: string | null;
         };
         /**
          * @description One page of anything, in the shape 08 §8.2 specifies for every collection.
@@ -5842,7 +5842,7 @@ export interface components {
              * Format: date-time
              * @description when it was last used, or null
              */
-            lastUsedAt: string;
+            lastUsedAt: string | null;
             /**
              * Format: date-time
              * @description when it was registered
@@ -5945,7 +5945,7 @@ export interface components {
              * Format: date-time
              * @description when the next one is due, or `null` once it is finished
              */
-            nextAttemptAt: string;
+            nextAttemptAt: string | null;
             /** @description `QUEUED`, `DELIVERED` or `DEAD_LETTERED` */
             state: string;
         };
@@ -6041,7 +6041,7 @@ export interface components {
              * Format: uuid
              * @description which things it watches, or `null` for all of them
              */
-            savedSearchId: string;
+            savedSearchId: string | null;
             /**
              * @description which date or condition it watches
              * @enum {string}
@@ -6110,7 +6110,7 @@ export interface components {
              * Format: uuid
              * @description who, or `null` where a system process made the change
              */
-            changedBy: string;
+            changedBy: string | null;
             /**
              * @description what happened
              * @enum {string}
@@ -6151,12 +6151,12 @@ export interface components {
         /** @description A role a rule is about. */
         RoleReference: {
             /** @description the built-in role's name, or null */
-            role: string;
+            role: string | null;
             /**
              * Format: uuid
              * @description the tenant-owned role, or null
              */
-            roleDefinitionId: string;
+            roleDefinitionId: string | null;
         };
         /** @description The body of a role change. */
         RoleRequest: {
@@ -6184,7 +6184,7 @@ export interface components {
             /** @description the built-in role it extends */
             baseRole: string;
             /** @description what it is for, or null */
-            description: string;
+            description: string | null;
             /**
              * @description everything it holds, base included — so a client can show what a
              *     role means without re-implementing the ladder
@@ -6272,9 +6272,9 @@ export interface components {
             /** @description what it is called */
             name: string;
             /** @description the text to search for, or `null` */
-            q: string;
+            q: string | null;
             /** @description the sort key, or `null` */
-            sort: string;
+            sort: string | null;
             /**
              * Format: date-time
              * @description when it last changed
@@ -6332,7 +6332,7 @@ export interface components {
         /** @description A service account as its tenant sees it. */
         ServiceAccountView: {
             /** @description what it is for, or null */
-            description: string;
+            description: string | null;
             /**
              * Format: date-time
              * @description when it stops working
@@ -6347,7 +6347,7 @@ export interface components {
              * Format: date-time
              * @description when it last authenticated, or null when it never has
              */
-            lastUsedAt: string;
+            lastUsedAt: string | null;
             /** @description what it is called */
             name: string;
             /** @description the built-in role it holds */
@@ -6356,7 +6356,7 @@ export interface components {
              * Format: uuid
              * @description the tenant-owned role extending it, or null
              */
-            roleDefinitionId: string;
+            roleDefinitionId: string | null;
         };
         /**
          * @description Who the caller is, on the wire.
@@ -6399,7 +6399,7 @@ export interface components {
         /** @description One setting a plugin declares, with what this tenant made of it. */
         SettingView: {
             /** @description what applies when nothing is set here, or null */
-            defaultValue: string;
+            defaultValue: string | null;
             /** @description the manifest's key */
             key: string;
             /** @description what a person sees, by language tag — multilingual data, like a field label */
@@ -6495,14 +6495,14 @@ export interface components {
         /** @description A tag as everything outside this block sees it. */
         TagView: {
             /** @description `#rrggbb`, or `null` when the tenant chose none (REQ-CORE-062) */
-            colour: string;
+            colour: string | null;
             /**
              * Format: uuid
              * @description the group it belongs to, or `null`
              */
-            groupId: string;
+            groupId: string | null;
             /** @description an icon name for clients, or `null` */
-            icon: string;
+            icon: string | null;
             /**
              * Format: uuid
              * @description the tag
@@ -6514,7 +6514,7 @@ export interface components {
              *     here is a tombstone: it is offered nowhere, carries nothing, and exists so a client holding
              *     its id is redirected rather than told the tag never existed (REQ-CORE-063)
              */
-            mergedInto: string;
+            mergedInto: string | null;
             /** @description the name a person reads, unique per tenant among the live ones */
             name: string;
         };
@@ -6702,49 +6702,49 @@ export interface components {
              * Format: date
              * @description the day that figure was true, or `null`
              */
-            currentValueAsOf: string;
+            currentValueAsOf: string | null;
             /**
              * @description who says so — {@link Provenance#MANUAL Provenance#MANUAL}, {@link de.greluc.homeinv.inventory.api.Valuation      Provenance#DEPRECIATION} or {@link Provenance#PLUGIN Provenance#PLUGIN} — or `null`. Not decoration: the
              *     refresh run rewrites only what it wrote, so a figure somebody typed survives the night
-             * @enum {string}
+             * @enum {string|null}
              */
-            currentValueSource: "MANUAL" | "DEPRECIATION" | "PLUGIN";
+            currentValueSource: "MANUAL" | "DEPRECIATION" | "PLUGIN" | null;
             /**
              * @description whether it is covered for life, in which case `warrantyUntil` is
              *     `null`. A flag rather than a date far in the future, because "2099-12-31" is a date
              *     somebody would eventually have to explain
              */
-            lifetimeWarranty: boolean;
+            lifetimeWarranty: boolean | null;
             /** @description what it cost, or `null` */
             purchase: components["schemas"]["MoneyJson"];
             /**
              * @description where from — a shop, a person, a listing — or `null`. Free text: an
              *     invoice is an attachment like any other and needs no field of its own
              */
-            purchaseSource: string;
+            purchaseSource: string | null;
             /**
              * Format: date
              * @description when it was bought, or `null`
              */
-            purchasedOn: string;
+            purchasedOn: string | null;
             /** @description what it would cost to replace, or `null` */
             replacement: components["schemas"]["MoneyJson"];
             /**
              * Format: date
              * @description the day that figure was true, or `null`
              */
-            replacementAsOf: string;
+            replacementAsOf: string | null;
             /**
              * @description who said so — {@link Provenance#MANUAL Provenance#MANUAL} or {@link Provenance#PLUGIN Provenance#PLUGIN} —
              *     or `null`
-             * @enum {string}
+             * @enum {string|null}
              */
-            replacementSource: "MANUAL" | "DEPRECIATION" | "PLUGIN";
+            replacementSource: "MANUAL" | "DEPRECIATION" | "PLUGIN" | null;
             /**
              * Format: date
              * @description when the warranty ends, or `null`
              */
-            warrantyUntil: string;
+            warrantyUntil: string | null;
         };
         /**
          * @description What an item cost, what covers it and what replacing it would cost (REQ-LIFE-001/002/014).
@@ -6955,7 +6955,7 @@ export interface components {
              */
             createdAt: string;
             /** @description what a person calls it, or `null` */
-            description: string;
+            description: string | null;
             /** @description whether it receives anything */
             enabled: boolean;
             /** @description which events it receives */

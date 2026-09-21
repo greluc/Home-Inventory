@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -139,12 +140,12 @@ public interface LoanLog {
   record LoanView(
       UUID id,
       UUID itemId,
-      UUID borrowerUserId,
-      String borrowerName,
+      @Nullable UUID borrowerUserId,
+      @Nullable String borrowerName,
       LocalDate handedOutOn,
-      LocalDate dueOn,
-      LocalDate returnedOn,
-      String note,
+      @Nullable LocalDate dueOn,
+      @Nullable LocalDate returnedOn,
+      @Nullable String note,
       Instant recordedAt,
       UUID recordedBy) {
 

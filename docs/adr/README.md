@@ -102,4 +102,5 @@ Date: YYYY-MM-DD
 | [0077](0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md) | A call may carry a setting that belongs to the thing being acted on rather than to the tenant | Accepted |
 | [0078](0078-a-webhook-carries-an-id-a-live-nudge-does-not.md) | A webhook carries the type, the moment and the subject id; a live nudge carries neither id nor data | Accepted |
 | [0079](0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md) | The GraphQL surface is registered by the build, weighed by a schema directive, and checked field by field | Accepted |
-| [0080](0080-a-generated-client-is-committed-and-the-document-must-earn-it.md) | A generated client is committed, and the document has to earn it | Accepted |
+| [0080](0080-a-generated-client-is-committed-and-the-document-must-earn-it.md) | A generated client is committed, and the document has to earn it | Accepted, amended by 0081 |
+| [0081](0081-the-contract-says-which-values-may-be-null.md) | The contract says which values may be null, from an annotation rather than from prose | Accepted |

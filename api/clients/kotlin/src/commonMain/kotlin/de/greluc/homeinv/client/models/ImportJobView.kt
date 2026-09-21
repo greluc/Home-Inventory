@@ -52,10 +52,10 @@ data class ImportJobView (
     @SerialName(value = "dryRun") @Required val dryRun: kotlin.Boolean,
 
     /* what went wrong, or null. One sentence, never a stack trace */
-    @SerialName(value = "failure") @Required val failure: kotlin.String,
+    @SerialName(value = "failure") @Required val failure: kotlin.String?,
 
     /* when it ended, or null */
-    @SerialName(value = "finishedAt") @Required val finishedAt: kotlin.time.Instant,
+    @SerialName(value = "finishedAt") @Required val finishedAt: kotlin.time.Instant?,
 
     /* its id */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -64,7 +64,7 @@ data class ImportJobView (
     @SerialName(value = "progress") @Required val progress: kotlin.Int,
 
     /* what happened, as a JSON object, or null until the job finishes. Per block: how many rows were inserted, how many overwritten and how many deliberately skipped, plus the sentences saying what an import never writes */
-    @SerialName(value = "report") @Required val report: kotlin.String,
+    @SerialName(value = "report") @Required val report: kotlin.String?,
 
     /* when it was uploaded */
     @SerialName(value = "requestedAt") @Required val requestedAt: kotlin.time.Instant,

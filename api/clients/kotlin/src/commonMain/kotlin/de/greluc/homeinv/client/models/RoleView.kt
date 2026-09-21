@@ -46,7 +46,7 @@ data class RoleView (
     @SerialName(value = "baseRole") @Required val baseRole: kotlin.String,
 
     /* what it is for, or null */
-    @SerialName(value = "description") @Required val description: kotlin.String,
+    @SerialName(value = "description") @Required val description: kotlin.String?,
 
     /* everything it holds, base included — so a client can show what a role means without re-implementing the ladder */
     @SerialName(value = "effectivePermissions") @Required val effectivePermissions: kotlin.collections.List<kotlin.String>,

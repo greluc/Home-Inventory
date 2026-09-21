@@ -46,7 +46,7 @@ import kotlinx.serialization.encoding.*
 data class MaintenanceEntryView (
 
     /* what it cost, or `null` */
-    @SerialName(value = "cost") @Required val cost: MoneyJson,
+    @SerialName(value = "cost") @Required val cost: MoneyJson?,
 
     /* the entry */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -58,7 +58,7 @@ data class MaintenanceEntryView (
     @SerialName(value = "kind") @Required val kind: kotlin.String,
 
     /* anything else worth knowing, or `null` */
-    @SerialName(value = "note") @Required val note: kotlin.String,
+    @SerialName(value = "note") @Required val note: kotlin.String?,
 
     /* when it was done */
     @SerialName(value = "performedOn") @Required val performedOn: kotlinx.datetime.LocalDate,

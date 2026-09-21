@@ -48,7 +48,7 @@ data class WebhookTargetView (
     @SerialName(value = "createdAt") @Required val createdAt: kotlin.time.Instant,
 
     /* what a person calls it, or `null` */
-    @SerialName(value = "description") @Required val description: kotlin.String,
+    @SerialName(value = "description") @Required val description: kotlin.String?,
 
     /* whether it receives anything */
     @SerialName(value = "enabled") @Required val enabled: kotlin.Boolean,

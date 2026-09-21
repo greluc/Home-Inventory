@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import jakarta.annotation.Nullable;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -49,18 +50,18 @@ import java.util.UUID;
 public record ItemView(
     UUID id,
     String name,
-    String description,
+    @Nullable String description,
     String kind,
     UUID itemTypeVersionId,
-    UUID locationId,
+    @Nullable UUID locationId,
     BigDecimal quantity,
-    String quantityUnit,
+    @Nullable String quantityUnit,
     String attributes,
     String notes,
-    BigDecimal minimumStock,
+    @Nullable BigDecimal minimumStock,
     String lifecycleState,
     Instant createdAt,
     Instant updatedAt,
     Valuation valuation,
     long version,
-    Integer maintenanceIntervalDays) {}
+    @Nullable Integer maintenanceIntervalDays) {}

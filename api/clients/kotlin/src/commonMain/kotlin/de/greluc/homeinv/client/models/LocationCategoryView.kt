@@ -42,7 +42,7 @@ import kotlinx.serialization.encoding.*
 data class LocationCategoryView (
 
     /* an icon name for the client, or `null` */
-    @SerialName(value = "icon") @Required val icon: kotlin.String,
+    @SerialName(value = "icon") @Required val icon: kotlin.String?,
 
     /* the category, which is what a location references */
     @SerialName(value = "id") @Required val id: kotlin.String,

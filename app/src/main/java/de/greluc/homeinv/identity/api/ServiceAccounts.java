@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.identity.api;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -43,11 +44,11 @@ public interface ServiceAccounts {
   record ServiceAccountView(
       UUID id,
       String name,
-      String description,
+      @Nullable String description,
       String role,
-      UUID roleDefinitionId,
+      @Nullable UUID roleDefinitionId,
       Instant expiresAt,
-      Instant lastUsedAt) {}
+      @Nullable Instant lastUsedAt) {}
 
   /**
    * A service account that has just been created, and its token.

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.authorization.api.FieldVisibility;
@@ -183,5 +184,5 @@ public class FieldVisibilityController {
    * @param role the built-in role's name, or null
    * @param roleDefinitionId the tenant-owned role, or null
    */
-  public record RoleReference(String role, UUID roleDefinitionId) {}
+  public record RoleReference(@Nullable String role, @Nullable UUID roleDefinitionId) {}
 }

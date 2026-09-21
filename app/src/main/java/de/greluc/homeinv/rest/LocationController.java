@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.LocationCategories;
@@ -316,7 +317,7 @@ public class LocationController {
    *     everything" says so with null rather than with an absent field, and both are read the same
    *     way
    */
-  public record MoveLocationRequest(UUID parentId) {}
+  public record MoveLocationRequest(@Nullable UUID parentId) {}
 
   /**
    * The body of a rename.

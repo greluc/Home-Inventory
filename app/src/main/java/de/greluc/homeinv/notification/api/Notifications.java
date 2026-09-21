@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.notification.api;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -115,7 +116,7 @@ public interface Notifications {
    * @param nextAttemptAt when the next one is due, or {@code null} once it is finished
    */
   record QueuedNotification(
-      UUID id, String channelKey, String address, String state, int attempts, Instant nextAttemptAt) {}
+      UUID id, String channelKey, String address, String state, int attempts, @Nullable Instant nextAttemptAt) {}
 
   /**
    * What somebody asked to be told about, and where.

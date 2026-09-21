@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.media.api;
 
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,8 +38,8 @@ public record MediaView(
     UUID id,
     String mediaType,
     long byteSize,
-    Integer widthPx,
-    Integer heightPx,
+    @Nullable Integer widthPx,
+    @Nullable Integer heightPx,
     String scanState,
     boolean primaryImage,
     String role,

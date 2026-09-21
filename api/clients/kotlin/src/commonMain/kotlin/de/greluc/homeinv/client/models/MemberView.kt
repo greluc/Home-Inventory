@@ -57,13 +57,13 @@ data class MemberView (
     @SerialName(value = "role") @Required val role: kotlin.String,
 
     /* the tenant-owned role extending it (REQ-TEN-006), or null */
-    @SerialName(value = "roleDefinitionId") @Required val roleDefinitionId: kotlin.String,
+    @SerialName(value = "roleDefinitionId") @Required val roleDefinitionId: kotlin.String?,
 
     /* what to call the role: the tenant-owned role's name where there is one, otherwise the built-in name. A member list shows this rather than making a client join */
     @SerialName(value = "roleName") @Required val roleName: kotlin.String,
 
     /* the part of the tree they are confined to (REQ-TEN-007), or null for the whole tenant */
-    @SerialName(value = "scopeLocationId") @Required val scopeLocationId: kotlin.String,
+    @SerialName(value = "scopeLocationId") @Required val scopeLocationId: kotlin.String?,
 
     /* the account */
     @SerialName(value = "userId") @Required val userId: kotlin.String

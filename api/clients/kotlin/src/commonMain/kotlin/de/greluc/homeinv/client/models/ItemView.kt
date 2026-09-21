@@ -61,7 +61,7 @@ data class ItemView (
     @SerialName(value = "createdAt") @Required val createdAt: kotlin.time.Instant,
 
     /* free text, may be `null` */
-    @SerialName(value = "description") @Required val description: kotlin.String,
+    @SerialName(value = "description") @Required val description: kotlin.String?,
 
     /* the item's UUIDv7 */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -76,13 +76,13 @@ data class ItemView (
     @SerialName(value = "lifecycleState") @Required val lifecycleState: kotlin.String,
 
     /* where it is; `null` for a digital item */
-    @SerialName(value = "locationId") @Required val locationId: kotlin.String,
+    @SerialName(value = "locationId") @Required val locationId: kotlin.String?,
 
     /* how often it needs servicing, in days, or `null` when nothing reminds about it (REQ-LIFE-004) */
-    @SerialName(value = "maintenanceIntervalDays") @Required val maintenanceIntervalDays: kotlin.Int,
+    @SerialName(value = "maintenanceIntervalDays") @Required val maintenanceIntervalDays: kotlin.Int?,
 
     /* the level below which this consumable needs restocking, or `null` */
-    @SerialName(value = "minimumStock") @Required val minimumStock: kotlin.Double,
+    @SerialName(value = "minimumStock") @Required val minimumStock: kotlin.Double?,
 
     /* the name */
     @SerialName(value = "name") @Required val name: kotlin.String,
@@ -94,7 +94,7 @@ data class ItemView (
     @SerialName(value = "quantity") @Required val quantity: kotlin.Double,
 
     /* the unit, may be `null` */
-    @SerialName(value = "quantityUnit") @Required val quantityUnit: kotlin.String,
+    @SerialName(value = "quantityUnit") @Required val quantityUnit: kotlin.String?,
 
     /* when it last changed */
     @SerialName(value = "updatedAt") @Required val updatedAt: kotlin.time.Instant,

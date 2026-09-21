@@ -90,6 +90,11 @@ dependencies {
     // `platform.ContextPropagation`: a thread-local ends at the thread, and the
     // GraphQL surface's DataLoader dispatches do not run on the request's.
     implementation(libs.context.propagation)
+
+    // `@Nullable`, which the API document is generated from (ADR-0081). It arrives
+    // with several starters anyway; naming it is what keeps the contract from
+    // depending on which of them happens to be on the classpath.
+    implementation(libs.jakarta.annotation.api)
     implementation(libs.spring.boot.session.data.redis)
 
     // The primary `SearchIndex` adapter (ADR-0008, REQ-SRCH-005). Not a Spring

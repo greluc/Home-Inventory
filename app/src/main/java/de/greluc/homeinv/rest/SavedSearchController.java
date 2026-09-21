@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -226,9 +227,9 @@ public class SavedSearchController {
   public record SavedSearchResponse(
       UUID id,
       String name,
-      String q,
+      @Nullable String q,
       List<String> filters,
-      String sort,
+      @Nullable String sort,
       java.time.Instant createdAt,
       java.time.Instant updatedAt,
       long version) {

@@ -40,13 +40,13 @@ import kotlinx.serialization.encoding.*
 data class PageInfo (
 
     /* how many rows the whole collection holds, or `null` when nobody counted. Explicitly an estimate — an exact total over a million rows costs more than it is worth (08 §8.2) — and absent rather than wrong where counting is not cheap */
-    @SerialName(value = "estimatedTotal") @Required val estimatedTotal: kotlin.Long,
+    @SerialName(value = "estimatedTotal") @Required val estimatedTotal: kotlin.Long?,
 
     /* whether a following page exists. Derived from the cursor rather than passed, so the two cannot disagree */
     @SerialName(value = "hasMore") @Required val hasMore: kotlin.Boolean,
 
     /* an opaque, signed cursor for the following page, or `null` when this was the last. Never an offset: offsets skip and duplicate rows on data that changes under them */
-    @SerialName(value = "nextCursor") @Required val nextCursor: kotlin.String
+    @SerialName(value = "nextCursor") @Required val nextCursor: kotlin.String?
 
 ) {
 

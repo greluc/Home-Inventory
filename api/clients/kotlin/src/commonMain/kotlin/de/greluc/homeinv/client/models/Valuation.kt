@@ -49,37 +49,37 @@ import kotlinx.serialization.encoding.*
 data class Valuation (
 
     /* what it is worth now, or `null` (REQ-LIFE-009) */
-    @SerialName(value = "currentValue") @Required val currentValue: MoneyJson,
+    @SerialName(value = "currentValue") @Required val currentValue: MoneyJson?,
 
     /* the day that figure was true, or `null` */
-    @SerialName(value = "currentValueAsOf") @Required val currentValueAsOf: kotlinx.datetime.LocalDate,
+    @SerialName(value = "currentValueAsOf") @Required val currentValueAsOf: kotlinx.datetime.LocalDate?,
 
     /* who says so — {@link Provenance#MANUAL Provenance#MANUAL}, {@link de.greluc.homeinv.inventory.api.Valuation      Provenance#DEPRECIATION} or {@link Provenance#PLUGIN Provenance#PLUGIN} — or `null`. Not decoration: the refresh run rewrites only what it wrote, so a figure somebody typed survives the night */
-    @SerialName(value = "currentValueSource") @Required val currentValueSource: Valuation.CurrentValueSource,
+    @SerialName(value = "currentValueSource") @Required val currentValueSource: Valuation.CurrentValueSource?,
 
     /* whether it is covered for life, in which case `warrantyUntil` is `null`. A flag rather than a date far in the future, because \"2099-12-31\" is a date somebody would eventually have to explain */
-    @SerialName(value = "lifetimeWarranty") @Required val lifetimeWarranty: kotlin.Boolean,
+    @SerialName(value = "lifetimeWarranty") @Required val lifetimeWarranty: kotlin.Boolean?,
 
     /* what it cost, or `null` */
-    @SerialName(value = "purchase") @Required val purchase: MoneyJson,
+    @SerialName(value = "purchase") @Required val purchase: MoneyJson?,
 
     /* where from — a shop, a person, a listing — or `null`. Free text: an invoice is an attachment like any other and needs no field of its own */
-    @SerialName(value = "purchaseSource") @Required val purchaseSource: kotlin.String,
+    @SerialName(value = "purchaseSource") @Required val purchaseSource: kotlin.String?,
 
     /* when it was bought, or `null` */
-    @SerialName(value = "purchasedOn") @Required val purchasedOn: kotlinx.datetime.LocalDate,
+    @SerialName(value = "purchasedOn") @Required val purchasedOn: kotlinx.datetime.LocalDate?,
 
     /* what it would cost to replace, or `null` */
-    @SerialName(value = "replacement") @Required val replacement: MoneyJson,
+    @SerialName(value = "replacement") @Required val replacement: MoneyJson?,
 
     /* the day that figure was true, or `null` */
-    @SerialName(value = "replacementAsOf") @Required val replacementAsOf: kotlinx.datetime.LocalDate,
+    @SerialName(value = "replacementAsOf") @Required val replacementAsOf: kotlinx.datetime.LocalDate?,
 
     /* who said so — {@link Provenance#MANUAL Provenance#MANUAL} or {@link Provenance#PLUGIN Provenance#PLUGIN} — or `null` */
-    @SerialName(value = "replacementSource") @Required val replacementSource: Valuation.ReplacementSource,
+    @SerialName(value = "replacementSource") @Required val replacementSource: Valuation.ReplacementSource?,
 
     /* when the warranty ends, or `null` */
-    @SerialName(value = "warrantyUntil") @Required val warrantyUntil: kotlinx.datetime.LocalDate
+    @SerialName(value = "warrantyUntil") @Required val warrantyUntil: kotlinx.datetime.LocalDate?
 
 ) {
 

@@ -53,10 +53,10 @@ data class ItemTypeView (
     @SerialName(value = "builtin") @Required val builtin: kotlin.Boolean,
 
     /* the version being edited, or `null` when none is */
-    @SerialName(value = "draftVersionId") @Required val draftVersionId: kotlin.String,
+    @SerialName(value = "draftVersionId") @Required val draftVersionId: kotlin.String?,
 
     /* the icon name, or `null` */
-    @SerialName(value = "icon") @Required val icon: kotlin.String,
+    @SerialName(value = "icon") @Required val icon: kotlin.String?,
 
     /* the type */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -68,10 +68,10 @@ data class ItemTypeView (
     @SerialName(value = "kind") @Required val kind: ItemTypeView.Kind,
 
     /* the type it inherits from, or `null` */
-    @SerialName(value = "parentId") @Required val parentId: kotlin.String,
+    @SerialName(value = "parentId") @Required val parentId: kotlin.String?,
 
     /* the newest published version, or `null` when none is published */
-    @SerialName(value = "publishedVersionId") @Required val publishedVersionId: kotlin.String,
+    @SerialName(value = "publishedVersionId") @Required val publishedVersionId: kotlin.String?,
 
     @SerialName(value = "usefulLifeMonths") @Required val usefulLifeMonths: kotlin.Int
 

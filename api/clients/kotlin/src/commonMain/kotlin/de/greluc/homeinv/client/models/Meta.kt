@@ -43,10 +43,10 @@ data class Meta (
     @SerialName(value = "degraded") @Required val degraded: kotlin.Boolean,
 
     /* a stable token from `docs/reference/degraded-reasons.yaml`, or `null` when nothing is degraded */
-    @SerialName(value = "degradedReason") @Required val degradedReason: kotlin.String,
+    @SerialName(value = "degradedReason") @Required val degradedReason: kotlin.String?,
 
     /* how many milliseconds the request took, or `null` before the edge fills it in */
-    @SerialName(value = "took") @Required val took: kotlin.Long
+    @SerialName(value = "took") @Required val took: kotlin.Long?
 
 ) {
 

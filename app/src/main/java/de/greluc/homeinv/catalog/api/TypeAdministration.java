@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.Map;
@@ -553,12 +554,12 @@ public interface TypeAdministration {
       UUID id,
       String key,
       TypeKind kind,
-      UUID parentId,
-      String icon,
+      @Nullable UUID parentId,
+      @Nullable String icon,
       boolean builtin,
       boolean archived,
-      UUID publishedVersionId,
-      UUID draftVersionId,
+      @Nullable UUID publishedVersionId,
+      @Nullable UUID draftVersionId,
       Integer usefulLifeMonths) {}
 
   /**
@@ -578,12 +579,12 @@ public interface TypeAdministration {
       UUID id,
       String key,
       Map<String, String> labels,
-      String icon,
+      @Nullable String icon,
       boolean mobile,
       boolean builtin,
       boolean archived,
-      UUID publishedVersionId,
-      UUID draftVersionId) {}
+      @Nullable UUID publishedVersionId,
+      @Nullable UUID draftVersionId) {}
 
   /**
    * What one category takes underneath it (REQ-CORE-047).

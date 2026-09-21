@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Money;
 import java.time.LocalDate;
 import java.util.List;
@@ -90,7 +91,7 @@ public interface InsuranceReport {
       Money replacement,
       LocalDate asOf,
       String source,
-      Evidence photo,
+      @Nullable Evidence photo,
       List<Evidence> receipts) {}
 
   /**

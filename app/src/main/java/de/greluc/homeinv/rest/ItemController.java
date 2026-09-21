@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.platform.QueryFilter;
@@ -211,14 +212,16 @@ public class ItemController {
    * @return the entry, with its version and key in their absent-value forms
    */
   private BulkItemOperations.Entry asEntry(BulkRequest request, BulkEntryRequest entry) {
+    Long version = entry.version();
+    String key = entry.idempotencyKey();
     return new BulkItemOperations.Entry(
         entry.itemId(),
-        entry.version() == null ? OptionalLong.empty() : OptionalLong.of(entry.version()),
-        entry.idempotencyKey() == null || entry.idempotencyKey().isBlank()
+        version == null ? OptionalLong.empty() : OptionalLong.of(version),
+        key == null || key.isBlank()
             ? Optional.empty()
             : Optional.of(
                 IdempotencyKeys.of(
-                    entry.idempotencyKey(),
+                    key,
                     // What the key is spent on: this operation, this target, this
                     // item. The same key sent later for a different change is then
                     // a conflict rather than a change nobody asked for twice.
@@ -332,7 +335,7 @@ public class ItemController {
    */
   public record BulkEntryRequest(
       @NotNull UUID itemId,
-      @PositiveOrZero Long version,
+      @Nullable @PositiveOrZero Long version,
       @Size(max = 255) String idempotencyKey) {}
 
   /**
@@ -367,7 +370,7 @@ public class ItemController {
    * @param detail what went wrong in prose, or {@code null} when nothing did
    */
   public record BulkEntryStatus(
-      UUID itemId, int status, String type, String title, String detail) {}
+      UUID itemId, int status, @Nullable String type, @Nullable String title, @Nullable String detail) {}
 
   /**
    * The tenant's items, filtered by a query (REQ-SRCH-001, 08 §8.2).
@@ -1108,7 +1111,7 @@ public class ItemController {
    *     months from 31 January" has no answer that is not a surprise to somebody
    */
   public record CreateItemRequest(
-      UUID id,
+      @Nullable UUID id,
       UUID itemTypeId,
       @NotBlank @Size(max = 500) String name,
       @Size(max = 20_000) String description,

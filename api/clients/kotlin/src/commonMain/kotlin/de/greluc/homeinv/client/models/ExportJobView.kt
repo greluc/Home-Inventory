@@ -46,13 +46,13 @@ import kotlinx.serialization.encoding.*
 data class ExportJobView (
 
     /* how large the archive is, or `null` until it exists */
-    @SerialName(value = "byteSize") @Required val byteSize: kotlin.Long,
+    @SerialName(value = "byteSize") @Required val byteSize: kotlin.Long?,
 
     /* what went wrong, or `null`. Never a stack trace: it is shown to whoever asked */
-    @SerialName(value = "failure") @Required val failure: kotlin.String,
+    @SerialName(value = "failure") @Required val failure: kotlin.String?,
 
     /* when it finished, or `null` */
-    @SerialName(value = "finishedAt") @Required val finishedAt: kotlin.time.Instant,
+    @SerialName(value = "finishedAt") @Required val finishedAt: kotlin.time.Instant?,
 
     /* its id */
     @SerialName(value = "id") @Required val id: kotlin.String,

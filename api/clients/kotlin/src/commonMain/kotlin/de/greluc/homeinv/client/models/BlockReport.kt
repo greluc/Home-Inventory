@@ -43,7 +43,7 @@ data class BlockReport (
     @SerialName(value = "block") @Required val block: kotlin.String,
 
     /* what was left and why, or null when everything of this block's went. The one entry that always carries a note is `audit`: the application holds `INSERT` and `SELECT` on the log and nothing else (`REQ-SEC-069`), so the log outlives the erasure and is removed by the retention run under `homeinv_housekeeping` */
-    @SerialName(value = "note") @Required val note: kotlin.String,
+    @SerialName(value = "note") @Required val note: kotlin.String?,
 
     /* how many rows went */
     @SerialName(value = "rowsRemoved") @Required val rowsRemoved: kotlin.Long

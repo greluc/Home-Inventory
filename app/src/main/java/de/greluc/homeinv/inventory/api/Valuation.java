@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Money;
 import java.time.LocalDate;
 
@@ -42,17 +43,17 @@ import java.time.LocalDate;
  *     refresh run rewrites only what it wrote, so a figure somebody typed survives the night
  */
 public record Valuation(
-    Money purchase,
-    LocalDate purchasedOn,
-    String purchaseSource,
-    LocalDate warrantyUntil,
-    boolean lifetimeWarranty,
-    Money replacement,
-    LocalDate replacementAsOf,
-    Provenance replacementSource,
-    Money currentValue,
-    LocalDate currentValueAsOf,
-    Provenance currentValueSource) {
+    @Nullable Money purchase,
+    @Nullable LocalDate purchasedOn,
+    @Nullable String purchaseSource,
+    @Nullable LocalDate warrantyUntil,
+    @Nullable boolean lifetimeWarranty,
+    @Nullable Money replacement,
+    @Nullable LocalDate replacementAsOf,
+    @Nullable Provenance replacementSource,
+    @Nullable Money currentValue,
+    @Nullable LocalDate currentValueAsOf,
+    @Nullable Provenance currentValueSource) {
 
   /**
    * A valuation that says nothing about where its current value came from.

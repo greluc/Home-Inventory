@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.notification.api;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -133,7 +134,7 @@ public interface ReminderRules {
       UUID id,
       String name,
       ReminderTrigger trigger,
-      UUID savedSearchId,
+      @Nullable UUID savedSearchId,
       int offsetDays,
       String channelKey,
       boolean enabled,

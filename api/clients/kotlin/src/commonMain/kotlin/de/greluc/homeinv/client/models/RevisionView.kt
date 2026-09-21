@@ -45,7 +45,7 @@ data class RevisionView (
     @SerialName(value = "changedAt") @Required val changedAt: kotlin.time.Instant,
 
     /* who, or `null` where a system process made the change */
-    @SerialName(value = "changedBy") @Required val changedBy: kotlin.String,
+    @SerialName(value = "changedBy") @Required val changedBy: kotlin.String?,
 
     /* what happened */
     @SerialName(value = "kind") @Required val kind: RevisionView.Kind,

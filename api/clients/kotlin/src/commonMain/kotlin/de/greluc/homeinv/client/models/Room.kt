@@ -52,7 +52,7 @@ data class Room (
     @SerialName(value = "path") @Required val path: kotlin.String,
 
     /* what they would cost to replace, per currency */
-    @SerialName(value = "totals") @Required val totals: kotlin.collections.List<MoneyJson>
+    @SerialName(value = "totals") @Required val totals: kotlin.collections.List<MoneyJson?>
 
 ) {
 

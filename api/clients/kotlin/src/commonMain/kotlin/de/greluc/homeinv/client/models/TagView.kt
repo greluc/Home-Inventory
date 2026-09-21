@@ -43,19 +43,19 @@ import kotlinx.serialization.encoding.*
 data class TagView (
 
     /* `#rrggbb`, or `null` when the tenant chose none (REQ-CORE-062) */
-    @SerialName(value = "colour") @Required val colour: kotlin.String,
+    @SerialName(value = "colour") @Required val colour: kotlin.String?,
 
     /* the group it belongs to, or `null` */
-    @SerialName(value = "groupId") @Required val groupId: kotlin.String,
+    @SerialName(value = "groupId") @Required val groupId: kotlin.String?,
 
     /* an icon name for clients, or `null` */
-    @SerialName(value = "icon") @Required val icon: kotlin.String,
+    @SerialName(value = "icon") @Required val icon: kotlin.String?,
 
     /* the tag */
     @SerialName(value = "id") @Required val id: kotlin.String,
 
     /* what this tag became, or `null` while it is itself. A tag with a value here is a tombstone: it is offered nowhere, carries nothing, and exists so a client holding its id is redirected rather than told the tag never existed (REQ-CORE-063) */
-    @SerialName(value = "mergedInto") @Required val mergedInto: kotlin.String,
+    @SerialName(value = "mergedInto") @Required val mergedInto: kotlin.String?,
 
     /* the name a person reads, unique per tenant among the live ones */
     @SerialName(value = "name") @Required val name: kotlin.String

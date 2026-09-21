@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -289,7 +290,7 @@ public class PluginController {
       String type,
       boolean required,
       List<String> values,
-      String defaultValue,
+      @Nullable String defaultValue,
       java.util.Map<String, String> label,
       String value,
       boolean set) {}

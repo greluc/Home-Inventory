@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import java.time.Instant;
@@ -88,5 +89,5 @@ public class VersionController {
    * @param licence the licence the source is under, so a reader knows what the offer is about
    */
   public record BuildVersion(
-      String version, String commit, Instant builtAt, String source, String licence) {}
+      String version, String commit, @Nullable Instant builtAt, String source, String licence) {}
 }

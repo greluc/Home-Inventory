@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.UUID;
 
@@ -47,11 +48,11 @@ public record FieldDefinitionView(
     Map<String, String> labels,
     Map<String, String> helpTexts,
     boolean required,
-    String defaultValue,
-    FieldConstraints constraints,
-    UUID valueListId,
+    @Nullable String defaultValue,
+    @Nullable FieldConstraints constraints,
+    @Nullable UUID valueListId,
     VisibilityRule visibility,
-    String group,
+    @Nullable String group,
     int displayOrder,
     boolean searchable,
     boolean sortable,

@@ -49,7 +49,7 @@ data class MediaView (
     @SerialName(value = "byteSize") @Required val byteSize: kotlin.Long,
 
     /* the height for an image, or `null` */
-    @SerialName(value = "heightPx") @Required val heightPx: kotlin.Int,
+    @SerialName(value = "heightPx") @Required val heightPx: kotlin.Int?,
 
     /* the media object */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -70,7 +70,7 @@ data class MediaView (
     @SerialName(value = "urls") @Required val urls: kotlin.collections.Map<kotlin.String, kotlin.String>,
 
     /* the width for an image, or `null` */
-    @SerialName(value = "widthPx") @Required val widthPx: kotlin.Int
+    @SerialName(value = "widthPx") @Required val widthPx: kotlin.Int?
 
 ) {
 

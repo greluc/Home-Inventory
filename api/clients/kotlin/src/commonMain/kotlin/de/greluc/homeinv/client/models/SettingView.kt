@@ -45,7 +45,7 @@ import kotlinx.serialization.encoding.*
 data class SettingView (
 
     /* what applies when nothing is set here, or null */
-    @SerialName(value = "defaultValue") @Required val defaultValue: kotlin.String,
+    @SerialName(value = "defaultValue") @Required val defaultValue: kotlin.String?,
 
     /* the manifest's key */
     @SerialName(value = "key") @Required val key: kotlin.String,

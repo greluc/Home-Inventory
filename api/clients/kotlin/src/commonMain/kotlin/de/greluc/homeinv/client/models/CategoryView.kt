@@ -52,10 +52,10 @@ data class CategoryView (
     @SerialName(value = "builtin") @Required val builtin: kotlin.Boolean,
 
     /* the version being edited, or `null` */
-    @SerialName(value = "draftVersionId") @Required val draftVersionId: kotlin.String,
+    @SerialName(value = "draftVersionId") @Required val draftVersionId: kotlin.String?,
 
     /* an icon name for the client, or `null` */
-    @SerialName(value = "icon") @Required val icon: kotlin.String,
+    @SerialName(value = "icon") @Required val icon: kotlin.String?,
 
     /* the category */
     @SerialName(value = "id") @Required val id: kotlin.String,
@@ -70,7 +70,7 @@ data class CategoryView (
     @SerialName(value = "mobile") @Required val mobile: kotlin.Boolean,
 
     /* the newest published version, or `null` */
-    @SerialName(value = "publishedVersionId") @Required val publishedVersionId: kotlin.String
+    @SerialName(value = "publishedVersionId") @Required val publishedVersionId: kotlin.String?
 
 ) {
 

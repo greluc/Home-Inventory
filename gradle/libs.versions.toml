@@ -135,6 +135,16 @@ spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-s
 # What the generated Kotlin client compiles against. The generator's own sample
 # build file names the same set; it lives here instead, because a version in a
 # generated file is a version nothing renovates (REQ-NFR-029).
+# `@Nullable` on a record component, which `NullablePropertiesSaySo` turns into the
+# nullability of a property in the published contract (ADR-0081). Declared rather than
+# relied on transitively for the reason aspectjweaver is: it reaches the API document, and
+# a dependency the CONTRACT depends on is one this build names itself.
+#
+# Jakarta's and not JSpecify's, although Spring Framework 7 brings the latter: JSpecify's
+# `@Nullable` is `TYPE_USE` only, which lands on the type and not on the record's field,
+# accessor or constructor parameter -- where the schema resolver looks. Jakarta's declares
+# no `@Target` at all and is therefore on all four.
+jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }

@@ -78,9 +78,10 @@ public class DefaultInsuranceDocuments implements InsuranceDocuments {
     Map<UUID, ItemEvidence.Picture> photos = new LinkedHashMap<>();
     for (InsuranceReport.Room room : report.rooms()) {
       for (InsuranceReport.Line line : room.lines()) {
-        if (line.photo() != null) {
+        InsuranceReport.Evidence photo = line.photo();
+        if (photo != null) {
           evidence
-              .pictureOf(line.photo().mediaObjectId())
+              .pictureOf(photo.mediaObjectId())
               .ifPresent(picture -> photos.put(line.itemId(), picture));
         }
       }

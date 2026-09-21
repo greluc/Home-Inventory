@@ -42,7 +42,7 @@ import kotlinx.serialization.encoding.*
 data class EnrolmentView (
 
     /* when it was confirmed, or null */
-    @SerialName(value = "enrolledAt") @Required val enrolledAt: kotlin.time.Instant,
+    @SerialName(value = "enrolledAt") @Required val enrolledAt: kotlin.time.Instant?,
 
     /* the registered passkeys, oldest first */
     @SerialName(value = "passkeys") @Required val passkeys: kotlin.collections.List<PasskeyView>,

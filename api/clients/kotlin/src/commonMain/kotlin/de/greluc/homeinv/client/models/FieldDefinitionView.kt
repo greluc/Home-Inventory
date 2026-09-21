@@ -63,7 +63,7 @@ data class FieldDefinitionView (
     @SerialName(value = "dataType") @Required val dataType: FieldDefinitionView.DataType,
 
     /* the JSON text of the value a new item starts with, or `null` */
-    @SerialName(value = "defaultValue") @Required val defaultValue: kotlin.String,
+    @SerialName(value = "defaultValue") @Required val defaultValue: kotlin.String?,
 
     /* whether it is hidden from new input while its values remain (REQ-CORE-026) */
     @SerialName(value = "deprecated") @Required val deprecated: kotlin.Boolean,
@@ -78,7 +78,7 @@ data class FieldDefinitionView (
     @SerialName(value = "facetable") @Required val facetable: kotlin.Boolean,
 
     /* the form section the tenant put it in, or `null` */
-    @SerialName(value = "group") @Required val group: kotlin.String,
+    @SerialName(value = "group") @Required val group: kotlin.String?,
 
     /* the explanatory line per language tag, empty when the tenant wrote none */
     @SerialName(value = "helpTexts") @Required val helpTexts: kotlin.collections.Map<kotlin.String, kotlin.String>,
@@ -105,7 +105,7 @@ data class FieldDefinitionView (
     @SerialName(value = "sortable") @Required val sortable: kotlin.Boolean,
 
     /* the list an `enum` or `multi-enum` draws from, `null` otherwise */
-    @SerialName(value = "valueListId") @Required val valueListId: kotlin.String,
+    @SerialName(value = "valueListId") @Required val valueListId: kotlin.String?,
 
     /* the one condition that decides whether a client shows this field, or ` null` when it is always shown */
     @SerialName(value = "visibility") @Required val visibility: VisibilityRule

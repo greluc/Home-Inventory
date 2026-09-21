@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Entitlement;
@@ -313,7 +314,7 @@ public class InstanceController {
       String displayName,
       boolean instanceOperator,
       boolean mayCreateTenants,
-      Integer tenantLimit,
+      @Nullable Integer tenantLimit,
       boolean locked) {}
 
   /**

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -373,9 +374,9 @@ public class FederatedAuthController {
       UUID id,
       String providerKey,
       String issuer,
-      String email,
+      @Nullable String email,
       String linkedAt,
-      String lastUsedAt) {}
+      @Nullable String lastUsedAt) {}
 
   /**
    * A refusal that already knows which problem type it is.

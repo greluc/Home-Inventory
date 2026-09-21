@@ -55,7 +55,7 @@ data class QueuedNotification (
     @SerialName(value = "id") @Required val id: kotlin.String,
 
     /* when the next one is due, or `null` once it is finished */
-    @SerialName(value = "nextAttemptAt") @Required val nextAttemptAt: kotlin.time.Instant,
+    @SerialName(value = "nextAttemptAt") @Required val nextAttemptAt: kotlin.time.Instant?,
 
     /* `QUEUED`, `DELIVERED` or `DEAD_LETTERED` */
     @SerialName(value = "state") @Required val state: kotlin.String

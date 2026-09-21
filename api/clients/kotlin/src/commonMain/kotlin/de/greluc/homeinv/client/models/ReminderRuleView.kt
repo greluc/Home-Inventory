@@ -61,7 +61,7 @@ data class ReminderRuleView (
     @SerialName(value = "offsetDays") @Required val offsetDays: kotlin.Int,
 
     /* which things it watches, or `null` for all of them */
-    @SerialName(value = "savedSearchId") @Required val savedSearchId: kotlin.String,
+    @SerialName(value = "savedSearchId") @Required val savedSearchId: kotlin.String?,
 
     /* which date or condition it watches */
     @SerialName(value = "trigger") @Required val trigger: ReminderRuleView.Trigger,

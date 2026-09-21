@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Money;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -113,8 +114,8 @@ public interface MaintenanceLog {
       UUID itemId,
       LocalDate performedOn,
       String kind,
-      Money cost,
-      String note,
+      @Nullable Money cost,
+      @Nullable String note,
       Instant recordedAt,
       UUID recordedBy) {}
 }

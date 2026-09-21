@@ -114,3 +114,9 @@ a check: `SchemaNameTest`, `OpenApiDocumentIT`, `npm run client:check` and
   and inventing one from a Java type would claim "may be null" of an id that never is. A
   generated client therefore knows which fields arrive and not which may be empty — which
   is exactly what the hand-written client asserted before there was a generated one.
+
+  > **Amended by [ADR-0081](0081-the-contract-says-which-values-may-be-null.md)** — the same day, because that was a gap left open rather
+  > than a decision taken. It is closed with `@Nullable` on the 83 components whose
+  > Javadoc already said so, published as JSON Schema's `type: [x, "null"]`. The half of
+  > the sentence that survives is why nothing was invented from the Java type: the
+  > annotation says which ones, and the ones it does not name are not null.

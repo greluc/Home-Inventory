@@ -44,7 +44,7 @@ import kotlinx.serialization.encoding.*
 data class ServiceAccountView (
 
     /* what it is for, or null */
-    @SerialName(value = "description") @Required val description: kotlin.String,
+    @SerialName(value = "description") @Required val description: kotlin.String?,
 
     /* when it stops working */
     @SerialName(value = "expiresAt") @Required val expiresAt: kotlin.time.Instant,
@@ -53,7 +53,7 @@ data class ServiceAccountView (
     @SerialName(value = "id") @Required val id: kotlin.String,
 
     /* when it last authenticated, or null when it never has */
-    @SerialName(value = "lastUsedAt") @Required val lastUsedAt: kotlin.time.Instant,
+    @SerialName(value = "lastUsedAt") @Required val lastUsedAt: kotlin.time.Instant?,
 
     /* what it is called */
     @SerialName(value = "name") @Required val name: kotlin.String,
@@ -62,7 +62,7 @@ data class ServiceAccountView (
     @SerialName(value = "role") @Required val role: kotlin.String,
 
     /* the tenant-owned role extending it, or null */
-    @SerialName(value = "roleDefinitionId") @Required val roleDefinitionId: kotlin.String
+    @SerialName(value = "roleDefinitionId") @Required val roleDefinitionId: kotlin.String?
 
 ) {
 

@@ -499,20 +499,22 @@ public class Item {
     de.greluc.homeinv.inventory.api.Valuation values =
         valuation == null ? de.greluc.homeinv.inventory.api.Valuation.NONE : valuation;
 
-    this.purchaseAmount = values.purchase() == null ? null : values.purchase().amount();
-    this.purchaseCurrency = values.purchase() == null ? null : values.purchase().currencyCode();
+    de.greluc.homeinv.platform.Money purchase = values.purchase();
+    this.purchaseAmount = purchase == null ? null : purchase.amount();
+    this.purchaseCurrency = purchase == null ? null : purchase.currencyCode();
     this.purchasedOn = values.purchasedOn();
     this.purchaseSource = values.purchaseSource();
 
     this.warrantyUntil = values.warrantyUntil();
     this.lifetimeWarranty = values.lifetimeWarranty();
 
-    this.replacementAmount = values.replacement() == null ? null : values.replacement().amount();
-    this.replacementCurrency =
-        values.replacement() == null ? null : values.replacement().currencyCode();
+    de.greluc.homeinv.platform.Money replacement = values.replacement();
+    this.replacementAmount = replacement == null ? null : replacement.amount();
+    this.replacementCurrency = replacement == null ? null : replacement.currencyCode();
     this.replacementAsOf = values.replacementAsOf();
-    this.replacementSource =
-        values.replacementSource() == null ? null : values.replacementSource().name();
+    de.greluc.homeinv.inventory.api.Valuation.Provenance replacementSource =
+        values.replacementSource();
+    this.replacementSource = replacementSource == null ? null : replacementSource.name();
 
     // THE SOURCE CHANGES WHEN THE NUMBER DOES, and not before. A client that
     // reads an item, renames it and writes the whole thing back is sending the
@@ -520,10 +522,9 @@ public class Item {
     // typing it would freeze the value for ever, because the refresh run never
     // touches what a person owns. A different number is a person's number; the
     // same number is the same number.
-    java.math.BigDecimal incomingAmount =
-        values.currentValue() == null ? null : values.currentValue().amount();
-    String incomingCurrency =
-        values.currentValue() == null ? null : values.currentValue().currencyCode();
+    de.greluc.homeinv.platform.Money currentValue = values.currentValue();
+    java.math.BigDecimal incomingAmount = currentValue == null ? null : currentValue.amount();
+    String incomingCurrency = currentValue == null ? null : currentValue.currencyCode();
     boolean sameFigure =
         java.util.Objects.equals(
                 incomingAmount == null ? null : incomingAmount.stripTrailingZeros(),
@@ -533,10 +534,12 @@ public class Item {
     this.currentAmount = incomingAmount;
     this.currentCurrency = incomingCurrency;
     this.currentAsOf = values.currentValueAsOf();
-    if (values.currentValue() == null) {
+    de.greluc.homeinv.inventory.api.Valuation.Provenance currentSource =
+        values.currentValueSource();
+    if (currentValue == null) {
       this.currentSource = null;
-    } else if (values.currentValueSource() != null) {
-      this.currentSource = values.currentValueSource().name();
+    } else if (currentSource != null) {
+      this.currentSource = currentSource.name();
     } else if (!sameFigure || this.currentSource == null) {
       this.currentSource = de.greluc.homeinv.inventory.api.Valuation.Provenance.MANUAL.name();
     }

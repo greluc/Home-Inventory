@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.notification.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.EventType;
 import java.time.Instant;
 import java.util.List;
@@ -164,7 +165,7 @@ public interface WebhookTargets {
   record WebhookTargetView(
       UUID id,
       String url,
-      String description,
+      @Nullable String description,
       Set<EventType> eventTypes,
       boolean enabled,
       long version,

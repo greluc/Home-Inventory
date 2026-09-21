@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.portability.api;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -106,8 +107,8 @@ public interface ImportService {
       boolean dryRun,
       int progress,
       long byteSize,
-      String report,
-      String failure,
+      @Nullable String report,
+      @Nullable String failure,
       Instant requestedAt,
-      Instant finishedAt) {}
+      @Nullable Instant finishedAt) {}
 }

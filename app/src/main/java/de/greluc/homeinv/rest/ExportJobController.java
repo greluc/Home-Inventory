@@ -109,12 +109,13 @@ public class ExportJobController {
   @CanFail({ProblemType.NOT_FOUND, ProblemType.EXPORT_NOT_READY})
   public ResponseEntity<InputStreamResource> content(@PathVariable UUID id) throws IOException {
     ExportService.ExportJobView job = exports.job(id);
+    Long byteSize = job.byteSize();
     return ResponseEntity.status(HttpStatus.OK)
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             "attachment; filename=\"home-inventory-export-" + id + ".zip\"")
         .contentType(MediaType.parseMediaType("application/zip"))
-        .contentLength(job.byteSize() == null ? -1 : job.byteSize())
+        .contentLength(byteSize == null ? -1 : byteSize)
         .body(new InputStreamResource(exports.open(id)));
   }
 }

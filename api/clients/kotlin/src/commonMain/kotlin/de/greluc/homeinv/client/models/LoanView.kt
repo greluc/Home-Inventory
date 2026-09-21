@@ -48,13 +48,13 @@ import kotlinx.serialization.encoding.*
 data class LoanView (
 
     /* the name that was typed, or `null` */
-    @SerialName(value = "borrowerName") @Required val borrowerName: kotlin.String,
+    @SerialName(value = "borrowerName") @Required val borrowerName: kotlin.String?,
 
     /* the member who has it, or `null` */
-    @SerialName(value = "borrowerUserId") @Required val borrowerUserId: kotlin.String,
+    @SerialName(value = "borrowerUserId") @Required val borrowerUserId: kotlin.String?,
 
     /* when it is due back, or `null` */
-    @SerialName(value = "dueOn") @Required val dueOn: kotlinx.datetime.LocalDate,
+    @SerialName(value = "dueOn") @Required val dueOn: kotlinx.datetime.LocalDate?,
 
     /* when it went out */
     @SerialName(value = "handedOutOn") @Required val handedOutOn: kotlinx.datetime.LocalDate,
@@ -66,7 +66,7 @@ data class LoanView (
     @SerialName(value = "itemId") @Required val itemId: kotlin.String,
 
     /* anything else worth knowing, or `null` */
-    @SerialName(value = "note") @Required val note: kotlin.String,
+    @SerialName(value = "note") @Required val note: kotlin.String?,
 
     /* Whether the item is still out. */
     @SerialName(value = "open") @Required val `open`: kotlin.Boolean,
@@ -78,7 +78,7 @@ data class LoanView (
     @SerialName(value = "recordedBy") @Required val recordedBy: kotlin.String,
 
     /* when it came back, or `null` while it is still out */
-    @SerialName(value = "returnedOn") @Required val returnedOn: kotlinx.datetime.LocalDate
+    @SerialName(value = "returnedOn") @Required val returnedOn: kotlinx.datetime.LocalDate?
 
 ) {
 

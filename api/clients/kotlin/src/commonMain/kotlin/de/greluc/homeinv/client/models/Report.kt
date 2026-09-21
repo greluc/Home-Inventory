@@ -53,7 +53,7 @@ data class Report (
     @SerialName(value = "rooms") @Required val rooms: kotlin.collections.List<Room>,
 
     /* the whole report's replacement value, per currency */
-    @SerialName(value = "totals") @Required val totals: kotlin.collections.List<MoneyJson>,
+    @SerialName(value = "totals") @Required val totals: kotlin.collections.List<MoneyJson?>,
 
     /* how many items were left out because nobody has recorded what replacing them would cost. Counted rather than hidden: an insurance report that quietly omits half a household is worse than one that says it did */
     @SerialName(value = "withoutAReplacementValue") @Required val withoutAReplacementValue: kotlin.Long

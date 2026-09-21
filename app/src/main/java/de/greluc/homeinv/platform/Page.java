@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.platform;
 
+import jakarta.annotation.Nullable;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.Objects;
@@ -164,7 +165,7 @@ public record Page<T>(
    *     counted. Explicitly an estimate — an exact total over a million rows costs more than it is
    *     worth (08 §8.2) — and absent rather than wrong where counting is not cheap
    */
-  public record PageInfo(String nextCursor, boolean hasMore, Long estimatedTotal) {}
+  public record PageInfo(@Nullable String nextCursor, boolean hasMore, @Nullable Long estimatedTotal) {}
 
   /**
    * What was true of the answer rather than of the rows.
@@ -175,7 +176,7 @@ public record Page<T>(
    *     {@code null} when nothing is degraded
    * @param took how many milliseconds the request took, or {@code null} before the edge fills it in
    */
-  public record Meta(boolean degraded, String degradedReason, Long took) {
+  public record Meta(boolean degraded, @Nullable String degradedReason, @Nullable Long took) {
 
     /** Nothing wrong, and nothing measured yet. What a block returns before the edge sees it. */
     public static final Meta SOUND = new Meta(false, null, null);

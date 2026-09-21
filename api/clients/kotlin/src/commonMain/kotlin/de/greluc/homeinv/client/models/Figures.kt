@@ -41,13 +41,13 @@ import kotlinx.serialization.encoding.*
 data class Figures (
 
     /* what they are worth now, per currency */
-    @SerialName(value = "current") @Required val current: kotlin.collections.List<MoneyJson>,
+    @SerialName(value = "current") @Required val current: kotlin.collections.List<MoneyJson?>,
 
     /* what the things cost, per currency */
-    @SerialName(value = "purchase") @Required val purchase: kotlin.collections.List<MoneyJson>,
+    @SerialName(value = "purchase") @Required val purchase: kotlin.collections.List<MoneyJson?>,
 
     /* what replacing them would cost, per currency */
-    @SerialName(value = "replacement") @Required val replacement: kotlin.collections.List<MoneyJson>
+    @SerialName(value = "replacement") @Required val replacement: kotlin.collections.List<MoneyJson?>
 
 ) {
 

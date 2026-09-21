@@ -42,7 +42,7 @@ import kotlinx.serialization.encoding.*
 data class BuildVersion (
 
     /* when it was built, or `null` when the build carried no information */
-    @SerialName(value = "builtAt") @Required val builtAt: kotlin.time.Instant,
+    @SerialName(value = "builtAt") @Required val builtAt: kotlin.time.Instant?,
 
     /* the exact commit it was built from, or `unknown` where the build had no git directory and was given no override */
     @SerialName(value = "commit") @Required val commit: kotlin.String,

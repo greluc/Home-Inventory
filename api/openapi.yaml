@@ -87,7 +87,9 @@ components:
         tenantLimit:
           description: their own limit, or null when the instance-wide default applies
           format: int32
-          type: integer
+          type:
+          - integer
+          - 'null'
       required:
       - displayName
       - email
@@ -143,7 +145,9 @@ components:
             that always carries a note is `audit`: the application holds `INSERT` and
             `SELECT` on the log and nothing else (`REQ-SEC-069`), so the log outlives the erasure
             and is removed by the retention run under `homeinv_housekeeping`
-          type: string
+          type:
+          - string
+          - 'null'
         rowsRemoved:
           description: how many rows went
           format: int64
@@ -175,7 +179,9 @@ components:
         builtAt:
           description: when it was built, or `null` when the build carried no information
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         commit:
           description: |-
             the exact commit it was built from, or `unknown` where the build had no
@@ -216,7 +222,9 @@ components:
             because a header cannot carry 500 of them
           format: int64
           minimum: 0
-          type: integer
+          type:
+          - integer
+          - 'null'
       required:
       - itemId
       type: object
@@ -225,7 +233,9 @@ components:
       properties:
         detail:
           description: what went wrong in prose, or `null` when nothing did
-          type: string
+          type:
+          - string
+          - 'null'
         itemId:
           description: the item this line is about
           format: uuid
@@ -236,10 +246,14 @@ components:
           type: integer
         title:
           description: the stable name of the condition, or `null` when the entry was applied
-          type: string
+          type:
+          - string
+          - 'null'
         type:
           description: the problem type URI, or `null` when the entry was applied
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - detail
       - itemId
@@ -349,10 +363,14 @@ components:
         draftVersionId:
           description: the version being edited, or `null`
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         icon:
           description: an icon name for the client, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: the category
           format: uuid
@@ -371,7 +389,9 @@ components:
         publishedVersionId:
           description: the newest published version, or `null`
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - archived
       - builtin
@@ -551,7 +571,9 @@ components:
         id:
           description: the client's chosen UUIDv7, or `null` to have one assigned
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         itemTypeId:
           description: |-
             the type, or omitted — the server then uses the tenant's built-in type, which
@@ -757,7 +779,9 @@ components:
         enrolledAt:
           description: when it was confirmed, or null
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         passkeys:
           description: the registered passkeys, oldest first
           items:
@@ -854,16 +878,22 @@ components:
         byteSize:
           description: how large the archive is, or `null` until it exists
           format: int64
-          type: integer
+          type:
+          - integer
+          - 'null'
         failure:
           description: |-
             what went wrong, or `null`. Never a stack trace: it is shown to whoever
             asked
-          type: string
+          type:
+          - string
+          - 'null'
         finishedAt:
           description: when it finished, or `null`
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: its id
           format: uuid
@@ -1035,7 +1065,9 @@ components:
           type: string
         defaultValue:
           description: the JSON text of the value a new item starts with, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         deprecated:
           description: whether it is hidden from new input while its values remain (REQ-CORE-026)
           type: boolean
@@ -1053,7 +1085,9 @@ components:
           type: boolean
         group:
           description: the form section the tenant put it in, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         helpTexts:
           additionalProperties:
             type: string
@@ -1096,7 +1130,9 @@ components:
             the list an `enum` or `multi-enum` draws from, `null`
             otherwise
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         visibility:
           $ref: '#/components/schemas/VisibilityRule'
           description: |-
@@ -1283,11 +1319,15 @@ components:
           type: boolean
         failure:
           description: what went wrong, or null. One sentence, never a stack trace
-          type: string
+          type:
+          - string
+          - 'null'
         finishedAt:
           description: when it ended, or null
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: its id
           format: uuid
@@ -1301,7 +1341,9 @@ components:
             what happened, as a JSON object, or null until the job finishes. Per block: how
             many rows were inserted, how many overwritten and how many deliberately skipped, plus the
             sentences saying what an import never writes
-          type: string
+          type:
+          - string
+          - 'null'
         requestedAt:
           description: when it was uploaded
           format: date-time
@@ -1465,10 +1507,14 @@ components:
         draftVersionId:
           description: the version being edited, or `null` when none is
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         icon:
           description: the icon name, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: the type
           format: uuid
@@ -1485,11 +1531,15 @@ components:
         parentId:
           description: the type it inherits from, or `null`
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         publishedVersionId:
           description: the newest published version, or `null` when none is published
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         usefulLifeMonths:
           format: int32
           type: integer
@@ -1528,7 +1578,9 @@ components:
           type: string
         description:
           description: free text, may be `null`
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: the item's UUIDv7
           format: uuid
@@ -1555,16 +1607,22 @@ components:
         locationId:
           description: where it is; `null` for a digital item
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         maintenanceIntervalDays:
           description: |-
             how often it needs servicing, in days, or `null` when
             nothing reminds about it (REQ-LIFE-004)
           format: int32
-          type: integer
+          type:
+          - integer
+          - 'null'
         minimumStock:
           description: the level below which this consumable needs restocking, or `null`
-          type: number
+          type:
+          - number
+          - 'null'
         name:
           description: the name
           type: string
@@ -1576,7 +1634,9 @@ components:
           type: number
         quantityUnit:
           description: the unit, may be `null`
-          type: string
+          type:
+          - string
+          - 'null'
         updatedAt:
           description: when it last changed
           format: date-time
@@ -1654,7 +1714,9 @@ components:
       properties:
         email:
           description: the address at linking, or null
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: the link, for unlinking
           format: uuid
@@ -1664,7 +1726,9 @@ components:
           type: string
         lastUsedAt:
           description: when it last signed somebody in, or null
-          type: string
+          type:
+          - string
+          - 'null'
         linkedAt:
           description: when it was made, ISO-8601
           type: string
@@ -1719,15 +1783,21 @@ components:
       properties:
         borrowerName:
           description: the name that was typed, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         borrowerUserId:
           description: the member who has it, or `null`
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         dueOn:
           description: when it is due back, or `null`
           format: date
-          type: string
+          type:
+          - string
+          - 'null'
         handedOutOn:
           description: when it went out
           format: date
@@ -1742,7 +1812,9 @@ components:
           type: string
         note:
           description: anything else worth knowing, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         open:
           description: Whether the item is still out.
           type: boolean
@@ -1757,7 +1829,9 @@ components:
         returnedOn:
           description: when it came back, or `null` while it is still out
           format: date
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - borrowerName
       - borrowerUserId
@@ -1794,7 +1868,9 @@ components:
       properties:
         icon:
           description: an icon name for the client, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: the category, which is what a location references
           format: uuid
@@ -1856,7 +1932,9 @@ components:
         parentId:
           description: the parent, or `null` for a root
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         version:
           format: int64
           type: integer
@@ -1908,7 +1986,9 @@ components:
           type: string
         note:
           description: anything else worth knowing, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         performedOn:
           description: when it was done
           format: date
@@ -1993,7 +2073,9 @@ components:
           description: |-
             which item type the rows are written against, or null for the tenant's
             built-in `general`
-          type: string
+          type:
+          - string
+          - 'null'
         key:
           description: how the profile is named in a request — `homebox`, `inventree`
           type: string
@@ -2032,7 +2114,9 @@ components:
         heightPx:
           description: the height for an image, or `null`
           format: int32
-          type: integer
+          type:
+          - integer
+          - 'null'
         id:
           description: the media object
           format: uuid
@@ -2064,7 +2148,9 @@ components:
         widthPx:
           description: the width for an image, or `null`
           format: int32
-          type: integer
+          type:
+          - integer
+          - 'null'
       required:
       - byteSize
       - heightPx
@@ -2095,7 +2181,9 @@ components:
         roleDefinitionId:
           description: the tenant-owned role extending it (REQ-TEN-006), or null
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         roleName:
           description: |-
             what to call the role: the tenant-owned role's name where there is one,
@@ -2106,7 +2194,9 @@ components:
             the part of the tree they are confined to (REQ-TEN-007), or null for the
             whole tenant
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         userId:
           description: the account
           format: uuid
@@ -2133,11 +2223,15 @@ components:
           description: |-
             a stable token from `docs/reference/degraded-reasons.yaml`, or
             `null` when nothing is degraded
-          type: string
+          type:
+          - string
+          - 'null'
         took:
           description: how many milliseconds the request took, or `null` before the edge fills it in
           format: int64
-          type: integer
+          type:
+          - integer
+          - 'null'
       required:
       - degraded
       - degradedReason
@@ -2158,7 +2252,9 @@ components:
         currency:
           description: the ISO 4217 code, three letters
           type: string
-      type: object
+      type:
+      - object
+      - 'null'
     MoveLocationRequest:
       description: Where a location is to be moved.
       properties:
@@ -2168,7 +2264,9 @@ components:
             everything" says so with null rather than with an absent field, and both are read the same
             way
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
       type: object
     OpenSession:
       description: One open session, as its owner sees it.
@@ -2465,7 +2563,9 @@ components:
             counted. Explicitly an estimate — an exact total over a million rows costs more than it is
             worth (08 §8.2) — and absent rather than wrong where counting is not cheap
           format: int64
-          type: integer
+          type:
+          - integer
+          - 'null'
         hasMore:
           description: |-
             whether a following page exists. Derived from the cursor rather than passed, so
@@ -2475,7 +2575,9 @@ components:
           description: |-
             an opaque, signed cursor for the following page, or `null` when this was
             the last. Never an offset: offsets skip and duplicate rows on data that changes under them
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - estimatedTotal
       - hasMore
@@ -3378,7 +3480,9 @@ components:
         lastUsedAt:
           description: when it was last used, or null
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         registeredAt:
           description: when it was registered
           format: date-time
@@ -3538,7 +3642,9 @@ components:
         nextAttemptAt:
           description: when the next one is due, or `null` once it is finished
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         state:
           description: '`QUEUED`, `DELIVERED` or `DEAD_LETTERED`'
           type: string
@@ -3665,7 +3771,9 @@ components:
         savedSearchId:
           description: which things it watches, or `null` for all of them
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         trigger:
           description: which date or condition it watches
           enum:
@@ -3765,7 +3873,9 @@ components:
         changedBy:
           description: who, or `null` where a system process made the change
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         kind:
           description: what happened
           enum:
@@ -3841,11 +3951,15 @@ components:
       properties:
         role:
           description: the built-in role's name, or null
-          type: string
+          type:
+          - string
+          - 'null'
         roleDefinitionId:
           description: the tenant-owned role, or null
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - role
       - roleDefinitionId
@@ -3884,7 +3998,9 @@ components:
           type: string
         description:
           description: what it is for, or null
-          type: string
+          type:
+          - string
+          - 'null'
         effectivePermissions:
           description: |-
             everything it holds, base included — so a client can show what a
@@ -4037,10 +4153,14 @@ components:
           type: string
         q:
           description: the text to search for, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         sort:
           description: the sort key, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         updatedAt:
           description: when it last changed
           format: date-time
@@ -4125,7 +4245,9 @@ components:
       properties:
         description:
           description: what it is for, or null
-          type: string
+          type:
+          - string
+          - 'null'
         expiresAt:
           description: when it stops working
           format: date-time
@@ -4137,7 +4259,9 @@ components:
         lastUsedAt:
           description: when it last authenticated, or null when it never has
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         name:
           description: what it is called
           type: string
@@ -4147,7 +4271,9 @@ components:
         roleDefinitionId:
           description: the tenant-owned role extending it, or null
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - description
       - expiresAt
@@ -4212,7 +4338,9 @@ components:
       properties:
         defaultValue:
           description: what applies when nothing is set here, or null
-          type: string
+          type:
+          - string
+          - 'null'
         key:
           description: the manifest's key
           type: string
@@ -4363,14 +4491,20 @@ components:
       properties:
         colour:
           description: '`#rrggbb`, or `null` when the tenant chose none (REQ-CORE-062)'
-          type: string
+          type:
+          - string
+          - 'null'
         groupId:
           description: the group it belongs to, or `null`
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         icon:
           description: an icon name for clients, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: the tag
           format: uuid
@@ -4381,7 +4515,9 @@ components:
             here is a tombstone: it is offered nowhere, carries nothing, and exists so a client holding
             its id is redirected rather than told the tag never existed (REQ-CORE-063)
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         name:
           description: the name a person reads, unique per tenant among the live ones
           type: string
@@ -4664,7 +4800,9 @@ components:
         currentValueAsOf:
           description: the day that figure was true, or `null`
           format: date
-          type: string
+          type:
+          - string
+          - 'null'
         currentValueSource:
           description: |-
             who says so — {@link Provenance#MANUAL Provenance#MANUAL}, {@link de.greluc.homeinv.inventory.api.Valuation      Provenance#DEPRECIATION} or {@link Provenance#PLUGIN Provenance#PLUGIN} — or `null`. Not decoration: the
@@ -4673,13 +4811,17 @@ components:
           - MANUAL
           - DEPRECIATION
           - PLUGIN
-          type: string
+          type:
+          - string
+          - 'null'
         lifetimeWarranty:
           description: |-
             whether it is covered for life, in which case `warrantyUntil` is
             `null`. A flag rather than a date far in the future, because "2099-12-31" is a date
             somebody would eventually have to explain
-          type: boolean
+          type:
+          - boolean
+          - 'null'
         purchase:
           $ref: '#/components/schemas/MoneyJson'
           description: what it cost, or `null`
@@ -4687,18 +4829,24 @@ components:
           description: |-
             where from — a shop, a person, a listing — or `null`. Free text: an
             invoice is an attachment like any other and needs no field of its own
-          type: string
+          type:
+          - string
+          - 'null'
         purchasedOn:
           description: when it was bought, or `null`
           format: date
-          type: string
+          type:
+          - string
+          - 'null'
         replacement:
           $ref: '#/components/schemas/MoneyJson'
           description: what it would cost to replace, or `null`
         replacementAsOf:
           description: the day that figure was true, or `null`
           format: date
-          type: string
+          type:
+          - string
+          - 'null'
         replacementSource:
           description: |-
             who said so — {@link Provenance#MANUAL Provenance#MANUAL} or {@link Provenance#PLUGIN Provenance#PLUGIN} —
@@ -4707,11 +4855,15 @@ components:
           - MANUAL
           - DEPRECIATION
           - PLUGIN
-          type: string
+          type:
+          - string
+          - 'null'
         warrantyUntil:
           description: when the warranty ends, or `null`
           format: date
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - currentValue
       - currentValueAsOf
@@ -5005,7 +5157,9 @@ components:
           type: string
         description:
           description: what a person calls it, or `null`
-          type: string
+          type:
+          - string
+          - 'null'
         enabled:
           description: whether it receives anything
           type: boolean

@@ -42,7 +42,7 @@ import kotlinx.serialization.encoding.*
 data class BulkEntryStatus (
 
     /* what went wrong in prose, or `null` when nothing did */
-    @SerialName(value = "detail") @Required val detail: kotlin.String,
+    @SerialName(value = "detail") @Required val detail: kotlin.String?,
 
     /* the item this line is about */
     @SerialName(value = "itemId") @Required val itemId: kotlin.String,
@@ -51,10 +51,10 @@ data class BulkEntryStatus (
     @SerialName(value = "status") @Required val status: kotlin.Int,
 
     /* the stable name of the condition, or `null` when the entry was applied */
-    @SerialName(value = "title") @Required val title: kotlin.String,
+    @SerialName(value = "title") @Required val title: kotlin.String?,
 
     /* the problem type URI, or `null` when the entry was applied */
-    @SerialName(value = "type") @Required val type: kotlin.String
+    @SerialName(value = "type") @Required val type: kotlin.String?
 
 ) {
 

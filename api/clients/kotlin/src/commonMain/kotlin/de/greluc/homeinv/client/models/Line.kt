@@ -65,7 +65,7 @@ data class Line (
     @SerialName(value = "receipts") @Required val receipts: kotlin.collections.List<Evidence>,
 
     /* what replacing it would cost */
-    @SerialName(value = "replacement") @Required val replacement: MoneyJson,
+    @SerialName(value = "replacement") @Required val replacement: MoneyJson?,
 
     /* who said so — `MANUAL` or `PLUGIN` */
     @SerialName(value = "source") @Required val source: kotlin.String

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
@@ -311,7 +312,7 @@ public class SecondFactorController {
    */
   public record EnrolmentView(
       boolean totpConfirmed,
-      Instant enrolledAt,
+      @Nullable Instant enrolledAt,
       int recoveryCodesLeft,
       List<PasskeyView> passkeys) {}
 
@@ -323,7 +324,7 @@ public class SecondFactorController {
    * @param registeredAt when it was registered
    * @param lastUsedAt when it was last used, or null
    */
-  public record PasskeyView(UUID id, String label, Instant registeredAt, Instant lastUsedAt) {}
+  public record PasskeyView(UUID id, String label, Instant registeredAt, @Nullable Instant lastUsedAt) {}
 
   /**
    * The options one side of a ceremony needs.

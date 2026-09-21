@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.portability.api;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -91,11 +92,11 @@ public interface ExportService {
       UUID id,
       String state,
       int progress,
-      Long byteSize,
-      String failure,
+      @Nullable Long byteSize,
+      @Nullable String failure,
       Instant requestedAt,
       UUID requestedBy,
-      Instant finishedAt) {
+      @Nullable Instant finishedAt) {
 
     /**
      * Whether the archive can be downloaded.

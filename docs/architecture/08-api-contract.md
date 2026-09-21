@@ -536,6 +536,7 @@ send the fragment to the server, so it leaks nothing.
 | Examples in the specification are valid | Schema validation of the examples | yes |
 | GraphQL schema unbroken | Schema comparison | yes |
 | Protobuf unbroken | `buf breaking` | yes |
+| Every property says whether it is present and whether it may be null | `required` from the record's components, `type: [x, "null"]` from `@Nullable` on them ([ADR-0081](../adr/0081-the-contract-says-which-values-may-be-null.md)) | yes — the generated clients carry both, and a client that compiled against one of the two would be wrong about the other |
 | Generated clients compile | TS `tsc` over `web/src/generated/api.d.ts`, `./gradlew :api-client-kotlin:build` | yes — and both are **committed and drift-checked**, `npm run client:check` and `tools/kotlin_client.py --check` ([ADR-0080](../adr/0080-a-generated-client-is-committed-and-the-document-must-earn-it.md)) |
 | Event schemas unbroken | Schema comparison | yes |
 | Every endpoint has an authorization test | A dedicated rule: an endpoint declaring none of `@RequiresPermission`, `@RequiresEntitlement` ([ADR-0057](../adr/0057-the-instance-operator.md)) and an explicit `@PublicEndpoint` marker fails the build, in `ArchitectureRulesTest` and again in `PermissionInterceptor` at run time | yes |

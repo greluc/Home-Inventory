@@ -204,6 +204,12 @@ commit".
 
 ### Added
 
+- **The API description now says which values can be empty.** It already said
+  which fields a response carries; it now also says which of them may come back
+  with nothing in them, so a client knows the difference before it runs rather
+  than after. Putting that in the code turned up thirteen places where the
+  server itself read such a value without checking.
+
 - **The clients are generated from the API description.** The web client's types
   now come from the same document the server publishes, so a field the server
   stops sending, or a path that moves, fails the build instead of a screen. A
@@ -998,7 +1004,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 81 architecture decision records, each with its alternatives and consequences —
+- 82 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

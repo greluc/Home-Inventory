@@ -47,7 +47,7 @@ data class PasskeyView (
     @SerialName(value = "label") @Required val label: kotlin.String,
 
     /* when it was last used, or null */
-    @SerialName(value = "lastUsedAt") @Required val lastUsedAt: kotlin.time.Instant,
+    @SerialName(value = "lastUsedAt") @Required val lastUsedAt: kotlin.time.Instant?,
 
     /* when it was registered */
     @SerialName(value = "registeredAt") @Required val registeredAt: kotlin.time.Instant
