@@ -37,6 +37,8 @@ import kotlinx.serialization.encoding.*
  * @param id its reverse-domain id
  * @param name what a person sees
  * @param registeredAt when it was first seen
+ * @param signed whether this core verified its manifest signature against the public key the operator installed for it (REQ-PLG-004, ADR-0085)
+ * @param stateReason why it is in that state, in a sentence, or null when there is nothing to say. This is the operator's surface, and a plugin taken out of service by its signature is exactly the case where \"disabled\" on its own tells them nothing they can act on — an altered manifest and a publisher who never signed are different problems with different answers
  * @param version the plugin's own version
  */
 @Serializable
@@ -57,6 +59,12 @@ data class InstancePluginView (
 
     /* when it was first seen */
     @SerialName(value = "registeredAt") @Required val registeredAt: kotlin.time.Instant,
+
+    /* whether this core verified its manifest signature against the public key the operator installed for it (REQ-PLG-004, ADR-0085) */
+    @SerialName(value = "signed") @Required val signed: kotlin.Boolean,
+
+    /* why it is in that state, in a sentence, or null when there is nothing to say. This is the operator's surface, and a plugin taken out of service by its signature is exactly the case where \"disabled\" on its own tells them nothing they can act on — an altered manifest and a publisher who never signed are different problems with different answers */
+    @SerialName(value = "stateReason") @Required val stateReason: kotlin.String?,
 
     /* the plugin's own version */
     @SerialName(value = "version") @Required val version: kotlin.String

@@ -455,18 +455,34 @@ def networks_of(service: dict, matrix: dict) -> list[str]:
 
 
 def plugin_manifest(matrix: dict, name: str) -> str:
-    """One plugin's manifest, as this deployment installs it.
+    """One plugin's manifest, exactly as its publisher wrote it.
 
-    The plugin's own manifest with `hosts` substituted into its
-    `network:outbound` capability: which receivers a deployment allows is the
-    operator's decision and not the plugin author's, and the manifest is where
-    the egress allowlist is compiled from (`ADR-0027`).
+    **Verbatim, and that is the point.** A detached signature is over these
+    bytes (`REQ-PLG-004`, `ADR-0085`), so anything that re-serialised them --
+    dropping comments, reordering keys, rewrapping a line -- would produce a
+    document no publisher's signature could ever match. The core verifies what
+    it registers, so what it registers has to be what was signed.
+
+    Until 2026-09-22 this substituted `services.yaml`'s `hosts` into the
+    manifest's `network:outbound` capability, and that was wrong for a second
+    reason beside the signature. The two lists are different things: the
+    manifest's is the publisher's REQUEST, and `services.yaml`'s is the
+    deployment's GRANT. The grant is what the egress proxy enforces -- it is
+    compiled straight from `services.yaml` by :func:`egress_allowlist` and never
+    from this document -- so overwriting the request with the grant changed
+    nothing about what the plugin could reach and lost the only record of what
+    it had asked for.
+
+    What is still checked is that the two can be about each other: a plugin
+    given somewhere to reach must declare `network:outbound`, and the manifest's
+    id must be the one `services.yaml` installs.
 
     :param matrix: the parsed matrix
     :param name: the plugin service
-    :return: the rendered manifest
-    :raises SystemExit: when the source manifest is missing or declares no
-        `network:outbound` to substitute into
+    :return: the manifest, byte for byte as the file holds it
+    :raises SystemExit: when the source manifest is missing, declares no
+        `network:outbound` while the deployment gives it somewhere to reach, or
+        calls itself something other than what `services.yaml` installs
     """
     service = matrix["services"][name]
     declared = service["plugin"]
@@ -475,7 +491,10 @@ def plugin_manifest(matrix: dict, name: str) -> str:
         raise SystemExit(
             f"services.yaml points {name} at {declared['manifest']}, which does not exist.")
 
-    document = yaml.safe_load(source.read_text(encoding="utf-8"))
+    text = source.read_text(encoding="utf-8")
+    # Parsed only to CHECK it. The parsed form is thrown away and the text is
+    # what is returned, because the signature is over the text.
+    document = yaml.safe_load(text)
     hosts = declared.get("hosts") or []
     # `tcp:` is the other shape a manifest declares, and it means something
     # different: a `host:port` for a protocol that is not HTTP -- SMTP
@@ -491,11 +510,6 @@ def plugin_manifest(matrix: dict, name: str) -> str:
             f"{declared['manifest']} declares no network:outbound capability, and services.yaml "
             f"gives {name} somewhere to reach. A target that is not in a manifest is a target the "
             "proxy refuses, so the two have to agree.")
-    for capability in outbound:
-        if hosts:
-            capability["hosts"] = list(hosts)
-        if tcp:
-            capability["tcp"] = list(tcp)
 
     if document["metadata"]["id"] != declared["id"]:
         raise SystemExit(
@@ -503,8 +517,37 @@ def plugin_manifest(matrix: dict, name: str) -> str:
             f"{document['metadata']['id']}. The core refuses a disagreement here, because a "
             "grant is recorded against the id.")
 
-    rendered = yaml.safe_dump(document, sort_keys=False, allow_unicode=True, width=100)
-    return rendered
+    return text
+
+
+def plugin_signature(matrix: dict, name: str) -> str | None:
+    """The detached signature travelling with one plugin's manifest, if there is one.
+
+    `<manifest>.sig`, beside the manifest: the base64 that `cosign sign-blob`
+    printed over exactly the bytes :func:`plugin_manifest` returns. Committed
+    rather than produced here, because producing it would need the private key
+    and the one place a signing key must never be is a build that anybody can
+    run (`ADR-0085`).
+
+    Its absence is not an error. A plugin nobody signed verifies as *unsigned*,
+    which an operator may permit deliberately with
+    `HOMEINV_PLUGINS_ALLOW_UNSIGNED`; what is never permitted is a signature
+    that does not verify, and that is the core's judgement rather than this
+    file's.
+
+    :param matrix: the parsed matrix
+    :param name: the plugin service
+    :return: the base64 signature on one line, or ``None`` when none is committed
+    """
+    declared = matrix["services"][name]["plugin"]
+    signature = HERE.parent / (declared["manifest"] + ".sig")
+    if not signature.is_file():
+        return None
+    # One line: whitespace is stripped so that a file with a trailing newline,
+    # or one `cosign` wrapped, still produces a YAML scalar rather than a
+    # surprise. The verifier tolerates both; the generated file should not have
+    # to be tolerated.
+    return "".join(signature.read_text(encoding="utf-8").split())
 
 
 def plugins_list(matrix: dict) -> str:
@@ -540,7 +583,16 @@ def plugins_list(matrix: dict) -> str:
         lines.append(f"  - id: {declared['id']}")
         lines.append(f"    endpoint: \"{name}:{port}\"")
         lines.append(f"    fingerprint: \"@FINGERPRINT:{declared['fingerprintFrom']}@\"")
-        lines.append(f"    signed: {str(bool(declared.get('signed'))).lower()}")
+        # The key is a placeholder for the same reason the fingerprint is: it
+        # lives in the deployment's secret store, which does not exist until
+        # `setup.sh` has run. The SIGNATURE is not a placeholder — it travels
+        # with the manifest in this repository, because it is over exactly the
+        # bytes written just below and the two must not be able to come from
+        # different places (REQ-PLG-004, ADR-0085).
+        lines.append(f'    publicKey: "@PUBKEY:{declared["publicKeyFrom"]}@"')
+        signature = plugin_signature(matrix, name)
+        if signature:
+            lines.append(f'    signature: "{signature}"')
         lines.append("    manifestInline: |")
         for line in plugin_manifest(matrix, name).splitlines():
             lines.append(f"      {line}" if line else "")
@@ -802,10 +854,20 @@ def secret_catalogue(matrix: dict) -> str:
     lines = [
         "# GENERATED FROM ../services.yaml — DO NOT EDIT.",
         "#",
-        "# Sourced by setup.sh. One line per secret: `<name> <kind>`.",
+        "# Sourced by setup.sh. One line per secret: `<name> <kind> [<seedFrom>]`.",
+        "#",
+        "# The third field is optional and names a file IN THIS REPOSITORY that the",
+        "# secret is seeded from when it exists — which today is the public key this",
+        "# project signs its own plugin manifests with. A public key is not a secret,",
+        "# and it travels as one because that is the mechanism a deployment already",
+        "# has for getting per-plugin material into a container with a read-only root.",
         "",
         "SECRET_KINDS='"
-        + "\n".join(f"{name} {spec['kind']}" for name, spec in matrix["secrets"].items())
+        + "\n".join(
+            f"{name} {spec['kind']}"
+            + (f" {spec['seedFrom']}" if spec.get("seedFrom") else "")
+            for name, spec in matrix["secrets"].items()
+        )
         + "'",
         "",
     ]

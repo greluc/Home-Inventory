@@ -241,7 +241,7 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
         manifest(pluginId).getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         identity().fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     TenantContext.runAs(
         tenant.id(),
         () -> registrations.grant(pluginId, "network:outbound", tenant.userId()));

@@ -50,7 +50,7 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
   @DisplayName("are nothing at all until a tenant grants them")
   void nothingUntilGranted() {
     UUID tenant = aTenant("nothing@example.org");
-    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, true);
+    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,
@@ -71,7 +71,7 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
   void grantsArePerTenant() {
     UUID mine = aTenant("mine@example.org");
     UUID theirs = aTenant("theirs@example.org");
-    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, true);
+    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(mine, () -> registry.grant(PLUGIN, "core:item:read", UUID.randomUUID()));
 
@@ -87,11 +87,11 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
   @DisplayName("survive an update that asks for more, and the new one is not granted with them")
   void anUpdateThatAsksForMore() {
     UUID tenant = aTenant("more@example.org");
-    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, true);
+    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
     TenantContext.runAs(tenant, () -> registry.grant(PLUGIN, "core:item:read", UUID.randomUUID()));
 
     // Version 2 wants the network as well.
-    registry.register(manifest("2.0.0", "core:item:read", "core:item:write"), "isbn:9000", null, true);
+    registry.register(manifest("2.0.0", "core:item:read", "core:item:write"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,
@@ -109,11 +109,11 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
   @DisplayName("stop when the manifest stops asking for them, grant or no grant")
   void aGrantForSomethingNoLongerAskedFor() {
     UUID tenant = aTenant("dropped@example.org");
-    registry.register(manifest("1.0.0", "core:item:read", "core:item:write"), "isbn:9000", null, true);
+    registry.register(manifest("1.0.0", "core:item:read", "core:item:write"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
     TenantContext.runAs(tenant, () -> registry.grant(PLUGIN, "core:item:write", UUID.randomUUID()));
 
     // Version 2 no longer asks to write.
-    registry.register(manifest("2.0.0", "core:item:read"), "isbn:9000", null, true);
+    registry.register(manifest("2.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     // The grant is still in the table, and it is not a permission: capabilities
     // are exhaustive, so what the manifest does not name cannot happen even with
@@ -126,7 +126,7 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
   @DisplayName("cannot be granted for something the plugin never asked for")
   void consentToSomethingUnasked() {
     UUID tenant = aTenant("unasked@example.org");
-    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, true);
+    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     assertThatThrownBy(
             () ->
@@ -140,7 +140,7 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
   @DisplayName("are withdrawable, and withdrawing what was never granted is not an error")
   void revoking() {
     UUID tenant = aTenant("revoke@example.org");
-    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, true);
+    registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,

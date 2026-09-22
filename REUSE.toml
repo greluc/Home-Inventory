@@ -193,3 +193,18 @@ path = ["tools/notices/licences/**", "tools/notices/overrides/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "The respective licence stewards and copyright holders, named in each file"
 SPDX-License-Identifier = "LicenseRef-ThirdPartyNotices"
+
+# A public key and a detached signature (REQ-PLG-004, ADR-0085). Neither can
+# carry a comment: a PEM block and a line of base64 are read by machines that
+# would refuse anything else in the file, and a `.license` sidecar beside each
+# would be one more file to keep in step with the thing it describes.
+#
+# Declared here BEFORE they exist, so that the commit adding them is about
+# signing and not about a licence check. They are this project's own material
+# and carry the project's licence.
+
+[[annotations]]
+path = ["deploy/keys/*.pem", "plugins/*/manifest.yaml.sig"]
+precedence = "override"
+SPDX-FileCopyrightText = "Lucas Greuloch"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

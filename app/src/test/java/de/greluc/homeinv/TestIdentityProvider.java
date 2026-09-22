@@ -96,7 +96,7 @@ final class TestIdentityProvider {
         manifest().getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         IDENTITY.get().fingerprint(),
-        true);
+        AbstractIntegrationTest.UNSIGNED_FIXTURE, true);
     // For the INSTANCE and not for a tenant: a sign-in happens before any tenant
     // is known, so a per-tenant grant would have nothing to key on.
     registry.grantForInstance(PLUGIN_ID, "network:outbound", UUID.randomUUID());

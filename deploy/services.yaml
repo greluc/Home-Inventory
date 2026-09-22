@@ -983,11 +983,22 @@ services:
       # fingerprint when it creates the certificate and substitutes it into the
       # generated list, because the certificate does not exist until then.
       fingerprintFrom: mtls-plugin-webhook
-      # Whether the operator verified the signature with `cosign`. False here:
-      # nothing has been published to a registry yet, so there is nothing signed
-      # to verify, and saying otherwise would be a claim about a check nobody ran
-      # (REQ-PLG-004).
-      signed: false
+      # WHICH PUBLIC KEY MAY VOUCH FOR THIS PLUGIN'S MANIFEST. The core verifies
+      # the manifest's detached signature against this key at every start-up and
+      # records what it found; an entry whose signature does not verify is
+      # registered DISABLED with the reason, and no setting runs it (REQ-PLG-004,
+      # ADR-0085).
+      #
+      # A `signed` boolean stood here until 2026-09-22 and was the OPERATOR's
+      # report of a `cosign` run that nothing could confirm or contradict. A claim
+      # about a check is not a check.
+      #
+      # The key is public and is still a secret ENTRY, because that is how a
+      # deployment already carries per-plugin material and because a third party's
+      # key is theirs to hand over rather than ours to publish. `setup.sh` seeds it
+      # from the repository for a first-party plugin and leaves it empty for
+      # anyone else's -- and an empty key with no signature is simply "unsigned".
+      publicKeyFrom: cosign-plugin-webhook
     segment:
       # Its own network, generated from this entry. The subnet is stated rather
       # than assigned, because it is the operator's network and because the
@@ -1033,7 +1044,7 @@ services:
       # operator meant.
       tcp: ["mail.example.org:587"]
       fingerprintFrom: mtls-plugin-smtp
-      signed: false
+      publicKeyFrom: cosign-plugin-smtp
     segment:
       subnet: 10.89.32.0/24
     networks: [plugin-smtp]
@@ -1085,7 +1096,7 @@ services:
       # chooses which places this deployment may reach at all.
       tcp: ["objects.example.org:443"]
       fingerprintFrom: mtls-plugin-blobstore-s3
-      signed: false
+      publicKeyFrom: cosign-plugin-blobstore-s3
     segment:
       subnet: 10.89.33.0/24
     networks: [plugin-blobstore-s3]
@@ -1138,7 +1149,7 @@ services:
       # connection (ADR-0027, ADR-0073).
       tcp: ["cloud.example.org:443"]
       fingerprintFrom: mtls-plugin-blobstore-nextcloud
-      signed: false
+      publicKeyFrom: cosign-plugin-blobstore-nextcloud
     segment:
       subnet: 10.89.34.0/24
     networks: [plugin-blobstore-nextcloud]
@@ -1185,7 +1196,7 @@ services:
       # tunnelling to (ADR-0027).
       hosts: ["provider.example"]
       fingerprintFrom: mtls-plugin-oidc
-      signed: false
+      publicKeyFrom: cosign-plugin-oidc
     segment:
       subnet: 10.89.35.0/24
     networks: [plugin-oidc]
@@ -1401,6 +1412,54 @@ secrets:
     notes: >
       Server identity for `plugin-smtp`, pinned by the core exactly as every
       other in-deployment peer is (REQ-SEC-056).
+  # ---------------------------------------------------------------------------
+  # The public keys a plugin manifest is verified against (REQ-PLG-004, ADR-0085)
+  # ---------------------------------------------------------------------------
+  #
+  # A public key is not a secret, and these are secret ENTRIES anyway. Three
+  # reasons, and none of them is confusion about what "public" means:
+  #
+  #   * a deployment already has exactly one mechanism for getting per-plugin
+  #     material onto a host and into a container with a read-only root, and it
+  #     is this one;
+  #   * a THIRD PARTY's key is theirs to hand over, which makes it operator
+  #     input on the same footing as their plugin's password -- the difference
+  #     between first-party and third-party should be which file `setup.sh`
+  #     finds, not which mechanism exists;
+  #   * one entry per plugin is what lets an operator replace one publisher's
+  #     key without touching anybody else's.
+  #
+  # `seedFrom` names a file in THIS repository. When it exists, `setup.sh`
+  # copies it; when it does not, the secret is written empty and the operator is
+  # told -- and an empty key with no signature is simply "unsigned", which is a
+  # state REQ-PLG-004 lets them permit deliberately. An empty key with a
+  # signature is NOT unsigned: it is a signature nobody can check, and the core
+  # refuses it.
+  #
+  # The seed file is the same for all five because this project signs its own
+  # plugins with one key. Five entries rather than one shared entry all the
+  # same: the day a plugin is handed to somebody else, only its own line moves.
+  cosign-plugin-webhook:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-smtp:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-blobstore-s3:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-blobstore-nextcloud:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-oidc:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+
   plugin-smtp-password:
     required: false
     kind: external

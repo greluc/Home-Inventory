@@ -238,6 +238,7 @@ public class PluginController {
         registration.runtime(),
         registration.signed(),
         registration.disabled(),
+        registration.stateReason(),
         registration.registeredAt(),
         registration.capabilities().stream()
             .map(capability -> new CapabilityView(capability, granted.contains(capability)))
@@ -253,9 +254,14 @@ public class PluginController {
    * @param vendor who publishes it
    * @param contract the contract range it supports
    * @param runtime {@code out-of-process} or {@code in-process}
-   * @param signed whether the operator verified its signature. An unsigned plugin runs only where
-   *     they allowed it, and a client shows that permanently (REQ-PLG-004)
+   * @param signed whether <b>this core</b> verified its manifest signature against the public key
+   *     the operator installed for it (REQ-PLG-004, ADR-0085). An unsigned plugin runs only where
+   *     they allowed it, and a client shows that permanently
    * @param disabled whether it is out of service
+   * @param stateReason why, in a sentence, or null when there is nothing to say. Needed beside
+   *     {@code signed} because "not signed" covers two different situations — a publisher who signed
+   *     nothing, and a document that does not match the signature travelling with it — and only one
+   *     of them is something an operator may choose to live with
    * @param registeredAt when it was first seen
    * @param capabilities everything its manifest asks for, each with whether this tenant agreed.
    *     Both halves together, because "what it wants" without "what it has" is not a decision
@@ -270,6 +276,7 @@ public class PluginController {
       String runtime,
       boolean signed,
       boolean disabled,
+      @Nullable String stateReason,
       Instant registeredAt,
       List<CapabilityView> capabilities) {}
 

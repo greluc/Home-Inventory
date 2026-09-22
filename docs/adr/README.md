@@ -27,7 +27,7 @@ Date: YYYY-MM-DD
 | [0003](0003-multi-tenancy.md) | Multi-tenancy from the start, access by invitation | Accepted |
 | [0004](0004-attribute-storage-model.md) | JSONB plus an application-maintained index side table | Accepted |
 | [0005](0005-identity.md) | An own identity core with optional OIDC federation | Accepted |
-| [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted |
+| [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted , amended by 0085 |
 | [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032, 0052, 0074 |
 | [0008](0008-search.md) | OpenSearch as a derived read model | Accepted, amended by 0039, 0047 |
 | [0009](0009-messaging-and-events.md) | RabbitMQ with a transactional outbox | Accepted, extended (O13) |
@@ -107,3 +107,4 @@ Date: YYYY-MM-DD
 | [0082](0082-tracing-is-a-library-and-the-sampling-is-the-operators.md) | Tracing is a library, and the sampling decision belongs to the operator | Accepted |
 | [0083](0083-the-notice-travels-inside-the-artifact.md) | The licence notice travels inside the artifact, and the SBOM is one per artifact | Accepted, amends 0034 |
 | [0084](0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md) | An upload arrives in pieces, and is staged where the volume is | Accepted, amends 0043 |
+| [0085](0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md) | A manifest signature is checked offline, and an image is not checked yet | Accepted, amends 0006 |

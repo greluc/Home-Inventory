@@ -173,8 +173,17 @@ EXT
 generate_secret() {
     name=$1
     kind=$2
+    # Optional third field of `secret-kinds.sh`: a file in this repository the
+    # secret is seeded from. Only `cosign-public` uses one today (ADR-0085).
+    seed=$3
     target="$SECRETS/$name"
-    if [ -f "$target" ]; then
+    # `-s` and not `-f`: a file that is there and EMPTY is not a provisioned
+    # secret. It is what the `external` and `cosign-public` kinds deliberately
+    # leave behind for the operator to fill, and treating it as done would mean
+    # a key added to the repository after the first run never reached a
+    # deployment -- the operator would run setup again, be told the secret was
+    # "kept", and watch their plugins stay unsigned with nothing saying why.
+    if [ -s "$target" ]; then
         # Never overwritten. A regenerated key means every session invalid and
         # every signed URL broken, and a setup script is not where that decision
         # belongs.
@@ -197,6 +206,28 @@ generate_secret() {
             ;;
         mtls-client) generate_mtls "$name" "api" ;;
         mtls-server) generate_mtls "$name" "$(echo "$name" | sed 's/^mtls-//')" ;;
+        cosign-public)
+            # THE PUBLIC half of a plugin publisher's signing key, which the core
+            # verifies that plugin's manifest against (REQ-PLG-004, ADR-0085).
+            #
+            # Seeded from the repository when `services.yaml` named a file and the
+            # file is there -- which is the case for the plugins this project
+            # signs itself. For anybody else's plugin the operator puts their
+            # publisher's key here, exactly as they would a credential, and until
+            # they do the manifest simply verifies as UNSIGNED.
+            #
+            # Never generated. A key pair invented here would verify nothing,
+            # because no publisher would ever have signed with its other half --
+            # and it would look like a check while being one.
+            if [ -n "$seed" ] && [ -f "$HERE/$seed" ]; then
+                cat "$HERE/$seed" > "$target"
+                say "  $name — seeded from $seed"
+            else
+                : > "$target"
+                say "  $name — EMPTY. Put the publisher's cosign public key in $target,"
+                say "      or leave it empty and let the plugin register as unsigned."
+            fi
+            ;;
         external)
             # A credential for somebody ELSE's system -- a mail account,
             # an object store's keys. Generating one would produce a value
@@ -435,6 +466,30 @@ render_templates() {
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done
+        # A PUBLIC KEY is not a secret either, and it reaches the core the same
+        # way a fingerprint does: substituted into the generated plugin list
+        # rather than mounted separately. One mount carries the whole list, and
+        # a key the core cannot find is a check the core cannot make.
+        #
+        # `awk` and not `sed`, for the reason the secret loop gives: base64
+        # contains / and +. The value is flattened to ONE LINE first, because a
+        # PEM is several and a YAML scalar is one -- the verifier strips the
+        # armour and the whitespace either way, and a generated file should not
+        # depend on that.
+        for key in $(grep -o '@PUBKEY:[a-z0-9-]*@' "$source" \
+                     | sed 's/@PUBKEY://; s/@//' | sort -u); do
+            key_file="$SECRETS/$key"
+            if [ -s "$key_file" ]; then
+                value=$(tr -d '\r\n' < "$key_file")
+            else
+                # No key installed. The entry keeps an empty value, and a manifest
+                # with no signature beside it is then simply unsigned.
+                value=""
+            fi
+            awk -v needle="@PUBKEY:$key@" -v value="$value" \
+                '{ gsub(needle, value); print }' "$target" > "$target.tmp"
+            mv "$target.tmp" "$target"
+        done
         # 0444 for the same reason as a generated secret; see generate_secret().
         chmod 0444 "$target"
         say "  $name — rendered"
@@ -461,8 +516,11 @@ say "  rootless prerequisites: present"
 step "Creating secrets in deploy/secrets/"
 mkdir -p "$SECRETS"
 chmod 0700 "$SECRETS"
-echo "$SECRET_KINDS" | while read -r name kind; do
-    [ -n "$name" ] && generate_secret "$name" "$kind"
+# Three fields since 2026-09-22: `<name> <kind> [<seedFrom>]`. The third is a
+# file in the repository a secret is seeded from, which today is the public key
+# this project signs its own plugin manifests with (ADR-0085).
+echo "$SECRET_KINDS" | while read -r name kind seed; do
+    [ -n "$name" ] && generate_secret "$name" "$kind" "$seed"
 done
 
 step "Rendering the generated files"

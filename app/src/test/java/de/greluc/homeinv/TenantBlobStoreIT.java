@@ -255,7 +255,7 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
         manifest().getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         identity().fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     TenantContext.runAs(
         tenantId,
         () -> {

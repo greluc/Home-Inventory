@@ -905,6 +905,16 @@ secrets:
     file: ../secrets/plugin-blobstore-s3-secret-key
   mtls-plugin-smtp:
     file: ../secrets/mtls-plugin-smtp
+  cosign-plugin-webhook:
+    file: ../secrets/cosign-plugin-webhook
+  cosign-plugin-smtp:
+    file: ../secrets/cosign-plugin-smtp
+  cosign-plugin-blobstore-s3:
+    file: ../secrets/cosign-plugin-blobstore-s3
+  cosign-plugin-blobstore-nextcloud:
+    file: ../secrets/cosign-plugin-blobstore-nextcloud
+  cosign-plugin-oidc:
+    file: ../secrets/cosign-plugin-oidc
   plugin-smtp-password:
     file: ../secrets/plugin-smtp-password
   mtls-search:

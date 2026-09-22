@@ -15,6 +15,7 @@ Everything needed to run Home Inventory.
 | [`images/`](images/) | The one derived image: PostgreSQL with the role scripts baked in |
 | [`postgres/initdb/`](postgres/initdb/) | The role definitions the whole isolation design rests on |
 | [`expected/`](expected/) | Fixtures the generator is compared against |
+| [`keys/`](keys/) | **Public** keys, and only public: the one a plugin manifest's signature is checked against ([ADR-0085](../docs/adr/0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md)) |
 | [`helm/`](helm/) | Kubernetes — hand-written, **validated** against the matrix |
 | [`setup.sh`](setup.sh) | **The one command**: host checks, secrets, templates, `.env`, and up |
 | [`smoke/`](smoke/) | What only a running stack can prove — segments and the journey |

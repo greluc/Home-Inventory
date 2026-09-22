@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.plugins.domain.ManifestSignature;
 import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
@@ -65,6 +66,21 @@ public abstract class AbstractIntegrationTest {
    * would have implemented it.
    */
   @SuppressWarnings("resource") // Testcontainers closes it with the JVM via Ryuk.
+  /**
+   * What a test fixture's manifest verifies as: nothing signed it.
+   *
+   * <p>Every manifest a test builds is written in the test, so no signature exists over it and no
+   * key is installed for it — which is {@link ManifestSignature.State#UNSIGNED} and not a failure.
+   * Registering with it and {@code allowUnsigned = true} is what leaves the plugin enabled, which is
+   * what these tests are about; the signature itself has its own tests.
+   *
+   * <p>Deliberately not a real signature over a real fixture: a private key in this repository would
+   * be a private key in a public repository, whatever the comment beside it said.
+   */
+  static final ManifestSignature.Result UNSIGNED_FIXTURE =
+      new ManifestSignature.Result(
+          ManifestSignature.State.UNSIGNED, "a manifest a test wrote is signed by nobody");
+
   protected static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(ProductionImages.postgresBase().asCompatibleSubstituteFor("postgres"))
           .withDatabaseName("homeinv")

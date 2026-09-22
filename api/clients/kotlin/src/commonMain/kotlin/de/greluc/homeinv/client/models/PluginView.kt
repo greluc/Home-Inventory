@@ -39,7 +39,8 @@ import kotlinx.serialization.encoding.*
  * @param name what a person sees
  * @param registeredAt when it was first seen
  * @param runtime `out-of-process` or `in-process`
- * @param signed whether the operator verified its signature. An unsigned plugin runs only where they allowed it, and a client shows that permanently (REQ-PLG-004)
+ * @param signed whether **this core** verified its manifest signature against the public key the operator installed for it (REQ-PLG-004, ADR-0085). An unsigned plugin runs only where they allowed it, and a client shows that permanently
+ * @param stateReason why, in a sentence, or null when there is nothing to say. Needed beside `signed` because \"not signed\" covers two different situations — a publisher who signed nothing, and a document that does not match the signature travelling with it — and only one of them is something an operator may choose to live with
  * @param vendor who publishes it
  * @param version the plugin's own version
  */
@@ -68,8 +69,11 @@ data class PluginView (
     /* `out-of-process` or `in-process` */
     @SerialName(value = "runtime") @Required val runtime: kotlin.String,
 
-    /* whether the operator verified its signature. An unsigned plugin runs only where they allowed it, and a client shows that permanently (REQ-PLG-004) */
+    /* whether **this core** verified its manifest signature against the public key the operator installed for it (REQ-PLG-004, ADR-0085). An unsigned plugin runs only where they allowed it, and a client shows that permanently */
     @SerialName(value = "signed") @Required val signed: kotlin.Boolean,
+
+    /* why, in a sentence, or null when there is nothing to say. Needed beside `signed` because \"not signed\" covers two different situations — a publisher who signed nothing, and a document that does not match the signature travelling with it — and only one of them is something an operator may choose to live with */
+    @SerialName(value = "stateReason") @Required val stateReason: kotlin.String?,
 
     /* who publishes it */
     @SerialName(value = "vendor") @Required val vendor: kotlin.String,

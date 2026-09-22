@@ -21,6 +21,13 @@ commit".
 
 ### Added
 
+- **The system checks a plugin's signature instead of taking your word for it.**
+  Every plugin's manifest is verified against the publisher's key when the system
+  starts, without reaching the internet. A plugin whose manifest was altered after
+  it was signed is switched off and says so; one nobody signed runs only if you
+  turn that on deliberately. The operator view now shows *why* a plugin is out of
+  service, which "disabled" on its own never did.
+
 - **An interrupted upload is continued rather than begun again.** Photographs and
   documents now go up in pieces, and a connection that drops partway through costs
   the pieces that had not arrived rather than the whole file. The web client
@@ -1067,7 +1074,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 85 architecture decision records, each with its alternatives and consequences —
+- 86 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -56,7 +56,8 @@ public class PluginRegistryQueries {
             .sql(
                 """
                 update plugins.plugin_registration
-                set state = ?, updated_at = now(), updated_by = ?, version = version + 1
+                set state = ?, state_reason = null,
+                    updated_at = now(), updated_by = ?, version = version + 1
                 where plugin_id = ?
                 """)
             .params(disabled ? "DISABLED" : "REGISTERED", actor, pluginId)
@@ -76,7 +77,7 @@ public class PluginRegistryQueries {
         .sql(
             """
             select plugin_id, plugin_version, manifest, manifest_digest, capabilities, contract,
-                   runtime, signed, state, created_at
+                   runtime, signed, state, state_reason, created_at
             from plugins.plugin_registration
             order by plugin_id
             limit ?
@@ -98,7 +99,7 @@ public class PluginRegistryQueries {
         .sql(
             """
             select plugin_id, plugin_version, manifest, manifest_digest, capabilities, contract,
-                   runtime, signed, state, created_at
+                   runtime, signed, state, state_reason, created_at
             from plugins.plugin_registration
             where plugin_id = ?
             """)
@@ -165,8 +166,8 @@ public class PluginRegistryQueries {
             """
             insert into plugins.plugin_registration
                 (plugin_id, plugin_version, manifest, manifest_digest, capabilities, contract,
-                 runtime, endpoint, fingerprint, signed, state)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 runtime, endpoint, fingerprint, signed, state, state_reason)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict (plugin_id) do update set
                 plugin_version = excluded.plugin_version,
                 manifest = excluded.manifest,
@@ -177,6 +178,35 @@ public class PluginRegistryQueries {
                 endpoint = excluded.endpoint,
                 fingerprint = excluded.fingerprint,
                 signed = excluded.signed,
+                -- WHO decided the state, and it is not always this statement.
+                -- `state` used to survive a re-registration untouched, so that an
+                -- operator's immediate measure outlived a restart (REQ-SEC-082).
+                -- Since V76 the SIGNATURE also decides it, and a manifest that
+                -- stopped verifying has to take the plugin out of service at the
+                -- next start -- which an untouched `state` would not do.
+                --
+                -- The two are told apart by the reason: `setDisabled` writes none,
+                -- because an operator is not a sentence, and a registration always
+                -- writes one when it disables. So a row that is DISABLED with no
+                -- reason is the operator's and is left exactly as it is; everything
+                -- else is this statement's to decide.
+                --
+                -- Re-enabling a plugin whose signature is broken therefore lasts
+                -- until the next start-up, and that is the intended answer rather
+                -- than an oversight: no setting runs a plugin whose document does
+                -- not match its signature.
+                state = case
+                    when plugins.plugin_registration.state = 'DISABLED'
+                         and plugins.plugin_registration.state_reason is null
+                    then 'DISABLED'
+                    else excluded.state
+                end,
+                state_reason = case
+                    when plugins.plugin_registration.state = 'DISABLED'
+                         and plugins.plugin_registration.state_reason is null
+                    then null
+                    else excluded.state_reason
+                end,
                 updated_at = now(),
                 version = plugins.plugin_registration.version + 1
             """)
@@ -191,7 +221,8 @@ public class PluginRegistryQueries {
             endpoint,
             fingerprint,
             registration.signed(),
-            registration.disabled() ? "DISABLED" : "REGISTERED")
+            registration.disabled() ? "DISABLED" : "REGISTERED",
+            registration.stateReason())
         .update();
   }
 
@@ -389,6 +420,7 @@ public class PluginRegistryQueries {
         rs.getString("manifest_digest"),
         rs.getBoolean("signed"),
         "DISABLED".equals(rs.getString("state")),
+        rs.getString("state_reason"),
         rs.getObject("created_at", OffsetDateTime.class).toInstant());
   }
 

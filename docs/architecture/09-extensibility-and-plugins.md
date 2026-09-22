@@ -142,7 +142,7 @@ than kept until an update makes them live.
 | `capabilities` | **Exhaustive.** What is not in the manifest is not possible — not even with consent granted. An extension requires a new manifest and new consent. |
 | `network:outbound.hosts` | A fixed target list. It is compiled into the allowlist of the **egress proxy** that is the plugin's only route outward — no container runtime can express a hostname rule by itself, so the proxy is the enforcement point ([ADR-0027](../adr/0027-egress-enforcement.md)). A host not listed here is refused **and logged**, which is what makes REQ-ENR-009 answerable from evidence rather than from the manifest. |
 | `contract` | A range, not a point. The core rejects a plugin outside its range at startup without failing itself. |
-| Signature | Manifest and artifact are signed (`cosign`). Unsigned plugins are permitted only if the operator explicitly enables that — with a permanent warning. |
+| Signature | **The manifest is signed and the core verifies it offline**, at every start-up, against a public key the operator installed beside the plugin — never one the manifest names ([ADR-0085](../adr/0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md)). Three outcomes, not two: *verified* runs; *unsigned* runs only where the operator explicitly enabled that, with a permanent warning; *a signature that does not verify* is registered `DISABLED` with the reason, and **no setting runs it** — an altered document is not an unsigned one. The **artifact** is a separate question with a separate answer: `cosign verify` on an image needs a registry, this project publishes none yet, and a gate in front of nothing would have to default to permissive. It is taken up with publishing (§9.9). |
 
 ## 9.4 The capability model
 
@@ -168,7 +168,7 @@ entitlement, no "read access, which is harmless anyway".
 ```mermaid
 stateDiagram-v2
     [*] --> Installed: operator provides the container
-    Installed --> Registered: manifest read, signature verified,<br/>contract version matches
+    Installed --> Registered: manifest read, signature checked,<br/>contract version matches
     Registered --> Consent: tenant administrator sees<br/>the capabilities in plain language
     Consent --> Active: granted (logged, with person and time)
     Consent --> Registered: declined
@@ -177,6 +177,16 @@ stateDiagram-v2
     Active --> Revoked: capability withdrawn
     Revoked --> [*]
 ```
+
+A registration is reached whatever the signature said; what the signature decides
+is the **state** it is reached in. A manifest that verifies is `Registered`; one
+nobody signed is `Registered` where the operator permitted that and `Disabled`
+where they did not; one whose signature does not verify is `Disabled` and stays
+there, because that is an altered document rather than an unsigned one
+([ADR-0085](../adr/0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md)).
+`Disabled` rather than never registered, so that the reason has somewhere to be
+shown — a plugin that simply never appeared leaves an operator looking at a
+container that is running and doing nothing.
 
 Capabilities are granted **per tenant**. An installed plugin is active for tenant
 A and invisible to tenant B until B's administrator consents.
@@ -334,7 +344,7 @@ From this follows, without an escape:
 | Rule | |
 |---|---|
 | Default | In-process is **off** |
-| Admission | Only by the operator, only for signed artifacts whose signing key is on an explicit trust list |
+| Admission | Only by the operator, only for signed artifacts whose signing key is on an explicit trust list — which for a manifest is that plugin's own `cosign-plugin-*` secret, one entry per publisher so that revoking one does not revoke every other ([ADR-0085](../adr/0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md)) |
 | No tenant path | A tenant administrator **cannot** install in-process plugins — otherwise tenant separation would be defeatable by a plugin |
 | Visibility | The administration UI permanently shows that in-process code is running, with publisher and fingerprint |
 | Isolation, as far as possible | A dedicated classloader with a parent filter: the plugin sees only `de.greluc.homeinv.plugin.api.*` and the JDK base, not the core implementation |

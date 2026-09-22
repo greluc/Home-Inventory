@@ -558,7 +558,9 @@ public class InstanceController {
         installed.pluginId(),
         installed.name(),
         installed.version(),
+        installed.signed(),
         installed.disabled(),
+        installed.stateReason(),
         installed.registeredAt(),
         installed.capabilities().stream()
             .map(capability -> new InstanceCapabilityView(capability, granted.contains(capability)))
@@ -571,7 +573,13 @@ public class InstanceController {
    * @param id its reverse-domain id
    * @param name what a person sees
    * @param version the plugin's own version
+   * @param signed whether this core verified its manifest signature against the public key the
+   *     operator installed for it (REQ-PLG-004, ADR-0085)
    * @param disabled whether it is out of service
+   * @param stateReason why it is in that state, in a sentence, or null when there is nothing to say.
+   *     This is the operator's surface, and a plugin taken out of service by its signature is
+   *     exactly the case where "disabled" on its own tells them nothing they can act on — an altered
+   *     manifest and a publisher who never signed are different problems with different answers
    * @param registeredAt when it was first seen
    * @param capabilities everything its manifest asks for, each with whether the <b>instance</b> has
    *     granted it. A tenant's grants are not shown here and are not this surface's business
@@ -580,7 +588,9 @@ public class InstanceController {
       String id,
       String name,
       String version,
+      boolean signed,
       boolean disabled,
+      @Nullable String stateReason,
       Instant registeredAt,
       List<InstanceCapabilityView> capabilities) {}
 

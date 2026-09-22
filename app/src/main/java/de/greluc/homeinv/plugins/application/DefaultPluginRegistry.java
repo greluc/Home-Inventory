@@ -9,6 +9,7 @@ import de.greluc.homeinv.platform.LogSafe;
 import de.greluc.homeinv.plugin.api.PluginManifest;
 import de.greluc.homeinv.plugin.api.PluginManifestReader;
 import de.greluc.homeinv.plugins.api.PluginRegistry;
+import de.greluc.homeinv.plugins.domain.ManifestSignature;
 import de.greluc.homeinv.plugins.infrastructure.PluginRegistryQueries;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -208,18 +209,65 @@ public class DefaultPluginRegistry implements PluginRegistry {
    * the new capability ungranted — the plugin carries on with what it has, and nothing escalates
    * without somebody saying yes (REQ-PLG-006).
    *
+   * <h2>What the signature decides</h2>
+   *
+   * <p>Four outcomes, and the two that look alike are kept apart (REQ-PLG-004, ADR-0085):
+   *
+   * <ul>
+   *   <li><b>verified</b> — registered and callable, {@code signed} true;
+   *   <li><b>unsigned, and this deployment permits unsigned plugins</b> — registered and callable
+   *       with a standing reason, which is the permanent warning 09 §9.3 asks for;
+   *   <li><b>unsigned, and it does not</b> — registered and <b>disabled</b>, because the operator
+   *       can then see the plugin and the one setting that would run it;
+   *   <li><b>a signature that does not verify</b> — registered and <b>disabled</b>, and no setting
+   *       changes that. It means the document was altered after signing or the key is not the one
+   *       that signed it, and neither is a thing an operator opts into.
+   * </ul>
+   *
+   * <p>Disabled rather than absent, for the last two: a plugin that simply never appeared leaves an
+   * operator looking for a container that is running and doing nothing, with the reason in a log
+   * line that has scrolled past. The registration is what the surface can show.
+   *
    * @param manifestBytes the manifest as it was read, which is what was signed
    * @param endpoint where the plugin listens, or {@code null} for an in-process one
    * @param fingerprint the certificate that may answer there, or {@code null}
-   * @param signed whether the signature verified
+   * @param signature what verifying the manifest against the operator's key found
+   * @param unsignedPermitted whether this deployment was told to accept unsigned plugins
    * @return the registration
    * @throws de.greluc.homeinv.plugin.api.InvalidManifestException when the manifest cannot be read
    */
   @Transactional
   public Registration register(
-      byte[] manifestBytes, String endpoint, String fingerprint, boolean signed) {
+      byte[] manifestBytes,
+      String endpoint,
+      String fingerprint,
+      ManifestSignature.Result signature,
+      boolean unsignedPermitted) {
     PluginManifest manifest = PluginManifestReader.read(manifestBytes);
     String document = new String(manifestBytes, StandardCharsets.UTF_8);
+
+    boolean signed = signature.state() == ManifestSignature.State.VERIFIED;
+    boolean disabled =
+        switch (signature.state()) {
+          case VERIFIED -> false;
+          case UNSIGNED -> !unsignedPermitted;
+          case INVALID -> true;
+        };
+    String stateReason =
+        switch (signature.state()) {
+          case VERIFIED -> null;
+          case UNSIGNED ->
+              unsignedPermitted
+                  ? "It is unsigned and this deployment permits unsigned plugins: " + signature.reason()
+                  : "It is unsigned and this deployment does not permit unsigned plugins: "
+                      + signature.reason()
+                      + ". Set HOMEINV_PLUGINS_ALLOW_UNSIGNED=true to run it anyway, or install"
+                      + " the publisher's public key for it.";
+          case INVALID ->
+              "Its manifest signature did not verify: "
+                  + signature.reason()
+                  + ". No setting runs a plugin in this state.";
+        };
 
     Registration registration =
         new Registration(
@@ -237,15 +285,26 @@ public class DefaultPluginRegistry implements PluginRegistry {
                 .toList(),
             digestOf(manifestBytes),
             signed,
-            false,
+            disabled,
+            stateReason,
             java.time.Instant.now());
 
     registry.register(registration, document, endpoint, fingerprint);
+    // One line per plugin, and it says what was decided rather than that
+    // something was. A registration that disabled a plugin is the line an
+    // operator goes looking for.
+    //
+    // Through `LogSafe`, because part of that sentence can come from a
+    // stranger: an unreadable signature reaches it as the JCA provider's own
+    // message about bytes a publisher chose. That is the shape the log-injection
+    // fix of 2026-09-21 was about, and a value is not safe merely because the
+    // path it took is long.
     log.info(
-        "Plugin {} {} registered, declaring {}",
-        registration.pluginId(),
+        "Plugin {} {} registered, declaring {}{}",
+        LogSafe.value(registration.pluginId()),
         registration.version(),
-        registration.capabilities());
+        registration.capabilities(),
+        disabled ? LogSafe.value(" -- DISABLED: " + stateReason) : "");
     return registration(registration.pluginId());
   }
 
@@ -277,6 +336,7 @@ public class DefaultPluginRegistry implements PluginRegistry {
                   stored.manifestDigest(),
                   stored.signed(),
                   stored.disabled(),
+                  stored.stateReason(),
                   stored.registeredAt());
             })
         .orElse(stored);

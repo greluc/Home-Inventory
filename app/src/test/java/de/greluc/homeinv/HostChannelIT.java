@@ -342,7 +342,7 @@ class HostChannelIT extends AbstractIntegrationTest {
         rendererManifest(pluginId).getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         rendererIdentity().fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     TenantContext.runAs(
         tenant, () -> registrations.grant(pluginId, "network:outbound", UUID.randomUUID()));
   }
@@ -365,7 +365,7 @@ class HostChannelIT extends AbstractIntegrationTest {
         callerManifest(pluginId).getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         callerIdentity().fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     return pluginId;
   }
 

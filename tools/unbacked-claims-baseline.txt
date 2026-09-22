@@ -4,7 +4,7 @@
 # The gate fails on anything NOT in this list, so the list only shrinks. Adding
 # a line here is a decision to promise something and not test it; removing one
 # is the point of the file.
-docs/adr/0006-plugin-runtime.md:45:cannot
+docs/adr/0006-plugin-runtime.md:47:cannot
 docs/adr/0008-search.md:60:enforced
 docs/adr/0009-messaging-and-events.md:17:guarantees
 docs/adr/0009-messaging-and-events.md:29:cannot
@@ -84,9 +84,9 @@ docs/architecture/08-api-contract.md:348:enforced
 docs/architecture/08-api-contract.md:349:enforced
 docs/architecture/08-api-contract.md:536:fails the build
 docs/architecture/09-extensibility-and-plugins.md:22:must never
-docs/architecture/09-extensibility-and-plugins.md:267:cannot
-docs/architecture/09-extensibility-and-plugins.md:338:cannot
-docs/architecture/09-extensibility-and-plugins.md:415:must never
+docs/architecture/09-extensibility-and-plugins.md:277:cannot
+docs/architecture/09-extensibility-and-plugins.md:348:cannot
+docs/architecture/09-extensibility-and-plugins.md:425:must never
 docs/architecture/10-identification-and-labels.md:117:cannot
 docs/architecture/10-identification-and-labels.md:155:is impossible
 docs/architecture/10-identification-and-labels.md:21:cannot

@@ -258,7 +258,7 @@ class DocumentRenderIT extends AbstractIntegrationTest {
         manifest(pluginId).getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         identity().fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     TenantContext.runAs(
         tenantId, () -> registrations.grant(pluginId, "network:outbound", UUID.randomUUID()));
   }

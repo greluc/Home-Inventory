@@ -163,10 +163,16 @@ public interface PluginRegistry {
    * @param runtime {@code out-of-process} or {@code in-process}
    * @param capabilities every capability its current manifest declares, whether granted or not
    * @param manifestDigest the SHA-256 of the manifest these capabilities came from
-   * @param signed whether the manifest's signature verified. An unsigned plugin runs only where the
-   *     operator allowed it, and an administration surface shows that permanently (REQ-PLG-004)
-   * @param disabled whether the operator, a permanently open circuit or a failed signature took it
-   *     out of service
+   * @param signed whether <b>this core</b> verified the manifest's signature against the public key
+   *     the operator installed for this plugin (REQ-PLG-004, ADR-0085). It was the operator's own
+   *     report until 2026-09-22 and is a result now. An unsigned plugin runs only where the operator
+   *     allowed it, and an administration surface shows that permanently
+   * @param disabled whether the operator, a permanently open circuit or a signature that did not
+   *     verify took it out of service
+   * @param stateReason why it is in that state, in a sentence an operator can act on, or {@code
+   *     null} when there is nothing to say. A plugin out of service because of its signature is the
+   *     case this exists for: "disabled" alone does not distinguish a document that was altered from
+   *     one nobody signed, and those are not the same problem
    * @param registeredAt when it was first seen
    */
   record Registration(
@@ -180,6 +186,7 @@ public interface PluginRegistry {
       String manifestDigest,
       boolean signed,
       boolean disabled,
+      String stateReason,
       Instant registeredAt) {}
 
   /**

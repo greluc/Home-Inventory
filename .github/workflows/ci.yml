@@ -145,6 +145,21 @@ jobs:
       - name: The Kotlin client matches the API document
         run: python tools/kotlin_client.py --check
 
+      # REQ-PLG-004 and ADR-0085. Each plugin manifest travels with a detached
+      # signature, and the core verifies it at every start-up -- so a manifest
+      # edited without its signature being renewed is a plugin that registers
+      # DISABLED in every deployment, with a message about cryptography.
+      #
+      # It fails HERE instead, where the cause is one commit away. The PUBLIC
+      # key is all this needs; the private half is never in a runner, which is
+      # the whole reason signing is a person's command rather than a build step.
+      #
+      # Unsigned manifests are reported and are not a failure: "nobody signed
+      # it" is a state an operator may permit deliberately, and this repository
+      # publishes nothing yet.
+      - name: Every manifest signature is over its manifest
+        run: python tools/manifest_signatures.py --check
+
       - uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ github.token }}

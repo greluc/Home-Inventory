@@ -1410,6 +1410,20 @@ components:
           description: when it was first seen
           format: date-time
           type: string
+        signed:
+          description: |-
+            whether this core verified its manifest signature against the public key the
+            operator installed for it (REQ-PLG-004, ADR-0085)
+          type: boolean
+        stateReason:
+          description: |-
+            why it is in that state, in a sentence, or null when there is nothing to say.
+            This is the operator's surface, and a plugin taken out of service by its signature is
+            exactly the case where "disabled" on its own tells them nothing they can act on — an altered
+            manifest and a publisher who never signed are different problems with different answers
+          type:
+          - string
+          - 'null'
         version:
           description: the plugin's own version
           type: string
@@ -1419,6 +1433,8 @@ components:
       - id
       - name
       - registeredAt
+      - signed
+      - stateReason
       - version
       type: object
     InvitationView:
@@ -3585,9 +3601,19 @@ components:
           type: string
         signed:
           description: |-
-            whether the operator verified its signature. An unsigned plugin runs only where
-            they allowed it, and a client shows that permanently (REQ-PLG-004)
+            whether **this core** verified its manifest signature against the public key
+            the operator installed for it (REQ-PLG-004, ADR-0085). An unsigned plugin runs only where
+            they allowed it, and a client shows that permanently
           type: boolean
+        stateReason:
+          description: |-
+            why, in a sentence, or null when there is nothing to say. Needed beside
+            `signed` because "not signed" covers two different situations — a publisher who signed
+            nothing, and a document that does not match the signature travelling with it — and only one
+            of them is something an operator may choose to live with
+          type:
+          - string
+          - 'null'
         vendor:
           description: who publishes it
           type: string
@@ -3603,6 +3629,7 @@ components:
       - registeredAt
       - runtime
       - signed
+      - stateReason
       - vendor
       - version
       type: object

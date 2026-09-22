@@ -4456,6 +4456,18 @@ export interface components {
              * @description when it was first seen
              */
             registeredAt: string;
+            /**
+             * @description whether this core verified its manifest signature against the public key the
+             *     operator installed for it (REQ-PLG-004, ADR-0085)
+             */
+            signed: boolean;
+            /**
+             * @description why it is in that state, in a sentence, or null when there is nothing to say.
+             *     This is the operator's surface, and a plugin taken out of service by its signature is
+             *     exactly the case where "disabled" on its own tells them nothing they can act on — an altered
+             *     manifest and a publisher who never signed are different problems with different answers
+             */
+            stateReason: string | null;
             /** @description the plugin's own version */
             version: string;
         };
@@ -6106,10 +6118,18 @@ export interface components {
             /** @description `out-of-process` or `in-process` */
             runtime: string;
             /**
-             * @description whether the operator verified its signature. An unsigned plugin runs only where
-             *     they allowed it, and a client shows that permanently (REQ-PLG-004)
+             * @description whether **this core** verified its manifest signature against the public key
+             *     the operator installed for it (REQ-PLG-004, ADR-0085). An unsigned plugin runs only where
+             *     they allowed it, and a client shows that permanently
              */
             signed: boolean;
+            /**
+             * @description why, in a sentence, or null when there is nothing to say. Needed beside
+             *     `signed` because "not signed" covers two different situations — a publisher who signed
+             *     nothing, and a document that does not match the signature travelling with it — and only one
+             *     of them is something an operator may choose to live with
+             */
+            stateReason: string | null;
             /** @description who publishes it */
             vendor: string;
             /** @description the plugin's own version */

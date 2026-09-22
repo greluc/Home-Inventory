@@ -57,7 +57,7 @@ class PluginSettingsIT extends AbstractIntegrationTest {
   @DisplayName("reach a call as the tenant's value, the manifest's default, or not at all")
   void whatThePluginReceives() {
     UUID tenant = aTenant("receives@example.org");
-    registry.register(manifest(), "settings:9000", null, true);
+    registry.register(manifest(), "settings:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,
@@ -86,7 +86,7 @@ class PluginSettingsIT extends AbstractIntegrationTest {
   @DisplayName("keep a secret sealed at rest and out of every surface")
   void aSecretIsSealed() {
     UUID tenant = aTenant("sealed@example.org");
-    registry.register(manifest(), "settings:9000", null, true);
+    registry.register(manifest(), "settings:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant, () -> settings.set(PLUGIN, "apiToken", "a-token-nobody-else-has", UUID.randomUUID()));
@@ -133,7 +133,7 @@ class PluginSettingsIT extends AbstractIntegrationTest {
   @DisplayName("refuse a key the manifest does not declare, and a value outside a declared list")
   void theManifestDecides() {
     UUID tenant = aTenant("refuses@example.org");
-    registry.register(manifest(), "settings:9000", null, true);
+    registry.register(manifest(), "settings:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,
@@ -158,7 +158,7 @@ class PluginSettingsIT extends AbstractIntegrationTest {
   void settingsArePerTenant() {
     UUID mine = aTenant("mine-settings@example.org");
     UUID theirs = aTenant("theirs-settings@example.org");
-    registry.register(manifest(), "settings:9000", null, true);
+    registry.register(manifest(), "settings:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         mine,
@@ -200,7 +200,7 @@ class PluginSettingsIT extends AbstractIntegrationTest {
   @DisplayName("go back to the manifest's default when they are cleared")
   void clearingRestoresTheDefault() {
     UUID tenant = aTenant("cleared@example.org");
-    registry.register(manifest(), "settings:9000", null, true);
+    registry.register(manifest(), "settings:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,
@@ -220,7 +220,7 @@ class PluginSettingsIT extends AbstractIntegrationTest {
   @DisplayName("travel only once the tenant has granted core:setting:read")
   void withoutTheGrantAPluginIsSentNothing() {
     UUID tenant = aTenant("ungranted-settings@example.org");
-    registry.register(manifest(), "settings:9000", null, true);
+    registry.register(manifest(), "settings:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,

@@ -328,7 +328,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
         manifest(higher, 200).getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     TenantContext.runAs(
         tenant, () -> registrations.grant(higher, "network:outbound", UUID.randomUUID()));
 
@@ -413,7 +413,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
 
   private void register(String pluginId, int port, String pin) {
     registrations.register(
-        manifest(pluginId, 100).getBytes(StandardCharsets.UTF_8), "localhost:" + port, pin, true);
+        manifest(pluginId, 100).getBytes(StandardCharsets.UTF_8), "localhost:" + port, pin, UNSIGNED_FIXTURE, true);
   }
 
   /**

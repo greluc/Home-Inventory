@@ -198,7 +198,7 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
   }
 
   private void register() {
-    registry.register(manifest(), "instancemail:9000", null, true);
+    registry.register(manifest(), "instancemail:9000", null, UNSIGNED_FIXTURE, true);
   }
 
   /**
