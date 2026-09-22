@@ -366,11 +366,23 @@ jobs:
       - name: The image can say what it is made of
         run: |
           set -euo pipefail
-          first=$(docker run --rm home-inv-egress-proxy:ci --licences | head -1)
+          # To a file and not through `head`: `head -1` closes the pipe
+          # after one line, the binary writing 1600 of them is killed by
+          # SIGPIPE, and `pipefail` turns that into a failed step. The
+          # error read `write /dev/stdout: broken pipe`, which is the
+          # check working and reporting itself as the thing it checks.
+          docker run --rm home-inv-egress-proxy:ci --licences > notice.txt
+          first=$(head -1 notice.txt)
           if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
             echo "::error::egress-proxy does not print its licence notice; it read '$first'"
             exit 1
           fi
+          # And that it is the notice rather than a banner over nothing.
+          if [ "$(wc -l < notice.txt)" -lt 200 ]; then
+            echo "::error::egress-proxy printed a notice of $(wc -l < notice.txt) lines"
+            exit 1
+          fi
+          rm notice.txt
           echo "The image prints its third-party notice."
 
       # `scratch` plus one static binary. An allowlist enforcer with a shell in
@@ -493,11 +505,23 @@ jobs:
         if: matrix.image
         run: |
           set -euo pipefail
-          first=$(docker run --rm home-inv-plugin-${{ matrix.crate }}:ci --licences | head -1)
+          # To a file and not through `head`: `head -1` closes the pipe
+          # after one line, the binary writing 1600 of them is killed by
+          # SIGPIPE, and `pipefail` turns that into a failed step. The
+          # error read `write /dev/stdout: broken pipe`, which is the
+          # check working and reporting itself as the thing it checks.
+          docker run --rm home-inv-plugin-${{ matrix.crate }}:ci --licences > notice.txt
+          first=$(head -1 notice.txt)
           if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
             echo "::error::plugin-${{ matrix.crate }} does not print its licence notice; it read '$first'"
             exit 1
           fi
+          # And that it is the notice rather than a banner over nothing.
+          if [ "$(wc -l < notice.txt)" -lt 200 ]; then
+            echo "::error::plugin-${{ matrix.crate }} printed a notice of $(wc -l < notice.txt) lines"
+            exit 1
+          fi
+          rm notice.txt
           echo "The image prints its third-party notice."
 
       # `scratch` plus one static binary, like the two core Rust services. A
@@ -838,11 +862,23 @@ jobs:
       - name: The image can say what it is made of
         run: |
           set -euo pipefail
-          first=$(docker run --rm home-inv-blobstore:ci --licences | head -1)
+          # To a file and not through `head`: `head -1` closes the pipe
+          # after one line, the binary writing 1600 of them is killed by
+          # SIGPIPE, and `pipefail` turns that into a failed step. The
+          # error read `write /dev/stdout: broken pipe`, which is the
+          # check working and reporting itself as the thing it checks.
+          docker run --rm home-inv-blobstore:ci --licences > notice.txt
+          first=$(head -1 notice.txt)
           if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
             echo "::error::blobstore does not print its licence notice; it read '$first'"
             exit 1
           fi
+          # And that it is the notice rather than a banner over nothing.
+          if [ "$(wc -l < notice.txt)" -lt 200 ]; then
+            echo "::error::blobstore printed a notice of $(wc -l < notice.txt) lines"
+            exit 1
+          fi
+          rm notice.txt
           echo "The image prints its third-party notice."
 
       # `scratch` plus one binary. Anything else in there is something an
