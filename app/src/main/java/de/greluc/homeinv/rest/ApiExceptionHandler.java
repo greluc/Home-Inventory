@@ -13,6 +13,8 @@ import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.idempotency.api.IdempotencyKeyConflictException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
+import de.greluc.homeinv.media.api.OffsetMismatchException;
+import de.greluc.homeinv.media.api.UploadBusyException;
 import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
 import de.greluc.homeinv.inventory.api.ItemLentException;
@@ -730,6 +732,70 @@ public class ApiExceptionHandler {
   public ProblemDetail handleWeakPassword(
       WeakPasswordException exception, HttpServletRequest request) {
     return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a tus request that is not shaped like one (REQ-MED-008).
+   *
+   * <p>The status comes from the exception rather than from here: a missing protocol version is a
+   * {@code 412} and a missing declared length is a {@code 400}, and flattening the two would hide
+   * which mistake was made from the only party that can fix it.
+   *
+   * @param exception the refusal, carrying its own problem type
+   * @param request the request
+   * @param response the response, which carries the protocol header
+   * @return the problem detail the exception names
+   */
+  @ExceptionHandler(TusRequestException.class)
+  public ProblemDetail handleTusRequest(
+      TusRequestException exception, HttpServletRequest request, HttpServletResponse response) {
+    response.setHeader("Tus-Resumable", MediaUploadController.TUS_VERSION);
+    return problem(exception.getType(), exception.getMessage(), request);
+  }
+
+  /**
+   * Tells a resumable upload where it actually is (REQ-MED-008).
+   *
+   * <p>The header is the part that matters: a client whose connection dropped mid-chunk does not
+   * know how much arrived, and the answer is not to guess but to be told. The problem document is
+   * there because REQ-API-003 admits no HTTP surface without one; a tus client reads the status and
+   * the header and ignores the body.
+   *
+   * @param exception the refusal, carrying the authoritative offset
+   * @param request the request
+   * @param response the response, which is where the header goes
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(OffsetMismatchException.class)
+  public ProblemDetail handleOffsetMismatch(
+      OffsetMismatchException exception, HttpServletRequest request, HttpServletResponse response) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.UPLOAD_OFFSET_MISMATCH,
+            "The upload is at a different offset. Continue from the one in Upload-Offset.",
+            request);
+    problem.setProperty("uploadOffset", exception.actual());
+    response.setHeader("Upload-Offset", Long.toString(exception.actual()));
+    response.setHeader("Tus-Resumable", MediaUploadController.TUS_VERSION);
+    return problem;
+  }
+
+  /**
+   * Refuses a second concurrent write to one upload (REQ-MED-008).
+   *
+   * @param exception what the store said
+   * @param request the request
+   * @param response the response, which carries the protocol header
+   * @return a {@code 423} problem detail
+   */
+  @ExceptionHandler(UploadBusyException.class)
+  public ProblemDetail handleUploadBusy(
+      UploadBusyException exception, HttpServletRequest request, HttpServletResponse response) {
+    response.setHeader("Tus-Resumable", MediaUploadController.TUS_VERSION);
+    return problem(
+        ProblemType.UPLOAD_IN_PROGRESS,
+        "Another request is writing to this upload. Try again in a moment.",
+        request);
   }
 
   /**

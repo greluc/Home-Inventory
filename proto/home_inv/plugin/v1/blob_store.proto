@@ -59,6 +59,46 @@ service BlobStore {
   // nothing points at a blob any more, and only then is this called. A store
   // that counted references would need to know what a reference is.
   rpc Delete(DeleteRequest) returns (DeleteResponse);
+
+  // ---------------------------------------------------------------------
+  // STAGING, for an upload that arrives in pieces (REQ-MED-008, ADR-0084).
+  // ---------------------------------------------------------------------
+  //
+  // OPTIONAL, and a plugin may answer all four with UNIMPLEMENTED. The core
+  // calls them on the IN-DEPLOYMENT store and on nothing else: a half-uploaded
+  // file has no content address yet, so it cannot be addressed the way the four
+  // methods above address a blob, and pushing an unfinished object into a
+  // tenant's own bucket would leave litter in somebody else's storage that only
+  // this deployment knows how to clean up. What a tenant's store receives is the
+  // finished blob, through `Put`, exactly as before (ADR-0074).
+  //
+  // A staged object is addressed by an UPLOAD ID rather than by content,
+  // because the content is not yet known -- that is the whole difference
+  // between this and `Put`.
+
+  // Appends bytes to a staged upload, creating it on the first call.
+  //
+  // The offset on the first frame must equal what is already staged, and the
+  // server refuses anything else with FAILED_PRECONDITION. That is what makes a
+  // retry after a broken connection safe: the client asks `HeadStaged` what
+  // arrived, and continues from there. A client that guesses wrong writes
+  // nothing rather than writing at the wrong place.
+  rpc AppendStaged(stream AppendStagedRequest) returns (StagedResponse);
+
+  // How much of a staged upload has arrived.
+  //
+  // This is the authoritative offset. The caller keeps the upload's metadata --
+  // who it is for, what it will be attached to, when it expires -- and keeps no
+  // second copy of the length, because two records of the same number disagree
+  // after a crash and the one on disk is the one that is true.
+  rpc HeadStaged(StagedRequest) returns (StagedResponse);
+
+  // Reads a staged upload back, so the caller can hash it, check its magic
+  // bytes and transcode it before storing it for real.
+  rpc GetStaged(StagedRequest) returns (stream GetResponse);
+
+  // Discards a staged upload: completed, abandoned or expired.
+  rpc DeleteStaged(StagedRequest) returns (DeleteResponse);
 }
 
 // Where a blob lives.
@@ -200,4 +240,65 @@ message DeleteResponse {
   // after a partial failure, and a retry that failed because the work was
   // already done would be a retry nobody could make succeed.
   bool removed = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Staging
+// ---------------------------------------------------------------------------
+
+// Where a half-arrived upload lives.
+//
+// Not content-addressed, because there is no content address until the last
+// byte has arrived. The pair is still per tenant, for the reason ADR-0032 gives
+// for blobs: one tenant must not be able to ask about another's upload, and an
+// id that carried no tenant would make that a matter of guessing a UUID.
+message StagedRef {
+  // The owning tenant, as a UUID in its canonical hyphenated text form.
+  string tenant_id = 1;
+
+  // The upload, as a UUID in its canonical hyphenated text form. The caller
+  // chooses it and hands the same id to whoever is uploading.
+  string upload_id = 2;
+}
+
+// Which staged upload to ask about, read or discard.
+message StagedRequest {
+  StagedRef staged = 1;
+
+  // WHO THE CALL IS FOR (ADR-0073). Same meaning as on every other request
+  // here, and the same rule: it names the tenant the address names.
+  CallContext context = 2;
+}
+
+// One frame of an append.
+//
+// The first message carries `staged` and `offset` and may carry bytes; every
+// later one carries `chunk` alone. The same shape `PutRequest` uses, for the
+// same reason: the wire format stays obvious at the cost of a rule the server
+// enforces.
+message AppendStagedRequest {
+  // Present on the first message only.
+  StagedRef staged = 1;
+
+  // Where these bytes go. Present on the first message only, and it must equal
+  // what is already staged -- the server refuses any other value rather than
+  // writing at the wrong place or silently overwriting.
+  uint64 offset = 2;
+
+  // The bytes.
+  bytes chunk = 3;
+
+  // Present on the first message only, with `staged`.
+  CallContext context = 4;
+}
+
+// How much of a staged upload is on disk.
+message StagedResponse {
+  // False when there is no such staged upload. A caller that asked about one
+  // that expired gets this rather than an error, because expiry is an ordinary
+  // outcome and the caller's next move is the same either way: start again.
+  bool exists = 1;
+
+  // The number of bytes staged so far, which is where the next append goes.
+  uint64 byte_size = 2;
 }

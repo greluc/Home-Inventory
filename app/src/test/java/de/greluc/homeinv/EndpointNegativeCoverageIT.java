@@ -136,6 +136,13 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    *       takes the value to store (REQ-PLG-017)
    *   <li>24 → 25 on 2026-09-21, {@code PUT /api/v1/webhooks/{id}}, which takes a URL, the event
    *       types and optionally a new signing secret (REQ-API-010)
+   *   <li>25 → 28 on 2026-09-22, the three requests on {@code /api/v1/media/uploads/{uploadId}} —
+   *       {@code HEAD}, {@code PATCH} and {@code DELETE}. They carry protocol headers rather than a
+   *       body a caller can invent: every one needs {@code Tus-Resumable} and answers {@code 412}
+   *       without it, and the {@code PATCH} needs an {@code Upload-Offset} and a content type
+   *       besides (REQ-MED-008). *Raised to 27 first, having counted two of the three: the
+   *       {@code DELETE} takes no body and still refuses, because the protocol version is a
+   *       precondition on every request rather than on the ones that carry something.*
    * </ul>
    *
    * <p>*The prose said "Eighteen today" over a constant of 19 between the second and third of
@@ -147,7 +154,7 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    * commit: a new endpoint that takes a body is ordinary, an existing one that stopped answering
    * {@code 404} is not.
    */
-  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 25;
+  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 28;
 
   @Autowired private RequestMappingHandlerMapping mappings;
   @Autowired private TenantProvisioningService provisioning;

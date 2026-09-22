@@ -68,8 +68,9 @@ use crate::dav::{failure, make_collection, MAX_ERROR_BODY};
 use crate::proto::blob_store_server::{BlobStore, BlobStoreServer};
 use crate::proto::plugin_health_server::{PluginHealth, PluginHealthServer};
 use crate::proto::{
-    BlobRef, CallContext, Check, DeleteRequest, DeleteResponse, GetRequest, GetResponse,
-    HeadRequest, HeadResponse, HealthRequest, HealthResponse, HealthState, PutRequest, PutResponse,
+    AppendStagedRequest, BlobRef, CallContext, Check, DeleteRequest, DeleteResponse, GetRequest,
+    GetResponse, HeadRequest, HeadResponse, HealthRequest, HealthResponse, HealthState, PutRequest,
+    PutResponse, StagedRequest, StagedResponse,
 };
 use crate::target::{Defaults, Target};
 
@@ -420,6 +421,14 @@ impl Store {
     }
 }
 
+/// What this plugin says when asked to hold a half-arrived upload.
+///
+/// The contract makes the four staging methods optional and says why: the core
+/// stages in the in-deployment store and sends a tenant's own store the finished
+/// blob (ADR-0084, ADR-0074).
+const STAGING_IS_THE_DEPLOYMENTS: &str =
+    "staging is the in-deployment store's; this plugin receives the finished blob";
+
 #[tonic::async_trait]
 impl BlobStore for Store {
     async fn put(
@@ -572,6 +581,46 @@ impl BlobStore for Store {
             exists: found.is_some(),
             byte_size: found.unwrap_or(0),
         }))
+    }
+
+    // -- Staging (REQ-MED-008, ADR-0084) -----------------------------------
+    //
+    // Answered UNIMPLEMENTED, which the contract expressly permits. The core
+    // calls these on the IN-DEPLOYMENT store and on nothing else: an upload
+    // that has not finished has no content address, and pushing an unfinished
+    // object into a tenant's own bucket would leave litter there that only the
+    // deployment knows how to clean up. What this plugin receives is the
+    // FINISHED blob, through `Put`, exactly as before (ADR-0074).
+
+    async fn append_staged(
+        &self,
+        _request: Request<tonic::Streaming<AppendStagedRequest>>,
+    ) -> Result<Response<StagedResponse>, Status> {
+        Err(Status::unimplemented(STAGING_IS_THE_DEPLOYMENTS))
+    }
+
+    async fn head_staged(
+        &self,
+        _request: Request<StagedRequest>,
+    ) -> Result<Response<StagedResponse>, Status> {
+        Err(Status::unimplemented(STAGING_IS_THE_DEPLOYMENTS))
+    }
+
+    type GetStagedStream =
+        Pin<Box<dyn Stream<Item = Result<GetResponse, Status>> + Send + 'static>>;
+
+    async fn get_staged(
+        &self,
+        _request: Request<StagedRequest>,
+    ) -> Result<Response<Self::GetStagedStream>, Status> {
+        Err(Status::unimplemented(STAGING_IS_THE_DEPLOYMENTS))
+    }
+
+    async fn delete_staged(
+        &self,
+        _request: Request<StagedRequest>,
+    ) -> Result<Response<DeleteResponse>, Status> {
+        Err(Status::unimplemented(STAGING_IS_THE_DEPLOYMENTS))
     }
 
     async fn delete(

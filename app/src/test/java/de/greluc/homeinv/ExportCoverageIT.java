@@ -165,6 +165,11 @@ class ExportCoverageIT extends AbstractIntegrationTest {
               "Key material. A wrapped DEK is useless without the KEK, which never leaves the "
                   + "deployment, and an archive is the last place to put either"),
           Map.entry(
+              "media.upload_session",
+              "An upload still arriving (REQ-MED-008). It names bytes staged in this deployment's "
+                  + "blob store, which the archive does not carry and the receiving instance could "
+                  + "not continue; the FINISHED file travels like any other"),
+          Map.entry(
               "idempotency.processed_request",
               "Which request ids this deployment has already answered. Operational, and it means "
                   + "nothing on an instance that never received them"),

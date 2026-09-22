@@ -21,6 +21,11 @@ commit".
 
 ### Added
 
+- **An interrupted upload is continued rather than begun again.** Photographs and
+  documents now go up in pieces, and a connection that drops partway through costs
+  the pieces that had not arrived rather than the whole file. The web client
+  resumes by itself; nothing has to be retried by hand.
+
 - **Every distributed artifact now carries the licence notices of what is in it.**
   The application, the web bundle, the OIDC plugin and the six Rust services each
   ship the copyright and permission notice of every third-party component they
@@ -1062,7 +1067,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 84 architecture decision records, each with its alternatives and consequences —
+- 85 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

@@ -64,7 +64,7 @@ Date: YYYY-MM-DD
 | [0040](0040-no-cross-origin-isolation.md) | `Cross-Origin-Embedder-Policy` is dropped; `COOP` and `CORP` stay | Accepted |
 | [0041](0041-migration-as-its-own-service.md) | Migration is its own one-shot service, on every runtime | Accepted |
 | [0042](0042-edge-is-not-internal.md) | A published port needs a non-internal segment; `web` becomes the ingress | Accepted, amended by 0044 |
-| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044, 0050 |
+| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044, 0050, 0084 |
 | [0044](0044-internal-is-not-a-trust-boundary.md) | `internal` is not a trust boundary: every datastore authenticates, and `web` leaves it | Accepted |
 | [0045](0045-wal-archive-volume.md) | The WAL archive is a volume of its own, or the recovery point objective is fiction | Accepted |
 | [0046](0046-truncatable-audit-chain.md) | The audit chain is truncatable, and per-tenant retention has a mechanism | Accepted |
@@ -106,3 +106,4 @@ Date: YYYY-MM-DD
 | [0081](0081-the-contract-says-which-values-may-be-null.md) | The contract says which values may be null, from an annotation rather than from prose | Accepted |
 | [0082](0082-tracing-is-a-library-and-the-sampling-is-the-operators.md) | Tracing is a library, and the sampling decision belongs to the operator | Accepted |
 | [0083](0083-the-notice-travels-inside-the-artifact.md) | The licence notice travels inside the artifact, and the SBOM is one per artifact | Accepted, amends 0034 |
+| [0084](0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md) | An upload arrives in pieces, and is staged where the volume is | Accepted, amends 0043 |

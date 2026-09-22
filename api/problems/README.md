@@ -66,3 +66,5 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`federated-address-taken`](federated-address-taken.md) | `409` | assigned | This instance creates accounts, and the address the provider verified already has one; sign in with it and link the provider deliberately. |
 | [`federated-address-unverified`](federated-address-unverified.md) | `403` | assigned | The provider did not confirm the address it reported, so no account can be created from it. |
 | [`federated-identity-linked-elsewhere`](federated-identity-linked-elsewhere.md) | `409` | assigned | That provider identity is already linked to another account here. |
+| [`upload-offset-mismatch`](upload-offset-mismatch.md) | `409` | assigned | The bytes were offered at a place the upload is not at. |
+| [`upload-in-progress`](upload-in-progress.md) | `423` | assigned | Another request is already writing to this upload. |

@@ -58,6 +58,115 @@ open class MediaApi : ApiClient {
     ): super(baseUrl = baseUrl, httpClient = httpClient)
 
     /**
+     * Abandons an upload and discards what arrived.
+     * Abandons an upload and discards what arrived.
+     * @param uploadId the upload
+     * @param tusResumable the protocol version the client speaks (optional)
+     * @return void
+     */
+    open suspend fun abort(uploadId: kotlin.String, tusResumable: kotlin.String? = null): HttpResponse<Unit> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+        tusResumable?.apply { localVariableHeaders["Tus-Resumable"] = this.toString() }
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.DELETE,
+            "/api/v1/media/uploads/{uploadId}".replace("{" + "uploadId" + "}", "$uploadId"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
+     * Sends the next piece, and finishes the upload when it was the last one
+     * Sends the next piece, and finishes the upload when it was the last one.  On completion the response carries &#x60;Location&#x60;, pointing at the file that was created — the same resource the one-shot upload&#39;s &#x60;202&#x60; names. tus says nothing about this because tus does not know what the bytes become; a client that lost the response asks again and is told the same thing, because the upload remembers what it produced.
+     * @param uploadId the upload
+     * @param uploadOffset where these bytes go, from &#x60;Upload-Offset&#x60; (optional)
+     * @param contentType what tus requires on this request and nothing else (optional)
+     * @param tusResumable the protocol version the client speaks (optional)
+     * @return void
+     */
+    open suspend fun append(uploadId: kotlin.String, uploadOffset: kotlin.Long? = null, contentType: kotlin.String? = null, tusResumable: kotlin.String? = null): HttpResponse<Unit> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+        uploadOffset?.apply { localVariableHeaders["Upload-Offset"] = this.toString() }
+        contentType?.apply { localVariableHeaders["Content-Type"] = this.toString() }
+        tusResumable?.apply { localVariableHeaders["Tus-Resumable"] = this.toString() }
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.PATCH,
+            "/api/v1/media/uploads/{uploadId}".replace("{" + "uploadId" + "}", "$uploadId"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
+     * Begins an upload and answers where to send the bytes
+     * Begins an upload and answers where to send the bytes.  The length is declared here and checked **before a byte arrives**, which is what REQ-SEC-037 asks for and what the one-shot path can only approximate by cutting the stream off mid-read.
+     * @param uploadLength how many bytes will follow, from &#x60;Upload-Length&#x60; (optional)
+     * @param uploadMetadata what the file will be attached to, from &#x60;Upload-Metadata&#x60; (optional)
+     * @param tusResumable the protocol version the client speaks (optional)
+     * @return void
+     */
+    open suspend fun create2(uploadLength: kotlin.Long? = null, uploadMetadata: kotlin.String? = null, tusResumable: kotlin.String? = null): HttpResponse<Unit> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+        uploadLength?.apply { localVariableHeaders["Upload-Length"] = this.toString() }
+        uploadMetadata?.apply { localVariableHeaders["Upload-Metadata"] = this.toString() }
+        tusResumable?.apply { localVariableHeaders["Tus-Resumable"] = this.toString() }
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.POST,
+            "/api/v1/media/uploads",
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
      * Detaches a file, removing the bytes when nothing references them.
      * Detaches a file, removing the bytes when nothing references them.
      * @param mediaObjectId the file
@@ -167,6 +276,37 @@ open class MediaApi : ApiClient {
 
 
     /**
+     * What this server supports, asked before anything is created
+     * What this server supports, asked before anything is created.  Authenticated like everything else under &#x60;/api/v1&#x60;: it says what the protocol can do here, which is of no use to somebody who may not upload.
+     * @return void
+     */
+    open suspend fun options(): HttpResponse<Unit> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.OPTIONS,
+            "/api/v1/media/uploads",
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
      * Serves the bytes of one variant, to whoever presents a valid signature
      * Serves the bytes of one variant, to whoever presents a valid signature.  No session and no tenant context: the signature carries the authorisation, and the tenant is part of what it covers, so a URL cannot be replayed with a different tenant in the path.  Every response is &#x60;Content-Disposition: attachment&#x60; and &#x60;X-Content-Type-Options: nosniff&#x60;. Even for an image: a file served inline from a hostname runs in that hostname&#39;s origin if a browser can be persuaded to treat it as a document, and the dedicated media hostname exists precisely so that the answer to \&quot;what if it is\&quot; is \&quot;nothing of ours\&quot;.
      * @param tenantId the tenant, from the path and covered by the signature
@@ -194,6 +334,40 @@ open class MediaApi : ApiClient {
         val localVariableConfig = RequestConfig<kotlin.Any?>(
             RequestMethod.GET,
             "/media/{tenantId}/{sha256}/{variant}".replace("{" + "tenantId" + "}", "$tenantId").replace("{" + "sha256" + "}", "$sha256").replace("{" + "variant" + "}", "$variant"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
+     * Where an upload stands
+     * Where an upload stands.  The one request a client makes after a connection dropped, and the reason this feature exists: the offset comes from the store that holds the bytes, so the answer is what actually arrived rather than what either side believed.
+     * @param uploadId the upload
+     * @param tusResumable the protocol version the client speaks (optional)
+     * @return void
+     */
+    open suspend fun status(uploadId: kotlin.String, tusResumable: kotlin.String? = null): HttpResponse<Unit> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+        tusResumable?.apply { localVariableHeaders["Tus-Resumable"] = this.toString() }
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.HEAD,
+            "/api/v1/media/uploads/{uploadId}".replace("{" + "uploadId" + "}", "$uploadId"),
             query = localVariableQuery,
             headers = localVariableHeaders,
             requiresAuthentication = false,

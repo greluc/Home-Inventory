@@ -3,7 +3,7 @@
 
 //! The `BlobStore` service itself.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -13,10 +13,11 @@ use tracing::{debug, warn};
 
 use crate::proto::blob_store_server::BlobStore;
 use crate::proto::{
-    BlobRef as BlobRefMessage, CallContext, DeleteRequest, DeleteResponse, GetRequest, GetResponse,
-    HeadRequest, HeadResponse, PutRequest, PutResponse,
+    AppendStagedRequest, BlobRef as BlobRefMessage, CallContext, DeleteRequest, DeleteResponse,
+    GetRequest, GetResponse, HeadRequest, HeadResponse, PutRequest, PutResponse,
+    StagedRef as StagedRefMessage, StagedRequest, StagedResponse,
 };
-use crate::store::BlobRef;
+use crate::store::{BlobRef, StagedRef};
 
 /// How much of a blob travels in one frame.
 ///
@@ -25,15 +26,87 @@ use crate::store::BlobRef;
 /// limit without either side having to raise it.
 const CHUNK_BYTES: usize = 256 * 1024;
 
+/// The most a single staged upload may grow to (`REQ-MED-008`).
+///
+/// The real limit is the caller's: `api` refuses an upload that declares more
+/// than `REQ-SEC-037`'s 25 MB, and refuses it before a byte arrives. This one
+/// exists because `internal` is not a trust boundary (ADR-0044) — a caller that
+/// reaches this service could otherwise fill the volume one append at a time,
+/// and a store with no bound of its own is a store that trusts the network it
+/// sits on. Above the caller's ceiling on purpose: whichever limit fires first
+/// decides what a person is told, and the caller's is the one that answers with
+/// a problem document.
+const STAGED_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
 /// A blob store backed by a directory.
 pub struct FilesystemBlobStore {
     root: PathBuf,
+
+    /// Which staged uploads are being appended to right now.
+    ///
+    /// tus asks a server to refuse a second concurrent `PATCH` on one upload,
+    /// and the reason is not tidiness: two appends that both read the length
+    /// before either writes would both be at the right offset and would both
+    /// write, leaving a file of the right size and the wrong bytes — which
+    /// nothing notices until the digest at the very end.
+    ///
+    /// In this process and not in Valkey, because this IS the process: one
+    /// service holds the volume ([ADR-0043]), so a lock held here covers every
+    /// caller rather than only the ones that agreed to take it.
+    appending: std::sync::Mutex<std::collections::HashSet<PathBuf>>,
+}
+
+/// Holds one staged upload for the duration of an append.
+///
+/// A guard rather than a pair of calls: an append has four ways out — a bad
+/// offset, a full disk, a client that vanished, success — and a release that
+/// has to be written on each of them is a release that is missing from one.
+struct Appending<'a> {
+    store: &'a FilesystemBlobStore,
+    path: PathBuf,
+}
+
+impl Drop for Appending<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut held) = self.store.appending.lock() {
+            held.remove(&self.path);
+        }
+    }
 }
 
 impl FilesystemBlobStore {
     /// Serves blobs from a directory.
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            appending: std::sync::Mutex::new(std::collections::HashSet::new()),
+        }
+    }
+
+    /// Claims a staged upload for this append, or refuses.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — where the staged upload lives
+    ///
+    /// # Errors
+    ///
+    /// Returns `ABORTED` when another append holds it, which the caller turns
+    /// into the `423 Locked` tus asks for.
+    fn claim(&self, path: &Path) -> Result<Appending<'_>, Status> {
+        let mut held = self
+            .appending
+            .lock()
+            .map_err(|_| Status::internal("the staging lock is poisoned"))?;
+        if !held.insert(path.to_path_buf()) {
+            return Err(Status::aborted(
+                "another append is in flight for this upload",
+            ));
+        }
+        Ok(Appending {
+            store: self,
+            path: path.to_path_buf(),
+        })
     }
 
     /// Validates the reference a request carries, against the envelope beside it.
@@ -64,6 +137,33 @@ impl FilesystemBlobStore {
             }
         }
         BlobRef::parse(&message.tenant_id, &message.sha256)
+            .map_err(|failure| Status::invalid_argument(failure.message()))
+    }
+
+    /// Validates a staged reference, against the envelope beside it.
+    ///
+    /// The same pairing [`Self::reference`] checks, for the same reason: the
+    /// address carries the tenant because staging is per tenant, and the
+    /// envelope says who the call is for. A caller that names two different
+    /// tenants is refused rather than served under either.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` — the address
+    /// * `context` — the envelope
+    fn staged(
+        message: Option<&StagedRefMessage>,
+        context: Option<&CallContext>,
+    ) -> Result<StagedRef, Status> {
+        let message = message.ok_or_else(|| Status::invalid_argument("staged is required"))?;
+        if let Some(envelope) = context.map(|context| context.tenant_id.trim()) {
+            if !envelope.is_empty() && envelope != message.tenant_id.trim() {
+                return Err(Status::invalid_argument(
+                    "the envelope and the address name different tenants",
+                ));
+            }
+        }
+        StagedRef::parse(&message.tenant_id, &message.upload_id)
             .map_err(|failure| Status::invalid_argument(failure.message()))
     }
 }
@@ -224,6 +324,197 @@ impl BlobStore for FilesystemBlobStore {
                     exists: false,
                     byte_size: 0,
                 }))
+            }
+            Err(failure) => Err(Status::internal(failure.to_string())),
+        }
+    }
+
+    async fn append_staged(
+        &self,
+        request: Request<Streaming<AppendStagedRequest>>,
+    ) -> Result<Response<StagedResponse>, Status> {
+        let mut frames = request.into_inner();
+
+        let first = frames
+            .next()
+            .await
+            .transpose()?
+            .ok_or_else(|| Status::invalid_argument("the stream carried no frames"))?;
+        let staged = Self::staged(first.staged.as_ref(), first.context.as_ref())?;
+        let target = staged.path_under(&self.root);
+        let parent = target
+            .parent()
+            .ok_or_else(|| Status::internal("the staged path has no parent"))?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|failure| Status::internal(failure.to_string()))?;
+
+        // Held until this call returns, by whichever path it returns on.
+        let _appending = self.claim(&target)?;
+
+        // What is already there decides whether this append is the one the
+        // client thinks it is. A mismatch is refused rather than reconciled:
+        // writing at the wrong place would produce a file that is the right
+        // length and the wrong bytes, and the only thing that would notice is
+        // the digest at the very end.
+        let present = match tokio::fs::metadata(&target).await {
+            Ok(metadata) => metadata.len(),
+            Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => 0,
+            Err(failure) => return Err(Status::internal(failure.to_string())),
+        };
+        if first.offset != present {
+            return Err(Status::failed_precondition(format!(
+                "the upload is at {present} bytes and the append names {}",
+                first.offset
+            )));
+        }
+
+        let mut written = present;
+        let outcome = async {
+            let mut file = tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&target)
+                .await?;
+            // The first frame may carry bytes as well as the address, and a
+            // client that sends them is not wrong -- so they count.
+            let mut chunk = first.chunk;
+            loop {
+                if !chunk.is_empty() {
+                    written += chunk.len() as u64;
+                    if written > STAGED_MAX_BYTES {
+                        return Err(std::io::Error::other("staged upload too large"));
+                    }
+                    file.write_all(&chunk).await?;
+                }
+                match frames
+                    .next()
+                    .await
+                    .transpose()
+                    .map_err(std::io::Error::other)?
+                {
+                    None => break,
+                    Some(frame) => {
+                        if frame.staged.is_some() {
+                            return Err(std::io::Error::other(
+                                "only the first frame may carry staged",
+                            ));
+                        }
+                        chunk = frame.chunk;
+                    }
+                }
+            }
+            // Durable before the offset is reported. A client that is told "you
+            // are at 5 MB" and then finds 3 MB after a power cut would resume
+            // from a place that does not exist, which is the one failure a
+            // resumable upload exists to prevent (REQ-MED-008).
+            file.sync_all().await?;
+            Ok::<_, std::io::Error>(())
+        }
+        .await;
+
+        if let Err(failure) = outcome {
+            // The bytes that did arrive stay. The offset is the file's length
+            // either way, so a client that asks what arrived gets a truthful
+            // answer and continues from there -- which is exactly what a broken
+            // connection looks like from here.
+            let length = tokio::fs::metadata(&target)
+                .await
+                .map(|metadata| metadata.len())
+                .unwrap_or(present);
+            if length > STAGED_MAX_BYTES {
+                let _ = tokio::fs::remove_file(&target).await;
+                warn!("a staged upload was discarded for exceeding the size limit");
+                return Err(Status::resource_exhausted("the staged upload is too large"));
+            }
+            return Err(Status::internal(failure.to_string()));
+        }
+
+        debug!(bytes = written, "staged an upload");
+        Ok(Response::new(StagedResponse {
+            exists: true,
+            byte_size: written,
+        }))
+    }
+
+    async fn head_staged(
+        &self,
+        request: Request<StagedRequest>,
+    ) -> Result<Response<StagedResponse>, Status> {
+        let message = request.into_inner();
+        let staged = Self::staged(message.staged.as_ref(), message.context.as_ref())?;
+        let target = staged.path_under(&self.root);
+
+        match tokio::fs::metadata(&target).await {
+            Ok(metadata) => Ok(Response::new(StagedResponse {
+                exists: true,
+                byte_size: metadata.len(),
+            })),
+            // Absent is an answer rather than an error: an upload that expired
+            // and one that was never begun look the same from here, and the
+            // caller's next move is the same for both.
+            Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
+                Ok(Response::new(StagedResponse {
+                    exists: false,
+                    byte_size: 0,
+                }))
+            }
+            Err(failure) => Err(Status::internal(failure.to_string())),
+        }
+    }
+
+    type GetStagedStream = std::pin::Pin<
+        Box<dyn futures_core::Stream<Item = Result<GetResponse, Status>> + Send + 'static>,
+    >;
+
+    async fn get_staged(
+        &self,
+        request: Request<StagedRequest>,
+    ) -> Result<Response<Self::GetStagedStream>, Status> {
+        let message = request.into_inner();
+        let staged = Self::staged(message.staged.as_ref(), message.context.as_ref())?;
+        let target = staged.path_under(&self.root);
+
+        let mut file = tokio::fs::File::open(&target).await.map_err(|failure| {
+            if failure.kind() == std::io::ErrorKind::NotFound {
+                Status::not_found("no such staged upload")
+            } else {
+                Status::internal(failure.to_string())
+            }
+        })?;
+
+        let stream = async_stream::stream! {
+            let mut buffer = vec![0_u8; CHUNK_BYTES];
+            loop {
+                match file.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(read) => yield Ok(GetResponse { chunk: buffer[..read].to_vec() }),
+                    Err(failure) => {
+                        yield Err(Status::internal(failure.to_string()));
+                        break;
+                    }
+                }
+            }
+        };
+        Ok(Response::new(Box::pin(stream) as Self::GetStagedStream))
+    }
+
+    async fn delete_staged(
+        &self,
+        request: Request<StagedRequest>,
+    ) -> Result<Response<DeleteResponse>, Status> {
+        let message = request.into_inner();
+        let staged = Self::staged(message.staged.as_ref(), message.context.as_ref())?;
+        let target = staged.path_under(&self.root);
+
+        match tokio::fs::remove_file(&target).await {
+            Ok(()) => Ok(Response::new(DeleteResponse { removed: true })),
+            // Nothing to remove is not a failure, for the reason `Delete` gives:
+            // this is called again after a partial failure, and a retry that
+            // failed because the work was already done is a retry nobody can
+            // make succeed.
+            Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
+                Ok(Response::new(DeleteResponse { removed: false }))
             }
             Err(failure) => Err(Status::internal(failure.to_string())),
         }

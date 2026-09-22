@@ -14438,6 +14438,352 @@ paths:
       summary: Uploads a file and attaches it to an item or a location.
       tags:
       - Media
+  /api/v1/media/uploads:
+    options:
+      description: |-
+        What this server supports, asked before anything is created.
+
+        Authenticated like everything else under `/api/v1`: it says what the protocol can do
+        here, which is of no use to somebody who may not upload.
+      operationId: options
+      responses:
+        '200':
+          description: '`204` with the version, the ceiling and the extensions'
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: What this server supports, asked before anything is created
+      tags:
+      - Media
+    post:
+      description: |-
+        Begins an upload and answers where to send the bytes.
+
+        The length is declared here and checked **before a byte arrives**, which is what
+        REQ-SEC-037 asks for and what the one-shot path can only approximate by cutting the stream off
+        mid-read.
+      operationId: create_2
+      parameters:
+      - description: how many bytes will follow, from `Upload-Length`
+        in: header
+        name: Upload-Length
+        required: false
+        schema:
+          format: int64
+          type: integer
+      - description: what the file will be attached to, from `Upload-Metadata`
+        in: header
+        name: Upload-Metadata
+        required: false
+        schema:
+          type: string
+      - description: the protocol version the client speaks
+        in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '`201` with the upload''s URL in `Location`'
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Begins an upload and answers where to send the bytes
+      tags:
+      - Media
+  /api/v1/media/uploads/{uploadId}:
+    delete:
+      description: Abandons an upload and discards what arrived.
+      operationId: abort
+      parameters:
+      - description: the upload
+        in: path
+        name: uploadId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the protocol version the client speaks
+        in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '`204`'
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Abandons an upload and discards what arrived.
+      tags:
+      - Media
+    head:
+      description: |-
+        Where an upload stands.
+
+        The one request a client makes after a connection dropped, and the reason this feature
+        exists: the offset comes from the store that holds the bytes, so the answer is what actually
+        arrived rather than what either side believed.
+      operationId: status
+      parameters:
+      - description: the upload
+        in: path
+        name: uploadId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: the protocol version the client speaks
+        in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '`200` with the offset and the declared length'
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Where an upload stands
+      tags:
+      - Media
+    patch:
+      description: |-
+        Sends the next piece, and finishes the upload when it was the last one.
+
+        On completion the response carries `Location`, pointing at the file that was created —
+        the same resource the one-shot upload's `202` names. tus says nothing about this because
+        tus does not know what the bytes become; a client that lost the response asks again and is told
+        the same thing, because the upload remembers what it produced.
+      operationId: append
+      parameters:
+      - description: the upload
+        in: path
+        name: uploadId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: where these bytes go, from `Upload-Offset`
+        in: header
+        name: Upload-Offset
+        required: false
+        schema:
+          format: int64
+          type: integer
+      - description: what tus requires on this request and nothing else
+        in: header
+        name: Content-Type
+        required: false
+        schema:
+          type: string
+      - description: the protocol version the client speaks
+        in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '`204` with the new offset'
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Upload offset mismatch (`upload-offset-mismatch`)
+        '412':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: The resource has moved on (`precondition-failed`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '423':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Upload in progress (`upload-in-progress`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Sends the next piece, and finishes the upload when it was the last one
+      tags:
+      - Media
   /api/v1/media/{mediaObjectId}:
     delete:
       description: Detaches a file, removing the bytes when nothing references them.

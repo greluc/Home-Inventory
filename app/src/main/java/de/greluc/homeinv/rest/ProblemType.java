@@ -382,6 +382,22 @@ public enum ProblemType {
   PAYLOAD_TOO_LARGE("payload-too-large", HttpStatus.CONTENT_TOO_LARGE, "Payload too large"),
 
   /**
+   * A resumable upload was offered bytes at a place it is not at (REQ-MED-008).
+   *
+   * <p>The response carries the authoritative offset in {@code Upload-Offset}, which is where the
+   * client continues from. The ordinary outcome of a broken connection rather than a fault.
+   */
+  UPLOAD_OFFSET_MISMATCH("upload-offset-mismatch", HttpStatus.CONFLICT, "Upload offset mismatch"),
+
+  /**
+   * Another request is already writing to this upload (REQ-MED-008).
+   *
+   * <p>{@code 423}, which is the status tus names. Two appends that both read the offset before
+   * either writes would leave a file of the right length and the wrong bytes.
+   */
+  UPLOAD_IN_PROGRESS("upload-in-progress", HttpStatus.LOCKED, "Upload in progress"),
+
+  /**
    * The request's {@code Content-Type} is not one this endpoint reads.
    *
    * <p>About the header. An upload whose <em>bytes</em> are a type this system does not store is a

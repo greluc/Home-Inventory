@@ -140,6 +140,24 @@ One source, one `<Icon>` component of our own.
   `LICENSES/ISC.txt`, `LICENSES/MIT.txt` and explicit annotations
   (ADR-0000, A4).
 
+## Uploads go in pieces
+
+`src/upload.ts` speaks **tus 1.0.0** against `/api/v1/media/uploads` (`REQ-MED-008`,
+[ADR-0084](../docs/adr/0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md)):
+create the upload, send the file in 4 MB chunks, and — when a chunk fails — ask the
+server where it actually got to and continue from there. On the connection a phone has
+while standing in front of a shelf, that is the difference between a photograph
+arriving and a photograph never arriving.
+
+**Hand-written, and `tus-js-client` is not a dependency.** What it would buy is parallel
+uploads, storage back-ends and a retry policy this client does not want; what it would
+cost is a line in nine licence notices (`REQ-CON-013`), an entry in this bundle's SBOM
+and a package to keep current. The protocol used here is four requests.
+
+It deliberately does **not** remember an upload across page loads. Somebody who
+navigates away has made a decision, and an upload that resumed itself the next morning
+would be a surprise rather than a convenience.
+
 ## What the bundle says about itself
 
 Two files the build writes into `dist/`, and both ship with the image:

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, api, type Media } from "./api";
+import { UploadFailed, upload as resumableUpload } from "./upload";
 
 /**
  * The photographs of one item.
@@ -92,7 +93,13 @@ export function ItemPhotos({
   async function upload(file: File): Promise<void> {
     setBusy(true);
     try {
-      const accepted = await api.uploadMedia(file, "ITEM", itemId);
+      // Resumable (REQ-MED-008): the file goes in pieces, and a chunk that
+      // fails is retried from where the server says the upload actually is
+      // rather than from the beginning. On the connection a phone has while
+      // standing in front of a shelf, that is the difference between a
+      // photograph arriving and a photograph never arriving.
+      const location = await resumableUpload(file, { targetKind: "ITEM", targetId: itemId });
+      const accepted = { id: location.slice(location.lastIndexOf("/") + 1) };
       // The upload is answered before the malware scan has run, so this waits for
       // the verdict rather than showing a permanent placeholder: the scan happens
       // in the worker and the file is not retrievable until it has cleared it.
@@ -101,7 +108,13 @@ export function ItemPhotos({
       await settled(accepted.id);
       await reload();
     } catch (cause) {
-      onError(cause instanceof ApiError ? cause.detail : t("media.uploadFailed"));
+      if (cause instanceof ApiError) {
+        onError(cause.detail);
+      } else if (cause instanceof UploadFailed) {
+        onError(t("media.uploadFailed"));
+      } else {
+        onError(t("media.uploadFailed"));
+      }
     } finally {
       setBusy(false);
     }

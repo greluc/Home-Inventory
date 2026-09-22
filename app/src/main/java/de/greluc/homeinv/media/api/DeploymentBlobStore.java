@@ -67,4 +67,59 @@ public interface DeploymentBlobStore {
    * @throws IOException when the store cannot be written
    */
   void delete(UUID tenantId, String sha256) throws IOException;
+
+  // -------------------------------------------------------------------------
+  // Staging, for an upload that arrives in pieces (REQ-MED-008, ADR-0084).
+  // -------------------------------------------------------------------------
+  //
+  // On THIS port and not on {@link BlobStore}: a half-arrived file has no
+  // content address, so it cannot be addressed the way a blob is, and pushing an
+  // unfinished object into a tenant's own bucket would leave litter in somebody
+  // else's storage that only this deployment knows how to clean up. A tenant's
+  // store receives the finished blob and nothing else (ADR-0074).
+
+  /**
+   * Appends bytes to a staged upload, creating it on the first call.
+   *
+   * @param tenantId the owning tenant
+   * @param uploadId the upload, which is also where the bytes are staged
+   * @param offset where these bytes go; it must equal what is already staged
+   * @param content the bytes
+   * @return how much is staged after this call
+   * @throws OffsetMismatchException when the offset is not where the upload stands
+   * @throws UploadBusyException when another append is in flight for this upload
+   * @throws IOException when the store cannot be written
+   */
+  long append(UUID tenantId, UUID uploadId, long offset, InputStream content) throws IOException;
+
+  /**
+   * How much of a staged upload has arrived.
+   *
+   * <p>This is the authoritative offset, and the reason there is no column for it: a number kept
+   * in two places disagrees after a crash, and the one on disk is the one that is true.
+   *
+   * @param tenantId the owning tenant
+   * @param uploadId the upload
+   * @return the bytes staged so far, or empty when there is no such upload
+   */
+  java.util.OptionalLong staged(UUID tenantId, UUID uploadId);
+
+  /**
+   * Reads a staged upload back, so it can be hashed, sniffed and transcoded.
+   *
+   * @param tenantId the owning tenant
+   * @param uploadId the upload
+   * @return the bytes
+   * @throws IOException when there is no such upload, or it cannot be read
+   */
+  InputStream openStaged(UUID tenantId, UUID uploadId) throws IOException;
+
+  /**
+   * Discards a staged upload: completed, abandoned or expired.
+   *
+   * @param tenantId the owning tenant
+   * @param uploadId the upload
+   * @throws IOException when the store cannot be written
+   */
+  void deleteStaged(UUID tenantId, UUID uploadId) throws IOException;
 }

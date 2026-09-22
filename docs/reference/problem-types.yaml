@@ -857,6 +857,36 @@ assigned:
       front of it. The way out is to unlink it on the account that holds it.
     sources:
       - "REQ-AUTH-005, REQ-AUTH-006"
+
+  - token: upload-offset-mismatch
+    status: 409
+    since: 1
+    summary: >
+      The bytes were offered at a place the upload is not at.
+    notes: >
+      The ordinary outcome of a broken connection and not a fault: a chunk was sent,
+      the connection dropped somewhere in the middle, and neither side knows how much
+      arrived. The response carries the authoritative offset in the `Upload-Offset`
+      header, which is where the client continues from — asking rather than guessing
+      is the whole difference between an upload that survives a network change and one
+      that starts again. The status is the one the tus protocol names.
+    sources:
+      - "REQ-MED-008, ADR-0084"
+
+  - token: upload-in-progress
+    status: 423
+    since: 1
+    summary: >
+      Another request is already writing to this upload.
+    notes: >
+      tus asks a server to refuse a second concurrent write to one upload, and the
+      reason is not tidiness: two appends that both read the offset before either
+      writes are both at the right place and both write, leaving a file of the right
+      length and the wrong bytes — which nothing notices until the digest at the very
+      end. The refusal comes from the blob store, which is one process holding one
+      volume and therefore the only place a lock covers every caller.
+    sources:
+      - "REQ-MED-008, ADR-0084"
 # ---------------------------------------------------------------------------
 # NOT REGISTERED YET — conditions the corpus describes without fixing a status
 # code. The list is EMPTY as of 2026-09-11: the three entries that stood here were
