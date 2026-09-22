@@ -77,7 +77,12 @@ forbids database and repository access from the access blocks.
 │                {id}/health {id}/enable {id}/disable
 ├── /audit       log queries
 ├── /events      the live stream an open view holds (SSE, REQ-API-011)
-└── /webhooks    {id} {id}/deliveries  /event-types
+├── /webhooks    {id} {id}/deliveries  /event-types
+└── /version     which build this is, its commit and its source (REQ-CON-009)
+                 /notices   the third-party licence notices this image carries
+                            (REQ-CON-013) — both without a session, because an
+                            obligation owed to whoever uses the instance cannot
+                            be owed only to whoever has an account on it
 ```
 
 Non-CRUD operations use the form `POST /resource/{id}/action` — `{id}/archive`,

@@ -46,8 +46,13 @@ import org.testcontainers.utility.MountableFile;
  *
  * <p>The repository root is about a gigabyte — {@code blobstore/target} alone is 800 MB of
  * incremental Rust artefacts — and Testcontainers tars whatever directory it is given, ignoring
- * {@code .dockerignore}. So the four files and two directories the image actually needs are copied
+ * {@code .dockerignore}. So the five files and two directories the image actually needs are copied
  * into a temporary root, which takes milliseconds instead of minutes.
+ *
+ * <p>The cost of that is a list that has to be kept in step with what the crate compiles, and this
+ * test is what notices: adding {@code include_str!} of the licence notice (REQ-CON-013) broke the
+ * image build here on 2026-09-22 and nowhere else, because every other build has the whole crate
+ * directory.
  */
 @DisplayName("The blob store contract")
 class BlobStoreContractIT {
@@ -255,7 +260,12 @@ class BlobStoreContractIT {
 
     copyTree(repository.resolve("proto"), root.resolve("proto"));
     Files.createDirectories(root.resolve("blobstore"));
-    for (String file : new String[] {"Cargo.toml", "Cargo.lock", "build.rs", "Dockerfile"}) {
+    // THIRD-PARTY-NOTICES.txt is not decoration here: `main.rs` reads it with
+    // `include_str!`, so the crate does not compile without it (REQ-CON-013,
+    // ADR-0083). A file this list forgets is a build failure inside the image
+    // rather than a missing file on the host, which is the slowest kind to read.
+    for (String file :
+        new String[] {"Cargo.toml", "Cargo.lock", "build.rs", "Dockerfile", "THIRD-PARTY-NOTICES.txt"}) {
       Files.copy(repository.resolve("blobstore").resolve(file), root.resolve("blobstore").resolve(file));
     }
     copyTree(repository.resolve("blobstore/src"), root.resolve("blobstore/src"));

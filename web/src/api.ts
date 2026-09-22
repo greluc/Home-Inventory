@@ -82,6 +82,8 @@ export type LocationCategory = components["schemas"]["LocationCategoryView"];
 export type Media = components["schemas"]["MediaView"];
 /** What this instance is running (REQ-CON-009). */
 export type Version = components["schemas"]["BuildVersion"];
+/** Everything third-party an artifact carries, with the licence text it is under. */
+export type ThirdPartyNotices = components["schemas"]["ThirdPartyNoticesView"];
 
 /** One page of items. */
 export type ItemPage = components["schemas"]["PageItemView"];
@@ -192,6 +194,21 @@ export const api = {
    */
   version: async (): Promise<Version> =>
     unwrap(await client.GET("/api/v1/version")),
+
+  /**
+   * What the server is built from, and under which licences (REQ-CON-013).
+   *
+   * Public for the same reason the version is: an attribution only signed-in
+   * people could read would be one owed to whoever has an account.
+   *
+   * This is the **server's** notice. The client's own is a static file in this
+   * bundle — two artifacts, two dependency sets — and `ThirdPartyNotices.tsx`
+   * shows them side by side rather than pretending either covers the other.
+   *
+   * @returns every third-party component in the API image
+   */
+  notices: async (): Promise<ThirdPartyNotices> =>
+    unwrap(await client.GET("/api/v1/version/notices")),
 
   /**
    * Logs in and establishes a session.

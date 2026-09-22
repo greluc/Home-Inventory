@@ -21,6 +21,14 @@ commit".
 
 ### Added
 
+- **Every distributed artifact now carries the licence notices of what is in it.**
+  The application, the web bundle, the OIDC plugin and the six Rust services each
+  ship the copyright and permission notice of every third-party component they
+  contain — compiled into the binary where the image has no filesystem to hold a
+  file. The notices are reachable from the running installation, next to the
+  version and the source link, and each artifact now publishes its own
+  CycloneDX bill of materials rather than one standing in for nine.
+
 - **A plugin id cannot write its own line in the log.** Values that come from a
   caller now go through a filter before they reach a log entry, so nothing can
   slip in a newline and add a record of something that never happened. Found by
@@ -1054,7 +1062,7 @@ commit".
 - A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 83 architecture decision records, each with its alternatives and consequences —
+- 84 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

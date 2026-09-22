@@ -4743,6 +4743,93 @@ components:
       - name
       - role
       type: object
+    ThirdPartyComponentView:
+      description: One third-party component the artifact carries.
+      properties:
+        licences:
+          description: |-
+            the SPDX identifiers it is declared under, or the names where what was
+            declared is not an identifier
+          items:
+            type: string
+          type: array
+        name:
+          description: the component's name as the artifact spells it
+          type: string
+        notices:
+          description: |-
+            the licence and notice files the component itself ships, verbatim; empty where
+            the licence's text is the same for every component and appears in `licences`
+          items:
+            $ref: '#/components/schemas/ThirdPartyNoticeView'
+          type: array
+        version:
+          description: its version
+          type: string
+      required:
+      - licences
+      - name
+      - notices
+      - version
+      type: object
+    ThirdPartyLicenceView:
+      description: The full text of one licence.
+      properties:
+        id:
+          description: the SPDX identifier
+          type: string
+        source:
+          description: where this copy of the text came from, named so the provenance is answerable
+          type: string
+        text:
+          description: the licence, verbatim
+          type: string
+      required:
+      - id
+      - source
+      - text
+      type: object
+    ThirdPartyNoticeView:
+      description: One file a component ships, reproduced as it is.
+      properties:
+        path:
+          description: where the file sat inside the component, so a reader can check it
+          type: string
+        text:
+          description: the file, verbatim
+          type: string
+      required:
+      - path
+      - text
+      type: object
+    ThirdPartyNoticesView:
+      description: The whole notice for one artifact.
+      properties:
+        artifact:
+          description: which artifact this describes, as `tools/notices.py` names it
+          type: string
+        components:
+          description: everything third-party it carries
+          items:
+            $ref: '#/components/schemas/ThirdPartyComponentView'
+          type: array
+        licences:
+          description: |-
+            the full text of every licence whose wording is the same for all of them,
+            reproduced once; a licence whose text carries a copyright line is with its component
+            instead
+          items:
+            $ref: '#/components/schemas/ThirdPartyLicenceView'
+          type: array
+        title:
+          description: what that artifact is called in prose
+          type: string
+      required:
+      - artifact
+      - components
+      - licences
+      - title
+      type: object
     TokensRevokedView:
       description: |-
         What a mass revocation did.
@@ -18448,6 +18535,46 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: The build's identity.
+      tags:
+      - Version
+  /api/v1/version/notices:
+    get:
+      description: |-
+        Every third-party component in this artifact, with the licence text it is under.
+
+        Cached for an hour, which is the one thing this endpoint does beyond serving a file. The
+        document is a few hundred kilobytes of licence text and does not change while a build is
+        running, so re-sending it on every open of the dialog would be the only expensive thing an
+        unauthenticated caller can ask this application for. An hour and not a year: the URL is the
+        same across builds, so a long lifetime would show somebody the notice of the version they
+        were running yesterday.
+      operationId: notices
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThirdPartyNoticesView'
+          description: the notice, as generated for this build
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Every third-party component in this artifact, with the licence text it is under
       tags:
       - Version
   /api/v1/webhooks:

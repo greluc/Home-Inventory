@@ -25,6 +25,7 @@ package de.greluc.homeinv.client.apis
 
 import de.greluc.homeinv.client.models.BuildVersion
 import de.greluc.homeinv.client.models.Problem
+import de.greluc.homeinv.client.models.ThirdPartyNoticesView
 
 import de.greluc.homeinv.client.infrastructure.*
 import io.ktor.client.HttpClient
@@ -54,6 +55,38 @@ open class VersionApi : ApiClient {
         baseUrl: String,
         httpClient: HttpClient
     ): super(baseUrl = baseUrl, httpClient = httpClient)
+
+    /**
+     * Every third-party component in this artifact, with the licence text it is under
+     * Every third-party component in this artifact, with the licence text it is under.  Cached for an hour, which is the one thing this endpoint does beyond serving a file. The document is a few hundred kilobytes of licence text and does not change while a build is running, so re-sending it on every open of the dialog would be the only expensive thing an unauthenticated caller can ask this application for. An hour and not a year: the URL is the same across builds, so a long lifetime would show somebody the notice of the version they were running yesterday.
+     * @return ThirdPartyNoticesView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun notices(): HttpResponse<ThirdPartyNoticesView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.GET,
+            "/api/v1/version/notices",
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
 
     /**
      * The build&#39;s identity.

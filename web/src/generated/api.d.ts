@@ -3245,6 +3245,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/version/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every third-party component in this artifact, with the licence text it is under
+         * @description Every third-party component in this artifact, with the licence text it is under.
+         *
+         *     Cached for an hour, which is the one thing this endpoint does beyond serving a file. The
+         *     document is a few hundred kilobytes of licence text and does not change while a build is
+         *     running, so re-sending it on every open of the dialog would be the only expensive thing an
+         *     unauthenticated caller can ask this application for. An hour and not a year: the URL is the
+         *     same across builds, so a long lifetime would show somebody the notice of the version they
+         *     were running yesterday.
+         */
+        get: operations["notices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks": {
         parameters: {
             query?: never;
@@ -6769,6 +6796,54 @@ export interface components {
             name: string;
             /** @description the role the caller holds in it */
             role: string;
+        };
+        /** @description One third-party component the artifact carries. */
+        ThirdPartyComponentView: {
+            /**
+             * @description the SPDX identifiers it is declared under, or the names where what was
+             *     declared is not an identifier
+             */
+            licences: string[];
+            /** @description the component's name as the artifact spells it */
+            name: string;
+            /**
+             * @description the licence and notice files the component itself ships, verbatim; empty where
+             *     the licence's text is the same for every component and appears in `licences`
+             */
+            notices: components["schemas"]["ThirdPartyNoticeView"][];
+            /** @description its version */
+            version: string;
+        };
+        /** @description The full text of one licence. */
+        ThirdPartyLicenceView: {
+            /** @description the SPDX identifier */
+            id: string;
+            /** @description where this copy of the text came from, named so the provenance is answerable */
+            source: string;
+            /** @description the licence, verbatim */
+            text: string;
+        };
+        /** @description One file a component ships, reproduced as it is. */
+        ThirdPartyNoticeView: {
+            /** @description where the file sat inside the component, so a reader can check it */
+            path: string;
+            /** @description the file, verbatim */
+            text: string;
+        };
+        /** @description The whole notice for one artifact. */
+        ThirdPartyNoticesView: {
+            /** @description which artifact this describes, as `tools/notices.py` names it */
+            artifact: string;
+            /** @description everything third-party it carries */
+            components: components["schemas"]["ThirdPartyComponentView"][];
+            /**
+             * @description the full text of every licence whose wording is the same for all of them,
+             *     reproduced once; a licence whose text carries a copyright line is with its component
+             *     instead
+             */
+            licences: components["schemas"]["ThirdPartyLicenceView"][];
+            /** @description what that artifact is called in prose */
+            title: string;
         };
         /**
          * @description What a mass revocation did.
@@ -23449,6 +23524,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildVersion"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    notices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the notice, as generated for this build */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThirdPartyNoticesView"];
                 };
             };
             /** @description Method not allowed (`method-not-allowed`) */

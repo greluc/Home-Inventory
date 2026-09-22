@@ -130,3 +130,9 @@ deploy/secrets/
 # already carries -- and it would otherwise appear in every working tree and in CI
 # as an untracked change nobody made.
 openapitools.json
+
+# The per-crate SBOMs (REQ-CON-010). A build output: produced by
+# `cargo cyclonedx` in the job that builds the crate, published with the
+# release, and read by `tools/notices.py`. Not committed, because it carries a
+# timestamp and a fresh serial number on every run.
+*.cdx.json

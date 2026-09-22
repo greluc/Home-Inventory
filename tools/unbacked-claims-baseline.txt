@@ -37,8 +37,8 @@ docs/adr/0030-public-code-format.md:46:cannot
 docs/adr/0030-public-code-format.md:99:impossible
 docs/adr/0031-audit-chain-per-tenant.md:52:cannot
 docs/adr/0031-audit-chain-per-tenant.md:65:cannot
-docs/adr/0034-icon-set-and-no-third-party-hosts.md:22:enforces
-docs/adr/0034-icon-set-and-no-third-party-hosts.md:88:enforces
+docs/adr/0034-icon-set-and-no-third-party-hosts.md:30:enforces
+docs/adr/0034-icon-set-and-no-third-party-hosts.md:96:enforces
 docs/adr/0035-design-system.md:180:enforced
 docs/adr/0036-scanner-egress.md:61:cannot
 docs/adr/0038-csp-delivery-and-first-paint.md:63:cannot
@@ -80,9 +80,9 @@ docs/architecture/07-data-model.md:653:guaranteed
 docs/architecture/07-data-model.md:658:enforces
 docs/architecture/07-data-model.md:677:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:343:enforced
-docs/architecture/08-api-contract.md:344:enforced
-docs/architecture/08-api-contract.md:531:fails the build
+docs/architecture/08-api-contract.md:348:enforced
+docs/architecture/08-api-contract.md:349:enforced
+docs/architecture/08-api-contract.md:536:fails the build
 docs/architecture/09-extensibility-and-plugins.md:22:must never
 docs/architecture/09-extensibility-and-plugins.md:267:cannot
 docs/architecture/09-extensibility-and-plugins.md:338:cannot

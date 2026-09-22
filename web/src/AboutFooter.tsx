@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api, type Version } from "./api";
+import { ThirdPartyNotices } from "./ThirdPartyNotices";
 
 /**
  * Which build this instance is running, and where its source is (REQ-CON-009).
@@ -17,10 +18,17 @@ import { api, type Version } from "./api";
  * It renders nothing at all until the endpoint answers, and nothing ever if it does not. A footer
  * that said "version unavailable" would be an error message about something nobody asked for; the
  * obligation is discharged by the endpoint, and this is where a person sees it.
+ *
+ * The third-party notices sit here too, because that obligation is the same shape and is owed to
+ * the same person (`REQ-CON-013`, [ADR-0034](../../docs/adr/0034-icon-set-and-no-third-party-hosts.md)):
+ * a permissive licence asks for its notice in every copy, and this bundle is a copy. A button
+ * rather than a link, and nothing fetched until it is pressed — the server's notice is a few
+ * hundred kilobytes and nobody arriving at the login page asked for it.
  */
 export function AboutFooter(): React.JSX.Element | null {
   const { t } = useTranslation();
   const [build, setBuild] = useState<Version | null>(null);
+  const [showing, setShowing] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -55,6 +63,10 @@ export function AboutFooter(): React.JSX.Element | null {
       <a href={build.source} rel="noreferrer noopener" target="_blank">
         {t("about.source")}
       </a>
+      <button type="button" className="as-link" onClick={() => setShowing(true)}>
+        {t("about.notices")}
+      </button>
+      {showing && <ThirdPartyNotices onClose={() => setShowing(false)} />}
     </footer>
   );
 }

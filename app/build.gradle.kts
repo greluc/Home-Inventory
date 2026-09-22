@@ -1,5 +1,6 @@
 import com.google.protobuf.gradle.id
 import java.math.BigDecimal
+import java.util.zip.ZipFile
 import java.util.Base64
 
 // The Spring Boot application. One Gradle project, eighteen building blocks as
@@ -484,6 +485,56 @@ tasks.cyclonedxDirectBom {
 }
 
 tasks.named("build") { dependsOn(tasks.named("cyclonedxDirectBom")) }
+
+// And `test` too, because `ThirdPartyNoticesTest` compares the licence notice
+// against it (REQ-CON-013): the two describe the same build and the test is
+// what says so. Without this the test would be conditional on whatever ran
+// before it, which is a test that passes by not running.
+tasks.named("test") { dependsOn(tasks.named("cyclonedxDirectBom")) }
+
+// AND IT TRAVELS IN THE ARTIFACT (REQ-CON-010) WITHOUT A LINE HERE.
+//
+// Spring Boot's Gradle plugin notices the CycloneDX plugin and puts the SBOM
+// into the jar itself, at `META-INF/sbom/application.cdx.json` -- which is
+// where a scanner looks. Verified by reading the jar rather than assumed:
+// `SbomTravelsTest` fails if a Boot upgrade ever stops doing it, because the
+// alternative is an image whose bill of materials is only on a workflow page
+// that expires in ninety days.
+//
+// A copy under `BOOT-INF/classes` was added here and then removed: it made the
+// actuator endpoint answer, and an SBOM is read from the image by whoever
+// scans it rather than from a management port nothing publishes. What IS
+// reachable from the running installation is the licence NOTICE, at
+// /api/v1/version/notices, because that one is owed to a user (REQ-CON-013).
+
+// THE SBOM IS IN THE JAR, CHECKED RATHER THAN ASSUMED (REQ-CON-010).
+//
+// Boot's plugin puts it there today. Nothing in this repository asks it to, so
+// nothing in this repository would notice if a later version stopped -- and the
+// failure would be silent: an image that ships without its bill of materials
+// looks exactly like one that ships with it.
+val sbomTravels by tasks.registering {
+    description = "Fails when the boot jar carries no SBOM (REQ-CON-010)."
+    group = "verification"
+
+    val jar = tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar")
+    dependsOn(jar)
+    inputs.files(jar)
+
+    doLast {
+        val archive = jar.get().archiveFile.get().asFile
+        val entry = "META-INF/sbom/application.cdx.json"
+        val carried =
+            ZipFile(archive).use { zip -> zip.getEntry(entry) != null }
+        require(carried) {
+            "$archive carries no $entry. REQ-CON-010 asks for the SBOM to travel with the " +
+                "artifact, and Spring Boot's plugin put it there for free until now. Add it to " +
+                "`bootJar` explicitly."
+        }
+    }
+}
+
+tasks.named("check") { dependsOn(sbomTravels) }
 
 // WHICH BUILD THIS IS, AND WHERE ITS SOURCE IS (REQ-CON-009).
 //

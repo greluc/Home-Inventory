@@ -119,6 +119,12 @@
   "about": {
     "version": "Version {{version}} ({{commit}})",
     "source": "Quelltext",
-    "licence": "Lizenziert unter {{licence}}"
+    "licence": "Lizenziert unter {{licence}}",
+    "notices": "Lizenzhinweise Dritter",
+    "noticesClose": "Schließen",
+    "noticesServer": "Server ({{count}} Komponenten)",
+    "noticesClient": "Web-Client ({{count}} Komponenten)",
+    "noticesLicences": "Lizenztexte",
+    "noticesUnavailable": "Die Hinweise konnten nicht geladen werden."
   }
 }

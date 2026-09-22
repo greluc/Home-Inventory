@@ -165,11 +165,15 @@ public class WebSecurityConfiguration {
                         "/api/v1/auth/password-reset",
                         "/api/v1/auth/password-reset/complete")
                     .permitAll()
-                    // Which build this is and where its source is (REQ-CON-009).
-                    // The AGPL's source offer is owed to whoever uses the
-                    // instance, and requiring an account to discharge it would
-                    // owe it only to the people who already have one.
-                    .requestMatchers(HttpMethod.GET, "/api/v1/version")
+                    // Which build this is and where its source is (REQ-CON-009),
+                    // and what it is built from (REQ-CON-013). The AGPL's source
+                    // offer and a third-party licence notice are both owed to
+                    // whoever USES the instance, and requiring an account to
+                    // discharge either would owe it only to the people who
+                    // already have one. Two exact paths rather than
+                    // `/api/v1/version/**`: a wildcard here would publish
+                    // whatever is added under that prefix later.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/version", "/api/v1/version/notices")
                     .permitAll()
                     // The generated OpenAPI document. `springdoc.api-docs.enabled`
                     // is false in every deployment, so this path answers 404

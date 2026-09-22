@@ -61,15 +61,30 @@ jobs:
           path: app/build/reports/tests/test
           retention-days: 7
 
+      # REQ-CON-013. The licence notice each artifact carries is generated from
+      # what that artifact actually holds — the jars inside the boot jar, here —
+      # and committed, so a dependency arriving with a new licence is visible in
+      # the pull request that brings it rather than in a legal question later.
+      # This is the step that fails when the committed notice no longer
+      # describes the build.
+      - name: The licence notices describe what the artifacts carry
+        run: python3 tools/notices.py --check app plugin-oidc
+
       # REQ-CON-010. The SBOM is produced by `build`, so it is never stale
       # relative to the dependencies beside it, and it is kept here so that a
       # release can attach the one that belongs to its own commit rather than
       # one regenerated later against whatever resolved that day.
-      - name: Publish the SBOM
+      #
+      # Two of them, because there are two Java images: the application and the
+      # OIDC plugin resolve different classpaths, and an advisory is matched
+      # against an image rather than against a repository.
+      - name: Publish the SBOMs
         uses: actions/upload-artifact@v7
         with:
           name: sbom
-          path: app/build/sbom/
+          path: |
+            app/build/sbom/
+            plugins/oidc/build/sbom/
           retention-days: 90
           if-no-files-found: error
 
@@ -312,12 +327,48 @@ jobs:
       - name: Advisories and licences
         run: cargo deny check
 
+      # REQ-CON-010 and REQ-CON-013, which for a `scratch` image are answered
+      # differently: the SBOM is published with the release, because there is no
+      # filesystem in the image to put it on, and the licence NOTICE is compiled
+      # INTO the binary — generated ahead of the build, committed, and checked
+      # here (ADR-0083).
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: The SBOM, and the notice the binary carries
+        run: |
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps
+          python3 ../tools/notices.py --check egress-proxy
+
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-egress-proxy
+          path: egress-proxy/*.cdx.json
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Image
         # `-f Dockerfile`, not `-f egress-proxy/Dockerfile`: the working directory is
         # already the crate, and the context is `..` because the Dockerfile COPYs
         # `egress-proxy/` and `proto/` from the repository root.
         run: docker build -f Dockerfile -t home-inv-egress-proxy:ci ..
         working-directory: egress-proxy
+
+
+      # REQ-CON-013, measured on the image rather than on the crate. The notice is
+      # compiled in, so this is the only place that can say it reached the thing
+      # that ships — and `scratch` has no shell, which is exactly why the flag
+      # exists (ADR-0083).
+      - name: The image can say what it is made of
+        run: |
+          set -euo pipefail
+          first=$(docker run --rm home-inv-egress-proxy:ci --licences | head -1)
+          if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
+            echo "::error::egress-proxy does not print its licence notice; it read '$first'"
+            exit 1
+          fi
+          echo "The image prints its third-party notice."
 
       # `scratch` plus one static binary. An allowlist enforcer with a shell in
       # the image is an allowlist enforcer with a way around itself.
@@ -399,11 +450,49 @@ jobs:
       - name: Advisories and licences
         run: cargo deny check
 
+      # REQ-CON-010 and REQ-CON-013. Skipped for `common`, which is a library
+      # rather than a distributed artifact: it is linked into the four plugins
+      # below and its dependencies appear in each of their notices.
+      - name: Install cargo-cyclonedx
+        if: matrix.image
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: The SBOM, and the notice the binary carries
+        if: matrix.image
+        run: |
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps
+          python3 ../../tools/notices.py --check plugins-${{ matrix.crate }}
+
+      - name: Publish the SBOM
+        if: matrix.image
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-plugin-${{ matrix.crate }}
+          path: plugins/${{ matrix.crate }}/*.cdx.json
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Image
         if: matrix.image
         # `-f Dockerfile` with the repository root as the context, because the
         # Dockerfile COPYs `proto/`, the shared crate and this one from there.
         run: docker build -f Dockerfile -t home-inv-plugin-${{ matrix.crate }}:ci ../..
+
+
+      # REQ-CON-013, measured on the image rather than on the crate. The notice is
+      # compiled in, so this is the only place that can say it reached the thing
+      # that ships — and `scratch` has no shell, which is exactly why the flag
+      # exists (ADR-0083).
+      - name: The image can say what it is made of
+        if: matrix.image
+        run: |
+          set -euo pipefail
+          first=$(docker run --rm home-inv-plugin-${{ matrix.crate }}:ci --licences | head -1)
+          if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
+            echo "::error::plugin-${{ matrix.crate }} does not print its licence notice; it read '$first'"
+            exit 1
+          fi
+          echo "The image prints its third-party notice."
 
       # `scratch` plus one static binary, like the two core Rust services. A
       # plugin with a shell in its image is a plugin that can be used as one.
@@ -538,6 +627,25 @@ jobs:
       # instead.
       - name: The served CSP matches the built bundle
         run: npm run csp:check
+
+      # REQ-CON-013. MIT and ISC ask for their notice in every copy and a
+      # minified bundle is a copy. The list comes from Rollup rather than from
+      # the dependency tree (`vite.config.ts`): a production install resolves
+      # `typescript`, because i18next declares it as a peer dependency, and no
+      # line of it reaches a browser.
+      - name: The licence notice describes what the bundle carries
+        run: python3 ../tools/notices.py --check web
+
+      # REQ-CON-010. The bundle's own bill of materials, produced by the build
+      # that produced the bundle and shipped inside it — `dist/sbom.json` is
+      # served by the `web` image like any other file in the bundle.
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-web
+          path: web/dist/sbom.json
+          retention-days: 90
+          if-no-files-found: error
 
       # `npm run build` REWRITES nginx/default.conf, so the check above compares
       # the build with itself and cannot fail. What it cannot see is the copy in
@@ -685,12 +793,48 @@ jobs:
       - name: Advisories and licences
         run: cargo deny check
 
+      # REQ-CON-010 and REQ-CON-013, which for a `scratch` image are answered
+      # differently: the SBOM is published with the release, because there is no
+      # filesystem in the image to put it on, and the licence NOTICE is compiled
+      # INTO the binary — generated ahead of the build, committed, and checked
+      # here (ADR-0083).
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: The SBOM, and the notice the binary carries
+        run: |
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps
+          python3 ../tools/notices.py --check blobstore
+
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-blobstore
+          path: blobstore/*.cdx.json
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Image
         # `-f Dockerfile`, not `-f blobstore/Dockerfile`: the working directory is
         # already the crate, and the context is `..` because the Dockerfile COPYs
         # `blobstore/` and `proto/` from the repository root.
         run: docker build -f Dockerfile -t home-inv-blobstore:ci ..
         working-directory: blobstore
+
+
+      # REQ-CON-013, measured on the image rather than on the crate. The notice is
+      # compiled in, so this is the only place that can say it reached the thing
+      # that ships — and `scratch` has no shell, which is exactly why the flag
+      # exists (ADR-0083).
+      - name: The image can say what it is made of
+        run: |
+          set -euo pipefail
+          first=$(docker run --rm home-inv-blobstore:ci --licences | head -1)
+          if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
+            echo "::error::blobstore does not print its licence notice; it read '$first'"
+            exit 1
+          fi
+          echo "The image prints its third-party notice."
 
       # `scratch` plus one binary. Anything else in there is something an
       # attacker who reaches this process could run, and something to patch on a

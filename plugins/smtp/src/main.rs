@@ -82,6 +82,22 @@ const REMEMBERED_KEYS: usize = 10_000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
+    //
+    // A permissive licence asks for its notice in every copy, and a statically
+    // linked binary is a copy. This image is `scratch` — one binary and nothing
+    // else, which CI asserts — so there is no file to put beside it and the
+    // notice is compiled in, exactly as the public roots are in the plugins
+    // that speak TLS.
+    //
+    // First, before the logger: somebody reading a licence should get the
+    // licence and not a JSON log line above it. `tools/notices.py` generates
+    // the file and CI fails when it no longer describes what is linked in.
+    if std::env::args().any(|argument| argument == "--licences") {
+        print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -499,5 +515,24 @@ mod tests {
     fn the_queue_id_is_read_when_a_server_gives_one() {
         assert_eq!(queue_id("250 2.0.0 Ok: queued as 4X1Y2Z"), "4X1Y2Z");
         assert_eq!(queue_id("250 OK"), "");
+    }
+}
+
+#[cfg(test)]
+mod licences {
+    /// The notice is compiled into the binary rather than read from a file
+    /// (`REQ-CON-013`). A `scratch` image has no filesystem to read one from,
+    /// so an absent notice would be a link error here and a licence breach in
+    /// production; this makes it the former.
+    #[test]
+    fn the_notice_travels_with_the_binary() {
+        let notice = include_str!("../THIRD-PARTY-NOTICES.txt");
+
+        assert!(notice.starts_with("THIRD-PARTY LICENCE NOTICES"));
+        assert!(notice.contains("rustls"));
+        assert!(
+            notice.len() > 10_000,
+            "a notice this short is a generator that failed"
+        );
     }
 }

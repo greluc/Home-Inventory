@@ -20,6 +20,10 @@ plugins {
     application
     alias(libs.plugins.protobuf)
     alias(libs.plugins.spotbugs)
+    // Its own SBOM (REQ-CON-010). One per distributed artifact, because an
+    // image is what an advisory is matched against and this one ships a
+    // different set of jars from `:app`.
+    alias(libs.plugins.cyclonedx)
 }
 
 application {
@@ -51,6 +55,27 @@ val noCoreOnTheClasspath by tasks.registering {
 }
 
 tasks.named("check") { dependsOn(noCoreOnTheClasspath) }
+
+// THE SBOM OF THIS IMAGE (REQ-CON-010), and the input to its licence notice
+// (REQ-CON-013). The same shape `:app` uses: CycloneDX 1.6 from the resolved
+// runtime classpath, so it lists what `installDist` writes into `lib/` rather
+// than what this file asks for.
+tasks.cyclonedxDirectBom {
+    schemaVersion = org.cyclonedx.Version.VERSION_16
+    projectType = org.cyclonedx.model.Component.Type.APPLICATION
+    jsonOutput = layout.buildDirectory.file("sbom/home-inv-plugin-oidc-sbom.json")
+    xmlOutput = layout.buildDirectory.file("sbom/home-inv-plugin-oidc-sbom.xml")
+    includeConfigs = listOf("runtimeClasspath")
+}
+
+tasks.named("build") { dependsOn(tasks.named("cyclonedxDirectBom")) }
+
+// And `installDist`, which is what the image is built from
+// (`plugins/oidc/Dockerfile`) and therefore what the licence notice of
+// REQ-CON-013 is generated from. Without this, `./gradlew build` produces
+// the SBOM and not the directory of jars it describes, and the notice check
+// has nothing to read.
+tasks.named("build") { dependsOn(tasks.named("installDist")) }
 
 sourceSets {
     named("main") {

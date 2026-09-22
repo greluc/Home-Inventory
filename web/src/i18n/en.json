@@ -119,6 +119,12 @@
   "about": {
     "version": "Version {{version}} ({{commit}})",
     "source": "Source code",
-    "licence": "Licensed under {{licence}}"
+    "licence": "Licensed under {{licence}}",
+    "notices": "Third-party notices",
+    "noticesClose": "Close",
+    "noticesServer": "Server ({{count}} components)",
+    "noticesClient": "Web client ({{count}} components)",
+    "noticesLicences": "Licence texts",
+    "noticesUnavailable": "The notices could not be loaded."
   }
 }

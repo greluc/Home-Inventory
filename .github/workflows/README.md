@@ -43,6 +43,7 @@ These come from the requirements catalogue, not from habit. Each fails the build
 | **Design-system adherence** | `adherence.oxlintrc.json` at `error`, plus the token drift check and the contrast recomputation (REQ-NFR-075/076/077) |
 | **Language** | No German-language document outside the two-entry carve-out of REQ-CON-012 |
 | **Licensing** | No AGPL-incompatible dependency in the core; only permissive ones in the plugin API |
+| **Licence notices** | Every one of the nine distributed artifacts carries a notice that still describes what it holds, regenerated from the built artifact and compared (`tools/notices.py --check`, REQ-CON-013) |
 | **DCO + CLA** | Every commit signed off; the contributor has signed |
 | **ADR back-links** | Every ADR named in another's `Amends:` carries the reciprocal note — see below |
 | **Restated facts** | Every number a second document repeats is recomputed; every retired spelling fails — see below |

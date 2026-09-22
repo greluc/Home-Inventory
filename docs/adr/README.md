@@ -55,7 +55,7 @@ Date: YYYY-MM-DD
 | [0031](0031-audit-chain-per-tenant.md) | The audit chain runs per tenant and is anchored in time | Accepted, amended by 0046, 0063 |
 | [0032](0032-per-tenant-blob-addressing.md) | Blobs are content-addressed within a tenant, never across | Accepted |
 | [0033](0033-dark-as-default-appearance.md) | Dark is the default appearance, on every platform | Accepted, amended by 0038 |
-| [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted |
+| [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted, amended by 0083 |
 | [0035](0035-design-system.md) | The delivered design system is binding, and `tokens.json` is its single source | Accepted |
 | [0036](0036-scanner-egress.md) | The malware scanner gets a route out; the egress proxy runs in every profile | Accepted |
 | [0037](0037-per-plugin-network-segments.md) | One network segment per plugin, and the management port out of their reach | Accepted, amended by 0071 |
@@ -105,3 +105,4 @@ Date: YYYY-MM-DD
 | [0080](0080-a-generated-client-is-committed-and-the-document-must-earn-it.md) | A generated client is committed, and the document has to earn it | Accepted, amended by 0081 |
 | [0081](0081-the-contract-says-which-values-may-be-null.md) | The contract says which values may be null, from an annotation rather than from prose | Accepted |
 | [0082](0082-tracing-is-a-library-and-the-sampling-is-the-operators.md) | Tracing is a library, and the sampling decision belongs to the operator | Accepted |
+| [0083](0083-the-notice-travels-inside-the-artifact.md) | The licence notice travels inside the artifact, and the SBOM is one per artifact | Accepted, amends 0034 |
