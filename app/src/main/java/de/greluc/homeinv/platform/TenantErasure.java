@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.platform;
 
+import jakarta.annotation.Nullable;
 import java.util.UUID;
 
 /**
@@ -36,7 +37,7 @@ public interface TenantErasure {
    *     {@code SELECT} on the log and nothing else (`REQ-SEC-069`), so the log outlives the erasure
    *     and is removed by the retention run under {@code homeinv_housekeeping}
    */
-  record BlockReport(String block, long rowsRemoved, String note) {}
+  record BlockReport(String block, long rowsRemoved, @Nullable String note) {}
 
   /**
    * Which block this is, for the report.

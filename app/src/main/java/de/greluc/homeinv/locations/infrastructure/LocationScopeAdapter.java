@@ -5,6 +5,7 @@
 package de.greluc.homeinv.locations.infrastructure;
 
 import de.greluc.homeinv.inventory.api.PlaceScope;
+import de.greluc.homeinv.inventory.api.PlaceTree;
 import de.greluc.homeinv.locations.api.LocationScope;
 import de.greluc.homeinv.platform.TenantContext;
 import java.util.List;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @RequiredArgsConstructor
-public class LocationScopeAdapter implements LocationScope, PlaceScope {
+public class LocationScopeAdapter implements LocationScope, PlaceScope, PlaceTree {
 
   private static final String CONTAINS =
       """
@@ -84,4 +85,29 @@ public class LocationScopeAdapter implements LocationScope, PlaceScope {
         ? List.of()
         : tree.subtreeIds(TenantContext.require(), scopeRootId);
   }
+
+  @Override
+  public java.util.List<java.util.UUID> ancestorsOf(java.util.UUID locationId) {
+    return tree.ancestorIds(de.greluc.homeinv.platform.TenantContext.require(), locationId);
+  }
+
+  @Override
+  public java.util.List<java.util.UUID> subtreeOf(java.util.UUID locationId) {
+    return tree.subtreeIds(de.greluc.homeinv.platform.TenantContext.require(), locationId);
+  }
+
+  @Override
+  public String labelOf(java.util.UUID locationId) {
+    // Read straight from the table rather than through `LocationService.get`,
+    // which would be this block calling its own service through a port declared
+    // by another -- and which throws where a report wants a null.
+    return jdbc
+        .sql("select name from locations.location where tenant_id = ? and id = ?")
+        .param(de.greluc.homeinv.platform.TenantContext.require())
+        .param(locationId)
+        .query(String.class)
+        .optional()
+        .orElse(null);
+  }
+
 }

@@ -133,4 +133,20 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
   @Query("select count(i) > 0 from Item i where i.tenantId = :tenantId "
       + "and i.locationId = :locationId and i.deletedAt is null")
   boolean existsLiveInLocation(@Param("tenantId") UUID tenantId, @Param("locationId") UUID locationId);
+
+  /**
+   * How many live items name a location.
+   *
+   * <p>A count and not a flag, because REQ-CORE-046 asks the refusal to state <b>the number</b>:
+   * "this still contains things" sends somebody looking, and "this still contains 14 things" tells
+   * them what they are in for. Counting costs the same as asking here — both scan the same partial
+   * index — so there is no cheaper question to ask first.
+   *
+   * @param tenantId the tenant
+   * @param locationId the location
+   * @return how many live items are in it, which is zero when it is empty
+   */
+  @Query("select count(i) from Item i where i.tenantId = :tenantId "
+      + "and i.locationId = :locationId and i.deletedAt is null")
+  long countLiveInLocation(@Param("tenantId") UUID tenantId, @Param("locationId") UUID locationId);
 }

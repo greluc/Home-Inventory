@@ -6,11 +6,16 @@
 /**
  * The typed client for `/api/v1`.
  *
- * Hand-written for stage 0. `REQ-API-002` generates clients from the OpenAPI
- * specification, and that is stage 1 — writing a generator now would mean
- * maintaining one for the six endpoints this stage has.
+ * **Generated, plus the three things the document cannot describe** (`REQ-API-002`).
+ * Every path, parameter and response shape below comes from
+ * [`src/generated/api.d.ts`](./generated/api.d.ts), which `scripts/client.mjs`
+ * produces from `api/openapi.yaml` — itself generated from the running
+ * application (ADR-0049). A path this file mistypes, a parameter it invents and a
+ * field it reads that the server does not send are all compile errors now, which
+ * is what `scripts/contract.mjs` used to check by comparing strings.
  *
- * Three things it does that a bare `fetch` would not:
+ * What stays hand-written is transport policy, because none of it is in the
+ * document:
  *
  * - It sends the CSRF token on every mutating request. Spring writes the token
  *   into a readable cookie and expects it back in a header, and a header is the
@@ -18,11 +23,16 @@
  *   header, so the token cannot be replayed by a cross-site form.
  * - It turns an RFC 9457 problem document into a typed error. Every error in this
  *   application has that shape (REQ-API-003), so unwrapping it once here means no
- *   component has to.
+ *   component has to — and it is why the methods below throw rather than
+ *   returning `openapi-fetch`'s `{ data, error }`, which would push a branch into
+ *   every call site.
  * - It sends `credentials: "same-origin"` and never `include`. The session cookie
  *   is `SameSite=Strict` and `__Host-`-prefixed; `include` would be an invitation
  *   to send it somewhere it was never meant to go.
  */
+
+import createClient, { type Middleware } from "openapi-fetch";
+import type { components, paths } from "./generated/api";
 
 /** An error carrying the problem document the server returned. */
 export class ApiError extends Error {
@@ -43,143 +53,65 @@ export class ApiError extends Error {
   }
 }
 
-/** Who the current session belongs to. */
-export interface Session {
-  userId: string;
-  tenantId: string;
-  email: string;
-  /** The language on the user's profile, which the interface starts in (REQ-NFR-033). */
-  locale: string;
-}
-
+/**
+ * The shapes, straight from the document.
+ *
+ * Aliases rather than copies: a field added to `ItemView` on the server appears
+ * here when the client is regenerated, and a field removed from it stops
+ * compiling wherever a component still reads it. That is the whole point of
+ * `REQ-API-002`, and it is why these are one line each.
+ */
+export type Session = components["schemas"]["SessionView"];
 /** An item as the API returns it. */
-export interface Item {
-  id: string;
-  name: string;
-  description: string | null;
-  kind: "PHYSICAL" | "DIGITAL";
-  locationId: string | null;
-  quantity: string;
-  quantityUnit: string | null;
-  lifecycleState: string;
-  createdAt: string;
-  updatedAt: string;
-  version: number;
-}
+export type Item = components["schemas"]["ItemView"];
+/** What the account holds besides its password. */
+export type SecondFactorEnrolment = components["schemas"]["EnrolmentView"];
+/** One registered authenticator. */
+export type Passkey = components["schemas"]["PasskeyView"];
+/** A WebAuthn ceremony, as the browser's API takes it. */
+export type Ceremony = components["schemas"]["CeremonyView"];
+/** A fresh TOTP secret, readable once. */
+export type TotpEnrolment = components["schemas"]["TotpEnrolmentView"];
+/** The recovery codes, readable once. */
+export type RecoveryCodes = components["schemas"]["RecoveryCodesView"];
+/** A place. */
+export type Location = components["schemas"]["LocationView"];
+/** A kind of place. */
+export type LocationCategory = components["schemas"]["LocationCategoryView"];
+/** A stored file. */
+export type Media = components["schemas"]["MediaView"];
+/** What this instance is running (REQ-CON-009). */
+export type Version = components["schemas"]["BuildVersion"];
+/** Everything third-party an artifact carries, with the licence text it is under. */
+export type ThirdPartyNotices = components["schemas"]["ThirdPartyNoticesView"];
 
-/** What an account holds besides its password (REQ-AUTH-002). */
-export interface SecondFactorEnrolment {
-  totpConfirmed: boolean;
-  enrolledAt: string | null;
-  recoveryCodesLeft: number;
-  passkeys: Passkey[];
-}
-
-/** One registered passkey. */
-export interface Passkey {
-  id: string;
-  label: string;
-  registeredAt: string;
-  lastUsedAt: string | null;
-}
-
-/** The options one side of a WebAuthn ceremony needs, as the specification's own JSON. */
-export interface Ceremony {
-  options: string;
-}
-
-/** A secret that has just been generated, readable this once. */
-export interface TotpEnrolment {
-  /** The shared secret in base32, for somebody typing it into an app by hand. */
-  secret: string;
-  /** The `otpauth://` URI an authenticator app reads from a QR code or a link. */
-  provisioningUri: string;
-}
-
-/** The recovery codes, readable this once. */
-export interface RecoveryCodes {
-  codes: string[];
-}
+/** One page of items. */
+export type ItemPage = components["schemas"]["PageItemView"];
+/** One page of places. */
+export type LocationPage = components["schemas"]["PageLocationView"];
+/** One page of kinds of place. */
+export type LocationCategoryPage = components["schemas"]["PageLocationCategoryView"];
+/** One page of files. */
+export type MediaPage = components["schemas"]["PageMediaView"];
 
 /**
- * The envelope every collection answers with (08 §8.2).
+ * A page of anything, for a component that does not care what is in it.
  *
- * `data` are the rows. `page` says where the next ones are; the cursor is opaque and signed, and
- * there is no offset anywhere in this API because offsets skip and duplicate rows on data that
- * changes under them. `meta.degraded` is how the server says a derived store was unavailable and
- * something less capable answered — a field and not a header, because `Warning: 199` was
- * obsoleted by RFC 9111 §5.5.
+ * The document types each page concretely — `PageItemView`, `PageLocationView` —
+ * because that is what the server returns. This keeps the one generic name the
+ * components already use.
  */
 export interface Page<T> {
-  data: T[];
-  page: {
-    nextCursor: string | null;
-    hasMore: boolean;
-    /** Absent where counting is not cheap; explicitly an estimate where present. */
-    estimatedTotal?: number | null;
-  };
-  meta: {
-    degraded: boolean;
-    /** A stable token from `docs/reference/degraded-reasons.yaml`; branch on this, never on prose. */
-    degradedReason?: string | null;
-    took?: number | null;
-  };
-}
-
-/** A storage location with its readable path. */
-export interface Location {
-  id: string;
-  name: string;
-  categoryId: string;
-  parentId: string | null;
-  depth: number;
-  ancestors: string[];
-  /** The concurrency token: send it back as `If-Match` to change or delete this place. */
-  version: number;
+  readonly data: T[];
+  readonly page: components["schemas"]["PageInfo"];
+  readonly meta?: components["schemas"]["Meta"];
 }
 
 /**
- * A kind of place a location can be.
+ * Reads one cookie.
  *
- * The server sends the shipped key and no label: the names are interface text and
- * live in the resource bundles, because only this side knows what language the
- * reader wants them in (REQ-NFR-032).
- */
-export interface LocationCategory {
-  id: string;
-  key: string;
-  /**
-   * The tenant's own name per language tag, empty when it has given the category none.
-   *
-   * A shipped category starts nameless and is translated from its `key`; a tenant may rename it or
-   * define one of its own, and then this wins. See `categoryName` in `LocationPanel.tsx`.
-   */
-  labels: Record<string, string>;
-  icon: string | null;
-  mobile: boolean;
-}
-
-/** A file attached to an item or a location. */
-export interface Media {
-  id: string;
-  mediaType: string;
-  byteSize: number;
-  widthPx: number | null;
-  heightPx: number | null;
-  scanState: string;
-  primaryImage: boolean;
-  /** Signed, short-lived URLs per variant; empty until the malware scan says clean. */
-  urls: Record<string, string>;
-}
-
-/**
- * Reads a cookie by name.
- *
- * Only the CSRF cookie is ever read this way. The session cookie is `HttpOnly`
- * and deliberately unreadable — if this function could see it, so could an XSS.
- *
- * @param name the cookie name
- * @returns its value, or undefined
+ * @param name the cookie's name
+ * @returns its value, still encoded, or undefined
  */
 function cookie(name: string): string | undefined {
   return document.cookie
@@ -189,50 +121,95 @@ function cookie(name: string): string | undefined {
 }
 
 /**
- * Performs a request and unwraps the result.
+ * What this client calls itself to the server (REQ-API-009).
  *
- * @param path the path below the origin
- * @param init the request options
- * @returns the parsed body
- * @throws ApiError when the server answers with a problem document
+ * A header and not `User-Agent`: a browser sets that one itself and a page cannot override it on
+ * `fetch`, which is why ADR-0011's "every client sends a User-Agent with product and version" could
+ * not be honoured here. The shape is the one that ADR asked for -- product, then version -- and the
+ * server tags its usage metric with the product alone, so releases do not each become their own
+ * time series.
  */
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  const method = (init.method ?? "GET").toUpperCase();
+const CLIENT = `web/${APP_VERSION}`;
 
-  if (method !== "GET" && method !== "HEAD") {
-    const token = cookie("XSRF-TOKEN");
-    if (token) {
-      headers.set("X-XSRF-TOKEN", decodeURIComponent(token));
+/**
+ * The three transport rules, applied to every request the generated client makes.
+ *
+ * A middleware rather than a wrapper per call: `openapi-fetch` runs it for every
+ * method, so a request added later cannot be the one that forgets the CSRF
+ * token.
+ */
+const transport: Middleware = {
+  onRequest({ request }) {
+    // On every request, including the reads: an API version is retired when
+    // nobody is calling it, and "nobody" has to include the people only reading.
+    request.headers.set("X-Home-Inv-Client", CLIENT);
+
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      const token = cookie("XSRF-TOKEN");
+      if (token) {
+        request.headers.set("X-XSRF-TOKEN", decodeURIComponent(token));
+      }
     }
-  }
-  if (init.body !== undefined && !(init.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
+    return request;
+  },
+};
 
-  const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
+const client = createClient<paths>({ credentials: "same-origin" });
+client.use(transport);
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const text = await response.text();
-  const body: unknown = text.length > 0 ? JSON.parse(text) : undefined;
-
-  if (!response.ok) {
-    const problem = (body ?? {}) as Record<string, unknown>;
+/**
+ * Unwraps what `openapi-fetch` returned, or throws the problem document.
+ *
+ * @param result what the generated client answered
+ * @returns the body, typed
+ * @throws ApiError when the server answered with a problem document
+ */
+function unwrap<T>(result: {
+  data?: T;
+  error?: unknown;
+  response: Response;
+}): T {
+  if (result.error !== undefined) {
+    const problem = (result.error ?? {}) as Record<string, unknown>;
     throw new ApiError(
-      response.status,
+      result.response.status,
       typeof problem.type === "string" ? problem.type : "about:blank",
-      typeof problem.detail === "string" ? problem.detail : response.statusText,
+      typeof problem.detail === "string" ? problem.detail : result.response.statusText,
       typeof problem.traceId === "string" ? problem.traceId : undefined,
     );
   }
-  return body as T;
+  // A 204 carries no body, and the generated types say so: the call sites that
+  // reach this expect `void`, and `undefined` is what they get.
+  return result.data as T;
 }
 
-/** Everything the application asks of the server. */
 export const api = {
+  /**
+   * Which build this instance is running (REQ-CON-009).
+   *
+   * Public: the source offer is owed to whoever uses the instance, not only to
+   * whoever has an account on it.
+   *
+   * @returns the build's identity
+   */
+  version: async (): Promise<Version> =>
+    unwrap(await client.GET("/api/v1/version")),
+
+  /**
+   * What the server is built from, and under which licences (REQ-CON-013).
+   *
+   * Public for the same reason the version is: an attribution only signed-in
+   * people could read would be one owed to whoever has an account.
+   *
+   * This is the **server's** notice. The client's own is a static file in this
+   * bundle — two artifacts, two dependency sets — and `ThirdPartyNotices.tsx`
+   * shows them side by side rather than pretending either covers the other.
+   *
+   * @returns every third-party component in the API image
+   */
+  notices: async (): Promise<ThirdPartyNotices> =>
+    unwrap(await client.GET("/api/v1/version/notices")),
+
   /**
    * Logs in and establishes a session.
    *
@@ -240,11 +217,8 @@ export const api = {
    * @param password the password
    * @returns who the caller now is
    */
-  login: (email: string, password: string): Promise<Session> =>
-    request<Session>("/api/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
+  login: async (email: string, password: string): Promise<Session> =>
+    unwrap(await client.POST("/api/v1/auth/login", { body: { email, password } })),
 
   /**
    * Answers the second factor and finishes a login (REQ-AUTH-002).
@@ -256,15 +230,12 @@ export const api = {
    * @param code the six digits from the authenticator app, or a recovery code
    * @returns who the caller now is
    */
-  completeSecondFactor: (code: string): Promise<Session> =>
-    request<Session>("/api/v1/auth/mfa", {
-      method: "POST",
-      body: JSON.stringify({ code }),
-    }),
+  completeSecondFactor: async (code: string): Promise<Session> =>
+    unwrap(await client.POST("/api/v1/auth/mfa", { body: { code } })),
 
   /** What the account holds besides its password. */
-  secondFactor: (): Promise<SecondFactorEnrolment> =>
-    request<SecondFactorEnrolment>("/api/v1/auth/mfa/enrolment"),
+  secondFactor: async (): Promise<SecondFactorEnrolment> =>
+    unwrap(await client.GET("/api/v1/auth/mfa/enrolment")),
 
   /**
    * Answers a second factor with a passkey instead of a code.
@@ -272,19 +243,16 @@ export const api = {
    * @param credential what the browser produced
    * @returns who the caller now is
    */
-  completeWithPasskey: (credential: string): Promise<Session> =>
-    request<Session>("/api/v1/auth/mfa", {
-      method: "POST",
-      body: JSON.stringify({ credential }),
-    }),
+  completeWithPasskey: async (credential: string): Promise<Session> =>
+    unwrap(await client.POST("/api/v1/auth/mfa", { body: { credential } })),
 
   /** The options for proving a passkey, whether in a login or in a re-confirmation. */
-  passkeyChallenge: (): Promise<Ceremony> =>
-    request<Ceremony>("/api/v1/auth/mfa/passkeys/challenge", { method: "POST" }),
+  passkeyChallenge: async (): Promise<Ceremony> =>
+    unwrap(await client.POST("/api/v1/auth/mfa/passkeys/challenge", {})),
 
   /** The options for registering a passkey. */
-  beginPasskey: (): Promise<Ceremony> =>
-    request<Ceremony>("/api/v1/auth/mfa/passkeys", { method: "POST" }),
+  beginPasskey: async (): Promise<Ceremony> =>
+    unwrap(await client.POST("/api/v1/auth/mfa/passkeys", {})),
 
   /**
    * Finishes registering a passkey.
@@ -292,19 +260,21 @@ export const api = {
    * @param credential what the browser produced
    * @param label what to call this authenticator
    */
-  confirmPasskey: (credential: string, label: string): Promise<void> =>
-    request<void>("/api/v1/auth/mfa/passkeys/confirmation", {
-      method: "POST",
-      body: JSON.stringify({ credential, label }),
-    }),
+  confirmPasskey: async (credential: string, label: string): Promise<void> => {
+    unwrap(
+      await client.POST("/api/v1/auth/mfa/passkeys/confirmation", {
+        body: { credential, label },
+      }),
+    );
+  },
 
   /**
    * Begins an enrolment; the secret comes back once and is never readable again.
    *
    * @returns the secret and the provisioning URI
    */
-  beginTotpEnrolment: (): Promise<TotpEnrolment> =>
-    request<TotpEnrolment>("/api/v1/auth/mfa/totp", { method: "POST" }),
+  beginTotpEnrolment: async (): Promise<TotpEnrolment> =>
+    unwrap(await client.POST("/api/v1/auth/mfa/totp", {})),
 
   /**
    * Confirms an enrolment with a code from the new secret, and takes the recovery codes.
@@ -312,14 +282,13 @@ export const api = {
    * @param code the six digits the app shows
    * @returns the recovery codes, readable this once
    */
-  confirmTotpEnrolment: (code: string): Promise<RecoveryCodes> =>
-    request<RecoveryCodes>("/api/v1/auth/mfa/totp/confirmation", {
-      method: "POST",
-      body: JSON.stringify({ code }),
-    }),
+  confirmTotpEnrolment: async (code: string): Promise<RecoveryCodes> =>
+    unwrap(await client.POST("/api/v1/auth/mfa/totp/confirmation", { body: { code } })),
 
   /** Ends the session. */
-  logout: (): Promise<void> => request<void>("/api/v1/auth/logout", { method: "POST" }),
+  logout: async (): Promise<void> => {
+    unwrap(await client.POST("/api/v1/auth/logout", {}));
+  },
 
   /**
    * Who the caller is, or a 401 when nobody.
@@ -328,7 +297,7 @@ export const api = {
    * rather than remembering a flag in storage: the session lives on the server
    * and only the server knows whether it is still valid.
    */
-  me: (): Promise<Session> => request<Session>("/api/v1/auth/me"),
+  me: async (): Promise<Session> => unwrap(await client.GET("/api/v1/auth/me")),
 
   /**
    * Searches items.
@@ -337,22 +306,28 @@ export const api = {
    * @param language which generated vector to search — the interface language, so
    *   that a German user's search is stemmed with German rules (ADR-0047)
    * @param cursor the opaque cursor from a previous page
+   * @returns one page of items
    */
-  search: (query: string, language: string, cursor?: string): Promise<Page<Item>> => {
-    const params = new URLSearchParams({ q: query, language, limit: "50" });
-    if (cursor) {
-      params.set("cursor", cursor);
-    }
-    return request<Page<Item>>(`/api/v1/items?${params.toString()}`);
-  },
+  search: async (query: string, language: string, cursor?: string): Promise<ItemPage> =>
+    unwrap(
+      await client.GET("/api/v1/items", {
+        // The cursor is spread in rather than set to `undefined`: the document
+        // says the parameter may be ABSENT, and `exactOptionalPropertyTypes`
+        // holds the client to the difference between absent and empty.
+        params: { query: { q: query, language, limit: 50, ...(cursor ? { cursor } : {}) } },
+      }),
+    ),
 
   /**
    * Creates an item.
    *
    * No type reference is sent: stage 0 has no type system to choose from and the
    * server fills in the tenant's built-in type (O27).
+   *
+   * @param item what to create
+   * @returns the stored item
    */
-  createItem: (item: {
+  createItem: async (item: {
     name: string;
     description?: string;
     kind: "PHYSICAL" | "DIGITAL";
@@ -360,10 +335,33 @@ export const api = {
     quantity?: string;
     quantityUnit?: string;
   }): Promise<Item> =>
-    request<Item>("/api/v1/items", { method: "POST", body: JSON.stringify(item) }),
+    unwrap(
+      await client.POST("/api/v1/items", {
+        // `quantity` arrives from a form as text and the document says the field
+        // is a NUMBER. This client sent the text until 2026-09-21 and nothing
+        // complained, because Jackson parses a JSON string into a BigDecimal --
+        // so the request worked while disagreeing with the contract every other
+        // consumer generates from. The conversion is here, at the edge, where the
+        // form's shape meets the document's.
+        body: {
+          name: item.name,
+          kind: item.kind,
+          ...(item.description ? { description: item.description } : {}),
+          ...(item.locationId ? { locationId: item.locationId } : {}),
+          ...(item.quantity ? { quantity: Number(item.quantity) } : {}),
+          ...(item.quantityUnit ? { quantityUnit: item.quantityUnit } : {}),
+        },
+      }),
+    ),
 
-  /** Reads one item. */
-  item: (id: string): Promise<Item> => request<Item>(`/api/v1/items/${id}`),
+  /**
+   * Reads one item.
+   *
+   * @param id the item
+   * @returns it
+   */
+  item: async (id: string): Promise<Item> =>
+    unwrap(await client.GET("/api/v1/items/{id}", { params: { path: { id } } })),
 
   /**
    * Deletes an item.
@@ -375,22 +373,35 @@ export const api = {
    * @param id the item
    * @param version the item's `version`, as the last read gave it
    */
-  deleteItem: (id: string, version: number): Promise<void> =>
-    request<void>(`/api/v1/items/${id}`, {
-      method: "DELETE",
-      headers: { "If-Match": `"${version}"` },
-    }),
+  deleteItem: async (id: string, version: number): Promise<void> => {
+    unwrap(
+      await client.DELETE("/api/v1/items/{id}", {
+        params: { path: { id } },
+        headers: { "If-Match": `"${version}"` },
+      }),
+    );
+  },
 
-  /** Creates a location. */
-  createLocation: (location: {
+  /**
+   * Creates a location.
+   *
+   * @param location what to create
+   * @returns the stored place
+   */
+  createLocation: async (location: {
     name: string;
     categoryId: string;
     parentId?: string;
-  }): Promise<Location> =>
-    request<Location>("/api/v1/locations", { method: "POST", body: JSON.stringify(location) }),
+  }): Promise<Location> => unwrap(await client.POST("/api/v1/locations", { body: location })),
 
-  /** Reads one location with its readable path. */
-  location: (id: string): Promise<Location> => request<Location>(`/api/v1/locations/${id}`),
+  /**
+   * Reads one location with its readable path.
+   *
+   * @param id the place
+   * @returns it
+   */
+  location: async (id: string): Promise<Location> =>
+    unwrap(await client.GET("/api/v1/locations/{id}", { params: { path: { id } } })),
 
   /**
    * The tenant's locations, as a page.
@@ -399,29 +410,38 @@ export const api = {
    * readable path, which is what the picker assembles a tree from.
    *
    * @param cursor the opaque cursor from a previous page
+   * @returns one page of places
    */
-  locations: (cursor?: string): Promise<Page<Location>> => {
-    const params = new URLSearchParams({ limit: "200" });
-    if (cursor) {
-      params.set("cursor", cursor);
-    }
-    return request<Page<Location>>(`/api/v1/locations?${params.toString()}`);
-  },
+  locations: async (cursor?: string): Promise<LocationPage> =>
+    unwrap(
+      await client.GET("/api/v1/locations", {
+        params: { query: { limit: 200, ...(cursor ? { cursor } : {}) } },
+      }),
+    ),
 
-  /** The kinds of place a location can be. */
-  locationCategories: (): Promise<Page<LocationCategory>> =>
-    request<Page<LocationCategory>>("/api/v1/locations/categories?limit=200"),
+  /**
+   * The kinds of place a location can be.
+   *
+   * @returns one page of categories
+   */
+  locationCategories: async (): Promise<LocationCategoryPage> =>
+    unwrap(
+      await client.GET("/api/v1/locations/categories", { params: { query: { limit: 200 } } }),
+    ),
 
   /**
    * The files attached to one thing.
    *
    * @param targetKind `ITEM` or `LOCATION`
    * @param targetId what they hang on
+   * @returns one page of files
    */
-  media: (targetKind: "ITEM" | "LOCATION", targetId: string): Promise<Page<Media>> => {
-    const params = new URLSearchParams({ targetKind, targetId, limit: "200" });
-    return request<Page<Media>>(`/api/v1/media?${params.toString()}`);
-  },
+  media: async (targetKind: "ITEM" | "LOCATION", targetId: string): Promise<MediaPage> =>
+    unwrap(
+      await client.GET("/api/v1/media", {
+        params: { query: { targetKind, targetId, limit: 200 } },
+      }),
+    ),
 
   /**
    * Uploads a file and attaches it.
@@ -433,12 +453,22 @@ export const api = {
    * @param file the chosen file
    * @param targetKind `ITEM` or `LOCATION`
    * @param targetId what to attach it to
+   * @returns the stored file
    */
-  uploadMedia: (file: File, targetKind: "ITEM" | "LOCATION", targetId: string): Promise<Media> => {
+  uploadMedia: async (
+    file: File,
+    targetKind: "ITEM" | "LOCATION",
+    targetId: string,
+  ): Promise<Media> => {
     const body = new FormData();
     body.append("file", file);
-    const params = new URLSearchParams({ targetKind, targetId });
-    return request<Media>(`/api/v1/media?${params.toString()}`, { method: "POST", body });
+    return unwrap(
+      await client.POST("/api/v1/media", {
+        params: { query: { targetKind, targetId } },
+        body: body as never,
+        bodySerializer: (form: unknown) => form as BodyInit,
+      }),
+    );
   },
 
   /**
@@ -450,10 +480,14 @@ export const api = {
    * verdict yet. Both failures arrive as an `ApiError` carrying the status.
    *
    * @param mediaObjectId the file
+   * @returns it
    */
-  mediaObject: (mediaObjectId: string): Promise<Media> => {
-    return request<Media>(`/api/v1/media/${mediaObjectId}`);
-  },
+  mediaObject: async (mediaObjectId: string): Promise<Media> =>
+    unwrap(
+      await client.GET("/api/v1/media/{mediaObjectId}", {
+        params: { path: { mediaObjectId } },
+      }),
+    ),
 
   /**
    * Detaches a file.
@@ -462,14 +496,15 @@ export const api = {
    * @param targetKind what it hangs on
    * @param targetId which one
    */
-  deleteMedia: (
+  deleteMedia: async (
     mediaObjectId: string,
     targetKind: "ITEM" | "LOCATION",
     targetId: string,
   ): Promise<void> => {
-    const params = new URLSearchParams({ targetKind, targetId });
-    return request<void>(`/api/v1/media/${mediaObjectId}?${params.toString()}`, {
-      method: "DELETE",
-    });
+    unwrap(
+      await client.DELETE("/api/v1/media/{mediaObjectId}", {
+        params: { path: { mediaObjectId }, query: { targetKind, targetId } },
+      }),
+    );
   },
 };

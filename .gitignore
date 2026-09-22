@@ -123,3 +123,16 @@ web/dist/
 # Rendered deployment secrets: the operator's real values, substituted into the
 # templates in deploy/generated/. Never committed — the templates are.
 deploy/secrets/
+
+# Written by @openapitools/openapi-generator-cli the first time it runs, to pin
+# the generator version it downloads. `tools/kotlin_client.py` pins that version
+# itself, through OPENAPI_GENERATOR_VERSION, so this file records a fact the tool
+# already carries -- and it would otherwise appear in every working tree and in CI
+# as an untracked change nobody made.
+openapitools.json
+
+# The per-crate SBOMs (REQ-CON-010). A build output: produced by
+# `cargo cyclonedx` in the job that builds the crate, published with the
+# release, and read by `tools/notices.py`. Not committed, because it carries a
+# timestamp and a fresh serial number on every run.
+*.cdx.json

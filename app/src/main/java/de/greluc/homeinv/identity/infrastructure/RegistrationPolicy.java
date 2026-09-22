@@ -39,8 +39,9 @@ public class RegistrationPolicy {
    * Reads the setting and refuses what cannot be served.
    *
    * @param configured the value of {@code HOMEINV_REGISTRATION_MODE}
-   * @throws IllegalStateException when the value names no mode, or names {@code open} while no mail
-   *     sender is installed to confirm an address with
+   * @throws IllegalStateException when the value names no mode. Whether an {@code open}
+   *     instance can confirm an address is asked by {@code OpenRegistrationReadiness},
+   *     which runs when the registry is readable
    */
   public RegistrationPolicy(
       @Value("${homeinv.registration-mode:invite_only}") String configured) {
@@ -56,15 +57,13 @@ public class RegistrationPolicy {
           unknown);
     }
 
-    if (mode == RegistrationMode.OPEN) {
-      // The mail sender is a plugin and there is no plugin runtime yet. When there
-      // is, this check becomes "is a MailSender registered" rather than a flat
-      // refusal — and the flow it guards is the one REQ-AUTH-004 describes.
-      throw new IllegalStateException(
-          "HOMEINV_REGISTRATION_MODE=open needs a confirmed e-mail address (REQ-AUTH-004), and"
-              + " confirming one needs plugin-smtp, which this build has no runtime for. Use"
-              + " invite_only or closed until it does.");
-    }
+    // `open` used to be refused here outright, because confirming an address needs
+    // a plugin and there was no plugin runtime. There is one now (ADR-0028), so the
+    // refusal moved to where it can look: `OpenRegistrationReadiness` asks, once the
+    // application is up and the registry is readable, whether anything installed can
+    // confirm an address at all. A constructor cannot ask that — it runs before the
+    // database is reachable — and a mode parsed here and checked there is one
+    // decision in two places rather than two decisions.
     log.info("Registration mode: {}", mode);
   }
 

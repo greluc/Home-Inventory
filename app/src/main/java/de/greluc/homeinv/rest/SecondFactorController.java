@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -38,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
  * code from it, and only then does the factor count. An enrolment that counted on the first call
  * would lock somebody out of their own account for scanning a QR code and closing the app.
  */
+@Tag(name = "Second factor", description = "Enrolling and answering the second factor (REQ-AUTH-004).")
 @RestController
 @RequestMapping("/api/v1/auth/mfa")
 @RequiredArgsConstructor
@@ -309,7 +312,7 @@ public class SecondFactorController {
    */
   public record EnrolmentView(
       boolean totpConfirmed,
-      Instant enrolledAt,
+      @Nullable Instant enrolledAt,
       int recoveryCodesLeft,
       List<PasskeyView> passkeys) {}
 
@@ -321,7 +324,7 @@ public class SecondFactorController {
    * @param registeredAt when it was registered
    * @param lastUsedAt when it was last used, or null
    */
-  public record PasskeyView(UUID id, String label, Instant registeredAt, Instant lastUsedAt) {}
+  public record PasskeyView(UUID id, String label, Instant registeredAt, @Nullable Instant lastUsedAt) {}
 
   /**
    * The options one side of a ceremony needs.

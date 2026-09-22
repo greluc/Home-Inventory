@@ -1,5 +1,6 @@
 import com.google.protobuf.gradle.id
 import java.math.BigDecimal
+import java.util.zip.ZipFile
 import java.util.Base64
 
 // The Spring Boot application. One Gradle project, eighteen building blocks as
@@ -11,6 +12,8 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.protobuf)
     alias(libs.plugins.spotbugs)
+    // The SBOM of REQ-CON-010, in CycloneDX.
+    alias(libs.plugins.cyclonedx)
     // REQ-NFR-070 asks for `Money` to be held at 100 % branch coverage. The plugin
     // is here for that one class and for nothing else -- see the verification
     // rule below.
@@ -59,6 +62,7 @@ dependencies {
     // checks the generated document itself, so the server and an offline client
     // reach the same verdict rather than two implementations of the same rules.
     implementation(libs.json.schema.validator)
+    implementation(libs.jackson.dataformat.csv)
     // WebAuthn/passkeys (REQ-AUTH-002). Configured with no metadata service and
     // no certificate-path validation: the core opens no outbound connection
     // (ADR-0026), and a self-hosted instance has nothing to attest against.
@@ -72,6 +76,38 @@ dependencies {
     // horizontally and a session must survive the instance that created it
     // (06 Deployment view).
     implementation(libs.spring.boot.starter.data.redis)
+
+    // The read-only GraphQL surface (REQ-API-006, 08 §8.4). Read-only is not a
+    // convention here: the schema declares no `Mutation` type at all, and
+    // `GraphQlSchemaTest` fails if one appears (ADR-0010).
+    implementation(libs.spring.boot.starter.graphql)
+
+    // For `GraphQlPermissions`: one aspect, so that every GraphQL resolver is checked
+    // against what it declares without every method beginning with the same line
+    // (REQ-SEC-023, ADR-0079). Boot's `AopAutoConfiguration` turns AspectJ proxying
+    // on when this is present, which is what makes `@Aspect` work.
+    implementation(libs.aspectjweaver)
+
+    // `platform.ContextPropagation`: a thread-local ends at the thread, and the
+    // GraphQL surface's DataLoader dispatches do not run on the request's.
+    implementation(libs.context.propagation)
+
+    // `@Nullable`, which the API document is generated from (ADR-0081). It arrives
+    // with several starters anyway; naming it is what keeps the contract from
+    // depending on which of them happens to be on the classpath.
+    implementation(libs.jakarta.annotation.api)
+
+    // Tracing (REQ-NFR-044). Three modules and not the starter, which would also
+    // bring an OTLP METRICS registry that pushes to localhost by default -- see
+    // the note in the version catalogue. The first carries Boot's
+    // auto-configuration, the bridge turns Micrometer's observations -- which
+    // Spring Boot already creates for the web layer, scheduling and AMQP -- into
+    // OpenTelemetry spans, and the exporter sends them. All three do NOTHING until
+    // an endpoint is configured, which is what "inactive when unconfigured" means
+    // here and what `TracingEnvironment` makes true.
+    implementation(libs.spring.boot.micrometer.tracing.opentelemetry)
+    implementation(libs.micrometer.tracing.bridge.otel)
+    implementation(libs.opentelemetry.exporter.otlp)
     implementation(libs.spring.boot.session.data.redis)
 
     // The primary `SearchIndex` adapter (ADR-0008, REQ-SRCH-005). Not a Spring
@@ -233,9 +269,70 @@ jacoco {
     toolVersion = "0.8.13"
 }
 
+// What coverage is measured over. The generated protobuf classes are NOT code
+// anybody wrote or could test: `de.greluc.homeinv.plugin.v1` is 34 000 of the
+// 49 000 lines here, at 13 % -- so measured with them, "the domain logic" reads
+// 34 % and means nothing at all. Excluded, the same tests measure 84 %, which is
+// the number REQ-NFR-025 is about.
+//
+// Nothing else is excluded. A hand-written class that is hard to test is a class
+// with a coverage problem, not a class with an exclusion.
+val coveredClasses: FileCollection =
+    fileTree(layout.buildDirectory.dir("classes/java/main")) {
+        exclude("de/greluc/homeinv/plugin/v1/**")
+    }
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+    classDirectories.setFrom(coveredClasses)
+    reports {
+        // XML because a machine reads it: the gate below, and anything an
+        // operator of this repository points at a report. HTML because a person
+        // does.
+        xml.required = true
+        html.required = true
+    }
+}
+
+// REQ-NFR-025: the domain logic at 80 %, the `domain` packages at 90 %,
+// "measured in CI; falling below fails the build". Until 2026-09-21 neither half
+// was true -- one rule existed, covering ONE class, and no job ever ran the task
+// that would have checked it. Wired into `check` below, so it runs wherever
+// `./gradlew build` runs and not only where somebody remembered a CI step.
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.named("test"))
+    classDirectories.setFrom(coveredClasses)
     violationRules {
+        // LINE, and that is a reading of the requirement rather than a
+        // restatement of it: it says "test coverage" and names no counter.
+        // Lines are what the number means to a person looking at a report.
+        // BRANCH is deliberately not the gate -- it is 61 % in `domain` today
+        // and a gate set there would be a gate somebody lowers.
+        rule {
+            element = "BUNDLE"
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = BigDecimal("0.80")
+            }
+        }
+
+        // PER PACKAGE and not aggregated: `catalog.domain` sat at 74 % while the
+        // six domain packages together were over 90, and it is the small
+        // packages that carry the rules nobody exercised.
+        rule {
+            element = "PACKAGE"
+            includes = listOf("de.greluc.homeinv.*.domain")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = BigDecimal("0.90")
+            }
+        }
+
+        // Money is arithmetic that throws across currencies, and every branch of
+        // it is a refusal somebody would otherwise meet in production
+        // (ADR-0025).
         rule {
             element = "CLASS"
             includes = listOf("de.greluc.homeinv.platform.Money")
@@ -246,6 +343,10 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
             }
         }
     }
+}
+
+tasks.named("check") {
+    dependsOn(tasks.named("jacocoTestCoverageVerification"))
 }
 
 tasks.named("check") {
@@ -357,6 +458,119 @@ protobuf {
                     create("grpc")
                 }
             }
+        }
+    }
+}
+
+// THE SBOM (REQ-CON-010).
+//
+// CycloneDX, generated from the resolved runtime classpath, so it lists what the
+// artefact actually carries rather than what the build files ask for -- the
+// transitive dependency nobody chose is exactly the one an advisory names.
+//
+// It runs as part of `build`, so it cannot be forgotten at release time and is
+// never stale relative to the dependencies beside it. `deploy/` publishes it with
+// the release.
+tasks.cyclonedxDirectBom {
+    // 1.6 is the schema version the current tooling reads; naming it beats
+    // whatever the plugin's default becomes in a later release.
+    schemaVersion = org.cyclonedx.Version.VERSION_16
+    projectType = org.cyclonedx.model.Component.Type.APPLICATION
+    jsonOutput = layout.buildDirectory.file("sbom/home-inv-sbom.json")
+    xmlOutput = layout.buildDirectory.file("sbom/home-inv-sbom.xml")
+    // Runtime only. A build-time dependency is not in the artefact, and an SBOM
+    // that listed the test framework would make every advisory against it look
+    // like an advisory against the product.
+    includeConfigs = listOf("runtimeClasspath")
+}
+
+tasks.named("build") { dependsOn(tasks.named("cyclonedxDirectBom")) }
+
+// And `test` too, because `ThirdPartyNoticesTest` compares the licence notice
+// against it (REQ-CON-013): the two describe the same build and the test is
+// what says so. Without this the test would be conditional on whatever ran
+// before it, which is a test that passes by not running.
+tasks.named("test") { dependsOn(tasks.named("cyclonedxDirectBom")) }
+
+// AND IT TRAVELS IN THE ARTIFACT (REQ-CON-010) WITHOUT A LINE HERE.
+//
+// Spring Boot's Gradle plugin notices the CycloneDX plugin and puts the SBOM
+// into the jar itself, at `META-INF/sbom/application.cdx.json` -- which is
+// where a scanner looks. Verified by reading the jar rather than assumed:
+// `SbomTravelsTest` fails if a Boot upgrade ever stops doing it, because the
+// alternative is an image whose bill of materials is only on a workflow page
+// that expires in ninety days.
+//
+// A copy under `BOOT-INF/classes` was added here and then removed: it made the
+// actuator endpoint answer, and an SBOM is read from the image by whoever
+// scans it rather than from a management port nothing publishes. What IS
+// reachable from the running installation is the licence NOTICE, at
+// /api/v1/version/notices, because that one is owed to a user (REQ-CON-013).
+
+// THE SBOM IS IN THE JAR, CHECKED RATHER THAN ASSUMED (REQ-CON-010).
+//
+// Boot's plugin puts it there today. Nothing in this repository asks it to, so
+// nothing in this repository would notice if a later version stopped -- and the
+// failure would be silent: an image that ships without its bill of materials
+// looks exactly like one that ships with it.
+val sbomTravels by tasks.registering {
+    description = "Fails when the boot jar carries no SBOM (REQ-CON-010)."
+    group = "verification"
+
+    val jar = tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar")
+    dependsOn(jar)
+    inputs.files(jar)
+
+    doLast {
+        val archive = jar.get().archiveFile.get().asFile
+        val entry = "META-INF/sbom/application.cdx.json"
+        val carried =
+            ZipFile(archive).use { zip -> zip.getEntry(entry) != null }
+        require(carried) {
+            "$archive carries no $entry. REQ-CON-010 asks for the SBOM to travel with the " +
+                "artifact, and Spring Boot's plugin put it there for free until now. Add it to " +
+                "`bootJar` explicitly."
+        }
+    }
+}
+
+tasks.named("check") { dependsOn(sbomTravels) }
+
+// WHICH BUILD THIS IS, AND WHERE ITS SOURCE IS (REQ-CON-009).
+//
+// The AGPL obligation is not satisfied by a version number: somebody running an
+// instance has to be able to get to the source OF THAT INSTANCE, which means the
+// exact commit. So the commit reaches the artefact at build time and the
+// application serves it (`VersionController`).
+//
+// Read from git, overridable by `HOMEINV_BUILD_COMMIT` for a build that has no
+// git directory -- a container build from a source tarball is the usual one --
+// and "unknown" where neither is available, which is a statement rather than a
+// silent zero.
+val buildCommit: String =
+    providers.environmentVariable("HOMEINV_BUILD_COMMIT").orNull?.takeIf { it.isNotBlank() }
+        // `runCatching` and not `isIgnoreExitValue`: the latter covers a git that
+        // ANSWERED badly, and the case that actually happens is a git that is not
+        // there at all -- the container build has no git binary and no `.git`
+        // directory, and Gradle turns a missing executable into a configuration
+        // failure. That broke the image build on 2026-09-16, in the very case
+        // the comment above had named.
+        ?: runCatching {
+            providers.exec {
+                commandLine("git", "rev-parse", "--short=12", "HEAD")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim()
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
+        ?: "unknown"
+
+springBoot {
+    buildInfo {
+        properties {
+            additional.put("commit", buildCommit)
+            // Where the source of THIS build is. A link to the project rather
+            // than to the commit, because the commit is beside it and a reader
+            // can reach either.
+            additional.put("source", "https://github.com/greluc/Home-Inventory")
         }
     }
 }

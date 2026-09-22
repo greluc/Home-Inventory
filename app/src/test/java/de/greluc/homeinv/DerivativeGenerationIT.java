@@ -137,7 +137,7 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
             () -> {
               try {
                 return media
-                    .upload(new ByteArrayInputStream(pdf()), "ITEM", UUID.randomUUID(), false, userId)
+                    .upload(new ByteArrayInputStream(pdf()), "ITEM", UUID.randomUUID(), false, "PHOTO", userId)
                     .id();
               } catch (IOException unreadable) {
                 throw new UncheckedIOException(unreadable);
@@ -225,7 +225,8 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
         () -> {
           try {
             return media
-                .upload(new ByteArrayInputStream(jpeg()), "ITEM", UUID.randomUUID(), false, userId)
+                .upload(
+                    new ByteArrayInputStream(jpeg()), "ITEM", UUID.randomUUID(), false, "PHOTO", userId)
                 .id();
           } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);

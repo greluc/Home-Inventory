@@ -129,7 +129,11 @@ const policy = [
 //     markup it cannot parse. 64 MB against the API's 25 MB upload ceiling, so
 //     the rejection always comes from the application;
 //   * a read timeout below the API's 30 s ceiling (08 §8.2) means `web` emits its
-//     own 504 instead of the handled response.
+//     own 504 instead of the handled response;
+//   * a read timeout below the SSE heartbeat (`homeinv.events.heartbeat-seconds`,
+//     30 s) closes every live stream on a quiet tenant — and quiet is the normal
+//     state of a home inventory, so it would look like a flaky connection rather
+//     than like a misconfiguration (REQ-API-011).
 const BODY_LIMIT = "64m";
 const READ_TIMEOUT = "60s";
 
@@ -229,6 +233,11 @@ server {
 
         # Above the API's own 30 s ceiling, so a slow response is answered by the
         # application rather than replaced by this proxy's 504.
+        #
+        # It is also what the SSE heartbeat is measured against: the stream sends
+        # one every 30 s (\`homeinv.events.heartbeat-seconds\`), and a quiet stream
+        # is closed by this timeout if the heartbeat is ever made slower than it.
+        # A home inventory is quiet for hours, so the quiet case is the normal one.
         proxy_read_timeout ${READ_TIMEOUT};
         proxy_send_timeout ${READ_TIMEOUT};
 
@@ -244,6 +253,31 @@ server {
         # REQ-SEC-064's acceptance criterion without breaking anything visible.
         # nginx passes response headers through by default; the point of saying so
         # is that none of them may ever be suppressed here.
+    }
+
+    # The read-only GraphQL surface (REQ-API-006). \`= /graphql\` and not a prefix:
+    # it is exactly one endpoint, and a prefix would also proxy \`/graphqlfoo\` —
+    # which the SPA fallback below would otherwise have answered with the shell,
+    # so the mistake would look like a working page rather than a 404.
+    #
+    # Its own location rather than a line in \`/api/\`, because it is not under
+    # \`/api\`: 08 §8.1 puts it at the root beside it, and Spring for GraphQL's
+    # default path is what a client library expects to find.
+    location = /graphql {
+        proxy_pass http://homeinv_api;
+        proxy_http_version 1.1;
+
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Host $host;
+
+        proxy_read_timeout ${READ_TIMEOUT};
+        proxy_send_timeout ${READ_TIMEOUT};
+
+        # A GraphQL response is one document and is not streamed. Buffering is
+        # therefore left at nginx's default, unlike \`/api/\` — the difference is
+        # the SSE stream, which lives there.
     }
 
     # Media answers on its own hostname (REQ-MED-010) and reaches the same

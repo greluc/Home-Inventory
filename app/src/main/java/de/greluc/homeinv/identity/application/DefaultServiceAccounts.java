@@ -119,6 +119,23 @@ public class DefaultServiceAccounts implements ServiceAccounts {
 
   @Override
   @Transactional
+  public int revokeAll(UUID actor) {
+    Instant now = Instant.now(clock);
+    // Through the entities rather than one UPDATE, so that the tombstone, the
+    // version and the audit columns are written exactly as a single revocation
+    // writes them -- a bulk path that set a column directly would be a second
+    // definition of what "revoked" means.
+    List<ServiceAccount> live =
+        accounts.findAll().stream().filter(account -> account.getDeletedAt() == null).toList();
+    live.forEach(account -> account.revoke(actor, now));
+    if (!live.isEmpty()) {
+      log.warn("{} service account token(s) were revoked at once by {}", live.size(), actor);
+    }
+    return live.size();
+  }
+
+  @Override
+  @Transactional
   public Optional<AuthenticatedUser> authenticate(String token) {
     if (token == null || !token.startsWith(PREFIX)) {
       return Optional.empty();

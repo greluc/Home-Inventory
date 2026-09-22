@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
@@ -52,6 +53,7 @@ import org.springframework.web.multipart.MultipartFile;
  *       anyway ({@code REQ-MED-010}).
  * </ul>
  */
+@Tag(name = "Media", description = "Photographs and documents, their derivatives and the signed URLs that serve them.")
 @RestController
 @RequiredArgsConstructor
 public class MediaController {
@@ -66,6 +68,10 @@ public class MediaController {
    * @param targetKind {@code ITEM} or {@code LOCATION}
    * @param targetId what to attach it to
    * @param primary whether it becomes the image lists show
+   * @param role what the attachment is for — {@code PHOTO}, {@code RECEIPT}, {@code
+   *     WARRANTY_PROOF} or {@code OTHER}. It is what lets the insurance report of REQ-LIFE-016
+   *     attach the receipt rather than offering a list of files and leaving the reader to find it
+   *     (REQ-LIFE-001 was amended for this on 2026-09-20)
    * @param user the authenticated caller
    * @return {@code 202} with the accepted file, its state, and a {@code Location} pointing at it
    * @throws IOException when the upload cannot be read or stored
@@ -89,11 +95,15 @@ public class MediaController {
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId,
       @RequestParam(defaultValue = "false") boolean primary,
+      @RequestParam(defaultValue = "PHOTO")
+          @Pattern(regexp = "PHOTO|RECEIPT|WARRANTY_PROOF|OTHER")
+          String role,
       @AuthenticationPrincipal AuthenticatedUser user)
       throws IOException {
 
     try (InputStream content = file.getInputStream()) {
-      MediaView view = media.upload(content, targetKind, targetId, primary, user.userId());
+      MediaView view =
+          media.upload(content, targetKind, targetId, primary, role, user.userId());
       return ResponseEntity.accepted()
           .location(URI.create("/api/v1/media/" + view.id()))
           .body(view);

@@ -67,6 +67,7 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
   @Autowired private TransactionTemplate transactions;
   @Autowired private ObjectMapper json;
   @Autowired private List<SearchIndex> engines;
+  @Autowired private de.greluc.homeinv.search.application.SearchIndexer indexer;
 
   @Test
   @DisplayName("is the engine an installation that asked for it gets")
@@ -151,6 +152,41 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
   }
 
   // -------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("is unchanged by a second delivery of the same event (REQ-NFR-016)")
+  void aDuplicateDeliveryChangesNothing() throws Exception {
+    Tenant tenant = aTenant("duplicate");
+    UUID hammer = anItem(tenant, "Zarquonhammer", null, null, null);
+    awaitFound(tenant, "Zarquonhammer", "Zarquonhammer");
+
+    // Delivery is at-least-once, so the broker WILL hand the same event over
+    // twice -- after a redelivery, after a consumer restart, after a network
+    // blip that lost the acknowledgement. REQ-NFR-016 says the second time must
+    // produce no second effect, and nothing held it to that before 2026-09-20.
+    List<String> afterOne = namesFound(tenant, "Zarquonhammer");
+    indexer.reindex(tenant.tenantId(), hammer);
+    indexer.reindex(tenant.tenantId(), hammer);
+
+    await()
+        .atMost(INDEXED)
+        .untilAsserted(
+            () ->
+                // ONE document and not three: the write is an upsert keyed by the
+                // item's id, so a redelivery overwrites rather than appends. A
+                // list that grew would be the same thing found twice, which is
+                // what a reader notices long before an operator does.
+                assertThat(namesFound(tenant, "Zarquonhammer")).isEqualTo(afterOne));
+
+    // And taking it out twice is not an error either: the second removal has
+    // nothing to remove, which is the outcome the caller wanted anyway.
+    indexer.forget(tenant.tenantId(), hammer);
+    indexer.forget(tenant.tenantId(), hammer);
+    await()
+        .atMost(INDEXED)
+        .untilAsserted(
+            () -> assertThat(namesFound(tenant, "Zarquonhammer")).doesNotContain("Zarquonhammer"));
+  }
 
   private void awaitFound(Tenant tenant, String text, String expected) {
     await()
@@ -239,7 +275,7 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     enrolSecondFactor(userId);
     UUID tenantId = provisioning.provision("Searching " + name, userId);
     UUID typeId = TenantContext.callAs(tenantId, () -> aType(userId));
-    return new Tenant(signIn(email, PASSWORD), typeId);
+    return new Tenant(signIn(email, PASSWORD), typeId, tenantId);
   }
 
   /**
@@ -282,5 +318,5 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
    * @param session the authenticated caller
    * @param typeId the published type its items are written against
    */
-  private record Tenant(MockHttpSession session, UUID typeId) {}
+  private record Tenant(MockHttpSession session, UUID typeId, UUID tenantId) {}
 }

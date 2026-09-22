@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tagging.api;
 
+import jakarta.annotation.Nullable;
 import java.util.UUID;
 
 /**
@@ -18,4 +19,4 @@ import java.util.UUID;
  *     here is a tombstone: it is offered nowhere, carries nothing, and exists so a client holding
  *     its id is redirected rather than told the tag never existed (REQ-CORE-063)
  */
-public record TagView(UUID id, String name, UUID groupId, String colour, String icon, UUID mergedInto) {}
+public record TagView(UUID id, String name, @Nullable UUID groupId, @Nullable String colour, @Nullable String icon, @Nullable UUID mergedInto) {}

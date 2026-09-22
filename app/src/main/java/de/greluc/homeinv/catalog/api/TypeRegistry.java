@@ -40,6 +40,21 @@ public interface TypeRegistry {
   UUID publishedItemTypeVersion(UUID itemTypeId);
 
   /**
+   * The item type with this key, if the tenant has one.
+   *
+   * <p>By key rather than by id, for the one caller that knows a type by name rather than by
+   * reference: an import writes its rows against a type the person importing named — {@code
+   * general} unless they said otherwise — and a key is what a mapping profile can carry, because a
+   * profile is the same on every instance and an id is not.
+   *
+   * @param key the type's key, as a tenant's catalogue holds it
+   * @return the type's id, or empty when the tenant has no type with that key. Empty rather than an
+   *     exception: a profile naming a type somebody has since deleted is a mistake to report, not a
+   *     failure to throw from a registry
+   */
+  java.util.Optional<UUID> itemTypeByKey(String key);
+
+  /**
    * The published version a location category currently points at.
    *
    * @param categoryId the category
@@ -133,6 +148,31 @@ public interface TypeRegistry {
   List<QueryableField> queryableFields();
 
   /**
+   * The attribute keys a tenant has marked as expiries (REQ-LIFE-013, REQ-CORE-023).
+   *
+   * <p>Across every <b>published</b> version of every type, because the overview is a question
+   * about the tenant and not about one type. A key declared as an expiry by any of them counts:
+   * two types both calling their date {@code expiresOn} is one key here, which is what makes the
+   * overview group sensibly.
+   *
+   * <p>Read here rather than by the caller joining {@code catalog}, because no block reads
+   * another's schema (REQ-NFR-021) — and the caller is {@code inventory}, which holds the values
+   * but not the definitions.
+   *
+   * @return the expiry fields, ordered by key; empty when no type marks one
+   */
+  List<ExpiryField> expiryFields();
+
+  /**
+   * An attribute key that holds an expiry date.
+   *
+   * @param key the attribute key, as {@code item_attr_index.field_key} holds it
+   * @param labels what to call it, per language tag. Empty when the field declares none, and the
+   *     caller then shows the key — a key is a poor label and better than nothing
+   */
+  record ExpiryField(String key, java.util.Map<String, String> labels) {}
+
+  /**
    * The item-type <b>version</b> ids belonging to the types a tenant knows by these keys.
    *
    * <p>What {@code filter=type:power-tool} resolves to. A key is what a person writes, and what an
@@ -170,6 +210,25 @@ public interface TypeRegistry {
    *     see is simply absent
    */
   Map<UUID, TypeIdentity> typesOfVersions(Collection<UUID> versionIds);
+
+  /**
+   * How long a thing of each of these versions' types is expected to last, in months
+   * (REQ-LIFE-009).
+   *
+   * <p>In bulk, and keyed by the <b>version</b> rather than by the type, because that is what an
+   * item carries: asking per item would be one query per row of a table somebody is depreciating
+   * ten thousand rows of.
+   *
+   * <p>A version whose type has no useful life is <b>absent from the map</b> rather than present
+   * with a null. No shipped type carries one — a useful life is a judgement about a household and
+   * the tenant makes it — so an instance nobody has configured returns an empty map, and the
+   * depreciation has nothing to divide by and produces nothing. That is the honest state rather
+   * than a default in disguise.
+   *
+   * @param versionIds the type versions to ask about
+   * @return the useful lives, by version id, missing where the type has none
+   */
+  Map<UUID, Integer> usefulLivesOfVersions(Collection<UUID> versionIds);
 
   /**
    * What a type is called, and what it sits under.

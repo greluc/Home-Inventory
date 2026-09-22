@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,6 +38,8 @@ import java.util.UUID;
  * @param sensitive whether reading it needs a permission of its own and it is encrypted at rest
  *     (ADR-0019)
  * @param deprecated whether it is hidden from new input while its values remain (REQ-CORE-026)
+ * @param expiry whether this date is an expiry, and so appears in the overview of
+ *     REQ-LIFE-013
  */
 public record FieldDefinitionView(
     UUID id,
@@ -45,17 +48,18 @@ public record FieldDefinitionView(
     Map<String, String> labels,
     Map<String, String> helpTexts,
     boolean required,
-    String defaultValue,
-    FieldConstraints constraints,
-    UUID valueListId,
+    @Nullable String defaultValue,
+    @Nullable FieldConstraints constraints,
+    @Nullable UUID valueListId,
     VisibilityRule visibility,
-    String group,
+    @Nullable String group,
     int displayOrder,
     boolean searchable,
     boolean sortable,
     boolean facetable,
     boolean sensitive,
-    boolean deprecated) {
+    boolean deprecated,
+    boolean expiry) {
 
   /**
    * Whether an item must carry a value for this field.
@@ -74,7 +78,7 @@ public record FieldDefinitionView(
   /**
    * Whether this field is mirrored into {@code inventory.item_attr_index} at all.
    *
-   * <p>Three flags decide it and two things have a veto. A {@code secret} data type is never
+   * <p>Four flags decide it and two things have a veto. A {@code secret} data type is never
    * projected, because the side table answers filters and a value gated by a permission must not be
    * filterable by somebody without it. Neither is anything marked {@code sensitive}: it is stored
    * sealed (ADR-0019), so the only thing that could be mirrored is ciphertext, and a filter over
@@ -86,6 +90,16 @@ public record FieldDefinitionView(
    * @return true when a write must project this field
    */
   public boolean projected() {
-    return (searchable || sortable || facetable) && dataType.projectable() && !sensitive;
+    // `expiry` joins the three since 2026-09-20: the overview of REQ-LIFE-013 is
+    // a QUERY over attribute values, and `item_attr_index` is the table that
+    // answers those. A field marked only as an expiry was written to the JSONB
+    // and to nowhere queryable, so the overview found the warranties and none of
+    // the attributes -- which the test caught before anybody shipped it.
+    //
+    // `sensitive` still wins, as it does for the other three: the value is stored
+    // encrypted, so a row here would hold ciphertext. The type editor refuses
+    // that combination outright, and this is the half that also covers a field
+    // marked sensitive after it was already an expiry.
+    return (searchable || sortable || facetable || expiry) && dataType.projectable() && !sensitive;
   }
 }

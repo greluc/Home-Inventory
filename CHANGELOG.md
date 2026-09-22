@@ -19,7 +19,84 @@ The project is in its design phase; nothing is released. This section records th
 groundwork so that the first release has a history rather than a single "initial
 commit".
 
+### Added
+
+- **The system checks a plugin's signature instead of taking your word for it.**
+  Every plugin's manifest is verified against the publisher's key when the system
+  starts, without reaching the internet. A plugin whose manifest was altered after
+  it was signed is switched off and says so; one nobody signed runs only if you
+  turn that on deliberately. The operator view now shows *why* a plugin is out of
+  service, which "disabled" on its own never did.
+
+- **An interrupted upload is continued rather than begun again.** Photographs and
+  documents now go up in pieces, and a connection that drops partway through costs
+  the pieces that had not arrived rather than the whole file. The web client
+  resumes by itself; nothing has to be retried by hand.
+
+- **Every distributed artifact now carries the licence notices of what is in it.**
+  The application, the web bundle, the OIDC plugin and the six Rust services each
+  ship the copyright and permission notice of every third-party component they
+  contain — compiled into the binary where the image has no filesystem to hold a
+  file. The notices are reachable from the running installation, next to the
+  version and the source link, and each artifact now publishes its own
+  CycloneDX bill of materials rather than one standing in for nine.
+
+- **A plugin id cannot write its own line in the log.** Values that come from a
+  caller now go through a filter before they reach a log entry, so nothing can
+  slip in a newline and add a record of something that never happened. Found by
+  the code scanner on a line added the day before, and fixed everywhere such a
+  value is logged — eight call sites, five of which the scanner had already
+  reported and nobody had got to.
+
+- **Four things you can do the moment something goes wrong.** Sign every device
+  of an account out — your own, or somebody else's if you run the instance —
+  revoke all of a tenant's machine tokens at once when you do not know which one
+  leaked, take a plugin out of service for everyone without anybody having to
+  grant it again afterwards, and suspend a tenant so it answers nothing at all
+  while not a single row of its data is touched. Each of them is undone by the
+  same call with the opposite argument.
+
+- **Rate limiting, and every response says where you stand.** One account, one
+  organisation or one address can no longer spend the instance on a runaway
+  script or a stolen session: too many requests in a minute answers `429` with a
+  `Retry-After`, and the authentication endpoints have a much stricter limit than
+  everything else. The figures are set so that nobody using the application ever
+  meets them, and every response carries `RateLimit` headers, so a client can see
+  what is left without having to be refused first.
+
+- **A field pattern can no longer take the instance down.** A type's validation
+  pattern is written by a tenant administrator and every item of that tenant is
+  matched against it — and a pattern like `(a+)+` takes longer than the age of
+  the universe on input that nearly matches. Patterns of that shape are now
+  refused as they are saved, with a sentence saying what to change, and every
+  match runs under a time limit so a shape nobody anticipated costs a
+  hundredth of a second instead of a request.
+
+- **The coverage floor is a build failure rather than a sentence.** Domain logic
+  is held to 80 % of lines and every `domain` package to 90 %, checked by
+  `./gradlew build` wherever it runs. It found two packages below the floor on
+  the day it was switched on, both of them rules about what a tenant may not do:
+  widening an inherited field, and the invariants an account holds.
+
+
+- **Distributed tracing, off unless you ask for it.** Set
+  `HOMEINV_TRACING_ENDPOINT` to an OpenTelemetry collector on the deployment's
+  internal network and a slow or failed request becomes one trace from the
+  browser's call through the database, the broker, the worker and any plugin
+  involved. Leave it empty — the default — and nothing changes: no spans, no
+  overhead, and the `traceId` in the logs and in every error message stays
+  exactly as it was. The collector is yours to run and to point at whatever you
+  already use; an example configuration ships in
+  [`docs/reference/otel-collector.yaml`](docs/reference/otel-collector.yaml).
+
 ### Changed
+
+- **Sizing a machine: the federated-login plugin costs more than the others.**
+  The documented budget was 64 MB of reserved memory per installed plugin, which is
+  what the four written in Rust use. `plugin-oidc` runs on a JVM — deliberately, so
+  that ID-token validation uses an audited library rather than a second
+  implementation of it — and reserves 192 MB with a 512 MB ceiling. The figure was
+  corrected before that plugin was written rather than after.
 
 - **Every dependency is on its current stable release.** Valkey moves to 9,
   i18next to 26, react-i18next to 17, vitest to 5, gRPC to 1.84, protobuf to
@@ -40,6 +117,29 @@ commit".
   Stage 3, as before.
 
 ### Fixed
+
+- **The list of which roles may see which fields comes back as a list.** It was a
+  JSON object whose keys were field names, which no client library can describe;
+  each entry now carries its own field name.
+
+- **An open page now notices a rename.** It refreshed itself when something was
+  created, moved or deleted, and not when somebody edited a name, lent an item,
+  brought one back, or put a tag on one — nine of the thirteen kinds of change went
+  unannounced.
+
+- **A notification goes out on the channel it was written for.** With both the mail
+  and the webhook plugins installed, whichever the system happened to resolve first
+  took everything — so a webhook could have been posted to the mail server.
+
+
+- **A rootless Podman install no longer stops at the first secret you have to
+  supply yourself.** `setup.sh` creates the mail plugin's password as an empty
+  file for the operator to fill in, and Podman refuses to store an empty secret,
+  so the install ended after copying the units with nothing started. That file is
+  now named and skipped, and the unit that mounts it stays down until the
+  credential is there. The script also stopped printing a stray `minimal: not
+  found` while writing `compose/.env`, which had swallowed a word from one of the
+  comments in it.
 
 - **The malware scanner updates its signatures again.** Under Podman the
   updater failed to start and said so only in a line nobody read: the scanner
@@ -173,6 +273,294 @@ commit".
   refused. The token is now issued on every request.
 
 ### Added
+
+- **The API description now says which values can be empty.** It already said
+  which fields a response carries; it now also says which of them may come back
+  with nothing in them, so a client knows the difference before it runs rather
+  than after. Putting that in the code turned up thirteen places where the
+  server itself read such a value without checking.
+
+- **The clients are generated from the API description.** The web client's types
+  now come from the same document the server publishes, so a field the server
+  stops sending, or a path that moves, fails the build instead of a screen. A
+  Kotlin client for the future mobile apps is generated from it too and compiled
+  on every build. Generating them turned up six places where the published
+  description did not match what the server actually does — among them the
+  version endpoint, which was described as something else entirely.
+
+- **A GraphQL endpoint for reading.** One request can now fetch exactly what a
+  screen needs — items with their type, their place and their tags — instead of
+  four round trips. It only reads: there is no way to change anything through it,
+  by design. Expensive queries are refused before they run rather than slowing the
+  system down for everybody, and each field checks the same permissions the rest of
+  the API does, so a query that asks for something you may not see answers the rest
+  and tells you about that one field.
+
+- **Webhooks: another system can be told when something here changes.** An
+  administrator adds a URL, picks which events it should hear about — an item
+  created, moved, lent, disposed of, a location moved, a tag put on something —
+  and gives it a signing secret. Each delivery is signed with **that target's own
+  secret**, so two receivers in one household cannot forge messages to each other.
+  What is sent is the kind of event, when it happened and which thing it happened
+  to; the receiver reads the details through the ordinary API, with the ordinary
+  permissions. Failed deliveries are retried with a widening gap and then listed,
+  with what the far side said, under the target.
+
+- **A page updates itself when somebody else changes something.** An open list
+  refreshes on its own instead of going stale until you reload it. What the server
+  sends is only that something of a kind changed — never an id and never the contents —
+  so the page re-reads what it is showing and sees exactly what you are allowed to
+  see, and somebody with access to part of a household learns nothing about the rest.
+
+- **The provider that signs you in now ships with the system.** `plugin-oidc` is the
+  fifth and last first-party plugin: discovery, PKCE and an ID token checked against
+  the provider's published keys, its issuer, its audience, its expiry and the one-time
+  value this instance minted. It works with Keycloak, Authentik, Authelia, Zitadel or
+  a hosted provider, with a client secret or as a public client using PKCE alone.
+  It is the one plugin with a JVM in it, which is why it reserves more memory than
+  the other four.
+
+- **You can sign in with an account you already have elsewhere.** An instance that
+  installs an identity provider offers it on the sign-in page: the provider says who
+  you are, and this instance decides whether that is an account here. **A matching
+  e-mail address is never enough** — an identity is linked deliberately, from your
+  own account settings and behind the second factor, so nobody walks into an account
+  by asserting its address. An instance that creates accounts (`open`) can create one
+  from a provider-confirmed address, and refuses when the address is taken or unconfirmed.
+  A second factor is still asked for: the provider proved who you are, not that you
+  hold the authenticator this instance knows about.
+
+- **Your photographs can live in your own Nextcloud.** `plugin-blobstore-nextcloud`
+  stores a tenant's media in a folder of a Nextcloud account over WebDAV, with an
+  app password rather than the account password — so revoking it revokes this and
+  nothing else. The person who owns the photographs can open the folder and see
+  them. As with S3, the installation can point at one instance and any tenant can
+  use its own instead; a file larger than 8 MiB is uploaded in chunks and assembled
+  by Nextcloud, and a file already there is not sent twice.
+
+- **Your photographs can live in your own S3 bucket.** `plugin-blobstore-s3` is
+  the third first-party plugin: MinIO, Garage, Backblaze or AWS, signed with
+  Signature Version 4. The person running the installation can point the whole
+  deployment at one bucket, and any tenant can override that with its own
+  endpoint, bucket and keys — the secret key sealed, never shown again and never
+  written to a log. Uploads larger than 8 MiB are streamed in parts, an upload
+  whose content does not match its address is refused, and a file already there
+  is not sent twice. *Plugin contract: the `BlobStore` requests carry the call
+  envelope. Additive.*
+
+- **Your photographs can live in your own storage.** A tenant that installs a storage
+  plugin has every new upload written there and nowhere else, while everything stored
+  before it stays readable exactly as it was — choosing a store is a routing decision,
+  not a migration, and nothing is copied or lost. Deleting a file clears it from both
+  places. The port was declared and never connected until now: a storage plugin could
+  be installed and granted, and every byte still went to the deployment's own store.
+
+- **Contributing needs a signed agreement, once.** A pull request from anybody
+  but the maintainer is blocked until its author has signed the Contributor
+  Licence Agreement — comment the sentence the bot names and it is recorded, on a
+  branch of this repository, where it stays readable however the tooling changes.
+  There is a version for an individual and one for contributing on behalf of an
+  employer; both grant rights of use rather than transfer copyright, and both say
+  plainly that no lawyer has read them.
+
+- **You can ask for a copy of everything.** A request returns straight away with
+  a job you can watch, and the finished archive is a ZIP of JSON Lines with a
+  manifest saying what is in it — the shape a tenant needs to move to another
+  instance — items, places, tags, the type definitions they are written
+  against, and the photographs themselves. It also takes what makes the
+  inventory yours rather than just its contents: who had access and in what
+  role, the roles you defined, the reminders you set up and the searches you
+  saved. Passwords, keys and this instance's own administration stay behind,
+  and the archive lists what it left out. Values in fields marked sensitive
+  travel too, as far as the person asking is allowed to read them — anything
+  held back is named in the archive rather than left looking empty.
+
+- **The system now checks its own bookkeeping every night.** Two tables are
+  kept in step with your data rather than being your data — the one that
+  makes filtering exact, and the one that makes “everything in this room”
+  fast — and until now nothing compared them with the real thing. A nightly
+  run does, reports how many disagreements it found, and **changes nothing**:
+  a repair that ran automatically would hide the fault that caused it. If
+  something is ever wrong, a rebuild puts it right from your items.
+
+- **E-mail works.** The second plugin sends your notifications, invitations
+  and password resets as mail, over an authenticated, encrypted submission —
+  and it **refuses a mail server that will not encrypt**, rather than
+  quietly sending your password in the clear and delivering anyway. The
+  account's password stays with the plugin's container and never reaches the
+  rest of the system; you write it into one file before the first start, and
+  until you do, the plugin says it is not configured instead of pretending
+  to work.
+
+- **A deployment can install a plugin, and the first one is here.** Until now
+  the system could call plugins and there was no way to put one in a
+  deployment: one entry in the deployment description now produces the
+  container, a network of its own that reaches the application and the
+  outbound proxy and nothing else, the list of hosts it is allowed to
+  contact, and the registration the application reads when it starts.
+  **`plugin-webhook`** is the first: it posts a notification to a URL you
+  choose, signed so the receiver can tell it came from your installation and
+  is not a replay of an older one. Mail still needs a plugin that does not
+  exist yet, and an installation without one says so rather than silently
+  sending nothing.
+
+- **A plugin can be configured, and it could not be before.** Whatever a plugin
+  offers to be told — which source it prefers, the key it signs with, your own
+  token for a service you have an account with — is now settable per tenant,
+  from the plugin's own page. A secret is stored sealed, never shown again and
+  never written to a log: the page says one is set and offers to replace it.
+  What the person running the installation configures — the mail server, the
+  storage keys — stays with the plugin's container and never reaches your
+  tenant at all. *Plugin contract: additive.*
+
+- **A plugin can ask for a document too.** A plugin that wants to hand you a PDF
+  no longer needs a PDF library of its own: it describes the document and the
+  core renders it with whichever renderer you installed. It is one method on one
+  port that is switched off until you turn it on, it reads nothing, and a plugin
+  you never granted it gets the same answer as one asking on an instance with no
+  renderer at all. *Plugin contract: additive.*
+
+- **The insurance report can be a document.** Install a renderer and the same
+  figures come back as a PDF — a page per room, the photograph beside each
+  thing, the figure and the day it was true. Without one you still get the
+  data and the table, and asking for the document says so rather than
+  returning an empty file.
+
+- **There is a report for your insurer.** Replacement value per room and in
+  total, with the day each figure was true, the photograph and the receipt —
+  as data and as a table you can paste into whatever they sent you. It counts
+  what it left out rather than quietly omitting it: a thing nobody has valued
+  is a line that would be argued about. Attachments can now be marked as a
+  receipt or a warranty proof, which is what lets the report attach the right
+  one instead of listing everything.
+
+- **Things can lose value as they age.** Say how long something of a given
+  kind is expected to last and the current value follows a straight line from
+  what it cost, recomputed nightly. Nothing is assumed: until you give a type
+  a lifespan, nothing is depreciated — and a value you typed yourself is never
+  overwritten, which is the whole reason each figure records where it came
+  from.
+
+- **Anything with a date on it can be reminded about.** Mark one of your own date
+  fields as an expiry — a licence, a passport, an inspection, a tin of paint — and
+  a reminder rule watches it the way it already watched warranties. The same mark
+  puts the date in the expiry overview, so it is one decision rather than two.
+
+- **You can bring an inventory in from Homebox or InvenTree.** Upload their CSV
+  export, pick the profile, and the things arrive with their places, their tags
+  and what they cost — the place path becomes a real tree rather than a label.
+  A dry run shows you the first rows as they would be written, and importing the
+  same file again updates what came from it rather than making a second copy.
+  Columns this inventory has no field for are listed rather than silently
+  dropped; a date that is not a date stops the whole import with the line named.
+
+- **An archive can be read back in.** Upload an export to another instance and the
+  inventory arrives — items, places, tags, photographs and the type definitions they
+  are written against, which is what makes them mean anything. It is all-or-nothing:
+  if anything fails, nothing is written and the job says what went wrong. A dry run
+  does the whole thing and throws it away, so you can see what would happen first.
+  People are not recreated — invite them again on the new instance — and the report
+  lists what it left behind rather than leaving you to find out.
+
+- **Asking for an export is its own right now.** It used to need only
+  permission to read the tenant, which meant somebody restricted to a single
+  room could still download a copy of everything. Administrators and owners
+  can ask for one; a membership limited to part of the location tree cannot,
+  whatever its role, because there is no archive of one room.
+
+- **Photographs nothing points at are cleaned up.** When the last item using an
+  uploaded file is deleted, the file itself is removed a week later — long enough
+  that moving a photograph between two items never loses it, and short enough
+  that deleted things stop taking up space. This never ran before, so uploads
+  stayed on disk for ever once detached.
+
+- **One list of everything that runs out.** Warranties, software licences and
+  best-before dates together, soonest first, including what has already lapsed.
+  A field in your own item types can join the list by being marked as an expiry,
+  so a date you invented shows up beside the ones that ship with the product.
+
+- **What is it all worth?** A report totals what you own by room, by kind of
+  thing or by tag. Each room shows what is in it and what is in it *including*
+  the boxes inside it, separately, because those are different questions. Purchase
+  price, current value and replacement value stay three separate columns, and
+  amounts in different currencies are never added together — you get one line per
+  currency and the report says that nothing was converted.
+
+- **Reminders.** Set a rule and be told before a warranty runs out, when
+  something is due for servicing, when something you lent is overdue, or when a
+  consumable has run down — a rule says what to watch, optionally which things
+  (a saved search narrows it), how many days early (or late, for an overdue
+  loan) and on which channel. A servicing interval is counted from the last time
+  the thing was actually serviced, not from a fixed calendar. It tells you
+  **once** per thing per date, again if the date moves, and only to people who
+  asked for that kind of message.
+
+- **You can record that something was sold or thrown away.** Note the price, the
+  date and who it went to, and the item moves out of your everyday lists without
+  disappearing — an inventory should still answer "what did we have, and what
+  became of it". Only a sale carries a price: something given away carries none,
+  which is not the same as a price of zero. It cannot be undone, and a thing you
+  have parted with can no longer be lent out.
+
+- **An item now says where it is in its life** — active, lent, trashed, sold or
+  disposed of — as one value rather than several flags that could disagree.
+
+- **You can record who borrowed something.** Lend a thing to a member of the
+  household or to anybody else by name, with the date it went out and the date it
+  is due back, and record the return when it comes. A thing is lent to one person
+  at a time, a lent thing shows as lent, and it cannot be put in the trash while
+  somebody else has it — the loan is the only record of who to ask.
+
+- **An item keeps a service history.** Record what was done to something, when,
+  what it cost and why — with the invoice attached. Entries are listed with the
+  most recent work first, by when the work was *done* rather than when it was
+  typed, and **no entry can be edited afterwards**: a correction is a second
+  entry, the way a service history behaves on paper.
+
+- **Every event carries the version of its own schema**, in the routing key, so
+  a consumer binds the version it understands and two can run side by side.
+  *Event schemas: breaking, pre-release — the keys changed from
+  `homeinv.inventory::item-created` to `…::item-created.v1`.*
+
+- **Every page says which build it is and where its source is.** A footer names
+  the version, the exact commit and a link to the source — the AGPL's offer is
+  about *this* instance, and two builds of the same version can differ. The same
+  answer is at `GET /api/v1/version`, without a session, because an offer only
+  signed-in people could take up would be owed only to them.
+
+- **Each release carries a CycloneDX SBOM**, generated from what the artefact
+  actually ships rather than from what the build files ask for.
+
+- **A password that is already known to attackers is refused.** Choosing one
+  now checks it against a list of the hundred thousand most breached passwords
+  that ships with the system — no service is called, because this system calls
+  nobody. Twelve characters are still the minimum, and there is still no rule
+  demanding a capital letter or a digit. An operator who wants a live breach
+  service can install a plugin for it; it is asked after the list, receives five
+  characters of a hash rather than a password, and cannot let anything through.
+  *Plugin contract: a fifteenth port, `PasswordBreachCheck`. Additive.*
+
+- **An operator is told when the malware scanner is missing.** It was already
+  impossible for an unscanned file to be served — uploads simply never become
+  retrievable — but the cause was invisible, and looked like uploads being slow.
+  The worker now says so at startup and reports it unhealthy while it lasts.
+
+- **A forgotten password can be reset.** Ask at the login page and a link
+  arrives that works once and for thirty minutes. Setting the new password ends
+  every session the account has open — so somebody who took the account over is
+  signed out by the real owner — and tells the address the account had before
+  the change, which is where you find out if it was not you. Asking about an
+  address that has no account looks exactly like asking about one that does.
+  *Needs a mail plugin with an instance-level grant; without one the message
+  waits and the delivery log says why.*
+
+- **An operator can permit a plugin to act for the instance, not only for a
+  tenant.** Security mail about an account — a password reset, a new second
+  factor, a remote sign-out — has to go out even when the account belongs to no
+  tenant, and until now every part of the path demanded one. The instance
+  operator now grants such a plugin under `/api/v1/instance/plugins`, separately
+  from any tenant's consent and reaching no tenant's data. *An operator
+  installing `plugin-smtp` grants twice: once per tenant, once for the instance.*
 
 - **The system can notify people, and say what became of each message.** Each
   person chooses what they want to hear about and where, and nothing goes to
@@ -571,7 +959,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 33 types in the shared
+- **The shared kernel is measured.** `platform` holds 40 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).
@@ -683,10 +1071,10 @@ commit".
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.
-- A requirements catalogue with 427 numbered, testable requirements across
+- A requirements catalogue with 429 numbered, testable requirements across
   functional, non-functional, security and privacy areas, assigned to four
   delivery stages.
-- 66 architecture decision records, each with its alternatives and consequences —
+- 86 architecture decision records, each with its alternatives and consequences —
   including the ones that shape everything else: a modular monolith rather than
   microservices, row-level security as a second line of defence, rootless as the
   only supported way to run it, and a plugin runtime that keeps third-party code

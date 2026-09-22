@@ -102,6 +102,51 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
     assertThatCode(() -> run(null)).doesNotThrowAnyException();
   }
 
+  @Test
+  @DisplayName("are registered from a list that carries the manifest itself")
+  void registersWhatIsInlined(@TempDir Path directory) throws Exception {
+    // What `deploy/generate.py` writes: one file for the deployment, with each
+    // manifest in it, rather than one file per plugin plus a path in each entry
+    // — a path is a thing that can be right in the list and wrong in the mount.
+    Path list =
+        list(
+            directory,
+            inlineEntry(
+                "de.greluc.homeinv.plugin.inline",
+                manifestOf("de.greluc.homeinv.plugin.inline", ">=1.0.0 <2.0.0")));
+
+    run(list);
+
+    assertThat(registry.installed(200))
+        .extracting(PluginRegistry.Registration::pluginId)
+        .contains("de.greluc.homeinv.plugin.inline");
+  }
+
+  @Test
+  @DisplayName("refuse an entry that carries both a path and a document, or neither")
+  void exactlyOneManifest(@TempDir Path directory) throws Exception {
+    // A reader that preferred one would silently ignore the other, and an
+    // operator who changed the file would see nothing change.
+    Path both =
+        list(
+            directory,
+            """
+                 - id: de.greluc.homeinv.plugin.both
+                   manifest: "/somewhere/manifest.yaml"
+                   manifestInline: "apiVersion: home-inv.plugin/v1"
+               """);
+    assertThatCode(() -> run(both)).doesNotThrowAnyException();
+    assertThat(registry.installed(200))
+        .extracting(PluginRegistry.Registration::pluginId)
+        .doesNotContain("de.greluc.homeinv.plugin.both");
+
+    Path neither = list(directory, "   - id: de.greluc.homeinv.plugin.neither\n");
+    assertThatCode(() -> run(neither)).doesNotThrowAnyException();
+    assertThat(registry.installed(200))
+        .extracting(PluginRegistry.Registration::pluginId)
+        .doesNotContain("de.greluc.homeinv.plugin.neither");
+  }
+
   // -------------------------------------------------------------------------
 
   /**
@@ -131,6 +176,29 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
                signed: true
            """
         .formatted(id, manifest.toString().replace("\\", "\\\\"), id);
+  }
+
+  /**
+   * An entry carrying the manifest itself, indented as a YAML block scalar.
+   *
+   * @param id the plugin
+   * @param manifest the document
+   * @return the entry
+   */
+  private static String inlineEntry(String id, String manifest) {
+    String indented =
+        manifest
+            .lines()
+            .map(line -> "       " + line)
+            .collect(java.util.stream.Collectors.joining("\n"));
+    return """
+             - id: %s
+               endpoint: "%s:9000"
+               signed: true
+               manifestInline: |
+           %s
+           """
+        .formatted(id, id, indented);
   }
 
   private static String manifestOf(String id, String contract) {

@@ -86,6 +86,13 @@ public class WebSecurityConfiguration {
                         })
                     .ignoringRequestMatchers(
                         "/api/v1/auth/login",
+                        // Starting a federated sign-in, for the same reason as the
+                        // login beside it: the caller has no session, so there is no
+                        // CSRF token to carry and nothing a forged one could reach.
+                        // It creates a ten-minute flow record and says where to send
+                        // a browser (REQ-AUTH-005). LINKING is NOT here: that one has
+                        // a session and changes an account.
+                        "/api/v1/auth/federated/begin",
                         "/api/v1/invitations/*/accept",
                         // Withdrawing an erasure is the same case again: the
                         // caller has no session because the pending deletion is
@@ -110,6 +117,20 @@ public class WebSecurityConfiguration {
                     .requestMatchers(
                         "/api/v1/auth/login", "/actuator/health/**", "/livez", "/readyz")
                     .permitAll()
+                    // Federated sign-in, the halves a stranger performs
+                    // (REQ-AUTH-005). The list says what this instance offers, `begin`
+                    // starts a flow and `callback` finishes one — and the caller has no
+                    // session at any of the three, because that is what the third one is
+                    // for. What stands in for one is the single-use handle the callback
+                    // has to present, checked against its stored hash (ADR-0029).
+                    // Exactly these paths: `/link` and `/links` administer an account
+                    // and need a session like everything else.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/federated")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/federated/begin")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/federated/callback")
+                    .permitAll()
                     // The second half of a login (REQ-AUTH-002). The caller has no
                     // session to be authenticated by yet — that is what this call
                     // establishes — and what it does have is the pending login the
@@ -132,6 +153,27 @@ public class WebSecurityConfiguration {
                     // (REQ-TEN-011). Only this path: asking for the erasure sits
                     // under /api/v1/tenants and needs the OWNER's permission.
                     .requestMatchers(HttpMethod.POST, "/api/v1/tenant-revocations/*")
+                    .permitAll()
+                    // Both halves of a password reset (REQ-SEC-018). Somebody who
+                    // cannot sign in is the only person who needs either, so
+                    // requiring a session would be circular. What stands in for
+                    // one is a throttle on its own counters and, for the second
+                    // half, the single-use token from the message checked against
+                    // its stored hash. Exactly these two paths.
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/auth/password-reset",
+                        "/api/v1/auth/password-reset/complete")
+                    .permitAll()
+                    // Which build this is and where its source is (REQ-CON-009),
+                    // and what it is built from (REQ-CON-013). The AGPL's source
+                    // offer and a third-party licence notice are both owed to
+                    // whoever USES the instance, and requiring an account to
+                    // discharge either would owe it only to the people who
+                    // already have one. Two exact paths rather than
+                    // `/api/v1/version/**`: a wildcard here would publish
+                    // whatever is added under that prefix later.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/version", "/api/v1/version/notices")
                     .permitAll()
                     // The generated OpenAPI document. `springdoc.api-docs.enabled`
                     // is false in every deployment, so this path answers 404

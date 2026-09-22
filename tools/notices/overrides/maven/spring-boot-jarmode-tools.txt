@@ -1,0 +1,12 @@
+spring-boot-jarmode-tools — recorded because Spring Boot's Gradle plugin puts
+this jar into the layered artifact without it ever being on the runtime
+classpath, so the SBOM of REQ-CON-010 does not list it and no licence
+identifier reaches the notice from there. The jar carries its own licence text,
+which is why only the identifier is recorded below.
+
+Why: in the boot jar, absent from the SBOM.
+Source: the jar's own META-INF/LICENSE.txt, and Spring Boot's published POM.
+Read: 2026-09-22
+
+SPDX: Apache-2.0
+---8<---

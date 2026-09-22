@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.SortOrder;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.platform.QueryFilter;
@@ -11,6 +12,7 @@ import de.greluc.homeinv.audit.api.RevisionLog;
 import de.greluc.homeinv.inventory.api.BulkItemOperations;
 import de.greluc.homeinv.inventory.api.ItemBundles;
 import de.greluc.homeinv.inventory.api.ItemRelations;
+import de.greluc.homeinv.inventory.api.MaintenanceLog;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -21,6 +23,7 @@ import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.search.api.SearchService;
 import de.greluc.homeinv.inventory.api.ItemKind;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -71,6 +74,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>The tenant never appears in a signature here. It comes from the session, through
  * {@code TenantContext}, and a path or header carrying it would be a value the caller chooses.
  */
+@Tag(name = "Items", description = "The things in the inventory, their lifecycle and everything hanging off one.")
 @RestController
 @RequestMapping("/api/v1/items")
 @RequiredArgsConstructor
@@ -85,6 +89,8 @@ public class ItemController {
   private final ItemService items;
   private final de.greluc.homeinv.search.api.SearchService search;
   private final ItemRelations relations;
+  private final MaintenanceLog maintenance;
+  private final de.greluc.homeinv.inventory.api.LoanLog loans;
   private final ItemBundles bundles;
   private final BulkItemOperations bulk;
 
@@ -139,7 +145,8 @@ public class ItemController {
                 request.attributes(),
                 request.notes(),
                 request.minimumStock(),
-                ValuationRequest.asValuation(request.valuation())),
+                ValuationRequest.asValuation(request.valuation()),
+                request.maintenanceIntervalDays()),
             IdempotencyKeys.from(http, request, json),
             user.userId());
 
@@ -205,14 +212,16 @@ public class ItemController {
    * @return the entry, with its version and key in their absent-value forms
    */
   private BulkItemOperations.Entry asEntry(BulkRequest request, BulkEntryRequest entry) {
+    Long version = entry.version();
+    String key = entry.idempotencyKey();
     return new BulkItemOperations.Entry(
         entry.itemId(),
-        entry.version() == null ? OptionalLong.empty() : OptionalLong.of(entry.version()),
-        entry.idempotencyKey() == null || entry.idempotencyKey().isBlank()
+        version == null ? OptionalLong.empty() : OptionalLong.of(version),
+        key == null || key.isBlank()
             ? Optional.empty()
             : Optional.of(
                 IdempotencyKeys.of(
-                    entry.idempotencyKey(),
+                    key,
                     // What the key is spent on: this operation, this target, this
                     // item. The same key sent later for a different change is then
                     // a conflict rather than a change nobody asked for twice.
@@ -326,7 +335,7 @@ public class ItemController {
    */
   public record BulkEntryRequest(
       @NotNull UUID itemId,
-      @PositiveOrZero Long version,
+      @Nullable @PositiveOrZero Long version,
       @Size(max = 255) String idempotencyKey) {}
 
   /**
@@ -361,7 +370,7 @@ public class ItemController {
    * @param detail what went wrong in prose, or {@code null} when nothing did
    */
   public record BulkEntryStatus(
-      UUID itemId, int status, String type, String title, String detail) {}
+      UUID itemId, int status, @Nullable String type, @Nullable String title, @Nullable String detail) {}
 
   /**
    * The tenant's items, filtered by a query (REQ-SRCH-001, 08 §8.2).
@@ -531,7 +540,8 @@ public class ItemController {
                 request.attributes(),
                 request.notes(),
                 request.minimumStock(),
-                ValuationRequest.asValuation(request.valuation())),
+                ValuationRequest.asValuation(request.valuation()),
+                request.maintenanceIntervalDays()),
             EntityTags.required(http),
             user.userId());
     return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
@@ -558,6 +568,45 @@ public class ItemController {
   }
 
   /**
+   * Records that this item was sold or otherwise parted with (REQ-LIFE-007).
+   *
+   * <p><b>Not a delete, and deliberately a different verb.</b> The item stays, stays readable and
+   * keeps its history; what changes is its state. "What did we have, and what became of it" is the
+   * question an inventory exists to answer, and `DELETE` would answer half of it.
+   *
+   * <p>Takes {@code ITEM_UPDATE} rather than {@code ITEM_DELETE} for the same reason: nothing is
+   * being removed. It is terminal, though, so it takes {@code If-Match} like any other write on a
+   * single resource (REQ-API-004).
+   *
+   * @param id the item
+   * @param request what became of it
+   * @param http the request, for the {@code If-Match} header
+   * @param user the authenticated caller
+   * @return the item in its new state
+   */
+  @PostMapping(path = "/{id}/disposal", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({
+    ProblemType.NOT_FOUND,
+    ProblemType.VALIDATION_FAILED,
+    ProblemType.ITEM_STATE,
+    ProblemType.PRECONDITION_REQUIRED,
+    ProblemType.PRECONDITION_FAILED
+  })
+  public ItemView disposeOfItem(
+      @PathVariable UUID id,
+      @Valid @RequestBody DisposalRequest request,
+      HttpServletRequest http,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return items.dispose(
+        id,
+        new ItemService.Disposal(
+            request.state(), request.price(), request.on(), request.recipient(), request.note()),
+        EntityTags.required(http),
+        user.userId());
+  }
+
+  /**
    * Every relation this item takes part in, from either end (REQ-CORE-006).
    *
    * @param id the item
@@ -573,6 +622,141 @@ public class ItemController {
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
     return relations.relationsOf(id, cursor, limit);
+  }
+
+  /**
+   * What has been done to this item (REQ-LIFE-003).
+   *
+   * <p>Most recent work first, ordered by when the work was done rather than by when it was
+   * recorded: somebody entering last year's invoice today has not just serviced the bicycle.
+   *
+   * @param id the item
+   * @param limit how many at most; capped at 200 by the service
+   * @return the entries
+   */
+  @GetMapping(path = "/{id}/maintenance", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public List<MaintenanceLog.MaintenanceEntryView> maintenanceOf(
+      @PathVariable UUID id,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return maintenance.entriesOf(id, limit);
+  }
+
+  /**
+   * Records a piece of work on this item (REQ-LIFE-003).
+   *
+   * <p>There is no endpoint that edits one. A maintenance log is a record of what happened and is
+   * worth something only if it cannot be tidied up afterwards; a mistake is corrected by recording
+   * the correction, and an entry logged against the wrong item is removed.
+   *
+   * @param id the item
+   * @param request what was done
+   * @param user the authenticated caller
+   * @return the recorded entry
+   */
+  @PostMapping(path = "/{id}/maintenance", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.CREATED)
+  public MaintenanceLog.MaintenanceEntryView recordMaintenance(
+      @PathVariable UUID id,
+      @Valid @RequestBody MaintenanceRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return maintenance.record(
+        id,
+        new MaintenanceLog.NewMaintenanceEntry(
+            request.performedOn(), request.kind(), request.cost(), request.note()),
+        user.userId());
+  }
+
+  /**
+   * Removes a maintenance entry that should not be there (REQ-LIFE-003).
+   *
+   * @param id the item, so the entry is addressed where it is read
+   * @param entryId the entry
+   * @param user the authenticated caller
+   */
+  @DeleteMapping(path = "/{id}/maintenance/{entryId}")
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail(ProblemType.NOT_FOUND)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeMaintenance(
+      @PathVariable UUID id,
+      @PathVariable UUID entryId,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    maintenance.remove(id, entryId, user.userId());
+  }
+
+  /**
+   * Who has had this item (REQ-LIFE-005).
+   *
+   * <p>Most recent handover first, open loan included. A client tells the open one by its absent
+   * {@code returnedOn} rather than by a flag: the row already says it, and a second answer to one
+   * question is the kind that goes wrong.
+   *
+   * @param id the item
+   * @param limit how many at most; capped at 200 by the service
+   * @return the loans
+   */
+  @GetMapping(path = "/{id}/loans", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public List<de.greluc.homeinv.inventory.api.LoanLog.LoanView> loansOf(
+      @PathVariable UUID id,
+      @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
+    return loans.loansOf(id, limit);
+  }
+
+  /**
+   * Hands this item to somebody (REQ-LIFE-005).
+   *
+   * @param id the item
+   * @param request to whom, since when, and back when
+   * @param user the authenticated caller
+   * @return the open loan
+   */
+  @PostMapping(path = "/{id}/loans", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED, ProblemType.ITEM_LENT})
+  @ResponseStatus(HttpStatus.CREATED)
+  public de.greluc.homeinv.inventory.api.LoanLog.LoanView lendItem(
+      @PathVariable UUID id,
+      @Valid @RequestBody LoanRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return loans.lend(
+        id,
+        new de.greluc.homeinv.inventory.api.LoanLog.NewLoan(
+            request.borrowerUserId(),
+            request.borrowerName(),
+            request.handedOutOn(),
+            request.dueOn(),
+            request.note()),
+        user.userId());
+  }
+
+  /**
+   * Records that this item came back (REQ-LIFE-005).
+   *
+   * <p>A {@code POST} to a sub-resource, the shape {@code /restore} uses, because a return is a
+   * transition and not an edit of a field somebody chose. Recording one twice leaves the first date
+   * standing — the first return is the true one.
+   *
+   * @param id the item
+   * @param loanId which loan is being closed
+   * @param request when it came back
+   * @param user the authenticated caller
+   * @return the closed loan
+   */
+  @PostMapping(path = "/{id}/loans/{loanId}/return", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.ITEM_UPDATE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public de.greluc.homeinv.inventory.api.LoanLog.LoanView returnItem(
+      @PathVariable UUID id,
+      @PathVariable UUID loanId,
+      @Valid @RequestBody ReturnRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    return loans.returnItem(id, loanId, request.returnedOn(), user.userId());
   }
 
   /**
@@ -711,7 +895,25 @@ public class ItemController {
   public record BundleMemberRequest(@jakarta.validation.constraints.NotNull UUID memberId) {}
 
   /**
+   * The body of a maintenance entry (REQ-LIFE-003).
+   *
+   * @param performedOn when the work was done
+   * @param kind what kind of work, in the tenant's own words
+   * @param cost what it cost, or absent. Absent rather than zero for work under warranty: the two
+   *     are different claims
+   * @param note anything else worth knowing, or absent
+   */
+  public record MaintenanceRequest(
+      @NotNull java.time.LocalDate performedOn,
+      @NotBlank @Size(max = 100) String kind,
+      Money cost,
+      @Size(max = 2000) String note) {}
+
+  /**
    * The body of a relation.
+   *
+   * <p>*Its Javadoc sat above `MaintenanceRequest` rather than above this record until 2026-09-16,
+   * so this one had none and that one had two.*
    *
    * @param targetId the item this one points at
    * @param type {@code ACCESSORY_OF}, {@code PART_OF}, {@code REPLACEMENT_FOR} or {@code RELATED}
@@ -719,6 +921,52 @@ public class ItemController {
   public record RelationRequest(
       @jakarta.validation.constraints.NotNull UUID targetId,
       @NotBlank @Size(max = 20) String type) {}
+
+  /**
+   * The body of a handover (REQ-LIFE-005).
+   *
+   * <p>Exactly one of the two borrower fields is given, which the service leaves to the database's
+   * {@code num_nonnulls(...) = 1} rather than restating: two places deciding one rule is how they
+   * come to disagree.
+   *
+   * @param borrowerUserId a member of this tenant, or absent
+   * @param borrowerName who has it, in the lender's own words, or absent. Most things are lent to
+   *     people with no account here
+   * @param handedOutOn when it went out
+   * @param dueOn when it is due back, or absent when nothing was agreed
+   * @param note anything else worth knowing, or absent
+   */
+  public record LoanRequest(
+      UUID borrowerUserId,
+      @Size(max = 200) String borrowerName,
+      @NotNull java.time.LocalDate handedOutOn,
+      java.time.LocalDate dueOn,
+      @Size(max = 2000) String note) {}
+
+  /**
+   * The body of a return (REQ-LIFE-005).
+   *
+   * @param returnedOn when it came back; never before the handover, which the database checks
+   */
+  public record ReturnRequest(@NotNull java.time.LocalDate returnedOn) {}
+
+  /**
+   * The body of a disposal (REQ-LIFE-007).
+   *
+   * @param state {@code SOLD} or {@code DISPOSED} — the two ways an item leaves. Any other value is
+   *     refused rather than treated as a disposal
+   * @param price what it fetched, or absent. Only a sale has one; absent rather than zero for
+   *     something given away, because the two are different claims
+   * @param on when it went
+   * @param recipient who to, in the seller's own words, or absent
+   * @param note anything else worth knowing, or absent
+   */
+  public record DisposalRequest(
+      @NotNull de.greluc.homeinv.inventory.api.ItemState state,
+      Money price,
+      @NotNull java.time.LocalDate on,
+      @Size(max = 200) String recipient,
+      @Size(max = 2000) String note) {}
 
   /**
    * One page of the tenant's trashed items (REQ-CORE-009).
@@ -857,9 +1105,13 @@ public class ItemController {
    *     schema, and an offending value is a {@code 422} naming its path (REQ-CORE-005)
    * @param notes a paragraph in limited Markdown; HTML is removed before it is stored
    * @param minimumStock the level below which this consumable needs restocking, or omitted
+   * @param valuation what it cost, what covers it and what replacing it would cost, or omitted
+   * @param maintenanceIntervalDays how often it needs servicing, in days, or omitted when
+   *     nothing should remind about it (REQ-LIFE-004). Days and not months, because "every 3
+   *     months from 31 January" has no answer that is not a surprise to somebody
    */
   public record CreateItemRequest(
-      UUID id,
+      @Nullable UUID id,
       UUID itemTypeId,
       @NotBlank @Size(max = 500) String name,
       @Size(max = 20_000) String description,
@@ -870,7 +1122,8 @@ public class ItemController {
       @Size(max = 65_536) String attributes,
       @Size(max = 20_000) String notes,
       @PositiveOrZero BigDecimal minimumStock,
-      @Valid ValuationRequest valuation) {}
+      @Valid ValuationRequest valuation,
+      @jakarta.validation.constraints.Min(1) @Max(3650) Integer maintenanceIntervalDays) {}
 
   /**
    * The body of an update. {@code kind} is absent: a physical item does not become a digital one.
@@ -884,6 +1137,10 @@ public class ItemController {
    *     was written against rather than against whatever the type says today
    * @param notes the new notes; HTML is removed before they are stored
    * @param minimumStock the new restocking level, or omitted to stop tracking one
+   * @param valuation what it cost, what covers it and what replacing it would cost, or omitted
+   * @param maintenanceIntervalDays how often it needs servicing, in days, or omitted when
+   *     nothing should remind about it (REQ-LIFE-004). Days and not months, because "every 3
+   *     months from 31 January" has no answer that is not a surprise to somebody
    */
   public record UpdateItemRequest(
       @NotBlank @Size(max = 500) String name,
@@ -894,7 +1151,8 @@ public class ItemController {
       @Size(max = 65_536) String attributes,
       @Size(max = 20_000) String notes,
       @PositiveOrZero BigDecimal minimumStock,
-      @Valid ValuationRequest valuation) {}
+      @Valid ValuationRequest valuation,
+      @jakarta.validation.constraints.Min(1) @Max(3650) Integer maintenanceIntervalDays) {}
 
   /**
    * What an item cost, what covers it and what replacing it would cost (REQ-LIFE-001/002/014).
@@ -950,7 +1208,12 @@ public class ItemController {
           request.replacementAsOf(),
           request.replacementSource(),
           request.currentValue(),
-          request.currentValueAsOf());
+          request.currentValueAsOf(),
+          // Never taken from the request: a caller saying "a plugin worked this
+          // out" about a number they typed would put the figure beyond the reach
+          // of the refresh run that is supposed to keep it current. What arrives
+          // through the API is MANUAL, and the entity says so.
+          null);
     }
   }
 }

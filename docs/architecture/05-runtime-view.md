@@ -67,26 +67,29 @@ sequenceDiagram
     participant C as Client
     participant R as rest
     participant M as media
+    participant BS as blobstore<br/>(staging)
     participant PB as plugin-blobstore<br/>(Nextcloud)
     participant B as Nextcloud
     participant MQ as RabbitMQ
     participant W as worker
     participant IP as ImageProcessor
 
-    C->>R: POST /api/v1/media/uploads (size, SHA-256, type)
-    R->>M: beginUpload()
-    M->>M: quota, MIME pre-check, duplicate by hash<br/>WITHIN THIS TENANT?
-    alt This tenant already holds a scanned blob with this hash
-        M-->>C: 200 + existing mediaId (no upload needed)
-    else new
-        M-->>C: 201 + upload URL (tus, resumable)
-        C->>R: PATCH upload URL (bytes, in chunks)
-        R->>M: appendChunk()
-        M->>M: check magic bytes, size limit
-        M->>PB: PUT sha256/<tenantId>/<hash>   [gRPC, mTLS]
-        PB->>B: WebDAV via egress-proxy
-        M->>MQ: MediaUploaded (state PENDING_SCAN)
+    C->>R: POST /api/v1/media/uploads (Upload-Length, target)
+    R->>M: begin()
+    M->>M: size limit, BEFORE a byte arrives
+    M-->>C: 201 + upload URL (tus, resumable)
+    loop until every byte has arrived
+        C->>R: PATCH upload URL (Upload-Offset, bytes)
+        R->>M: append()
+        M->>BS: AppendStaged staged/<tenantId>/<uploadId>  [gRPC, mTLS]
     end
+    Note over C,BS: A dropped connection ends here.<br/>HEAD answers the offset the STORE reports,<br/>and the client continues from it.
+    M->>BS: GetStaged — read it back to look at it
+    M->>M: magic bytes, EXIF, transcode, hash<br/>duplicate by hash WITHIN THIS TENANT?
+    M->>PB: PUT sha256/<tenantId>/<hash>   [gRPC, mTLS]
+    PB->>B: WebDAV via egress-proxy
+    M->>BS: DeleteStaged
+    M->>MQ: MediaUploaded (state PENDING_SCAN)
 
     MQ->>W: MediaUploaded
     W->>IP: malware scan → CLEAN, INFECTED or no verdict
@@ -103,10 +106,21 @@ until it exists the only bytes on hand are the ones that must not be stored
 ([ADR-0054](../adr/0054-the-scan-is-asynchronous.md)), and `thumb` and `preview`
 are too ([ADR-0051](../adr/0051-broker-in-stage-0.md)).*
 
-**Demonstrates:** content addressing makes repeated uploads (offline catch-up,
-network drop) free and idempotent — **within the tenant**
-([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)). The duplicate check in
-the first branch consults the tenant's own namespace only; a hash known from
+*This diagram showed the client declaring the file's **SHA-256** at creation and the
+server answering `200 + existing mediaId` when the tenant already held it, so that a
+duplicate needed no upload at all. It was written before anything implemented it, and
+what was built on 2026-09-22 does not do that: a client does not know the digest of
+what it is about to send, and — more to the point — the digest of what it sends is not
+the digest of what is stored, because every image is re-encoded on the way in
+([ADR-0052](../adr/0052-one-stored-image-format.md)). Deduplication is therefore **after**
+the pipeline rather than before it, where it still costs the tenant no second copy
+([ADR-0084](../adr/0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md)).*
+
+**Demonstrates:** an interrupted upload is continued and not restarted (`REQ-MED-008`),
+and the offset a client resumes from comes from **the store that holds the bytes** rather
+than from either side's belief about them. Content addressing then makes a repeated
+upload cost no second copy — **within the tenant**
+([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)); a hash known from
 elsewhere yields nothing, and never skips the mandatory scan. Image processing
 sits outside the request path. Nextcloud is reached by a plugin, not by the core
 ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) — which is why the storage

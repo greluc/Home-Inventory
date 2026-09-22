@@ -31,13 +31,14 @@ forbids database and repository access from the access blocks.
 | Specification first | `api/openapi.yaml` is the source. Server stubs, the TypeScript client, the Kotlin client and the documentation are **generated** from it. Hand-written clients do not exist. |
 | Resources, not actions | `/items`, `/locations`, `/item-types`. Where an operation is not a resource, it becomes one: `/print-jobs`, `/stocktakes`, `/import-jobs`, `/scans`. |
 | Predictability | The same pagination, the same filter syntax, the same error format, the same sort parameters **everywhere**. |
+| Clients name themselves | Every client sends `X-Home-Inv-Client: <product>/<version>` — `web/1.4.2`, `android/2.0.0`. A **header and not `User-Agent`**, because a browser sets that one itself and a page cannot override it on `fetch`, so [ADR-0011](../adr/0011-api-versioning.md)'s arrangement could not be honoured by the main client (found 2026-09-20). The server tags its usage metric with the **product alone**, so a release does not become its own time series, and an unrecognised product is `other` — the header is chosen by the caller, and a free tag would let any request invent a series. Omitting it is not an error: a script gets counted as `other` (`REQ-API-009`) |
 | No surprises in the status code | `200/201/202/204` · `400` syntax · `401` not authenticated · `403` authenticated but not permitted · `404` not present **or not visible** · `405` method not allowed · `406` not acceptable · `409` conflict · `412` precondition failed · **`413` payload too large** · `415` unsupported content type · `422` domain-invalid · `428` precondition required · `429` rate limit · **`500` unexpected** · `503` degraded. *`413` and `428` were missing from this list while [`problem-types.yaml`](../reference/problem-types.yaml) needed both — `428` from the ETag rule below, and `413` from the limits in the security table, which is why that condition sat in the registry's `pending` list with no status code (O24). `500`, `405`, `406` and `415` were missing too, and their absence was not cosmetic: every one of them is reachable today — `POST /api/v1/items/{id}` is a 405 — and without a token each left as Spring Boot's own error JSON rather than as problem details, on the paths a client can least anticipate (corrected 2026-09-12).*
 
 ### Resource overview
 
 ```
 /api/v1
-├── /auth        /login /logout /refresh /password-reset
+├── /auth        /login /logout /refresh · /password-reset {,/complete}
 │             /mfa  (answer a login) · /mfa/enrolment · /mfa/totp {,/confirmation,/removal}
 │             /mfa/recovery-codes · /mfa/step-up  (prove it again)
 │             /mfa/passkeys {,/challenge,/confirmation,{id}/removal}
@@ -75,7 +76,13 @@ forbids database and repository access from the access blocks.
 ├── /plugins     {id} {id}/capabilities/{capability}   (PUT to consent, DELETE to withdraw)
 │                {id}/health {id}/enable {id}/disable
 ├── /audit       log queries
-└── /webhooks    delivery targets and delivery attempts
+├── /events      the live stream an open view holds (SSE, REQ-API-011)
+├── /webhooks    {id} {id}/deliveries  /event-types
+└── /version     which build this is, its commit and its source (REQ-CON-009)
+                 /notices   the third-party licence notices this image carries
+                            (REQ-CON-013) — both without a session, because an
+                            obligation owed to whoever uses the instance cannot
+                            be owed only to whoever has an account on it
 ```
 
 Non-CRUD operations use the form `POST /resource/{id}/action` — `{id}/archive`,
@@ -96,6 +103,26 @@ in a path.
 > of that building block. Clients are registered by the operator
 > (`/auth/clients`); there is no dynamic client registration, because every client
 > here is one the operator installed.
+
+### The two surfaces that push rather than answer
+
+Everything above is asked for. Two things are **sent**, and they carry
+deliberately different amounts, because the party at the other end is a different
+party ([ADR-0078](../adr/0078-a-webhook-carries-an-id-a-live-nudge-does-not.md)).
+
+| | `GET /api/v1/events` (`REQ-API-011`) | `/webhooks` (`REQ-API-010`) |
+|---|---|---|
+| Who receives it | a **member** holding an open view, whose role may be confined to part of the location tree | a URL a **tenant administrator** entered, with the secret it is signed with |
+| What travels | the **kind** and a moment — `item`, `location`, `tag`, `type`, `media` — and `heartbeat` every 30 s | the **event type**, the moment and the **subject's id**: `item.moved`, and which item |
+| Why not more | the id would tell a scoped member that a thing they may not see just changed | an integration that must re-read the whole inventory to find one change is not an integration |
+| Transport | `text/event-stream`, fanned out through Valkey so it works with more than one `api` replica | a signed `POST` made by `plugin-webhook` from its own segment; the core opens no connection ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) |
+| If it is lost | one late refresh | nothing: the delivery row is written in the transaction that made the change, retried with a widening gap and then dead-lettered, in the same log a person's notifications are in (`REQ-NOTI-005`) |
+
+The event types are the list in
+[`event-types.yaml`](../reference/event-types.yaml), and the noun before the dot
+is what the live stream sends: `item.moved` and `item.type-changed` both reach an
+open view as `item`. `GET /api/v1/webhooks/event-types` returns the list this
+deployment raises, so a form offers a subscription that works.
 
 ### Querying, pagination, sorting
 
@@ -317,21 +344,28 @@ resource exists, and never contain internal paths, SQL or stack traces.
 |---|---|
 | Authentication | `Authorization: Bearer <JWT>` (short-lived, 10 min) for apps and third-party systems. For the web a `__Host-` session cookie with `Secure`, `HttpOnly`, **`SameSite=Strict`** plus a CSRF token for state-changing calls — and, scoped to `/c` only, a second `__Secure-` cookie with `SameSite=Lax` that exists for one purpose: so a QR scan from a foreign camera app recognises the signed-in user instead of bouncing them to the login page. It grants no authority of its own ([ADR-0029](../adr/0029-session-cookie-and-oidc-state.md)). |
 | CORS | The configured frontend origin only; never `*`, never a reflection of the request origin. |
-| Rate limiting | Per user, per tenant and per IP; the response is `429` with `Retry-After` and `RateLimit-*` headers. Login attempts and code resolution have their own, stricter limits. |
+| Rate limiting | Per user, per tenant and per IP; the response is `429` with `Retry-After` and the `RateLimit` / `RateLimit-Policy` headers of the IETF draft, which **every** response carries and not only a refused one. Login attempts and code resolution have their own, stricter limits — authentication is built, code resolution is stage 2 and will use the same bucket. Fixed one-minute windows, counted in Valkey and in this instance when Valkey is gone (`REQ-SEC-064`, `RateLimitIT`) |
 | Payload limits | JSON max. 1 MB, bulk operations max. 500 entries, uploads through the dedicated tus path with its own limit. The JSON limit is enforced by `JsonBodyLimitFilter` **before the body is read** when a `Content-Length` is declared, and while it is read when the request is chunked — a header alone would put the limit one header away from not applying. |
 | Timeouts | A server-side ceiling of 30 s per request; long operations are `202` plus a job resource, never a long-held connection. It is enforced where a request can actually block rather than by a watchdog: `statement_timeout = 30s` on the database roles (set in [`deploy/postgres/initdb/00-roles.sql`](../../deploy/postgres/initdb/00-roles.sql), so a client cannot forget it), `lock_timeout` lower again because waiting for a lock is waiting for another transaction, and Tomcat's `connection-timeout` and `keep-alive-timeout` for a client that sends or reads slowly. A servlet container cannot interrupt a thread that is computing; what it can do is refuse to wait for a query, a lock or a socket, which is every way a request in this application waits. |
 
 ## 8.3 Versioning
 
 Four contracts are versioned **separately**, because they evolve at different
-speeds:
+speeds. `REQ-CON-004` names its four as *the application, the REST API, the
+plugin contract and the event schemas*; this table lists the four **contracts**
+and so has GraphQL in the application's place — the application's own version is
+the artefact's, and GraphQL deliberately has none, which its row says. *The
+spelling in the last row was `de.greluc.homeinv.item.created.v1` until
+2026-09-16 and no event had ever been called that: the annotations use Modulith's
+`target::key` form, and they carried no version at all. The keys gained one and
+this row was corrected to what the code says.*
 
 | Contract | Scheme | Breaking-change check |
 |---|---|---|
 | REST API | `/api/v1`, SemVer inside the OpenAPI document | `oasdiff` in CI, every change against the last release |
 | GraphQL | No version, fields get deprecated | Schema comparison in CI |
 | Plugin / gRPC contract | `home_inv.plugin.v1` | `buf breaking` in CI |
-| Event schemas | `de.greluc.homeinv.item.created.v1` | Schema comparison in CI |
+| Event schemas | `homeinv.inventory::item-created.v1` — Spring Modulith's `target::key` form, which is what the broker binds on, with the version in the **key** so a consumer can route on it and two versions can run side by side | `EventSchemaVersionTest` holds the shape; a schema comparison in CI holds the content |
 
 ### What counts as breaking
 
@@ -364,7 +398,7 @@ headers above already carry the same information in parseable form
 |---|---|
 | Minimum period between deprecation and shutdown | **12 months** for the main API, 6 months for the plugin contract |
 | Parallel operation | `v1` and `v2` run side by side; `v2` is an adapter onto the same application layer, not a second implementation |
-| Visibility | Usage of deprecated endpoints is collected as a metric per tenant and client — shutdown happens only when usage is zero or the period has elapsed |
+| Visibility | Usage is collected as `homeinv.api.requests`, tagged by endpoint template, version, client product and outcome — shutdown happens only when usage is zero or the period has elapsed (`REQ-API-009`, `ApiUsageMetricIT`). *This row said “per tenant and client”; the metric carries **no tenant**, deliberately — a per-tenant series times every endpoint is the cardinality that takes Prometheus down, and the per-tenant count that does exist is `REQ-TEN-009`'s quota in Valkey, which is a different thing for a different purpose.* |
 | Announcement | Changelog, the three headers above, a notice in the UI for tenant administrators. **Not** a `Warning` header — this row still named one three lines under the paragraph that drops it ([ADR-0039](../adr/0039-degraded-response-signalling.md), `REQ-API-012`) |
 
 ## 8.4 GraphQL
@@ -374,39 +408,60 @@ writing surfaces mean duplicated authorization, validation and idempotency logic
 — the main source of holes that get closed on one surface and forgotten on the
 other.
 
+> **Built on 2026-09-21.** The sketch this section carried until then is replaced by
+> what the schema actually declares —
+> [`app/src/main/resources/graphql/schema.graphqls`](../../app/src/main/resources/graphql/schema.graphqls),
+> which ships with the application and is the contract. Three differences from the
+> sketch are deliberate and are argued in
+> [ADR-0079](../adr/0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md):
+> `filter` is the **string grammar of §8.2** rather than an `ItemFilter` input object,
+> `ItemType` has no `name` because a type's display name is multilingual tenant data,
+> and `stats` takes the same `q`/`filter` a search takes.
+
 ```graphql
 type Query {
-  item(id: ID!): Item
-  items(filter: ItemFilter, sort: [ItemSort!], first: Int, after: String): ItemConnection!
-  location(id: ID!): Location
-  locationTree(rootId: ID, depth: Int = 3): [Location!]!
-  itemTypes: [ItemType!]!
-  savedSearch(id: ID!): SavedSearchResult
-  stats(groupBy: StatsDimension!, filter: ItemFilter): [StatsBucket!]!
+  item(id: ID!): Item                                   @cost(weight: 5)
+  items(q: String, language: String = "de", filter: [String!],
+        sort: String, first: Int = 50, after: String):
+        ItemConnection!                                 @cost(weight: 10)
+  location(id: ID!): Location                           @cost(weight: 5)
+  locationTree(rootId: ID, depth: Int = 3): [Location!]! @cost(weight: 20)
+  itemTypes(first: Int = 50, after: String): ItemTypeConnection! @cost(weight: 5)
+  savedSearch(id: ID!, first: Int = 50, after: String): SavedSearchResult @cost(weight: 20)
+  stats(groupBy: StatsDimension!, q: String, language: String = "de",
+        filter: [String!]): [StatsBucket!]!             @cost(weight: 20)
 }
 
 type Item {
   id: ID!
   name: String!
-  type: ItemType!
-  location: Location
-  tags: [Tag!]!
+  kind: String!                   # PHYSICAL or DIGITAL
+  type: ItemType                  @cost(weight: 5)
+  location: Location              @cost(weight: 5)
+  quantity: String                # a decimal as text: GraphQL Float is a double (ADR-0025)
   attributes: JSON!               # filtered by the role's field visibility
-  photos(first: Int = 3): [Media!]!
-  relations: [ItemRelation!]!
-  history(first: Int = 20): RevisionConnection!
+  tags: [Tag!]!                   @cost(weight: 5)
+  photos(first: Int = 3): [Media!]!            @cost(weight: 5)
+  relations(first: Int = 20): [ItemRelation!]! @cost(weight: 5)
+  history(first: Int = 20): RevisionConnection! @cost(weight: 10)
 }
 ```
 
-| Safeguard | Value |
-|---|---|
-| Depth limit | max. 10 — which is **below** the default maximum location depth of 12 ([04 `locations`](04-building-blocks.md)). A deep tree therefore cannot be walked to its leaves in one query; `locationTree(rootId:, depth:)` is the intended path and pages by subtree. The mismatch is deliberate: raising the limit to 12 would raise the cost ceiling of every other query too |
-| Cost analysis | A budget per query; field costs declared; exceeding it → rejection **before** execution |
-| Persisted queries | In production only registered queries; free-form queries only for authenticated administrators and in development |
-| Introspection | Disabled in production (the schema ships with the documentation) |
-| N+1 | `DataLoader` for every relation, guarded by a test |
-| Field visibility | The same rule as in REST — `sensitive` fields are removed per role, not masked |
-| Alias abuse | A limit on identical aliases per query |
+**There is no `Mutation` type and there will not be one** ([ADR-0010](../adr/0010-api-surfaces.md)).
+Read-only here is structural rather than a convention: `GraphQlSchemaTest` fails if a
+`Mutation` or `Subscription` type appears, so "no mutations exist" is a property of the
+file and not of somebody's restraint.
+
+| Safeguard | Value | Where it is |
+|---|---|---|
+| Depth limit | max. 10 — **below** the maximum location depth of 12 ([04 `locations`](04-building-blocks.md)), so a deep tree cannot be walked to its leaves in one query; `locationTree(rootId:, depth:)` is the intended path. *Nothing in the schema recurses today, so ten is not reachable by a valid query — the limit is for the schema as it grows, and `GraphQlGuardIT` lowers it to three to prove the mechanism* | `MaxQueryDepthInstrumentation` |
+| Cost analysis | A budget of 5 000 per query. **The weight is declared in the SDL** with `@cost(weight:)`, beside the field, and a list multiplies its children by the `first` it was asked for. Summed and refused **before** execution | `MaxQueryComplexityInstrumentation` with a calculator that reads the directive |
+| Persisted queries | In production only registered queries. The register is **generated from the client by the build** — `tools/persisted_queries.py` hashes every `.graphql` document under `web/src` — so there is no registration surface at run time. Free-form queries are for administrators, configurable to `NEVER` or, in development, `ANYONE` | `QueryGuard`, `--check` in CI |
+| Introspection | Refused for anybody who may not write a query by hand, **per request** rather than by hiding the fields: field visibility is schema-wide and this has to answer differently per caller. The schema ships with the documentation | `QueryGuard` |
+| N+1 | `Item.type` and `Item.location` resolve for a whole page at once — two calls and a de-duplicated read rather than two per item — and `GraphQlBatchingTest` **counts the calls** rather than trusting the annotation. `tags`, `photos`, `relations` and `history` are **not** batched: each carries a per-target visibility check in the block that owns it, and a batch read that skipped it would move a visibility decision into the adapter. They are bounded by the cost budget, and a batch read that keeps the check is the improvement to make (ADR-0079) | `@BatchMapping` |
+| Field visibility | The same rule as in REST — a `sensitive` field is **removed** per role, not masked — because the attributes come through the same `AttributeRedaction` the REST surface uses | `inventory` |
+| Alias abuse | No field name may appear more than 20 times in one document. Counted on the **name** and not the alias: aliasing is what makes the repetition possible and renaming is what hides it | `QueryGuard` |
+| A missing permission | Costs the **field**, not the query: `null` for it and an entry in `errors`, with the rest answered. Every resolver declares its permission and `ArchitectureRulesTest` refuses one that does not (ADR-0079) | `GraphQlPermissions` |
 
 ## 8.5 gRPC — plugins and internal services
 
@@ -486,6 +541,7 @@ send the fragment to the server, so it leaks nothing.
 | Examples in the specification are valid | Schema validation of the examples | yes |
 | GraphQL schema unbroken | Schema comparison | yes |
 | Protobuf unbroken | `buf breaking` | yes |
-| Generated clients compile | TS `tsc`, Kotlin build | yes |
+| Every property says whether it is present and whether it may be null | `required` from the record's components, `type: [x, "null"]` from `@Nullable` on them ([ADR-0081](../adr/0081-the-contract-says-which-values-may-be-null.md)) | yes — the generated clients carry both, and a client that compiled against one of the two would be wrong about the other |
+| Generated clients compile | TS `tsc` over `web/src/generated/api.d.ts`, `./gradlew :api-client-kotlin:build` | yes — and both are **committed and drift-checked**, `npm run client:check` and `tools/kotlin_client.py --check` ([ADR-0080](../adr/0080-a-generated-client-is-committed-and-the-document-must-earn-it.md)) |
 | Event schemas unbroken | Schema comparison | yes |
 | Every endpoint has an authorization test | A dedicated rule: an endpoint declaring none of `@RequiresPermission`, `@RequiresEntitlement` ([ADR-0057](../adr/0057-the-instance-operator.md)) and an explicit `@PublicEndpoint` marker fails the build, in `ArchitectureRulesTest` and again in `PermissionInterceptor` at run time | yes |

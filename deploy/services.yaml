@@ -250,6 +250,22 @@ services:
                                                  # per-tenant metrics of 13 §13.3 without
                                                  # holding a single capability
                                                  # (ADR-0037, REQ-SEC-099).
+      - { container: 8091, host: null }          # THE HOST CHANNEL (ADR-0071, REQ-PLG-016):
+                                                 # the one listener plugins CALL, rather than
+                                                 # are called on. Deliberately NOT bound to a
+                                                 # segment, because there is no single segment
+                                                 # to bind it to — `api` sits on every plugin
+                                                 # segment and each one is its own network.
+                                                 # What gates it is mTLS against the
+                                                 # fingerprint pinned at registration: a
+                                                 # container that is not a registered plugin
+                                                 # gets a refused handshake, not a refused
+                                                 # call. Reachability is never authorisation
+                                                 # (ADR-0044), and this is the one port where
+                                                 # that sentence has to do the work on its own.
+                                                 # Off unless HOMEINV_PLUGIN_HOST_PORT names
+                                                 # it; `minimal` runs no plugins and opens no
+                                                 # socket here.
     env:
       SPRING_PROFILES_ACTIVE: "api"             # the ROLE, which is fixed by which
                                                  # service this is
@@ -269,10 +285,42 @@ services:
       # instead of silently reaching for localhost (REQ-NFR-046).
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
+      # Where the generated plugin list is. Written by `setup.sh` as the path
+      # below in `standard` and `ha`, and EMPTY in `minimal` — which is what
+      # "minimal runs no plugin" means, and a complete deployment rather than a
+      # degraded one (REQ-PLG-013).
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
+      HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
+                                                 # Where the operator's OTLP collector listens, and
+                                                 # the whole of the tracing configuration
+                                                 # (REQ-NFR-044, 13 §13.4). EMPTY is the default and
+                                                 # means no tracing at all -- no tracer, no spans, no
+                                                 # sampler -- which is the requirement's "inactive
+                                                 # when unconfigured". The empty string cannot be
+                                                 # passed as "absent" by either runtime, so
+                                                 # `TracingEnvironment` turns it into one.
+                                                 #
+                                                 # The collector is INSIDE the deployment: this
+                                                 # container has no outbound route (ADR-0026) and
+                                                 # this does not give it one. The operator attaches
+                                                 # their collector to `internal`; where it forwards
+                                                 # to afterwards is theirs.
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "api-internal"               # the alias below, which resolves to
                                                               # this container's address on
                                                               # `internal` and to nothing else
+      HOMEINV_PLUGIN_HOST_PORT: "${HOMEINV_PLUGIN_HOST_PORT:-0}"
+                                                              # the host channel above. 0 is off,
+                                                              # and off is what a deployment with
+                                                              # no plugin that asks the core for
+                                                              # anything stays (ADR-0071).
+                                                              # `api` ONLY: `worker` runs no
+                                                              # second copy, because every plugin
+                                                              # segment has `api` on it, so one
+                                                              # listener is reachable from all of
+                                                              # them — and one place where the
+                                                              # direction reverses is easier to
+                                                              # keep narrow than two
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
       # The other two REQUIRED non-secret variables of 06 §6.11. They were listed
       # as required there and declared nowhere here, so the generated units would
@@ -324,6 +372,15 @@ services:
     # the matrix authenticated PostgreSQL and nothing else, so Valkey, RabbitMQ and
     # OpenSearch were reachable-and-open to anything on `internal`, and RabbitMQ could
     # not have worked at all — its `guest` account is restricted to loopback.
+    files:
+      - target: /run/secrets/plugins.yaml
+        generatedFrom: plugins
+        notes: >
+          WHAT THE OPERATOR INSTALLED, generated from the `role: plugin` services
+          in this file (REQ-PLG-013). Each entry carries its manifest inline, so
+          this is one file rather than one per plugin plus a path in each entry —
+          a path is a thing that can be right in the list and wrong in the mount.
+          The core reads it at start-up, fetches nothing and installs nothing.
     secrets:
       - db-password
       - data-encryption-master-key
@@ -370,6 +427,26 @@ services:
                                                  # cannot.
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
+      # Where the generated plugin list is. Written by `setup.sh` as the path
+      # below in `standard` and `ha`, and EMPTY in `minimal` — which is what
+      # "minimal runs no plugin" means, and a complete deployment rather than a
+      # degraded one (REQ-PLG-013).
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
+      HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
+                                                 # Where the operator's OTLP collector listens, and
+                                                 # the whole of the tracing configuration
+                                                 # (REQ-NFR-044, 13 §13.4). EMPTY is the default and
+                                                 # means no tracing at all -- no tracer, no spans, no
+                                                 # sampler -- which is the requirement's "inactive
+                                                 # when unconfigured". The empty string cannot be
+                                                 # passed as "absent" by either runtime, so
+                                                 # `TracingEnvironment` turns it into one.
+                                                 #
+                                                 # The collector is INSIDE the deployment: this
+                                                 # container has no outbound route (ADR-0026) and
+                                                 # this does not give it one. The operator attaches
+                                                 # their collector to `internal`; where it forwards
+                                                 # to afterwards is theirs.
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "worker-internal"            # as api, one segment only
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
@@ -404,6 +481,15 @@ services:
                                                              # service and every plugin, so
                                                              # trusting it alone would let any of
                                                              # them answer as the index (ADR-0044)
+    files:
+      - target: /run/secrets/plugins.yaml
+        generatedFrom: plugins
+        notes: >
+          WHAT THE OPERATOR INSTALLED, generated from the `role: plugin` services
+          in this file (REQ-PLG-013). Each entry carries its manifest inline, so
+          this is one file rather than one per plugin plus a path in each entry —
+          a path is a thing that can be right in the list and wrong in the mount.
+          The core reads it at start-up, fetches nothing and installs nothing.
     secrets:
       - db-password
       - data-encryption-master-key
@@ -861,6 +947,292 @@ services:
       weakness: the built-in `guest` account is restricted to loopback, so api and worker
       could not have connected at all. The generated stack did not start.
 
+  # ---------------------------------------------------------------------------
+  # PLUGINS
+  # ---------------------------------------------------------------------------
+  # A plugin is a container the OPERATOR declares, exactly like every other
+  # service here (REQ-PLG-013). There is no installation from inside the running
+  # system, so this block is the whole of "installing a plugin": the generator
+  # turns one entry into the container, its OWN network segment (ADR-0037), its
+  # entry in the egress allowlist (ADR-0027) and its line in the list the core
+  # reads at start-up — which is what keeps the registration and the container
+  # from disagreeing.
+  #
+  # `role: plugin` is what marks it. Everything below follows from that mark
+  # rather than from a second declaration somewhere else.
+
+  plugin-webhook:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-webhook }
+    plugin:
+      # The id the manifest carries. The core refuses a list and a manifest that
+      # disagree about who a plugin is, because a grant is recorded against the
+      # id and taking the wrong one would attach somebody's consent to the wrong
+      # plugin.
+      id: de.greluc.homeinv.plugin.webhook
+      # The manifest this deployment installs, rendered from the plugin's own
+      # with `hosts` below substituted into its `network:outbound` capability.
+      manifest: plugins/webhook/manifest.yaml
+      # WHERE THIS DEPLOYMENT ALLOWS IT TO SEND. The operator's decision and
+      # nobody else's: it is compiled into the egress proxy's allowlist, and a
+      # tenant that configures a webhook to a host outside it is refused there,
+      # visibly. The example reaches nothing real on purpose — a deployment that
+      # wants webhooks replaces it.
+      hosts: ["hooks.example.org"]
+      # Which secret's certificate the core pins. `setup.sh` computes the
+      # fingerprint when it creates the certificate and substitutes it into the
+      # generated list, because the certificate does not exist until then.
+      fingerprintFrom: mtls-plugin-webhook
+      # WHICH PUBLIC KEY MAY VOUCH FOR THIS PLUGIN'S MANIFEST. The core verifies
+      # the manifest's detached signature against this key at every start-up and
+      # records what it found; an entry whose signature does not verify is
+      # registered DISABLED with the reason, and no setting runs it (REQ-PLG-004,
+      # ADR-0085).
+      #
+      # A `signed` boolean stood here until 2026-09-22 and was the OPERATOR's
+      # report of a `cosign` run that nothing could confirm or contradict. A claim
+      # about a check is not a check.
+      #
+      # The key is public and is still a secret ENTRY, because that is how a
+      # deployment already carries per-plugin material and because a third party's
+      # key is theirs to hand over rather than ours to publish. `setup.sh` seeds it
+      # from the repository for a first-party plugin and leaves it empty for
+      # anyone else's -- and an empty key with no signature is simply "unsigned".
+      publicKeyFrom: cosign-plugin-webhook
+    segment:
+      # Its own network, generated from this entry. The subnet is stated rather
+      # than assigned, because it is the operator's network and because the
+      # egress proxy identifies a caller by the interface a connection arrived on
+      # — which is a subnet comparison (ADR-0037).
+      subnet: 10.89.31.0/24
+    networks: [plugin-webhook]    # generated; `api`, `worker` and `egress-proxy`
+                                  # join it through their `networksByPlugin: all`
+    ports:
+      - { container: 8200, host: null }   # gRPC over mTLS, reached by api and worker
+                                          # on this segment and by nothing else
+    env:
+      HOMEINV_PLUGIN_PORT: "8200"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-webhook"
+      # The one route out. A plugin segment is `internal: true`, so without this
+      # there is no way out at all — which is the default and the point.
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_WEBHOOK_TIMEOUT_SECONDS: "10"
+    secrets: [mtls-plugin-webhook]        # its server identity; the core pins its
+                                          # fingerprint (REQ-SEC-056)
+    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    # NO container health check, and that is not an omission: the image is
+    # `scratch`, so there is no shell to run one and no curl to call — and the
+    # core asks this plugin about itself over the contract's own `PluginHealth`
+    # service, which is a better question than "is the process up" (09 §9.5).
+    profiles: [standard, ha]
+    notes: >
+      The first first-party plugin (ADR-0072). `minimal` runs no plugin at all,
+      which is a complete deployment rather than a degraded one: without one,
+      nothing leaves the deployment and the core says so plainly rather than
+      failing silently (REQ-PLG-013, ADR-0028).
+
+  plugin-smtp:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-smtp }
+    plugin:
+      id: de.greluc.homeinv.plugin.smtp
+      manifest: plugins/smtp/manifest.yaml
+      # WHERE THIS DEPLOYMENT SUBMITS. A `tcp:` target and not a host, because
+      # submission is not HTTP: the proxy opens a tunnel to exactly this
+      # host:port and the plugin speaks SMTP inside it (O11, ADR-0027). The port
+      # is part of the allowance — "the mail server, on any port" is not what an
+      # operator meant.
+      tcp: ["mail.example.org:587"]
+      fingerprintFrom: mtls-plugin-smtp
+      publicKeyFrom: cosign-plugin-smtp
+    segment:
+      subnet: 10.89.32.0/24
+    networks: [plugin-smtp]
+    ports:
+      - { container: 8201, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8201"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-smtp"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The mail server, and it has to agree with the `tcp:` target above: one
+      # says where the plugin submits and the other says where it is ALLOWED to.
+      HOMEINV_SMTP_HOST: "${HOMEINV_SMTP_HOST:-mail.example.org}"
+      HOMEINV_SMTP_PORT: "${HOMEINV_SMTP_PORT:-587}"
+      # `starttls` for 587, `implicit` for 465. Neither is guessed at: guessing
+      # means guessing whether the credentials travel in the clear, so a value
+      # that names neither leaves the plugin NOT_CONFIGURED.
+      HOMEINV_SMTP_SECURITY: "${HOMEINV_SMTP_SECURITY:-starttls}"
+      HOMEINV_SMTP_USER: "${HOMEINV_SMTP_USER:-}"
+      HOMEINV_SMTP_SENDER: "${HOMEINV_SMTP_SENDER:-}"
+      HOMEINV_SMTP_TIMEOUT_SECONDS: "30"
+    secrets:
+      - mtls-plugin-smtp          # its server identity, pinned by the core
+      - plugin-smtp-password      # the mail account's password, the OPERATOR's
+                                  # credential — it never passes through the core
+                                  # (ADR-0073)
+    resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
+    profiles: [standard, ha]
+    notes: >
+      The plugin a deployment misses first: an invitation, a password reset and
+      every security notification of REQ-NOTI-004 are mail or they are nothing.
+      The mail server this deployment may reach is the `tcp:` target above and
+      the `HOMEINV_SMTP_HOST` beside it, and the two have to name the same
+      server — one is what the proxy allows and the other is where the plugin
+      goes.
+
+  plugin-blobstore-s3:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-blobstore-s3 }
+    plugin:
+      id: de.greluc.homeinv.plugin.blobstore.s3
+      manifest: plugins/blobstore-s3/manifest.yaml
+      # EVERY OBJECT STORE THIS DEPLOYMENT MAY REACH. A `tcp:` target and not a
+      # host, because what runs inside the tunnel is HTTPS the plugin terminates
+      # itself: the proxy sees a host and a port and never a URL (ADR-0027).
+      #
+      # A TENANT may configure its own endpoint (ADR-0073), and one that is not
+      # on this list gets a refusal from the proxy rather than a connection. That
+      # is the division: the tenant chooses where its data goes, the operator
+      # chooses which places this deployment may reach at all.
+      tcp: ["objects.example.org:443"]
+      fingerprintFrom: mtls-plugin-blobstore-s3
+      publicKeyFrom: cosign-plugin-blobstore-s3
+    segment:
+      subnet: 10.89.33.0/24
+    networks: [plugin-blobstore-s3]
+    ports:
+      - { container: 8202, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8202"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-s3"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The deployment's own bucket, used by every tenant that did not name
+      # its own. Empty is a valid deployment: each tenant then brings its own
+      # endpoint, bucket and keys, and the plugin says so once at start-up.
+      HOMEINV_S3_ENDPOINT: "${HOMEINV_S3_ENDPOINT:-}"
+      HOMEINV_S3_BUCKET: "${HOMEINV_S3_BUCKET:-}"
+      HOMEINV_S3_REGION: "${HOMEINV_S3_REGION:-us-east-1}"
+      HOMEINV_S3_PREFIX: "${HOMEINV_S3_PREFIX:-}"
+      # `path` puts the bucket in the path, `virtual` in the hostname. Path by
+      # default: a self-hosted store rarely has a wildcard certificate, and with
+      # `virtual` the operator would have to allow one host per bucket.
+      HOMEINV_S3_ADDRESSING: "${HOMEINV_S3_ADDRESSING:-path}"
+      HOMEINV_S3_ACCESS_KEY_ID: "${HOMEINV_S3_ACCESS_KEY_ID:-}"
+      HOMEINV_S3_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-s3        # its server identity, pinned by the core
+      - plugin-blobstore-s3-secret-key  # the deployment's secret access key, the
+                                        # OPERATOR's credential — it never passes
+                                        # through the core (ADR-0073). A TENANT's
+                                        # own key is a different thing and is
+                                        # sealed in the core instead
+    resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
+    profiles: [standard, ha]
+    notes: >
+      A tenant's media in S3-compatible storage. Granting it routes the tenant's
+      NEXT bytes here and moves none of the old ones (ADR-0074): what was stored
+      before stays in the deployment's own blobstore and is still served from
+      there. Two multipart parts of 8 MiB are what the memory reservation is for --
+      an upload larger than one part is streamed part by part rather than held, so
+      this does not grow with the size of the object. It is REQ-NFR-009's
+      per-plugin adder exactly: 64 MB reserved, 256 MB limit.
+
+  plugin-blobstore-nextcloud:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-blobstore-nextcloud }
+    plugin:
+      id: de.greluc.homeinv.plugin.blobstore.nextcloud
+      manifest: plugins/blobstore-nextcloud/manifest.yaml
+      # EVERY NEXTCLOUD THIS DEPLOYMENT MAY REACH, for the reason the S3
+      # plugin's list gives: a tenant may configure its own instance and one
+      # that is not here gets a refusal from the proxy rather than a
+      # connection (ADR-0027, ADR-0073).
+      tcp: ["cloud.example.org:443"]
+      fingerprintFrom: mtls-plugin-blobstore-nextcloud
+      publicKeyFrom: cosign-plugin-blobstore-nextcloud
+    segment:
+      subnet: 10.89.34.0/24
+    networks: [plugin-blobstore-nextcloud]
+    ports:
+      - { container: 8203, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8203"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-nextcloud"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The deployment's own account, used by every tenant that did not name
+      # its own. Empty is a valid deployment: each tenant then brings its own
+      # instance, account and app password.
+      HOMEINV_NEXTCLOUD_URL: "${HOMEINV_NEXTCLOUD_URL:-}"
+      HOMEINV_NEXTCLOUD_USER: "${HOMEINV_NEXTCLOUD_USER:-}"
+      HOMEINV_NEXTCLOUD_FOLDER: "${HOMEINV_NEXTCLOUD_FOLDER:-}"
+      HOMEINV_NEXTCLOUD_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-nextcloud          # its server identity, pinned by the core
+      - plugin-blobstore-nextcloud-password      # the deployment's APP password, the
+                                                 # OPERATOR's credential — it never passes
+                                                 # through the core (ADR-0073). A TENANT's
+                                                 # own is sealed in the core instead
+    resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
+    profiles: [standard, ha]
+    notes: >
+      A tenant's media in its own Nextcloud, which is the path ADR-0007 named
+      first: the photographs land in a store that is already backed up and
+      synchronised, and the person who owns them can open the folder. Granting
+      it routes the tenant's NEXT bytes here and moves none of the old ones
+      (ADR-0074). Below 8 MiB one PUT; above it a chunked upload assembled by a
+      MOVE, because WebDAV needs a Content-Length the core cannot give in
+      advance. It is REQ-NFR-009's per-plugin adder exactly: 64 MB reserved,
+      256 MB limit.
+
+  plugin-oidc:
+    role: plugin
+    image: { name: ghcr.io/greluc/home-inv-plugin-oidc }
+    plugin:
+      id: de.greluc.homeinv.plugin.oidc
+      manifest: plugins/oidc/manifest.yaml
+      # THE PROVIDER THIS DEPLOYMENT FEDERATES WITH. A `hosts:` target and not
+      # a `tcp:` one: what the plugin speaks is HTTPS, three times -- discovery,
+      # the key set and the token endpoint -- and the proxy sees the host it is
+      # tunnelling to (ADR-0027).
+      hosts: ["provider.example"]
+      fingerprintFrom: mtls-plugin-oidc
+      publicKeyFrom: cosign-plugin-oidc
+    segment:
+      subnet: 10.89.35.0/24
+    networks: [plugin-oidc]
+    ports:
+      - { container: 8204, host: null }
+    env:
+      HOMEINV_PLUGIN_PORT: "8204"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-oidc"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      # The provider, and it has to agree with the `hosts:` target above: one
+      # says where the plugin goes and the other says where it is ALLOWED to.
+      HOMEINV_OIDC_ISSUER: "${HOMEINV_OIDC_ISSUER:-}"
+      HOMEINV_OIDC_CLIENT_ID: "${HOMEINV_OIDC_CLIENT_ID:-}"
+      HOMEINV_OIDC_PROVIDER_KEY: "${HOMEINV_OIDC_PROVIDER_KEY:-oidc}"
+      HOMEINV_OIDC_DISPLAY_NAME: "${HOMEINV_OIDC_DISPLAY_NAME:-Single sign-on}"
+      HOMEINV_OIDC_SCOPES: "${HOMEINV_OIDC_SCOPES:-openid email profile}"
+      HOMEINV_OIDC_TIMEOUT_SECONDS: "20"
+    secrets:
+      - mtls-plugin-oidc            # its server identity, pinned by the core
+      - plugin-oidc-client-secret   # the client secret the PROVIDER issued, the
+                                    # operator's credential -- it never passes
+                                    # through the core (ADR-0073), and an empty
+                                    # one means a public client authenticating
+                                    # with PKCE alone
+    resources: { memoryReservation: 192Mi, memoryLimit: 512Mi }
+    profiles: [standard, ha]
+    notes: >
+      Federated sign-in (REQ-AUTH-005). The ONE plugin with a JVM in it, because
+      ID-token validation is where an audited library outweighs an image size
+      (ADR-0072) -- and the reason REQ-NFR-009 carries two per-plugin adders
+      since ADR-0075: 64 MB for a Rust plugin, 192 MB for this one, amended
+      before it was written rather than after. It is configured ONCE, by the
+      operator: a sign-in happens before any tenant is known, so there is no
+      tenant whose settings could be read, and the core resolves it through the
+      instance operator's grant (ADR-0066).
+
 secrets:
   # Passed as files, never as environment values holding the secret itself.
   # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
@@ -962,6 +1334,146 @@ secrets:
       Server identity for the in-deployment BlobStore, pinned by fingerprint in
       HOMEINV_BLOBSTORE_FINGERPRINT. ADR-0043 gave this service every tenant's media and
       no authentication; ADR-0044 gives it the one the plugin adapters already had.
+  mtls-plugin-webhook:
+    required: false
+    kind: mtls-server
+    # No `profiles:`. It would change nothing if it were here -- `setup.sh`
+    # creates every secret the catalogue names, in every profile, exactly as it
+    # does for `mtls-search` -- and saying it would imply a filter that does not
+    # exist. The certificate being there in `minimal` is what lets the smoke
+    # suite start this container on the minimal stack to prove its segment
+    # refuses what it must (deploy/smoke/connectivity.sh).
+    services: [plugin-webhook]
+    notes: >
+      Server identity for `plugin-webhook`. The core pins its fingerprint, which
+      `setup.sh` computes when it creates this certificate and substitutes into
+      the generated plugin list — exactly the mechanism a third party's plugin
+      uses, because a first-party one gets no privileged path (ADR-0072).
+  mtls-plugin-oidc:
+    required: false
+    kind: mtls-server
+    services: [plugin-oidc]
+    notes: >
+      Server identity for `plugin-oidc`, pinned by the core exactly as every other
+      in-deployment peer is (REQ-SEC-056).
+  plugin-oidc-client-secret:
+    required: false
+    kind: external
+    services: [plugin-oidc]
+    notes: >
+      THE CLIENT SECRET THE PROVIDER ISSUED, and the fourth secret here that
+      belongs to somebody else's system. `setup.sh` creates it EMPTY and says so;
+      under Podman it is also not INSTALLED until it is filled in, because a
+      Podman secret cannot be empty. An empty one is a VALID configuration: a
+      public client authenticates with PKCE alone, which is what binds the
+      authorization code to this deployment.
+  mtls-plugin-blobstore-nextcloud:
+    required: false
+    kind: mtls-server
+    services: [plugin-blobstore-nextcloud]
+    notes: >
+      Server identity for `plugin-blobstore-nextcloud`, pinned by the core exactly
+      as every other in-deployment peer is (REQ-SEC-056).
+  plugin-blobstore-nextcloud-password:
+    required: false
+    kind: external
+    services: [plugin-blobstore-nextcloud]
+    notes: >
+      THE DEPLOYMENT'S NEXTCLOUD APP PASSWORD, and the third secret here that
+      belongs to somebody else's system. `setup.sh` creates it EMPTY and says so;
+      under Podman it is also not INSTALLED until it is filled in, because a
+      Podman secret cannot be empty. An APP password and not an account password:
+      it carries no web session and revoking it revokes exactly this integration.
+      A TENANT's own never appears here at all — it is sealed in the core and
+      travels in the call envelope (ADR-0073, ADR-0019).
+  mtls-plugin-blobstore-s3:
+    required: false
+    kind: mtls-server
+    services: [plugin-blobstore-s3]
+    notes: >
+      Server identity for `plugin-blobstore-s3`, pinned by the core exactly as
+      every other in-deployment peer is (REQ-SEC-056).
+  plugin-blobstore-s3-secret-key:
+    required: false
+    kind: external
+    services: [plugin-blobstore-s3]
+    notes: >
+      THE DEPLOYMENT'S SECRET ACCESS KEY, and the second secret here that belongs
+      to somebody else's system. `setup.sh` creates it EMPTY and says so:
+      generating one would produce a key the object store has never heard of, and
+      the failure would look like a broken plugin rather than a key nobody set.
+      Under Podman it is also not INSTALLED until then, because a Podman secret
+      cannot be empty. A TENANT's own key never appears here at all — it is sealed
+      in the core and travels in the call envelope (ADR-0073, ADR-0019).
+  mtls-plugin-smtp:
+    required: false
+    kind: mtls-server
+    services: [plugin-smtp]
+    notes: >
+      Server identity for `plugin-smtp`, pinned by the core exactly as every
+      other in-deployment peer is (REQ-SEC-056).
+  # ---------------------------------------------------------------------------
+  # The public keys a plugin manifest is verified against (REQ-PLG-004, ADR-0085)
+  # ---------------------------------------------------------------------------
+  #
+  # A public key is not a secret, and these are secret ENTRIES anyway. Three
+  # reasons, and none of them is confusion about what "public" means:
+  #
+  #   * a deployment already has exactly one mechanism for getting per-plugin
+  #     material onto a host and into a container with a read-only root, and it
+  #     is this one;
+  #   * a THIRD PARTY's key is theirs to hand over, which makes it operator
+  #     input on the same footing as their plugin's password -- the difference
+  #     between first-party and third-party should be which file `setup.sh`
+  #     finds, not which mechanism exists;
+  #   * one entry per plugin is what lets an operator replace one publisher's
+  #     key without touching anybody else's.
+  #
+  # `seedFrom` names a file in THIS repository. When it exists, `setup.sh`
+  # copies it; when it does not, the secret is written empty and the operator is
+  # told -- and an empty key with no signature is simply "unsigned", which is a
+  # state REQ-PLG-004 lets them permit deliberately. An empty key with a
+  # signature is NOT unsigned: it is a signature nobody can check, and the core
+  # refuses it.
+  #
+  # The seed file is the same for all five because this project signs its own
+  # plugins with one key. Five entries rather than one shared entry all the
+  # same: the day a plugin is handed to somebody else, only its own line moves.
+  cosign-plugin-webhook:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-smtp:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-blobstore-s3:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-blobstore-nextcloud:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+  cosign-plugin-oidc:
+    required: false
+    kind: cosign-public
+    seedFrom: keys/home-inv-plugins.pub.pem
+
+  plugin-smtp-password:
+    required: false
+    kind: external
+    services: [plugin-smtp]
+    notes: >
+      THE MAIL ACCOUNT'S PASSWORD, and the first secret here that belongs to
+      somebody else's system. `setup.sh` creates it EMPTY and says so: generating
+      one would produce a value the mail server has never heard of, and the
+      failure would look like a broken plugin rather than a password nobody set.
+      Until it is filled in, the plugin reports NOT_CONFIGURED and sends nothing
+      (REQ-PLG-015). It never passes through the core (ADR-0073). Under Podman it
+      is also not INSTALLED until then: a Podman secret cannot be empty, so
+      `setup.sh` names the file and moves on, and the unit that mounts it stays
+      down until the credential is there.
   mtls-search:
     required: true
     kind: mtls-server

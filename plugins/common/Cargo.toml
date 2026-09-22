@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-plugin-common"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "What every first-party Home Inventory plugin in Rust needs twice"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+# The mTLS identity a plugin presents to the core, which is `tonic`'s to
+# configure.
+tonic = { version = "0.14", features = ["tls-ring"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+tokio = { version = "1", features = ["net", "io-util", "time"] }
+
+# SHA-256, which `mac` turns into HMAC-SHA256 in thirty lines of RFC 2104.
+# `sha2` alone and no `hmac` crate: that one pins a `digest` version which has
+# to match this one's, a coupling that breaks on every digest release for no
+# gain. The RFC 4231 vectors stand in for it.
+sha2 = "0.11"
+
+# TLS towards whatever a plugin reaches, inside the proxy's tunnel. Both the
+# mail submission and the object store need the identical handshake, and the
+# roots have to be DATA in an image with no system trust store.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1"
+
+[dev-dependencies]
+# `#[tokio::test]` needs the runtime and the macro, which the crate itself does
+# not: a plugin brings its own runtime and this is a library.
+tokio = { version = "1", features = ["rt", "macros"] }

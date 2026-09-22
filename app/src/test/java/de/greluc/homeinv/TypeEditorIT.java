@@ -601,6 +601,51 @@ class TypeEditorIT extends AbstractIntegrationTest {
         false);
   }
 
+  @Test
+  @DisplayName("refuses a pattern that could take exponentially long (REQ-SEC-035)")
+  void aCatastrophicPatternIsRefusedWhereItIsWritten() {
+    Tenant tenant = newTenant("type-editor-redos@example.org");
+    inTenant(
+        tenant,
+        () -> {
+          TypeAdministration.ItemTypeView type = newType(tenant, "guarded");
+
+          // The published example of the attack. The pattern is tenant data and
+          // every item of this tenant would then be matched against it, so it is
+          // refused here rather than met later as "saving an item hangs"
+          // (PatternSafety; the time limit in BoundedRegularExpressions is the
+          // other half, for shapes this rule does not know).
+          assertThatThrownBy(
+                  () ->
+                      types.addField(
+                          type.draftVersionId(),
+                          field("code", FieldDataType.TEXT, false, constraintsWithPattern("(a+)+")),
+                          tenant.userId()))
+              .isInstanceOf(IllegalArgumentException.class)
+              .hasMessageContaining("repetition inside a repetition");
+
+          // And an ordinary field rule is unaffected, which is the half that
+          // decides whether a guard survives contact with its users.
+          types.addField(
+              type.draftVersionId(),
+              field("currency", FieldDataType.TEXT, false, constraintsWithPattern("^[A-Z]{3}$")),
+              tenant.userId());
+          assertThat(registry.fields(type.draftVersionId()))
+              .extracting(FieldDefinitionView::key)
+              .containsExactly("currency");
+        });
+  }
+
+  /**
+   * Field constraints carrying nothing but a pattern.
+   *
+   * @param pattern the regular expression
+   * @return the constraints
+   */
+  private static FieldConstraints constraintsWithPattern(String pattern) {
+    return new FieldConstraints(pattern, null, null, null, null, null, null);
+  }
+
   private TypeAdministration.FieldCommand field(
       String key, FieldDataType type, boolean required, FieldConstraints constraints) {
     return new TypeAdministration.FieldCommand(

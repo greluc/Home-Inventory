@@ -79,6 +79,28 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Autowired private AppUserRepository users;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
+  @Autowired private de.greluc.homeinv.notification.api.SecurityNotifications securityNotifications;
+  @Autowired private de.greluc.homeinv.notification.application.SecurityDeliveryDispatcher securityDispatcher;
+
+  /**
+   * Withdraws every instance-level grant this class makes.
+   *
+   * <p>An instance grant is not scoped to a tenant — that is its whole nature — so one left behind
+   * by a finished test is visible to the next one, which then resolves a plugin whose server has
+   * already been stopped. The per-tenant tests need no such cleanup because their grants are
+   * invisible outside their own tenant, and that difference is worth seeing in the fixture rather
+   * than debugging later.
+   */
+  @org.junit.jupiter.api.AfterEach
+  void withdrawInstanceGrants() {
+    for (String name : List.of("instance", "accountmail")) {
+      try {
+        registrations.revokeForInstance(PLUGIN + name, "network:outbound", UUID.randomUUID());
+      } catch (RuntimeException neverRegistered) {
+        // This test did not register that one. Nothing to withdraw.
+      }
+    }
+  }
 
   @AfterAll
   static void stopTheServer() {
@@ -117,6 +139,117 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
     // plugin had to be trusted to read.
     assertThat(seen.get().getContext().getTenantId()).isEqualTo(tenant.toString());
     assertThat(seen.get().getIdempotencyKey()).isEqualTo("invitation-1");
+  }
+
+  @Test
+  @DisplayName("resolves for the instance, with no tenant anywhere in the call")
+  void anInstanceCallCarriesNoTenant() throws Exception {
+    // ADR-0066. The deployment owes an account its security mail whether or not
+    // the account belongs to a tenant (REQ-NOTI-004), so the operator grants at
+    // instance level and the call goes out with no tenant at all. What is
+    // asserted is what the PLUGIN received: an empty tenant and a scope saying
+    // why it is empty, rather than a zero UUID standing in for one.
+    AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
+    int port = startPlugin(serviceOf(seen, null, false));
+    String pluginId = PLUGIN + "instance";
+    register(pluginId, port, fingerprint());
+    registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
+
+    // No TenantContext is opened here on purpose: an instance resolution must
+    // work where there is none, which is the situation a password reset is in.
+    NotificationChannel channel =
+        extensions.lookupForInstance(NotificationChannel.class).orElseThrow();
+
+    channel.deliver(
+        CallContext.forInstance("", "en", 0),
+        new NotificationChannel.Message(
+            "somebody@example.org",
+            "Your password was changed",
+            "If this was not you, act now.",
+            "",
+            "en",
+            java.util.Map.of(),
+            "security-1",
+            List.of()));
+
+    assertThat(seen.get().getContext().getTenantId()).isEmpty();
+    assertThat(seen.get().getContext().getScope())
+        .isEqualTo(de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE);
+  }
+
+  @Test
+  @DisplayName("delivers an account notification through the plugin, with no tenant in the call")
+  void anAccountNotificationGoesOut() throws Exception {
+    // The whole of REQ-NOTI-004's delivery half, end to end: a security message
+    // is raised for an account that belongs to no tenant, the operator has
+    // granted the plugin at instance level, and the message goes out.
+    AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
+    // Every request, not only the last. `security_notification` is instance-wide
+    // (07 §7.1) and this run delivers everything due on it, so the plugin may
+    // also be handed a row an earlier test left queued -- and asserting about
+    // whichever arrived last is how this failed on 2026-09-20, with a
+    // password-reset address from somewhere else entirely.
+    java.util.List<NotificationDeliverRequest> all =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    int port = startPlugin(serviceOf(seen, null, false, all::add));
+    String pluginId = PLUGIN + "accountmail";
+    register(pluginId, port, fingerprint());
+    registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
+
+    UUID account = UUID.randomUUID();
+    var queued =
+        securityNotifications.raise(
+            new de.greluc.homeinv.notification.api.SecurityNotifications.NewSecurityNotification(
+                account,
+                "security.password-reset",
+                "somebody@example.org",
+                "Reset your password",
+                "Open this link.",
+                null,
+                "en",
+                "runtime-account-" + account));
+
+    // The database's clock, not the JVM's: `next_attempt_at` was written by
+    // `now()` in PostgreSQL and the run compares against what it is given, so
+    // two clocks in two processes decide whether a just-raised row is due.
+    securityDispatcher.deliverDue(databaseNow());
+
+    // `security_notification` is instance-wide (07 §7.1) and this run delivers
+    // everything due on it, so the plugin may also have been handed a row some
+    // earlier test left queued. The assertions are therefore about THIS
+    // message, found among what the plugin saw, rather than about whichever one
+    // happened to arrive last -- which is what failed on 2026-09-20, with a
+    // password-reset address from another test.
+    NotificationDeliverRequest mine =
+        all.stream()
+            .filter(request -> "somebody@example.org".equals(request.getRecipient()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the plugin was never handed this message"));
+    // No tenant in the call, which is the half REQ-NOTI-004 and ADR-0066 are
+    // about: an account belongs to no tenant, so the call carries none.
+    assertThat(mine.getContext().getTenantId()).isEmpty();
+    assertThat(
+            securityNotifications.of(account, 5).stream()
+                .filter(candidate -> candidate.id().equals(queued.id()))
+                .findFirst()
+                .orElseThrow()
+                .state())
+        .isEqualTo("DELIVERED");
+    assertThat(securityNotifications.attempts(queued.id()))
+        .singleElement()
+        .satisfies(attempt -> assertThat(attempt.outcome()).isEqualTo("ACCEPTED"));
+  }
+
+  @Test
+  @DisplayName("is not resolved for the instance when only a tenant granted it")
+  void aTenantGrantIsNotAnInstanceGrant() throws Exception {
+    // The two levels are separate in both directions (ADR-0066). A tenant that
+    // consented to everything has said nothing about the deployment's own calls,
+    // and the proof is the resolution rather than the flag.
+    int port = startPlugin(serviceOf(null, null, false));
+    aTenantThatConsented(port, "tenantonly");
+
+    assertThat(extensions.lookupForInstance(NotificationChannel.class)).isEmpty();
   }
 
   @Test
@@ -195,7 +328,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
         manifest(higher, 200).getBytes(StandardCharsets.UTF_8),
         "localhost:" + port,
         fingerprint(),
-        true);
+        UNSIGNED_FIXTURE, true);
     TenantContext.runAs(
         tenant, () -> registrations.grant(higher, "network:outbound", UUID.randomUUID()));
 
@@ -280,7 +413,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
 
   private void register(String pluginId, int port, String pin) {
     registrations.register(
-        manifest(pluginId, 100).getBytes(StandardCharsets.UTF_8), "localhost:" + port, pin, true);
+        manifest(pluginId, 100).getBytes(StandardCharsets.UTF_8), "localhost:" + port, pin, UNSIGNED_FIXTURE, true);
   }
 
   /**
@@ -340,6 +473,27 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
    */
   private static NotificationChannelGrpc.NotificationChannelImplBase serviceOf(
       AtomicReference<NotificationDeliverRequest> seen, AtomicInteger calls, boolean fail) {
+    return serviceOf(seen, calls, fail, request -> {});
+  }
+
+  /**
+   * A fake channel that also hands every request to a collector.
+   *
+   * <p>The single {@code seen} reference holds the LAST request, which is the wrong thing to assert
+   * about whenever the run that produced it delivers more than one message — and the instance-wide
+   * account queue always may.
+   *
+   * @param seen the last request, kept for the tests that only ever see one
+   * @param calls a counter, or {@code null}
+   * @param fail whether to answer every call with an error
+   * @param collector handed every delivery, so a test can find its own among them
+   * @return the service
+   */
+  private static NotificationChannelGrpc.NotificationChannelImplBase serviceOf(
+      AtomicReference<NotificationDeliverRequest> seen,
+      AtomicInteger calls,
+      boolean fail,
+      java.util.function.Consumer<NotificationDeliverRequest> collector) {
     return new NotificationChannelGrpc.NotificationChannelImplBase() {
 
       @Override
@@ -378,6 +532,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
         if (seen != null) {
           seen.set(request);
         }
+        collector.accept(request);
         observer.onNext(
             NotificationDeliverResponse.newBuilder().setProviderMessageId("accepted-1").build());
         observer.onCompleted();

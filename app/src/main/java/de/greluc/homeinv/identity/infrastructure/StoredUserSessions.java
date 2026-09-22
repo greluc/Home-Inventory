@@ -82,6 +82,16 @@ public class StoredUserSessions implements UserSessions {
     log.info("Account {} ended one of its sessions remotely.", userId);
   }
 
+  @Override
+  public int endAll(UUID userId) {
+    Map<String, ? extends Session> open = sessions.findByPrincipalName(userId.toString());
+    open.keySet().forEach(sessions::deleteById);
+    if (!open.isEmpty()) {
+      log.info("Every session of account {} was ended ({}).", userId, open.size());
+    }
+    return open.size();
+  }
+
   /**
    * What one stored session looks like to its owner.
    *

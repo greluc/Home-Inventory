@@ -23,6 +23,11 @@
 *.md        text diff=markdown
 *.asc       text eol=lf
 *.yaml      text
+# A detached signature over a manifest, base64 on one line. Explicit rather than
+# guessed by `text=auto`: the signature is over the manifest's BYTES, and a line
+# ending rewritten on either file is a verification failure whose message would
+# be about cryptography rather than about `git` (ADR-0085).
+*.sig       text eol=lf
 *.yml       text
 *.json      text
 *.toml      text

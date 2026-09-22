@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
@@ -50,6 +52,7 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code meta.degraded} and all, because a smart list is the list the same query typed by hand
  * would produce and not a second kind of thing.
  */
+@Tag(name = "Saved searches", description = "Named queries, usable as smart lists.")
 @RestController
 @RequestMapping("/api/v1/saved-searches")
 @RequiredArgsConstructor
@@ -224,9 +227,9 @@ public class SavedSearchController {
   public record SavedSearchResponse(
       UUID id,
       String name,
-      String q,
+      @Nullable String q,
       List<String> filters,
-      String sort,
+      @Nullable String sort,
       java.time.Instant createdAt,
       java.time.Instant updatedAt,
       long version) {

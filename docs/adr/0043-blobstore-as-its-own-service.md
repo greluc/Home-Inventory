@@ -2,6 +2,8 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 
+> **Amended by [ADR-0084](0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md)** — the service gains four optional methods and a second directory, `staged/`, for an upload that has not finished arriving (`REQ-MED-008`). They address by upload id rather than by content, because a half-arrived file has no content address; a plugin may answer all four with `UNIMPLEMENTED`, and the core calls them on this service alone.
+
 > **Amended by [ADR-0050](0050-blobstore-service-in-rust.md):** the service is written in
 > **Rust**, not in Java. This record left the language open and weighed the cost of the
 > service against *"for a small installation, one more container"* — an argument that only

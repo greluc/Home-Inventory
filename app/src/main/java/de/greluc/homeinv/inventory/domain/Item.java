@@ -5,6 +5,9 @@
 package de.greluc.homeinv.inventory.domain;
 
 import de.greluc.homeinv.inventory.api.ItemKind;
+import de.greluc.homeinv.inventory.api.ItemLentException;
+import de.greluc.homeinv.inventory.api.ItemState;
+import de.greluc.homeinv.inventory.api.ItemStateException;
 import de.greluc.homeinv.platform.JsonbType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -117,6 +120,16 @@ public class Item {
   @Column(name = "minimum_stock")
   private BigDecimal minimumStock;
 
+  /**
+   * How often this needs servicing, in days, or {@code null} (REQ-LIFE-004).
+   *
+   * <p>Days and not months: "every 3 months from 31 January" has no answer that is not a surprise
+   * to somebody. What reads it is the {@code MAINTENANCE_DUE} reminder, which measures from the
+   * last maintenance entry rather than from a fixed calendar.
+   */
+  @Column(name = "maintenance_interval_days")
+  private Integer maintenanceIntervalDays;
+
   /** Whether the item exists in the physical world, which decides whether it needs a location. */
   @Enumerated(EnumType.STRING)
   @Column(name = "kind", nullable = false)
@@ -185,15 +198,50 @@ public class Item {
   @Column(name = "current_amount")
   private BigDecimal currentAmount;
 
+  /** Who says so: {@code MANUAL}, {@code DEPRECIATION} or {@code PLUGIN} (REQ-LIFE-009). */
+  @Column(name = "current_source")
+  private String currentSource;
+
   @Column(name = "current_currency")
   private String currentCurrency;
 
   @Column(name = "current_as_of")
   private LocalDate currentAsOf;
 
-  /** Where the item is in its life. Stage 0 writes {@code ACTIVE} only. */
+  /** What the item fetched when it was sold (REQ-LIFE-007); {@code null} unless it was. */
+  @Column(name = "disposal_amount")
+  private BigDecimal disposalAmount;
+
+  /** The currency of {@link #disposalAmount}; present exactly when the amount is. */
+  @Column(name = "disposal_currency")
+  private String disposalCurrency;
+
+  /** When the item was sold or disposed of; present exactly when the state says it is gone. */
+  @Column(name = "disposed_on")
+  private LocalDate disposedOn;
+
+  /** Who it went to, in the seller's own words, or {@code null}. */
+  @Column(name = "disposal_recipient")
+  private String disposalRecipient;
+
+  /** Anything else worth knowing about the sale, or {@code null}. */
+  @Column(name = "disposal_note")
+  private String disposalNote;
+
+  /**
+   * Where the item is in its life (04 §4.4).
+   *
+   * <p>The machine's one value, stored as its name and constrained to the known set by {@code
+   * item_lifecycle_state_known}. It is one column because 11 §11.3 resolves a sync conflict by
+   * <b>ranking</b> these against each other, and a rank needs one ordered value.
+   *
+   * <p>*Said "Stage 0 writes {@code ACTIVE} only" until 2026-09-20, by which time {@link
+   * #markDeleted} had been writing {@code TRASHED} for weeks — and it was free text, so the
+   * database would have taken any word at all.*
+   */
+  @Enumerated(EnumType.STRING)
   @Column(name = "lifecycle_state", nullable = false)
-  private String lifecycleState;
+  private ItemState lifecycleState;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
@@ -242,6 +290,7 @@ public class Item {
       String notes,
       BigDecimal minimumStock,
       de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays,
       UUID actor,
       Instant now) {
     applyValuation(valuation);
@@ -251,13 +300,14 @@ public class Item {
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.notes = Notes.sanitise(notes);
     this.minimumStock = minimumStock;
+    this.maintenanceIntervalDays = maintenanceIntervalDays;
     this.name = name;
     this.description = description;
     this.kind = kind;
     this.locationId = locationId;
     this.quantity = quantity;
     this.quantityUnit = quantityUnit;
-    this.lifecycleState = "ACTIVE";
+    this.lifecycleState = ItemState.ACTIVE;
     this.createdAt = now;
     this.updatedAt = now;
     this.createdBy = actor;
@@ -302,6 +352,7 @@ public class Item {
       String notes,
       BigDecimal minimumStock,
       de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -327,6 +378,7 @@ public class Item {
         notes,
         minimumStock,
         valuation,
+        maintenanceIntervalDays,
         actor,
         now);
   }
@@ -360,6 +412,7 @@ public class Item {
       String notes,
       BigDecimal minimumStock,
       de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays,
       UUID actor,
       Instant now) {
     if (name == null || name.isBlank()) {
@@ -379,6 +432,7 @@ public class Item {
     this.attributes = attributes == null || attributes.isBlank() ? EMPTY_ATTRIBUTES : attributes;
     this.notes = Notes.sanitise(notes);
     this.minimumStock = minimumStock;
+    this.maintenanceIntervalDays = maintenanceIntervalDays;
     applyValuation(valuation);
     this.updatedBy = actor;
     this.updatedAt = now;
@@ -445,25 +499,50 @@ public class Item {
     de.greluc.homeinv.inventory.api.Valuation values =
         valuation == null ? de.greluc.homeinv.inventory.api.Valuation.NONE : valuation;
 
-    this.purchaseAmount = values.purchase() == null ? null : values.purchase().amount();
-    this.purchaseCurrency = values.purchase() == null ? null : values.purchase().currencyCode();
+    de.greluc.homeinv.platform.Money purchase = values.purchase();
+    this.purchaseAmount = purchase == null ? null : purchase.amount();
+    this.purchaseCurrency = purchase == null ? null : purchase.currencyCode();
     this.purchasedOn = values.purchasedOn();
     this.purchaseSource = values.purchaseSource();
 
     this.warrantyUntil = values.warrantyUntil();
     this.lifetimeWarranty = values.lifetimeWarranty();
 
-    this.replacementAmount = values.replacement() == null ? null : values.replacement().amount();
-    this.replacementCurrency =
-        values.replacement() == null ? null : values.replacement().currencyCode();
+    de.greluc.homeinv.platform.Money replacement = values.replacement();
+    this.replacementAmount = replacement == null ? null : replacement.amount();
+    this.replacementCurrency = replacement == null ? null : replacement.currencyCode();
     this.replacementAsOf = values.replacementAsOf();
-    this.replacementSource =
-        values.replacementSource() == null ? null : values.replacementSource().name();
+    de.greluc.homeinv.inventory.api.Valuation.Provenance replacementSource =
+        values.replacementSource();
+    this.replacementSource = replacementSource == null ? null : replacementSource.name();
 
-    this.currentAmount = values.currentValue() == null ? null : values.currentValue().amount();
-    this.currentCurrency =
-        values.currentValue() == null ? null : values.currentValue().currencyCode();
+    // THE SOURCE CHANGES WHEN THE NUMBER DOES, and not before. A client that
+    // reads an item, renames it and writes the whole thing back is sending the
+    // depreciated figure it was just given -- and treating that as somebody
+    // typing it would freeze the value for ever, because the refresh run never
+    // touches what a person owns. A different number is a person's number; the
+    // same number is the same number.
+    de.greluc.homeinv.platform.Money currentValue = values.currentValue();
+    java.math.BigDecimal incomingAmount = currentValue == null ? null : currentValue.amount();
+    String incomingCurrency = currentValue == null ? null : currentValue.currencyCode();
+    boolean sameFigure =
+        java.util.Objects.equals(
+                incomingAmount == null ? null : incomingAmount.stripTrailingZeros(),
+                this.currentAmount == null ? null : this.currentAmount.stripTrailingZeros())
+            && java.util.Objects.equals(incomingCurrency, this.currentCurrency);
+
+    this.currentAmount = incomingAmount;
+    this.currentCurrency = incomingCurrency;
     this.currentAsOf = values.currentValueAsOf();
+    de.greluc.homeinv.inventory.api.Valuation.Provenance currentSource =
+        values.currentValueSource();
+    if (currentValue == null) {
+      this.currentSource = null;
+    } else if (currentSource != null) {
+      this.currentSource = currentSource.name();
+    } else if (!sameFigure || this.currentSource == null) {
+      this.currentSource = de.greluc.homeinv.inventory.api.Valuation.Provenance.MANUAL.name();
+    }
   }
 
   /**
@@ -489,7 +568,10 @@ public class Item {
             ? null
             : de.greluc.homeinv.inventory.api.Valuation.Provenance.valueOf(replacementSource),
         money(currentAmount, currentCurrency),
-        currentAsOf);
+        currentAsOf,
+        currentSource == null
+            ? null
+            : de.greluc.homeinv.inventory.api.Valuation.Provenance.valueOf(currentSource));
   }
 
   /**
@@ -529,7 +611,7 @@ public class Item {
               + "resides in exactly one location.");
     }
     this.deletedAt = null;
-    this.lifecycleState = "ACTIVE";
+    this.lifecycleState = ItemState.ACTIVE;
     this.updatedBy = actor;
     this.updatedAt = now;
   }
@@ -552,7 +634,104 @@ public class Item {
     // The state a person reads, beside the timestamp the queries filter on. Both
     // move together, so a listing that shows the state and a query that hides the
     // row can never disagree (REQ-CORE-009).
-    this.lifecycleState = "TRASHED";
+    this.lifecycleState = ItemState.TRASHED;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Records that somebody has taken the item away (REQ-LIFE-005).
+   *
+   * <p>The loan row holds who and since when; this is the item's own answer to "is it here", which
+   * a listing shows and which 11 §11.3 ranks. Both are written in the transaction that opens the
+   * loan, so they cannot disagree.
+   *
+   * @param actor who recorded the handover
+   * @param now the moment it was recorded
+   * @throws ItemLentException when it is already out
+   * @throws ItemStateException when it is in a state that cannot be lent at all —
+   *     something trashed or sold is not a thing to hand over
+   */
+  public void lend(UUID actor, Instant now) {
+    if (this.lifecycleState == ItemState.LENT) {
+      // The same answer the partial unique index gives, raised here because this
+      // is where the state is known. A caller does one thing about it.
+      throw new ItemLentException("This item is already lent out. Record its return first.");
+    }
+    if (this.lifecycleState != ItemState.ACTIVE) {
+      throw new ItemStateException(
+          "An item that is " + this.lifecycleState.name().toLowerCase(java.util.Locale.ROOT)
+              + " cannot be lent out.");
+    }
+    this.lifecycleState = ItemState.LENT;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Records that the item came back (REQ-LIFE-005).
+   *
+   * <p>Quiet when it was not out: recording a return twice is not an error, because the outcome the
+   * caller wants — the thing is here — is already true. It does not disturb any other state, so a
+   * return recorded against an item that was meanwhile trashed leaves it trashed.
+   *
+   * @param actor who recorded the return
+   * @param now the moment it was recorded
+   */
+  public void returnedFromLoan(UUID actor, Instant now) {
+    if (this.lifecycleState != ItemState.LENT) {
+      return;
+    }
+    this.lifecycleState = ItemState.ACTIVE;
+    this.updatedBy = actor;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Records that the item was sold or otherwise parted with (REQ-LIFE-007).
+   *
+   * <p>Terminal, and that is the point: unlike a trashing there is no way back, because what is
+   * gone is the thing rather than the record of it. The record stays readable — REQ-LIFE-007 asks
+   * for the price, the date and the recipient, and they are columns here.
+   *
+   * @param state {@link ItemState#SOLD} or {@link ItemState#DISPOSED}
+   * @param amount what it fetched, or {@code null}; only a sale has one
+   * @param currency the amount's currency, or {@code null}; both or neither
+   * @param on when it went
+   * @param recipient who to, or {@code null}
+   * @param note anything else worth knowing, or {@code null}
+   * @param actor who recorded it
+   * @param now the moment it was recorded
+   * @throws ItemStateException when the item is not one the tenant still holds, or when a
+   *     price is given for something that was not sold
+   */
+  public void dispose(
+      ItemState state,
+      BigDecimal amount,
+      String currency,
+      LocalDate on,
+      String recipient,
+      String note,
+      UUID actor,
+      Instant now) {
+    if (!state.isGoneForGood()) {
+      throw new IllegalArgumentException(state + " is not a way of parting with an item.");
+    }
+    if (!this.lifecycleState.isHeld()) {
+      throw new ItemStateException(
+          "An item that is " + this.lifecycleState.name().toLowerCase(java.util.Locale.ROOT)
+              + " cannot be sold or disposed of.");
+    }
+    if (amount != null && state != ItemState.SOLD) {
+      throw new ItemStateException(
+          "Only a sale has a price; record it as SOLD or leave the amount out.");
+    }
+    this.lifecycleState = state;
+    this.disposalAmount = amount;
+    this.disposalCurrency = currency;
+    this.disposedOn = on;
+    this.disposalRecipient = recipient == null ? null : recipient.strip();
+    this.disposalNote = note;
     this.updatedBy = actor;
     this.updatedAt = now;
   }

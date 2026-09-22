@@ -46,8 +46,12 @@ this rate of change, and costs clarity permanently.
   measurement, a shutdown is a leap in the dark.
 - Clients must **tolerate** unknown fields and unknown enum values. This is
   documented and implemented that way in the generated clients.
-- Every client sends a `User-Agent` with product and version, so deprecations can
-  be communicated to the right people.
+- Every client sends its product and version, so deprecations can be communicated
+  to the right people. *This said `User-Agent` until 2026-09-20, and the web PWA
+  could never have honoured it: a browser sets that header itself and a page
+  cannot override it on `fetch`. The header is `X-Home-Inv-Client`, in the shape
+  this line always asked for — product, then version (08 §8, `REQ-API-009`). The
+  decision is unchanged; what was wrong was a fact about browsers.*
 - The apps show a notice when their contract version is deprecated, and refuse
   service only after the period has elapsed — never before.
 - `oasdiff` in CI prevents a break from slipping into a minor version unnoticed.

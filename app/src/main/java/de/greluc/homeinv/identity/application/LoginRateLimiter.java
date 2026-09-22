@@ -4,8 +4,10 @@
  */
 package de.greluc.homeinv.identity.application;
 
+import de.greluc.homeinv.platform.LogSafe;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -104,6 +106,41 @@ public class LoginRateLimiter {
   }
 
   /**
+   * How long the caller must wait before another password reset may be asked for (REQ-SEC-018).
+   *
+   * <p>Its own counters, not the login ones, and the separation is the point in both directions: a
+   * flood of reset requests must not lock the account holder out of signing in, and somebody
+   * failing to guess a password must not thereby stop the real owner from asking for a reset.
+   *
+   * <p>What it protects is the mailbox. A reset endpoint with no throttle is a way to send somebody
+   * a hundred messages, and the account it belongs to has no say in whether they arrive.
+   *
+   * @param email the address a reset was asked for, in any casing
+   * @param clientIp the caller's address
+   * @return the remaining wait, or {@link Duration#ZERO} when the request may proceed now
+   */
+  public Duration retryAfterReset(String email, String clientIp) {
+    Duration byAccount = delayFor(resetAccountKey(email));
+    Duration byAddress = delayFor(resetAddressKey(clientIp));
+    return byAccount.compareTo(byAddress) >= 0 ? byAccount : byAddress;
+  }
+
+  /**
+   * Records that a reset was asked for.
+   *
+   * <p>Counted whether or not the address has an account, for the reason {@link #recordFailure}
+   * gives: a counter that only moved for known addresses would answer the question the endpoint
+   * refuses to answer (REQ-SEC-110).
+   *
+   * @param email the address a reset was asked for
+   * @param clientIp the caller's address
+   */
+  public void recordResetRequest(String email, String clientIp) {
+    bump(resetAccountKey(email));
+    bump(resetAddressKey(clientIp));
+  }
+
+  /**
    * Computes the wait a key's failure count currently imposes.
    *
    * @param key the Valkey key holding the count
@@ -122,13 +159,24 @@ public class LoginRateLimiter {
     long seconds = 1L << Math.min(failures - FREE_ATTEMPTS - 1, 20);
     Duration required = Duration.ofSeconds(Math.min(seconds, MAX_DELAY.toSeconds()));
 
-    Long elapsedTtl = redis.getExpire(key);
-    if (elapsedTtl == null || elapsedTtl < 0) {
+    // MILLISECONDS, and that is not a detail. The counter's remaining time to
+    // live says how long ago the last failure was -- every failure restarts the
+    // window, so elapsed = WINDOW - remaining -- and asking for it in SECONDS
+    // rounds the remainder DOWN, which rounds the elapsed time UP by as much as
+    // a second. Every step of this delay was therefore up to a second shorter
+    // than it says, and the first step, which is exactly one second, could be no
+    // delay at all: a failure at 12:00:00.999 and a retry at 12:00:01.001 read
+    // as a full second elapsed.
+    //
+    // `PTTL` costs the same round trip as `TTL` and is exact. Found by
+    // `PasswordResetIT.theThrottleEngages` failing in CI on 2026-09-21 while
+    // passing on every developer machine -- a ~5 % flake that the extra Valkey
+    // round trip of REQ-SEC-064's rate limiter made likely enough to fire.
+    Long remainingMillis = redis.getExpire(key, TimeUnit.MILLISECONDS);
+    if (remainingMillis == null || remainingMillis < 0) {
       return Duration.ZERO;
     }
-    // The counter's remaining TTL tells us how long ago the last failure was:
-    // every failure resets the window, so elapsed = WINDOW - remaining.
-    Duration sinceLastFailure = WINDOW.minusSeconds(elapsedTtl);
+    Duration sinceLastFailure = WINDOW.minusMillis(remainingMillis);
     Duration remaining = required.minus(sinceLastFailure);
     return remaining.isNegative() ? Duration.ZERO : remaining;
   }
@@ -144,7 +192,9 @@ public class LoginRateLimiter {
     if (count != null && count == FREE_ATTEMPTS + 1L) {
       // Logged once, when the delay starts applying, rather than on every failure:
       // an attacker must not be able to fill the log by failing.
-      log.info("Login throttling engaged for key {}", key);
+      // The key is built from an e-mail address and a client address, so it
+      // carries text somebody else chose.
+      log.info("Login throttling engaged for key {}", LogSafe.value(key));
     }
   }
 
@@ -183,5 +233,25 @@ public class LoginRateLimiter {
    */
   private static String addressKey(String clientIp) {
     return "login:fail:address:" + clientIp;
+  }
+
+  /**
+   * The key for an account's reset requests.
+   *
+   * @param email the address
+   * @return the Valkey key
+   */
+  private static String resetAccountKey(String email) {
+    return "reset:ask:account:" + email.toLowerCase(Locale.ROOT);
+  }
+
+  /**
+   * The key for a client address's reset requests.
+   *
+   * @param clientIp the address
+   * @return the Valkey key
+   */
+  private static String resetAddressKey(String clientIp) {
+    return "reset:ask:address:" + clientIp;
   }
 }

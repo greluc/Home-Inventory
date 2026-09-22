@@ -128,10 +128,20 @@
     WEAK_HOSTNAME_VERIFIER comes with it: pinning has already answered a stricter
     question than a hostname does, and the certificate is issued to a service name
     a client may legitimately reach under another.
+
+    `RegisteredPlugins` is the same decision pointing the other way, and the only
+    one that does: it is the SERVER's view of a client on the host channel
+    (ADR-0071), where the core answers and a plugin calls. It accepts a certificate
+    whose SHA-256 is the fingerprint SOME registration pins and refuses every other
+    one — including one the deployment's own CA signed, which is the case the rule
+    cannot distinguish from an empty check. `getAcceptedIssuers` returns nothing
+    because the chain is not what decides here, and `checkServerTrusted` throws
+    unconditionally, because a manager that recognises callers must never be used
+    to decide what to trust as a server.
   -->
   <Match>
     <Bug pattern="WEAK_TRUST_MANAGER,WEAK_HOSTNAME_VERIFIER"/>
-    <Class name="~de\.greluc\.homeinv\.(media\.infrastructure\.BlobStoreChannelFactory|platform\.PinnedCertificate|search\.infrastructure\.OpenSearchClientFactory).*"/>
+    <Class name="~de\.greluc\.homeinv\.(media\.infrastructure\.BlobStoreChannelFactory|platform\.PinnedCertificate|search\.infrastructure\.OpenSearchClientFactory|plugins\.infrastructure\.RegisteredPlugins).*"/>
   </Match>
 
   <!--
@@ -455,6 +465,63 @@
   <Match>
     <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
     <Class name="~de[.]greluc[.]homeinv[.](inventory[.]infrastructure[.]ItemSearchAdapter|tagging[.]infrastructure[.]TagAdapter|locations[.]infrastructure[.]LocationTreeQueries)"/>
+  </Match>
+
+  <!--
+    WEAK_MESSAGE_DIGEST_SHA1 on the password policy's breach lookup. SHA-1 is
+    here by PROTOCOL rather than by choice: the k-anonymity range query every
+    such service answers is defined over it (ADR-0067), and a different digest
+    would mean a port no existing service can serve.
+
+    It is a lookup key and not a credential store. The password itself is hashed
+    with Argon2id (REQ-SEC-010) and this digest is never stored, never compared
+    against a stored value and never used to authenticate anything. Five of its
+    forty characters leave the deployment; the comparison happens in the core, so
+    a plugin learns neither the password nor its full hash.
+  -->
+  <Match>
+    <Bug pattern="WEAK_MESSAGE_DIGEST_SHA1"/>
+    <Class name="de.greluc.homeinv.identity.application.DefaultPasswordPolicy"/>
+  </Match>
+
+  <!--
+    SERVLET_HEADER on the API usage interceptor. The rule is right that a header
+    is untrusted input; the whole design of that tag is the answer to it.
+
+    `X-Home-Inv-Client` is read, matched against a regular expression bounded at
+    32 characters, lower-cased and then checked for membership in a CLOSED SET of
+    six product names. Anything that fails any of those three is `other`. The
+    value never reaches a query, a log line, a response or a file path - it
+    becomes one of seven constants and nothing else, which is exactly the
+    validation the rule asks for and more than it can see.
+
+    The reason it is validated so hard is not injection but CARDINALITY: a
+    Prometheus series exists per combination of tag values, so a tag a caller can
+    choose freely is an outage waiting for the right request (REQ-API-009,
+    `ApiUsageMetricIT`).
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.ApiUsageInterceptor"/>
+  </Match>
+
+  <!--
+    SERVLET_HEADER on the federated callback. The rule is right that a header is
+    untrusted input; what this one decides is not a security question.
+
+    `Accept` is read to tell two kinds of caller apart: a BROWSER following a
+    provider's redirect, which must land on the sign-in page rather than on a JSON
+    document, and a client that reads `application/problem+json` like every other
+    endpoint's. The value is tested for one substring and is never reflected, never
+    logged, never stored and never part of a query.
+
+    It cannot widen anything either: BOTH branches are the same refusal, and the
+    redirect carries the same problem token the document would. A caller choosing
+    the other shape gets the other shape of the answer they were going to get.
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Class name="de.greluc.homeinv.rest.FederatedAuthController"/>
   </Match>
 
 </FindBugsFilter>

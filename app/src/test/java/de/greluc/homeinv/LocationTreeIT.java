@@ -49,6 +49,7 @@ class LocationTreeIT extends AbstractIntegrationTest {
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactions;
   @Autowired private JdbcClient jdbc;
+  @Autowired private de.greluc.homeinv.inventory.api.ItemService itemService;
 
   @Test
   @DisplayName("returns a full path without recursing, and one query deep")
@@ -358,6 +359,58 @@ class LocationTreeIT extends AbstractIntegrationTest {
     return TenantContext.callAs(tenantId, () -> transactions.execute(status -> body.get()));
   }
 
+  @org.junit.jupiter.api.Test
+  @org.junit.jupiter.api.DisplayName("says how many things are in a place it will not delete (REQ-CORE-046)")
+  void aFullPlaceSaysHowManyThingsAreInIt() {
+    Tenant tenant = newTenant("location-count@example.org");
+    // Both catalogue reads run under row-level security, so they need a tenant
+    // context like every other read in this file.
+    UUID category = inOwnTransaction(tenant.tenantId(), () -> anyCategory(tenant.tenantId()));
+    UUID type = inOwnTransaction(tenant.tenantId(), () -> builtinType(tenant.tenantId()));
+    UUID shed =
+        inOwnTransaction(tenant.tenantId(), () -> create(category, null, "Schuppen", tenant.userId()).id());
+
+    for (int i = 0; i < 3; i++) {
+      String name = "A thing " + i;
+      inOwnTransaction(
+          tenant.tenantId(),
+          () ->
+              itemService
+                  .create(
+                      new de.greluc.homeinv.inventory.api.ItemService.CreateItemCommand(
+                          null,
+                          type,
+                          name,
+                          null,
+                          de.greluc.homeinv.inventory.api.ItemKind.PHYSICAL,
+                          shed,
+                          java.math.BigDecimal.ONE,
+                          null,
+                          "{}",
+                          null,
+                          null,
+                          de.greluc.homeinv.inventory.api.Valuation.NONE),
+                      java.util.Optional.empty(),
+                      tenant.userId())
+                  .item()
+                  .id());
+    }
+
+    // THE NUMBER, which is REQ-CORE-046's acceptance criterion: "it still
+    // contains things" sends somebody looking, and three tells them what they
+    // are in for.
+    assertThatThrownBy(
+            () ->
+                inOwnTransaction(
+                    tenant.tenantId(),
+                    () -> {
+                      locationService.delete(shed, OptionalLong.empty(), tenant.userId());
+                      return null;
+                    }))
+        .isInstanceOf(LocationNotEmptyException.class)
+        .hasMessageContaining("3 items");
+  }
+
   private LocationView create(UUID categoryId, UUID parentId, String name, UUID actor) {
     return locationService.create(
         new LocationService.CreateLocationCommand(null, categoryId, parentId, name, null), Optional.empty(), actor);
@@ -367,6 +420,14 @@ class LocationTreeIT extends AbstractIntegrationTest {
     return jdbc.sql("select path::text from locations.location where id = ?")
         .param(locationId)
         .query(String.class)
+        .single();
+  }
+
+  private UUID builtinType(UUID tenantId) {
+    return jdbc
+        .sql("select id from catalog.item_type where tenant_id = ? and key = 'general'")
+        .param(tenantId)
+        .query(UUID.class)
         .single();
   }
 

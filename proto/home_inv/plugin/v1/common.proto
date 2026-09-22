@@ -44,11 +44,40 @@ option java_outer_classname = "CommonProto";
 // tenant, because a blob is content-addressed WITHIN a tenant and the tenant is
 // therefore part of the address rather than of the call (ADR-0032). Trace
 // context there travels as gRPC metadata, like it does everywhere else.
+// What authorised a call, and therefore what it may touch.
+//
+// A call is made either on behalf of one tenant — the ordinary case, and the
+// only one until 2026-09-16 — or on behalf of the instance, which is how an
+// account-level obligation reaches a plugin when the account belongs to no
+// tenant at all (ADR-0066).
+enum CallScope {
+  // Not stated. Treated as CALL_SCOPE_TENANT, which is what every caller before
+  // this field existed meant.
+  CALL_SCOPE_UNSPECIFIED = 0;
+
+  // One tenant granted this plugin a capability, and this call is made under
+  // that grant. `tenant_id` names it and is never empty.
+  CALL_SCOPE_TENANT = 1;
+
+  // The instance operator granted this plugin a capability for the deployment
+  // itself, and `tenant_id` is empty because there is no tenant to name.
+  //
+  // Reserved for obligations the instance owes an account rather than a tenant:
+  // today the security notifications of REQ-NOTI-004, which cannot be switched
+  // off by a user or a tenant administrator and must still reach an account
+  // that is a member of nothing. It grants a plugin nothing else — a plugin
+  // calling back into the core on an instance call reaches no tenant's data,
+  // because there is no tenant context to read it under (REQ-SEC-057).
+  CALL_SCOPE_INSTANCE = 2;
+}
+
 message CallContext {
   // The tenant the call is made for, as a UUID in canonical hyphenated text.
   //
-  // Never empty. A call for no tenant is a call the capability model cannot
-  // answer.
+  // Empty exactly when `scope` is CALL_SCOPE_INSTANCE, and never otherwise. A
+  // call for no tenant used to be a call the capability model could not answer;
+  // since ADR-0066 the model has a second level that answers it, and the
+  // emptiness of this field is what says which level applies.
   string tenant_id = 1;
 
   // The W3C `traceparent` of the call, so that a plugin's own log lines join the
@@ -62,6 +91,28 @@ message CallContext {
   // The caller's language as an IETF tag (`de`, `en`), for text a plugin
   // composes itself. Empty when the call has no human reader.
   string language = 3;
+
+  // What authorised this call. Added 2026-09-16 (ADR-0066); a sender that does
+  // not set it means CALL_SCOPE_TENANT, which is what the field's absence meant
+  // before it existed.
+  CallScope scope = 4;
+
+  // WHAT THIS TENANT CONFIGURED FOR THIS PLUGIN, by the keys the manifest's
+  // `settings` block declares, with secrets opened (ADR-0073, REQ-PLG-017).
+  //
+  // It travels in the envelope rather than being fetched, because fetching it
+  // would be a READ on the host channel and ADR-0071's admission test -- "takes
+  // what the caller already holds" -- refuses exactly that.
+  //
+  // WHAT IS NOT HERE, and will not be: the operator's configuration of the
+  // plugin CONTAINER. The SMTP host and its credentials, the S3 endpoint and its
+  // keys, the OIDC client secret are mounted into the container from
+  // `deploy/services.yaml` like every other service's, and the core never holds
+  // them. A manifest describes what a TENANT may set; a container describes what
+  // an OPERATOR must set.
+  //
+  // Empty on an instance call: there is no tenant whose settings these would be.
+  map<string, string> settings = 5;
 }
 
 // AN AMOUNT AND THE CURRENCY IT IS IN.

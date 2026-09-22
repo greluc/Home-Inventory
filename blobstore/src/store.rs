@@ -100,6 +100,57 @@ impl BlobRef {
     }
 }
 
+/// Where a half-arrived upload lives (`REQ-MED-008`).
+///
+/// The same rules as [`BlobRef`] and for the same reason: both components come
+/// from a network peer, and a path built from remote input is a path traversal
+/// unless something refuses the shapes that could be one. The difference is
+/// what the second component is — an upload id rather than a digest, because a
+/// half-arrived file has no content address yet.
+#[derive(Debug, Clone)]
+pub struct StagedRef {
+    tenant_id: String,
+    upload_id: String,
+}
+
+impl StagedRef {
+    /// Validates both components as canonical UUIDs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RefError::TenantNotAUuid`] when either is not a UUID in
+    /// canonical hyphenated form. Both are the same kind of value, so they
+    /// share the error: the message names the shape, which is what a caller
+    /// needs, and neither value is echoed back.
+    pub fn parse(tenant_id: &str, upload_id: &str) -> Result<Self, RefError> {
+        for component in [tenant_id, upload_id] {
+            if uuid::Uuid::try_parse(component).is_err() || component.len() != 36 {
+                return Err(RefError::TenantNotAUuid);
+            }
+        }
+        Ok(Self {
+            tenant_id: tenant_id.to_owned(),
+            upload_id: upload_id.to_owned(),
+        })
+    }
+
+    /// Where this upload lives under a root.
+    ///
+    /// `staged/<tenantId>/<uploadId>` — a directory of its own, beside
+    /// `sha256/` and never inside it. Two reasons: an unfinished file must
+    /// never be reachable at an address `Head` would report as a stored blob,
+    /// and a sweep that removes abandoned uploads can then be a sweep over one
+    /// directory rather than a filter over all of them.
+    ///
+    /// No fan-out, unlike a blob: uploads in flight are a handful at a time,
+    /// and the directory empties itself as they complete.
+    pub fn path_under(&self, root: &Path) -> PathBuf {
+        root.join("staged")
+            .join(&self.tenant_id)
+            .join(&self.upload_id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +206,37 @@ mod tests {
         // would be invisible under the other.
         assert_eq!(
             BlobRef::parse(&TENANT.replace('-', ""), DIGEST).unwrap_err(),
+            RefError::TenantNotAUuid
+        );
+    }
+
+    #[test]
+    fn a_staged_upload_lives_beside_the_blobs_and_not_among_them() {
+        // An unfinished file at an address `Head` answers for would be a blob
+        // that is not all there, served as though it were.
+        let staged =
+            StagedRef::parse(TENANT, "0192f2a0-1b2c-7d3e-8f40-000000000001").expect("valid");
+        let path = staged.path_under(Path::new("/var/lib/homeinv/blobs"));
+        let components: Vec<String> = path
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy().into_owned())
+            .collect();
+
+        let tail = &components[components.len() - 3..];
+        assert_eq!(
+            tail,
+            ["staged", TENANT, "0192f2a0-1b2c-7d3e-8f40-000000000001"]
+        );
+    }
+
+    #[test]
+    fn a_staged_reference_refuses_a_traversal_in_either_component() {
+        assert_eq!(
+            StagedRef::parse("../../etc", TENANT).unwrap_err(),
+            RefError::TenantNotAUuid
+        );
+        assert_eq!(
+            StagedRef::parse(TENANT, "../../etc/passwd").unwrap_err(),
             RefError::TenantNotAUuid
         );
     }

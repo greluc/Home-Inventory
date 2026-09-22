@@ -281,6 +281,96 @@ assigned:
       - "REQ-CORE-007: an item can be a bundle containing other items"
       - "04 §4.4: a bundle does not contain itself"
 
+  - token: item-lent
+    status: 409
+    since: 1
+    summary: >
+      The item is out on loan, and what was asked cannot be done while somebody
+      else has it.
+    notes: >
+      TWO requests get it and the caller does the same thing about both, which is
+      why it is one token: lending something that is already out would open a
+      second loan on one object, and trashing it would throw away the only record
+      of who to ask for it back. A `409` and not a `422` -- nothing about the
+      request is malformed and the identical one succeeds once the thing is back.
+      Its own token rather than `validation-failed`, because no field is wrong and
+      a client showing a field error would point at nothing. Registered with
+      REQ-LIFE-005's implementation, when an item could first be out.
+    sources:
+      - "REQ-LIFE-005: a lent item is recognisable as such and not deletable"
+      - "07 §7.8 `inventory.loan`: at most one open loan per item"
+
+  - token: item-state
+    status: 409
+    since: 1
+    summary: >
+      The item is in a state where what was asked cannot be done -- it has been
+      sold, disposed of or trashed.
+    notes: >
+      SEPARATE from `item-lent`, because a caller acts differently on the two:
+      "somebody has it" is answered by asking for it back, "you sold it in March"
+      is not answered at all. A client forced to read the detail text to tell them
+      apart would be doing the work a stable `type` exists to remove -- the
+      argument `bundle-cycle` makes against sharing `invalid-move`. Registered
+      with REQ-LIFE-007's implementation, when an item first had a state it could
+      not come back from.
+    sources:
+      - "REQ-LIFE-007: sale and disposal change the state"
+      - "04 §4.4: ACTIVE -> LENT -> ACTIVE, ACTIVE -> SOLD/DISPOSED"
+
+  - token: unserved-trigger
+    status: 422
+    since: 1
+    summary: >
+      A reminder rule names a trigger that nothing in this installation can
+      answer.
+    notes: >
+      REQ-NOTI-003 names six triggers and two of them have no source: a stocktake
+      is stage 2 and no licence expiry date is stored. A rule naming one is
+      refused when it is WRITTEN, by the person who can still choose another --
+      accepted and then silently never firing is the failure a reminder feature
+      cannot afford, and it would look like working software until the day
+      somebody needed it. The same argument REQ-SRCH-008 makes about refusing an
+      unparseable filter when it is saved rather than when it is run. A 422 and
+      not a 409, because what is wrong is the value of a field. The detail names
+      the triggers that do work, since picking one of them is the way out.
+    sources:
+      - "REQ-NOTI-003: triggers at least warranty expiry, maintenance interval, return date, minimum stock, licence expiry, stocktake discrepancy"
+      - "REQ-NOTI-001: reminder rules are data, not code"
+
+  - token: no-document-renderer
+    status: 409
+    since: 1
+    summary: >
+      A document was asked for and nothing installed can render one.
+    notes: >
+      A 409 and not a 501. The report exists and its figures are served by the
+      two endpoints beside this one, as data and as a table; what is missing is
+      a DocumentRenderer plugin, which an operator installs. A 501 would say
+      this application cannot do it, which is not what is wrong -- and an empty
+      file would be a worse answer than a refusal somebody can act on. The
+      detail says where the figures are.
+    sources:
+      - "REQ-LIFE-016: an insurance report is producible as a PDF and as a table"
+      - "ADR-0070: a document is described, not programmed, and rendering it is a plugin's job"
+
+  - token: export-not-ready
+    status: 409
+    since: 1
+    summary: >
+      The export archive was asked for before it had been built.
+    notes: >
+      A 409 and not a 404: the job is there and the caller is looking at the
+      right thing, it is simply not finished. A 404 would send somebody looking
+      for a job they can see in their own list. The detail names the state
+      instead, because "still running" and "it failed" lead a caller somewhere
+      different -- one waits, the other asks again. Registered with
+      REQ-PORT-005's implementation, when an export first became a job rather
+      than a response.
+    sources:
+      - "REQ-PORT-005: export runs asynchronously as a job resource with progress"
+      - "08 §8.1: /export-jobs is a resource"
+
   - token: invalid-move
     status: 409
     since: 1
@@ -687,6 +777,116 @@ assigned:
       - "04 §4.3 `tenancy`: Tenant states; 05 §5.9: access blocked immediately"
       - "REQ-TEN-011, REQ-SEC-082"
 
+  - token: federated-flow-unknown
+    status: 410
+    since: 1
+    summary: >
+      The sign-in this callback belongs to is unknown, expired or already
+      finished; start again from the sign-in page.
+    notes: >
+      The `state` parameter carries a single-use handle to server-side flow state
+      (ADR-0029), and this is what a replayed callback gets — which is the property
+      REQ-AUTH-005 is verified by. Also what an expired one gets, after ten minutes.
+      410 rather than 400: the handle was well-formed and is gone, and the caller's
+      way out is to begin again rather than to correct anything.
+
+      It says nothing about whether the handle ever existed. A token that
+      distinguished "never seen" from "already spent" would let somebody probe for
+      sign-ins in flight.
+    sources:
+      - "REQ-AUTH-005, ADR-0029"
+
+  - token: federated-identity-unlinked
+    status: 403
+    since: 1
+    summary: >
+      The provider verified who you are and no account here is linked to that
+      identity; sign in and link it from your account settings.
+    notes: >
+      The refusal REQ-AUTH-006 exists for. A verified address that matches an
+      existing account is NOT permission to sign in as it, so an unlinked identity is
+      refused even when the address is one this instance knows — and the message is
+      the same either way, because a different one would be an account oracle.
+
+      An instance with `HOMEINV_REGISTRATION_MODE=open` may instead CREATE an account
+      here (REQ-AUTH-004); this token is what the other two modes answer.
+    sources:
+      - "REQ-AUTH-005, REQ-AUTH-006, REQ-SEC-020"
+
+  - token: federated-address-taken
+    status: 409
+    since: 1
+    summary: >
+      This instance creates accounts, and the address the provider verified
+      already has one; sign in with it and link the provider deliberately.
+    notes: >
+      Only reachable on an `open` instance, where the alternative would have been to
+      create a second account on an address that already has one. Linking the
+      existing account instead is a decision for the person who owns it, taken while
+      signed in and re-confirmed (REQ-AUTH-006) — never a consequence of somebody
+      arriving with a token that carries the same string.
+    sources:
+      - "REQ-AUTH-004, REQ-AUTH-006"
+
+  - token: federated-address-unverified
+    status: 403
+    since: 1
+    summary: >
+      The provider did not confirm the address it reported, so no account can
+      be created from it.
+    notes: >
+      An unverified address is a claim about somebody else: a provider that lets a
+      person type any address and hands it on unverified would otherwise create an
+      account here in that person's name. The core treats an unverified address as
+      absent, which is what the `IdentityProvider` port's own contract says.
+
+      It refuses only the CREATION. An identity already linked to an account signs in
+      whatever the address says, because the link is on `(issuer, subject)`.
+    sources:
+      - "REQ-AUTH-004, REQ-AUTH-006"
+
+  - token: federated-identity-linked-elsewhere
+    status: 409
+    since: 1
+    summary: >
+      That provider identity is already linked to another account here.
+    notes: >
+      A link is unique on `(issuer, subject)` instance-wide: two accounts on one
+      foreign identity would make every later sign-in ambiguous, and an ambiguity
+      resolved by taking the first row is an account takeover with an ordering bug in
+      front of it. The way out is to unlink it on the account that holds it.
+    sources:
+      - "REQ-AUTH-005, REQ-AUTH-006"
+
+  - token: upload-offset-mismatch
+    status: 409
+    since: 1
+    summary: >
+      The bytes were offered at a place the upload is not at.
+    notes: >
+      The ordinary outcome of a broken connection and not a fault: a chunk was sent,
+      the connection dropped somewhere in the middle, and neither side knows how much
+      arrived. The response carries the authoritative offset in the `Upload-Offset`
+      header, which is where the client continues from — asking rather than guessing
+      is the whole difference between an upload that survives a network change and one
+      that starts again. The status is the one the tus protocol names.
+    sources:
+      - "REQ-MED-008, ADR-0084"
+
+  - token: upload-in-progress
+    status: 423
+    since: 1
+    summary: >
+      Another request is already writing to this upload.
+    notes: >
+      tus asks a server to refuse a second concurrent write to one upload, and the
+      reason is not tidiness: two appends that both read the offset before either
+      writes are both at the right place and both write, leaving a file of the right
+      length and the wrong bytes — which nothing notices until the digest at the very
+      end. The refusal comes from the blob store, which is one process holding one
+      volume and therefore the only place a lock covers every caller.
+    sources:
+      - "REQ-MED-008, ADR-0084"
 # ---------------------------------------------------------------------------
 # NOT REGISTERED YET — conditions the corpus describes without fixing a status
 # code. The list is EMPTY as of 2026-09-11: the three entries that stood here were

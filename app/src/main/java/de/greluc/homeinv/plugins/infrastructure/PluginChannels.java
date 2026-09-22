@@ -4,12 +4,20 @@
  */
 package de.greluc.homeinv.plugins.infrastructure;
 
+import de.greluc.homeinv.platform.CurrentTrace;
 import de.greluc.homeinv.platform.PinnedCertificate;
 import de.greluc.homeinv.plugin.api.PluginException;
 import de.greluc.homeinv.plugins.application.PluginRuntimeProperties;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
 import io.grpc.ChannelCredentials;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ForwardingClientCall;
 import io.grpc.Grpc;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.TlsChannelCredentials;
 import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayInputStream;
@@ -52,6 +60,16 @@ public class PluginChannels {
   private final PluginRuntimeProperties properties;
   private final Path identityFile;
 
+  /**
+   * Puts the trace on the wire as metadata (REQ-NFR-044).
+   *
+   * <p>The other half of what {@code CallContext.trace_id} carries in the payload, and the half an
+   * instrumentation library reads without being told: a plugin built on any of the OpenTelemetry
+   * gRPC integrations is traced by adding the dependency, and one built on nothing at all can still
+   * read the field. The contract names both, so both are sent.
+   */
+  private final CurrentTrace trace;
+
   /** Keyed by plugin id and the connection it was built for, so a changed pin builds a new one. */
   private final Map<String, Entry> channels = new ConcurrentHashMap<>();
 
@@ -61,13 +79,16 @@ public class PluginChannels {
    * @param properties the operator's limits, for the message size the channel accepts
    * @param identityFile the PEM bundle this service presents, from {@code HOMEINV_MTLS_CORE_FILE}.
    *     The same identity the blob store already authenticates
+   * @param trace the current span, which every channel built here propagates
    */
   public PluginChannels(
       PluginRuntimeProperties properties,
-      @Value("${HOMEINV_MTLS_CORE_FILE:}") String identityFile) {
+      @Value("${HOMEINV_MTLS_CORE_FILE:}") String identityFile,
+      CurrentTrace trace) {
     this.properties = properties;
     this.identityFile =
         identityFile == null || identityFile.isBlank() ? null : Path.of(identityFile);
+    this.trace = trace;
   }
 
   /**
@@ -151,6 +172,10 @@ public class PluginChannels {
           // Both directions. 09 §9.5 names 8 MiB, and gRPC's own 4 MiB default
           // is passed by a rendered label sheet or a scanned image.
           .maxInboundMessageSize(properties.getMaxMessageBytes())
+          // On the channel rather than per stub: every port, present and
+          // future, propagates the trace without its adapter knowing that
+          // tracing exists (REQ-NFR-044).
+          .intercept(new TracePropagation(trace))
           .build();
     } catch (IOException | RuntimeException unusable) {
       throw new PluginException(
@@ -181,6 +206,35 @@ public class PluginChannels {
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
       channel.shutdownNow();
+    }
+  }
+
+  /**
+   * Writes the current span's propagation fields into every call's metadata.
+   *
+   * <p>A no-op when nothing is being traced, which is the normal case: {@link CurrentTrace} writes
+   * nothing when there is no tracer and no current span, so the headers are simply absent rather
+   * than present and empty.
+   *
+   * @param trace the current span
+   */
+  private record TracePropagation(CurrentTrace trace) implements ClientInterceptor {
+
+    /** How a gRPC header is written, once, rather than per field. */
+    private static void put(Metadata headers, String key, String value) {
+      headers.put(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER), value);
+    }
+
+    @Override
+    public <Q, A> ClientCall<Q, A> interceptCall(
+        MethodDescriptor<Q, A> method, CallOptions options, Channel next) {
+      return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, options)) {
+        @Override
+        public void start(Listener<A> responseListener, Metadata headers) {
+          trace.inject(headers, TracePropagation::put);
+          super.start(responseListener, headers);
+        }
+      };
     }
   }
 

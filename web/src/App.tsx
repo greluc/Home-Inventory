@@ -13,6 +13,7 @@ import {
   type LocationCategory,
   type Session,
 } from "./api";
+import { AboutFooter } from "./AboutFooter";
 import { adoptProfileLanguage } from "./i18n";
 import { LanguageToggle } from "./LanguageToggle";
 import { LocationPanel } from "./LocationPanel";
@@ -212,6 +213,8 @@ export function App(): React.JSX.Element {
           onError={setError}
         />
       </main>
+
+      <AboutFooter />
     </div>
   );
 }

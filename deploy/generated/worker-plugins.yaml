@@ -1,0 +1,445 @@
+# GENERATED FROM ../services.yaml — DO NOT EDIT.
+#
+# Run `python deploy/generate.py` after changing the matrix. CI regenerates
+# this file and fails on any difference, so an edit here is lost and noticed
+# rather than lost and not (REQ-NFR-063).
+
+#
+# WHAT THE OPERATOR INSTALLED. The core reads this and nothing else: it
+# fetches nothing and it installs nothing, because installation is an
+# operator's act outside the running system (REQ-PLG-013).
+#
+# Each entry carries its manifest INLINE. The alternative -- a path per
+# entry and a file per plugin -- is a path that can be right here and
+# wrong in the mount, and nothing would say which.
+
+plugins:
+  - id: de.greluc.homeinv.plugin.webhook
+    endpoint: "plugin-webhook:8200"
+    fingerprint: "@FINGERPRINT:mtls-plugin-webhook@"
+    publicKey: "@PUBKEY:cosign-plugin-webhook@"
+    manifestInline: |
+      # SPDX-FileCopyrightText: Lucas Greuloch
+      # SPDX-License-Identifier: AGPL-3.0-or-later
+      #
+      # The manifest `plugin-webhook` ships as its reference.
+      #
+      # THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS. A registration names a
+      # manifest file on the deployment's own filesystem, generated from
+      # `deploy/services.yaml` beside the container, the network segment and the
+      # egress allowlist (REQ-PLG-013). That is not a formality: `spec.capabilities`
+      # below carries the HOSTS this plugin may reach, and which receivers a
+      # deployment allows is the operator's decision rather than the plugin author's.
+      #
+      # So this file is the template and the documentation of what to declare. The
+      # `hosts` entry is deliberately an example that reaches nothing real.
+
+      apiVersion: home-inv.plugin/v1
+
+      metadata:
+        id: de.greluc.homeinv.plugin.webhook
+        name: "Webhook"
+        version: "0.1.0"
+        vendor: "greluc"
+        license: "AGPL-3.0-or-later"
+        homepage: "https://github.com/greluc/Home-Inventory"
+        descriptions:
+          en: "Delivers a notification to a URL as a signed JSON POST."
+          de: "Stellt eine Benachrichtigung als signierten JSON-POST an eine URL zu."   # spelling-exempt: a manifest's own multilingual DATA
+
+      spec:
+        contract: ">=1.0.0 <2.0.0"
+        runtime: out-of-process
+
+        implements:
+          - port: NotificationChannel
+            priority: 100
+
+        capabilities:
+          # WHERE THIS DEPLOYMENT MAY SEND. Compiled into the egress proxy's allowlist,
+          # which is the enforcement point: no container runtime can express a hostname
+          # rule of its own (ADR-0027). A tenant that configures a webhook to a host
+          # outside this list is refused by the proxy, visibly, with a message naming
+          # the host -- and adding one is an operator's edit to `deploy/services.yaml`,
+          # not something the running system can do to itself (REQ-PLG-013).
+          - id: network:outbound
+            hosts: ["hooks.example.org"]
+            reason: "Delivering notifications to the receivers this deployment allows"
+          # WHAT THE TENANT CONFIGURED may be sent to this plugin. Since ADR-0073 this
+          # is what the capability means: not "the plugin may fetch its settings" --
+          # nothing fetches -- but "the core may send them". Without it the signing
+          # secret never leaves the core and this plugin delivers nothing.
+          #
+          # THERE IS NO `settings:` BLOCK BELOW, AND THIS CAPABILITY IS STILL THE GATE.
+          # The signing secret is per webhook TARGET and not per tenant (ADR-0077): one
+          # secret for a tenant would let every receiver that tenant configured forge a
+          # delivery to every other one. It therefore lives beside the target, in
+          # `notification.webhook_target`, and the core lays it over this plugin's
+          # settings in the envelope of the one call that delivers to that target --
+          # under this capability, which a tenant can still withdraw. A `settings:`
+          # entry for it would show an administrator a field that changes nothing.
+          - id: core:setting:read
+            reason: "Sending the signing secret a tenant agreed with the receiver of one target"
+
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+
+        resources:
+          # A socket in, a socket out, and no state. The budget is the one ADR-0072
+          # argues the language choice from: five JVMs would not have fitted
+          # REQ-NFR-009's sum of reservations, and this is what the alternative costs.
+          memoryMiB: 32
+          timeoutSeconds: 15
+  - id: de.greluc.homeinv.plugin.smtp
+    endpoint: "plugin-smtp:8201"
+    fingerprint: "@FINGERPRINT:mtls-plugin-smtp@"
+    publicKey: "@PUBKEY:cosign-plugin-smtp@"
+    manifestInline: |
+      # SPDX-FileCopyrightText: Lucas Greuloch
+      # SPDX-License-Identifier: AGPL-3.0-or-later
+      #
+      # The manifest `plugin-smtp` ships as its reference.
+      #
+      # THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+      # `deploy/services.yaml` beside the container, the network segment and the
+      # egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+      # carries the `host:port` of the mail server this deployment submits to, and
+      # which server that is belongs to the operator and to nobody else.
+
+      apiVersion: home-inv.plugin/v1
+
+      metadata:
+        id: de.greluc.homeinv.plugin.smtp
+        name: "E-mail"
+        version: "0.1.0"
+        vendor: "greluc"
+        license: "AGPL-3.0-or-later"
+        homepage: "https://github.com/greluc/Home-Inventory"
+        descriptions:
+          en: "Delivers a notification as an e-mail, over an authenticated TLS submission."
+          de: "Stellt eine Benachrichtigung als E-Mail über eine authentifizierte TLS-Einlieferung zu."   # spelling-exempt: a manifest's own multilingual DATA
+
+      spec:
+        contract: ">=1.0.0 <2.0.0"
+        runtime: out-of-process
+
+        implements:
+          - port: NotificationChannel
+            priority: 100
+
+        capabilities:
+          # A `tcp:` target and not a `hosts:` one, because submission is not HTTP: the
+          # proxy opens a tunnel to exactly this host and port and the plugin speaks
+          # SMTP inside it (O11, ADR-0027). The port is part of the allowance -- "the
+          # mail server, on any port" is not what an operator meant.
+          - id: network:outbound
+            tcp: ["mail.example.org:587"]
+            reason: "Submitting notifications to this deployment's mail server"
+          # Without this the sender's display name never leaves the core and messages
+          # go out with the address alone, which still works. It is declared because a
+          # tenant that sets one expects to see it (ADR-0073).
+          - id: core:setting:read
+            reason: "Reading the sender name this tenant chose"
+
+        settings:
+          # PER TENANT, and the only thing a tenant configures here. The mail server,
+          # the account and the password are the OPERATOR's, mounted into the
+          # container: a deployment's mail credential has no business in a tenant's
+          # row (ADR-0073).
+          - key: senderName
+            type: string
+            required: false
+            label:
+              en: "Sender name"
+              de: "Absendername"   # spelling-exempt: a manifest's own multilingual DATA
+
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+
+        resources:
+          # One socket in, one socket out, and a message in memory while it is written.
+          memoryMiB: 32
+          timeoutSeconds: 45
+  - id: de.greluc.homeinv.plugin.blobstore.s3
+    endpoint: "plugin-blobstore-s3:8202"
+    fingerprint: "@FINGERPRINT:mtls-plugin-blobstore-s3@"
+    publicKey: "@PUBKEY:cosign-plugin-blobstore-s3@"
+    manifestInline: |
+      # SPDX-FileCopyrightText: Lucas Greuloch
+      # SPDX-License-Identifier: AGPL-3.0-or-later
+      #
+      # The manifest `plugin-blobstore-s3` ships as its reference.
+      #
+      # THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+      # `deploy/services.yaml` beside the container, the network segment and the
+      # egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+      # carries the `host:port` of every object store this deployment may reach, and
+      # a tenant that configures an endpoint outside that list gets a refusal from the
+      # proxy rather than a connection (ADR-0027).
+
+      apiVersion: home-inv.plugin/v1
+
+      metadata:
+        id: de.greluc.homeinv.plugin.blobstore.s3
+        name: "S3 object storage"
+        version: "0.1.0"
+        vendor: "greluc"
+        license: "AGPL-3.0-or-later"
+        homepage: "https://github.com/greluc/Home-Inventory"
+        descriptions:
+          en: "Stores a tenant's media in an S3-compatible bucket, signed with Signature Version 4."
+          de: "Legt die Medien eines Mandanten in einem S3-kompatiblen Bucket ab, signiert mit Signature Version 4."   # spelling-exempt: a manifest's own multilingual DATA
+
+      spec:
+        contract: ">=1.0.0 <2.0.0"
+        runtime: out-of-process
+
+        implements:
+          - port: BlobStore
+            priority: 100
+
+        capabilities:
+          # A `tcp:` target and not a `hosts:` one: what runs inside the tunnel is
+          # HTTPS this plugin terminates itself, so the proxy sees a host and a port
+          # and never a URL (O11, ADR-0027). The port is part of the allowance --
+          # "the object store, on any port" is not what an operator meant.
+          - id: network:outbound
+            tcp: ["objects.example.org:443"]
+            reason: "Storing and reading this tenant's media in its bucket"
+          # Without this the plugin has only the deployment's bucket to write to, and
+          # a tenant that configured its own account would be storing in the
+          # operator's (ADR-0073, ADR-0074).
+          - id: core:setting:read
+            reason: "Reading the bucket and keys this tenant configured"
+
+        settings:
+          # PER TENANT, and every one of them optional: a tenant that sets none uses
+          # the deployment's bucket, where the tenant id is already part of every key
+          # (ADR-0032). A tenant that wants its own account sets `endpoint`, `bucket`
+          # and BOTH credential fields -- half a pair is refused rather than mixed
+          # with the deployment's other half.
+          - key: endpoint
+            type: string
+            required: false
+            label:
+              en: "Endpoint"
+              de: "Endpunkt"   # spelling-exempt: a manifest's own multilingual DATA
+          - key: bucket
+            type: string
+            required: false
+            label:
+              en: "Bucket"
+              de: "Bucket"
+          - key: region
+            type: string
+            required: false
+            label:
+              en: "Region"
+              de: "Region"
+          - key: prefix
+            type: string
+            required: false
+            label:
+              en: "Key prefix"
+              de: "Schlüsselpräfix"   # spelling-exempt: a manifest's own multilingual DATA
+          - key: addressingStyle
+            type: string
+            required: false
+            label:
+              en: "Addressing style (path or virtual)"
+              de: "Adressierung (path oder virtual)"   # spelling-exempt: a manifest's own multilingual DATA
+          - key: accessKeyId
+            type: string
+            required: false
+            label:
+              en: "Access key id"
+              de: "Zugriffsschlüssel-ID"   # spelling-exempt: a manifest's own multilingual DATA
+          # SEALED in the core and opened only into the envelope of this plugin's own
+          # calls (ADR-0019, ADR-0073). It is never returned by any read endpoint and
+          # never appears in a log line.
+          - key: secretAccessKey
+            type: secret
+            required: false
+            label:
+              en: "Secret access key"
+              de: "Geheimer Zugriffsschlüssel"   # spelling-exempt: a manifest's own multilingual DATA
+
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+
+        resources:
+          # Two multipart parts of 8 MiB, the connection buffers around them, and the
+          # runtime. An upload larger than one part is streamed part by part rather
+          # than held, so this does not grow with the size of the object -- which is
+          # what lets it fit REQ-NFR-009's per-plugin adder of 64 MB.
+          memoryMiB: 64
+          timeoutSeconds: 120
+  - id: de.greluc.homeinv.plugin.blobstore.nextcloud
+    endpoint: "plugin-blobstore-nextcloud:8203"
+    fingerprint: "@FINGERPRINT:mtls-plugin-blobstore-nextcloud@"
+    publicKey: "@PUBKEY:cosign-plugin-blobstore-nextcloud@"
+    manifestInline: |
+      # SPDX-FileCopyrightText: Lucas Greuloch
+      # SPDX-License-Identifier: AGPL-3.0-or-later
+      #
+      # The manifest `plugin-blobstore-nextcloud` ships as its reference.
+      #
+      # THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+      # `deploy/services.yaml` beside the container, the network segment and the
+      # egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+      # carries the `host:port` of every Nextcloud this deployment may reach, and a
+      # tenant that configures an instance outside that list gets a refusal from the
+      # proxy rather than a connection (ADR-0027).
+
+      apiVersion: home-inv.plugin/v1
+
+      metadata:
+        id: de.greluc.homeinv.plugin.blobstore.nextcloud
+        name: "Nextcloud storage"
+        version: "0.1.0"
+        vendor: "greluc"
+        license: "AGPL-3.0-or-later"
+        homepage: "https://github.com/greluc/Home-Inventory"
+        descriptions:
+          en: "Stores a tenant's media in a Nextcloud folder over WebDAV, with an app password."
+          de: "Legt die Medien eines Mandanten per WebDAV in einem Nextcloud-Ordner ab, mit einem App-Passwort."   # spelling-exempt: a manifest's own multilingual DATA
+
+      spec:
+        contract: ">=1.0.0 <2.0.0"
+        runtime: out-of-process
+
+        implements:
+          - port: BlobStore
+            # Below the S3 plugin's 100, so that an operator who installs both gets a
+            # deterministic answer rather than whichever was registered first. A
+            # tenant that wants the other one uninstalls or disables this.
+            priority: 90
+
+        capabilities:
+          # A `tcp:` target and not a `hosts:` one: what runs inside the tunnel is
+          # HTTPS this plugin terminates itself, so the proxy sees a host and a port
+          # and never a URL (O11, ADR-0027).
+          - id: network:outbound
+            tcp: ["cloud.example.org:443"]
+            reason: "Storing and reading this tenant's media in its Nextcloud"
+          # Without this the plugin has only the deployment's account to write to, and
+          # a tenant that configured its own would be storing in the operator's
+          # (ADR-0073, ADR-0074).
+          - id: core:setting:read
+            reason: "Reading the instance, account and folder this tenant configured"
+
+        settings:
+          # PER TENANT, and every one of them optional: a tenant that sets none uses
+          # the deployment's account, where the tenant id is already part of every
+          # path (ADR-0032). A tenant that wants its own Nextcloud sets `url` and BOTH
+          # credential fields -- half a pair is refused rather than mixed with the
+          # deployment's other half.
+          - key: url
+            type: string
+            required: false
+            label:
+              en: "Nextcloud address"
+              de: "Nextcloud-Adresse"   # spelling-exempt: a manifest's own multilingual DATA
+          - key: username
+            type: string
+            required: false
+            label:
+              en: "Account"
+              de: "Konto"   # spelling-exempt: a manifest's own multilingual DATA
+          # SEALED in the core and opened only into the envelope of this plugin's own
+          # calls (ADR-0019, ADR-0073). An APP password, not the account password: it
+          # carries no web session, and revoking it revokes exactly this integration.
+          - key: appPassword
+            type: secret
+            required: false
+            label:
+              en: "App password"
+              de: "App-Passwort"   # spelling-exempt: a manifest's own multilingual DATA
+          - key: folder
+            type: string
+            required: false
+            label:
+              en: "Folder"
+              de: "Ordner"   # spelling-exempt: a manifest's own multilingual DATA
+
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+
+        resources:
+          # Two chunks of 8 MiB, the connection buffers around them, and the runtime.
+          # An upload larger than one chunk is streamed chunk by chunk rather than
+          # held, so this does not grow with the size of the object -- which is what
+          # lets it fit REQ-NFR-009's per-plugin adder of 64 MB.
+          memoryMiB: 64
+          timeoutSeconds: 120
+  - id: de.greluc.homeinv.plugin.oidc
+    endpoint: "plugin-oidc:8204"
+    fingerprint: "@FINGERPRINT:mtls-plugin-oidc@"
+    publicKey: "@PUBKEY:cosign-plugin-oidc@"
+    manifestInline: |
+      # SPDX-FileCopyrightText: Lucas Greuloch
+      # SPDX-License-Identifier: AGPL-3.0-or-later
+      #
+      # The manifest `plugin-oidc` ships as its reference.
+      #
+      # THE ONE THE CORE READS IS THE ONE THE OPERATOR MOUNTS, generated from
+      # `deploy/services.yaml` beside the container, the network segment and the
+      # egress allowlist (REQ-PLG-013). That matters most here: `spec.capabilities`
+      # carries the host of the provider this deployment federates with, and which
+      # provider that is belongs to the operator and to nobody else.
+
+      apiVersion: home-inv.plugin/v1
+
+      metadata:
+        id: de.greluc.homeinv.plugin.oidc
+        name: "Single sign-on"
+        version: "0.1.0"
+        vendor: "greluc"
+        license: "AGPL-3.0-or-later"
+        homepage: "https://github.com/greluc/Home-Inventory"
+        descriptions:
+          en: "Signs somebody in against an OIDC provider, with PKCE and a verified ID token."
+          de: "Meldet jemanden bei einem OIDC-Anbieter an, mit PKCE und einem geprüften ID-Token."   # spelling-exempt: a manifest's own multilingual DATA
+
+      spec:
+        contract: ">=1.0.0 <2.0.0"
+        runtime: out-of-process
+
+        implements:
+          - port: IdentityProvider
+            priority: 100
+
+        capabilities:
+          # A `hosts:` target and not a `tcp:` one: what this speaks is HTTPS, three
+          # times -- discovery, the key set and the token endpoint -- and the proxy
+          # sees the host it is tunnelling to.
+          - id: network:outbound
+            hosts: ["provider.example"]
+            reason: "Discovery, the signing key set and the token exchange"
+
+        # NO `settings:` BLOCK, and that is the difference from every other
+        # first-party plugin.
+        #
+        # ADR-0073 splits configuration by who decides, and a sign-in has no tenant to
+        # decide anything: it happens BEFORE any tenant is known -- it is the step
+        # that decides which memberships a session may act on. So the issuer, the
+        # client and its secret are the operator's, in this container's environment,
+        # and the core resolves this plugin through the instance operator's grant
+        # rather than a tenant's (ADR-0066).
+
+        health:
+          endpoint: /healthz
+          intervalSeconds: 60
+
+        resources:
+          # A JRE with gRPC, Netty and Nimbus. REQ-NFR-009's per-plugin adder carries
+          # a second figure for exactly this container since ADR-0075, amended before
+          # the plugin was written rather than after: the heap is the smallest part of
+          # the problem, and metaspace, the code cache and the direct buffers all sit
+          # outside what `-XX:MaxRAMPercentage` bounds.
+          memoryMiB: 192
+          timeoutSeconds: 30

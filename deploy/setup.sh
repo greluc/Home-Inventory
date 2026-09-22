@@ -173,8 +173,17 @@ EXT
 generate_secret() {
     name=$1
     kind=$2
+    # Optional third field of `secret-kinds.sh`: a file in this repository the
+    # secret is seeded from. Only `cosign-public` uses one today (ADR-0085).
+    seed=$3
     target="$SECRETS/$name"
-    if [ -f "$target" ]; then
+    # `-s` and not `-f`: a file that is there and EMPTY is not a provisioned
+    # secret. It is what the `external` and `cosign-public` kinds deliberately
+    # leave behind for the operator to fill, and treating it as done would mean
+    # a key added to the repository after the first run never reached a
+    # deployment -- the operator would run setup again, be told the secret was
+    # "kept", and watch their plugins stay unsigned with nothing saying why.
+    if [ -s "$target" ]; then
         # Never overwritten. A regenerated key means every session invalid and
         # every signed URL broken, and a setup script is not where that decision
         # belongs.
@@ -197,6 +206,39 @@ generate_secret() {
             ;;
         mtls-client) generate_mtls "$name" "api" ;;
         mtls-server) generate_mtls "$name" "$(echo "$name" | sed 's/^mtls-//')" ;;
+        cosign-public)
+            # THE PUBLIC half of a plugin publisher's signing key, which the core
+            # verifies that plugin's manifest against (REQ-PLG-004, ADR-0085).
+            #
+            # Seeded from the repository when `services.yaml` named a file and the
+            # file is there -- which is the case for the plugins this project
+            # signs itself. For anybody else's plugin the operator puts their
+            # publisher's key here, exactly as they would a credential, and until
+            # they do the manifest simply verifies as UNSIGNED.
+            #
+            # Never generated. A key pair invented here would verify nothing,
+            # because no publisher would ever have signed with its other half --
+            # and it would look like a check while being one.
+            if [ -n "$seed" ] && [ -f "$HERE/$seed" ]; then
+                cat "$HERE/$seed" > "$target"
+                say "  $name — seeded from $seed"
+            else
+                : > "$target"
+                say "  $name — EMPTY. Put the publisher's cosign public key in $target,"
+                say "      or leave it empty and let the plugin register as unsigned."
+            fi
+            ;;
+        external)
+            # A credential for somebody ELSE's system -- a mail account,
+            # an object store's keys. Generating one would produce a value
+            # that server has never heard of, and the failure would look
+            # like a broken plugin rather than a password nobody set. So an
+            # empty file is created and the operator is told to fill it;
+            # the plugin that reads it reports NOT_CONFIGURED until they do
+            # (REQ-PLG-015).
+            : > "$target"
+            say "  $name — EMPTY. Write the credential into $target before starting."
+            ;;
         *) die "Unknown secret kind '$kind' for $name. services.yaml and this script disagree." ;;
     esac
     # 0444 in a 0700 directory, and the directory is the protection. Compose
@@ -211,6 +253,27 @@ generate_secret() {
     # Podman copies these into its own secret store, which mounts them 0444 too.
     chmod 0444 "$target"
     say "  $name — generated ($kind)"
+}
+
+# Installs one secret into Podman's store, if there is one to install.
+#
+# `podman secret create` refuses an EMPTY file -- "secret data must be larger
+# than 0 and less than 512000 bytes" -- and the `external` kind deliberately
+# writes an empty one: a credential this deployment does not own is not a
+# credential this script may invent. The two met on 2026-09-20 and ended the
+# run at exit 125, with the units copied and nothing started.
+#
+# So an empty file is reported and skipped rather than fatal. The unit that
+# mounts it refuses to start until the operator writes the credential and runs
+# this script again -- which is what a missing secret is supposed to do: stop,
+# and say which file it is waiting for.
+install_secret() {
+    if [ ! -s "$SECRETS/$1" ]; then
+        say "  $1 — NOT installed: it is empty. Write the credential into $SECRETS/$1 and run this script again."
+        return 0
+    fi
+    podman secret exists "$1" 2>/dev/null \
+        || podman secret create "$1" "$SECRETS/$1" >/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -248,6 +311,9 @@ write_environment() {
     search_fingerprint=$(openssl x509 -in "$SECRETS/mtls-search.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
     [ -n "$search_fingerprint" ] || die "the OpenSearch certificate produced no fingerprint."
+    # Empty in `minimal`, for the reason the variable's own comment gives.
+    plugins_file="/run/secrets/plugins.yaml"
+    [ "$profile" = "minimal" ] && plugins_file=""
     cat > "$env_file" <<ENV
 # Written by deploy/setup.sh on first run. Edit freely; it is never overwritten.
 #
@@ -255,6 +321,12 @@ write_environment() {
 # deploy/secrets/ and are mounted, never interpolated.
 
 HOMEINV_PROFILE=$profile
+
+# Where the generated list of installed plugins is, inside api and worker.
+# EMPTY in \`minimal\`, which runs no plugin -- a complete deployment rather
+# than a degraded one (REQ-PLG-013). An instance with no list registers
+# nothing, fetches nothing, and says so once at start-up.
+HOMEINV_PLUGINS_FILE=$plugins_file
 
 # ⚠ PRINTED ONTO EVERY LABEL. Changing it later invalidates every label already
 # printed (10 §10.2.1). For anything beyond a local trial, set it before the
@@ -269,6 +341,28 @@ HOMEINV_MEDIA_BASE_URL=http://media.localhost:8080
 # the frontend segment (REQ-SEC-103). The default covers a local container
 # network; a real deployment narrows it.
 HOMEINV_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# The port on which api answers the plugins that call IT (ADR-0071). 0 is off,
+# and off is right until a plugin is installed that holds host:render-document —
+# a listener nothing can authenticate to is still a listener. Set it to 8091 with
+# that plugin, and to nothing else: it is the only port in the deployment where
+# the direction of a call reverses.
+HOMEINV_PLUGIN_HOST_PORT=0
+
+# Where the operator's OTLP collector listens (REQ-NFR-044, 13 §13.4). EMPTY is
+# the default and means NO TRACING AT ALL: no tracer, no spans, no sampler, and
+# the `traceId` in the logs and in every error document is unchanged. Set it and
+# `api` and `worker` export spans there.
+#
+# It names a collector INSIDE the deployment, on the `internal` segment. These
+# containers have no route to the internet (ADR-0026) and this does not give them
+# one; what your collector forwards to afterwards is yours to decide. The
+# sampling policy of 13 §13.4 -- everything that failed or was slow, a fraction
+# of the rest -- belongs there too: the application sends everything, because a
+# tail decision can only be made where the whole trace is.
+#
+#   HOMEINV_TRACING_ENDPOINT=http://otel-collector:4318/v1/traces
+HOMEINV_TRACING_ENDPOINT=
 
 # The blobstore certificate this deployment just created, pinned by fingerprint.
 HOMEINV_BLOBSTORE_FINGERPRINT=$fingerprint
@@ -323,6 +417,23 @@ render_templates() {
             opensearch-*) [ "$profile" = "minimal" ] && continue ;;
         esac
         target="$SECRETS/$name"
+        # `minimal` runs no plugin, and the generated list names a certificate
+        # that is not created in that profile. The mount still has to exist --
+        # api and worker declare it in every profile -- so it is rendered EMPTY
+        # rather than skipped: an empty list is what "no plugins" looks like,
+        # and a missing file would stop the stack for a reason nobody could
+        # read.
+        case "$name" in
+            *-plugins.yaml)
+                if [ "$profile" = "minimal" ]; then
+                    printf '# The minimal profile runs no plugin (REQ-PLG-013).\nplugins: []\n' \
+                        > "$target"
+                    chmod 0444 "$target"
+                    say "  $name — empty, this profile runs no plugin"
+                    continue
+                fi
+                ;;
+        esac
         cp "$source" "$target"
         for secret in $(grep -o '@SECRET:[a-z0-9-]*@' "$source" | sed 's/@SECRET://; s/@//' | sort -u); do
             value_file="$SECRETS/$secret"
@@ -335,6 +446,47 @@ render_templates() {
             # a sed expression, and gsub takes the replacement literally enough
             # for an alphabet with no `&` in it.
             awk -v needle="@SECRET:$secret@" -v value="$value" \
+                '{ gsub(needle, value); print }' "$target" > "$target.tmp"
+            mv "$target.tmp" "$target"
+        done
+        # A FINGERPRINT is not a secret: it is the public half, and pinning is
+        # what it is for (REQ-SEC-056). It cannot be generated with the file
+        # either, because the certificate does not exist until this script
+        # makes one -- which is why the generated list carries a placeholder
+        # and this is where it is filled in.
+        for pin in $(grep -o '@FINGERPRINT:[a-z0-9-]*@' "$source" \
+                     | sed 's/@FINGERPRINT://; s/@//' | sort -u); do
+            certificate="$SECRETS/$pin.crt"
+            [ -f "$certificate" ] \
+                || die "$name pins the certificate '$pin' and it was not generated."
+            value=$(openssl x509 -in "$certificate" -noout -fingerprint -sha256 \
+                    | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
+            [ -n "$value" ] || die "the certificate '$pin' produced no fingerprint."
+            awk -v needle="@FINGERPRINT:$pin@" -v value="$value" \
+                '{ gsub(needle, value); print }' "$target" > "$target.tmp"
+            mv "$target.tmp" "$target"
+        done
+        # A PUBLIC KEY is not a secret either, and it reaches the core the same
+        # way a fingerprint does: substituted into the generated plugin list
+        # rather than mounted separately. One mount carries the whole list, and
+        # a key the core cannot find is a check the core cannot make.
+        #
+        # `awk` and not `sed`, for the reason the secret loop gives: base64
+        # contains / and +. The value is flattened to ONE LINE first, because a
+        # PEM is several and a YAML scalar is one -- the verifier strips the
+        # armour and the whitespace either way, and a generated file should not
+        # depend on that.
+        for key in $(grep -o '@PUBKEY:[a-z0-9-]*@' "$source" \
+                     | sed 's/@PUBKEY://; s/@//' | sort -u); do
+            key_file="$SECRETS/$key"
+            if [ -s "$key_file" ]; then
+                value=$(tr -d '\r\n' < "$key_file")
+            else
+                # No key installed. The entry keeps an empty value, and a manifest
+                # with no signature beside it is then simply unsigned.
+                value=""
+            fi
+            awk -v needle="@PUBKEY:$key@" -v value="$value" \
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done
@@ -364,8 +516,11 @@ say "  rootless prerequisites: present"
 step "Creating secrets in deploy/secrets/"
 mkdir -p "$SECRETS"
 chmod 0700 "$SECRETS"
-echo "$SECRET_KINDS" | while read -r name kind; do
-    [ -n "$name" ] && generate_secret "$name" "$kind"
+# Three fields since 2026-09-22: `<name> <kind> [<seedFrom>]`. The third is a
+# file in the repository a secret is seeded from, which today is the public key
+# this project signs its own plugin manifests with (ADR-0085).
+echo "$SECRET_KINDS" | while read -r name kind seed; do
+    [ -n "$name" ] && generate_secret "$name" "$kind" "$seed"
 done
 
 step "Rendering the generated files"
@@ -404,17 +559,28 @@ case "$mode" in
         done
         echo "$SECRET_KINDS" | while read -r name _; do
             [ -z "$name" ] && continue
-            podman secret exists "$name" 2>/dev/null \
-                || podman secret create "$name" "$SECRETS/$name" >/dev/null
+            install_secret "$name"
         done
         # The generated files travel the same way: a secret mount is the one
         # mechanism every runtime has for getting a file into a container with a
         # read-only root filesystem and no bind mounts (ADR-0022).
-        for rendered in "$SECRETS"/*.conf "$SECRETS"/*.acl "$SECRETS"/*.yml; do
-            [ -f "$rendered" ] || continue
-            secret_name=$(basename "$rendered")
-            podman secret exists "$secret_name" 2>/dev/null \
-                || podman secret create "$secret_name" "$rendered" >/dev/null
+        #
+        # Driven by what `generate.py` WROTE rather than by a list of
+        # extensions. It was `*.conf *.acl *.yml` until 2026-09-20, and the
+        # plugin list arrived as `*.yaml`: every unit mounting it failed with
+        # `no secret with name or id "worker-plugins.yaml"`, on Podman only,
+        # because Compose mounts a file and Podman needs the secret to exist
+        # first. An extension list is a list somebody has to remember; this
+        # cannot fall behind.
+        for source in "$GENERATED"/*; do
+            secret_name=$(basename "$source")
+            case "$secret_name" in
+                README.md|host-prerequisites.sh|secret-kinds.sh) continue ;;
+            esac
+            # Not rendered in this profile -- `opensearch-*` in `minimal` --
+            # is not an error: the service is not running either.
+            [ -f "$SECRETS/$secret_name" ] || continue
+            install_secret "$secret_name"
         done
         # The same variables Compose reads from compose/.env, in the place the
         # units name. systemd does not interpolate `${VAR}` in `Environment=`, so

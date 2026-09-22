@@ -11,6 +11,15 @@ springBoot = "4.1.1"
 springModulith = "2.1.1"
 
 flyway = "13.6.0"
+
+# The generated Kotlin Multiplatform client of REQ-API-002 and what it runs on.
+# Nothing else in this repository is Kotlin: the client is generated from
+# `api/openapi.yaml` and compiled so that the contract is proved to generate into
+# the place the apps of ADR-0013 will consume it from -- `commonMain`.
+kotlin = "2.4.0"
+ktor = "3.5.1"
+kotlinxSerialization = "1.11.0"
+kotlinxDatetime = "0.8.0"
 postgresql = "42.7.13"
 
 lombok = "1.18.48"
@@ -45,6 +54,11 @@ therapi = "0.15.0"
 # SAST for the JVM code (REQ-SEC-076). `find-sec-bugs` is the plugin that turns
 # SpotBugs from a bug finder into a security one.
 spotbugsPlugin = "6.5.11"
+
+# The SBOM of REQ-CON-010, in CycloneDX. Pinned like everything else: an SBOM
+# produced by a floating generator is an SBOM whose format can change between
+# two releases of the thing it describes.
+cyclonedxPlugin = "3.4.1"
 findSecBugs = "1.14.0"
 
 # The JSON Schema validator of REQ-CORE-027. Draft 2020-12, Apache-2.0, and it
@@ -86,6 +100,21 @@ snakeyaml = "2.6"
 junit = "6.0.3"
 assertj = "3.27.7"
 
+# What `plugins/oidc` is built with. It is a container of its own rather than part
+# of the application, so it cannot reach the versions Spring Boot's platform pins
+# for `:app` -- it names its own, the way `plugin-api` does.
+#
+# Nimbus JOSE+JWT is the whole reason that plugin is in Java (ADR-0072): ID-token
+# validation is where an audited library outweighs an image size, and a subtle
+# verification bug written by hand is how a federated login becomes an
+# authentication bypass. Apache-2.0.
+nimbusJose = "10.9.1"
+# A plugin is a plain process: no Spring Boot, so no starter to bring logging
+# along. slf4j is what grpc-java and Nimbus log through, and logback is the
+# implementation behind it.
+slf4j = "2.0.18"
+logback = "1.5.38"
+
 testcontainers = "2.0.5"
 archunit = "1.5.0"
 
@@ -98,6 +127,65 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+# The read-only GraphQL surface of REQ-API-006. Version managed by the Boot BOM, like every
+# other starter here: graphql-java, spring-graphql and the Jackson binding have to agree, and
+# the BOM is the one place that knows which trio does.
+spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-starter-graphql" }
+
+# What the generated Kotlin client compiles against. The generator's own sample
+# build file names the same set; it lives here instead, because a version in a
+# generated file is a version nothing renovates (REQ-NFR-029).
+# `@Nullable` on a record component, which `NullablePropertiesSaySo` turns into the
+# nullability of a property in the published contract (ADR-0081). Declared rather than
+# relied on transitively for the reason aspectjweaver is: it reaches the API document, and
+# a dependency the CONTRACT depends on is one this build names itself.
+#
+# Jakarta's and not JSpecify's, although Spring Framework 7 brings the latter: JSpecify's
+# `@Nullable` is `TYPE_USE` only, which lands on the type and not on the record's field,
+# accessor or constructor parameter -- where the schema resolver looks. Jakarta's declares
+# no `@Target` at all and is therefore on all four.
+jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api" }
+# Distributed tracing (REQ-NFR-044, 13 §13.4). Micrometer's OpenTelemetry bridge and the
+# OTLP exporter, as LIBRARIES rather than the Java agent 13.4 originally named: they are in
+# the version catalogue, in the SBOM, and inert without a configured endpoint, where an
+# agent is a binary fetched at image build time that instruments whether or not anything
+# is exported (ADR-0082). Versions come from the Boot BOM.
+#
+# The three modules and not `spring-boot-starter-opentelemetry`, which would be shorter and
+# would also drag in `micrometer-registry-otlp`: that registry PUSHES METRICS to
+# `http://localhost:4318/v1/metrics` by default, on a schedule, with nobody having asked
+# for it. A core container that periodically opens a connection nobody configured is the
+# one thing ADR-0026 exists to prevent, and "it only reaches localhost" is not an answer
+# when the point is that it was never decided.
+spring-boot-micrometer-tracing-opentelemetry = { module = "org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry" }
+micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+# Declared rather than relied on transitively: `GraphQlPermissions` is an `@Aspect`, and
+# the weaver arrives today only because resilience4j happens to bring it. A dependency that
+# AUTHORISATION depends on is one this build names itself.
+#
+# The artefact and not `spring-boot-starter-aop`, which Spring Boot 4 no longer publishes:
+# the starter was one dependency and a piece of auto-configuration that is now always on.
+# The version comes from the Boot BOM either way.
+aspectjweaver = { module = "org.aspectj:aspectjweaver" }
+# Carrying the caller and the tenant onto a thread the request did not start on
+# (`ContextPropagation`). It is on the runtime classpath already, through Reactor and
+# Micrometer; compiling against it is what makes the accessors ours rather than theirs.
+context-propagation = { module = "io.micrometer:context-propagation" }
+
+# CSV, for the imports of REQ-PORT-001/002. No version and no new vendor: it is
+# the same Jackson 3 the whole application already speaks, from the same BOM as
+# the YAML and CBOR dataformats beside it. A hand-written RFC 4180 reader was the
+# alternative and was rejected -- quoted newlines, doubled quotes, a BOM and CRLF
+# are exactly the edge cases a parser gets wrong, and this one reads a file
+# somebody uploaded.
+jackson-dataformat-csv = { module = "tools.jackson.dataformat:jackson-dataformat-csv" }
 # `org.springframework.boot:...`, not `org.springframework.session:...`. Boot 4
 # moved every auto-configuration out of `spring-boot-autoconfigure` into a module
 # per technology, and the plain Spring Session artefact carries none: with it
@@ -145,6 +233,9 @@ protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "p
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
 grpc-protoc-gen-java = { module = "io.grpc:protoc-gen-grpc-java", version.ref = "grpc" }
 javax-annotation-api = { module = "javax.annotation:javax.annotation-api", version.ref = "javaxAnnotation" }
+nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbusJose" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 # --- Test ------------------------------------------------------------------
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
@@ -182,3 +273,6 @@ protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugsPlugin" }
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedxPlugin" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

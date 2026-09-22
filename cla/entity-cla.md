@@ -1,144 +1,88 @@
-# Home Inventory — Entity Contributor Licence Agreement
+# Entity Contributor Licence Agreement
 
-> **Draft, not reviewed by a lawyer.** See [the caveat](README.md#a-necessary-caveat).
-> Structure adapted from the Apache Software Foundation Corporate CLA.
+**Home Inventory** · Version 1.0 · 2026-09-16
 
-**Version 1.0 (draft)**
+> **Not reviewed by a lawyer.** The same caveat as the
+> [individual agreement](individual-cla.md): this follows the structure of the
+> Apache Software Foundation's Corporate CLA, is written in this project's own
+> words, and grants **rights of use** rather than transferring copyright
+> (§ 29 UrhG). It needs review by somebody qualified before the first
+> contribution under it is accepted.
 
-This agreement is for an organisation whose employees or contractors contribute
-to Home Inventory (the "Project"), maintained by Lucas Greuloch (the
-"Maintainer"). It must be signed by someone authorised to bind the organisation.
+This is the document for a contribution somebody makes **on behalf of an
+employer or a client** — where the rights in the work belong to a company rather
+than to the person who typed it. If you are contributing in your own right, the
+[individual agreement](individual-cla.md) is the one you want, and many people
+need **both**: one for their own work, one for their employer's.
 
-It covers the rights the organisation holds. Individuals it designates may still
-need to sign the [Individual CLA](individual-cla.md) for anything they contribute
-outside the scope of their employment.
+## 1. What the words mean
 
-## 1. Definitions
+**"The entity"** is the company or organisation signing, together with everyone
+it controls. **"You"** is the person signing on its behalf, who states by signing
+that they are authorised to bind it. **"The project"** is Home Inventory and
+**"the maintainer"** its copyright holder, currently Lucas Greuloch.
 
-**"You"** means the copyright owner or the legal entity authorised by the
-copyright owner that is entering into this agreement. For a legal entity, the
-entity and all others that control, are controlled by, or are under common
-control with it are considered a single contributor. "Control" means (i) the
-power, direct or indirect, to cause the direction or management of such entity,
-whether by contract or otherwise, or (ii) ownership of fifty per cent (50 %) or
-more of the outstanding shares, or (iii) beneficial ownership of such entity.
+**"Contribution"** is anything an authorised person submits to the project on
+the entity's behalf: code, documentation, translations, designs, configuration,
+test data. A pull request is a submission; a suggestion in a comment is not.
 
-**"Contribution"** means any work of authorship, including any modification or
-addition to existing work, that is intentionally submitted by you to the Project
-for inclusion in, or documentation of, any of its products. "Submitted" means any
-form of electronic, verbal or written communication sent to the Maintainer or the
-Project's repositories, including but not limited to communication on issue
-trackers, pull requests, discussions and mailing lists, excluding communication
-conspicuously marked or otherwise designated in writing by you as "Not a
-Contribution".
+## 2. Copyright licence
 
-## 2. Grant of copyright licence
+The entity grants the maintainer and everyone who receives the software a
+**perpetual, worldwide, non-exclusive, irrevocable, royalty-free** licence to
+use its contributions: to reproduce, modify, derive from, distribute and
+sublicense them, **under any licence terms**, including terms different from the
+project's current ones.
 
-Subject to the terms of this agreement, you grant to the Maintainer and to
-recipients of software distributed by the Project a **perpetual, worldwide,
-non-exclusive, royalty-free, irrevocable licence** to reproduce, prepare
-derivative works of, publicly display, publicly perform, sublicense and
-distribute your Contributions and such derivative works.
+## 3. Patent licence
 
-This grant is expressly **not** a transfer of copyright. You retain all right,
-title and interest in and to your Contributions.
+The entity grants the same people a perpetual, worldwide, non-exclusive,
+irrevocable, royalty-free **patent licence** covering any patent claim it owns
+or controls that a contribution would otherwise infringe, to the extent the
+contribution — alone or combined with the project — infringes it.
 
-## 3. Grant of patent licence
+If the entity begins patent litigation alleging that the project or a
+contribution to it infringes a patent, the patent licence granted to **the
+entity** ends on the day it files.
 
-Subject to the terms of this agreement, you grant to the Maintainer and to
-recipients of software distributed by the Project a perpetual, worldwide,
-non-exclusive, royalty-free, irrevocable (except as stated in this section)
-patent licence to make, have made, use, offer to sell, sell, import and otherwise
-transfer the work. This applies only to those patent claims licensable by you
-that are necessarily infringed by your Contribution alone or by combination of
-your Contribution with the work to which it was submitted.
+## 4. Who may contribute under this agreement
 
-If any entity institutes patent litigation alleging that a Contribution, or the
-work to which it was submitted, constitutes direct or contributory patent
-infringement, then any patent licences granted to that entity under this
-agreement for that Contribution or work terminate as of the date such litigation
-is filed.
+The entity names the people authorised to contribute on its behalf, and keeps
+that list current. Adding somebody later is a message to the maintainer, not a
+new agreement.
 
-## 4. Relicensing
+A contribution from somebody who has left the entity, or who was never on the
+list, is **not covered** — it is either the individual's own, under the
+individual agreement, or it is not accepted.
 
-You acknowledge that the Project is currently distributed under
-**AGPL-3.0-or-later**, with the plugin API and SDKs under **Apache-2.0**, and you
-agree that the Maintainer may distribute Contributions under those licences **and
-under other licence terms**, including a commercial licence.
+## 5. What the entity is stating
 
-Every version already published under the AGPL remains available under the AGPL;
-no later relicensing can withdraw what has already been released.
+- Each contribution is work the entity has the right to submit and to license as
+  described above.
+- The person signing is authorised to bind the entity.
+- Every third-party element in a contribution is **identified as such**, with
+  its licence and its origin, in the contribution itself.
+- The entity is not aware of any claim, lien or agreement that would conflict
+  with what it grants here.
 
-## 5. You are entitled to grant this
+## 6. What the entity is not promising
 
-You represent that you are legally entitled to grant the above licences, and that
-each employee or contractor designated by you under section 7 is authorised to
-submit Contributions on your behalf.
+Contributions are provided **as is**, with no warranty of any kind beyond what
+section 5 states.
 
-## 6. The Contributions are original work
+## 7. Keeping it accurate
 
-You represent that each Contribution is an original work of the designated person
-or of you.
+If anything in section 5 stops being true, or the list of authorised people
+changes, tell the maintainer. A correction is welcome; a stale statement is a
+problem for both sides.
 
-You represent that Contribution submissions include complete details of any
-third-party licence or other restriction (including related patents and
-trademarks) of which you are aware and which is associated with any part of the
-Contributions.
+## 8. How this is recorded
 
-## 7. Designated employees
+The person signing does so in a pull request, the same way the individual
+agreement is signed, and names the entity they are binding. The record lives in
+this repository so that it can be read by anybody and outlives the tooling that
+collected it.
 
-Contributions made by the people listed below, from the accounts listed, are
-covered by this agreement. You may update this list at any time by notifying the
-Maintainer in writing.
-
-```
-Name                     GitHub username          E-mail
-______________________   ______________________   ______________________
-______________________   ______________________   ______________________
-______________________   ______________________   ______________________
-```
-
-You agree to notify the Maintainer when a designated person is no longer
-authorised to contribute on your behalf.
-
-## 8. No obligation, no warranty
-
-You are not expected to provide support for Contributions, except to the extent
-you desire to do so.
-
-Unless required by applicable law or agreed to in writing, Contributions are
-provided **on an "AS IS" basis, without warranties or conditions of any kind**,
-either express or implied, including, without limitation, any warranties or
-conditions of title, non-infringement, merchantability or fitness for a
-particular purpose.
-
-The Maintainer is under no obligation to accept, merge or distribute any
-Contribution.
-
-## 9. Tell us if something changes
-
-You agree to notify the Maintainer of any facts or circumstances of which you
-become aware that would make these representations inaccurate in any respect.
-
----
-
-## Signature
-
-```
-Organisation:      ____________________________________________
-
-Registered office: ____________________________________________
-
-Signed by:         ____________________________________________
-
-Title:             ____________________________________________
-
-E-mail:            ____________________________________________
-
-Date:              ____________________________________________
-
-Signature:         ____________________________________________
-```
-
-By signing, you confirm that you are authorised to enter into this agreement on
-behalf of the organisation named above.
+Every commit additionally carries a DCO `Signed-off-by:` trailer, which states
+where the code came from rather than what may be done with it (`REQ-CON-003`,
+`REQ-CON-011`).

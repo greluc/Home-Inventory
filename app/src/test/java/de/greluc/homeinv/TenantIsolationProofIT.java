@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -32,7 +33,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The isolation proof {@code REQ-SEC-007} asks for: <b>every</b> table, two tenants, and a wrongly
+ * The isolation proof {@code REQ-SEC-007} asks for — and the second line {@code REQ-TEN-001} promises, which is the same proof seen from the other side: all data belongs to a tenant and the separation holds independently of the application logic —: <b>every</b> table, two tenants, and a wrongly
  * set context.
  *
  * <h2>Why this exists next to the tests that were already here</h2>
@@ -97,6 +98,20 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       Pattern.compile(">=\\s*\\(?(-?\\d+)\\)?\\s*\\)?\\s*AND", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern HEX_LENGTH = Pattern.compile("\\^\\[0-9a-f]\\{(\\d+)}\\$");
+
+  /**
+   * The ceiling of a {@code length(x) <= n} check, as pg prints it.
+   *
+   * <p>Text columns in this schema are bounded far more often than they are patterned, and the
+   * seeder's own value is 48 characters — {@code isolation-proof-} plus a UUID without its dashes —
+   * so a column taking fewer than that could not be seeded at all. {@code
+   * notification.reminder.subject_kind} was the first, at 40.
+   */
+  /** A column a check requires to be present, as pg prints it. */
+  private static final Pattern MUST_BE_PRESENT =
+      Pattern.compile("(\\w+) IS NOT NULL");
+  private static final Pattern MAX_LENGTH =
+      Pattern.compile("length\\([^)]*\\)\\s*<=\\s*(\\d+)");
 
   /**
    * The length of a {@code length(x) = n} check, as pg prints it.
@@ -340,7 +355,19 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         continue;
       }
       Map<UUID, UUID> rows = seeded.getOrDefault(reference.getValue(), Map.of());
-      UUID parent = rows.getOrDefault(tenant, rows.values().stream().findFirst().orElse(null));
+      // THIS TENANT'S ROW, and another tenant's only when the target is
+      // instance-wide and has no tenant to belong to. A reference between two
+      // tenant-scoped tables is tenant-qualified (07 §7.5), so a parent seeded
+      // for a different tenant is not a weaker choice but an impossible one --
+      // the composite foreign key refuses it, and the refusal names a constraint
+      // `relax` cannot do anything about, so the table fails to seed.
+      // `notification.notification.webhook_target_id` is where that first showed,
+      // on 2026-09-21; every earlier nullable reference happened to point at a
+      // table seeded for every tenant before it.
+      UUID parent =
+          rows.containsKey(tenant) || hasColumn(superuser, reference.getValue(), "tenant_id")
+              ? rows.get(tenant)
+              : rows.values().stream().findFirst().orElse(null);
       if (parent != null) {
         columns.add(reference.getKey());
         values.add("'" + parent + "'");
@@ -463,7 +490,68 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         values.remove(at);
         changed = true;
       }
+      if (!kept) {
+        // The row carries NONE of them, which `num_nonnulls(...) = 1` refuses as
+        // firmly as it refuses two. It happens when every named column is nullable
+        // and none is a foreign key the optimistic pass could fill —
+        // `inventory.loan` is the first: a borrower is a member of the tenant or a
+        // typed name, and the member column deliberately has no foreign key
+        // (07 §7.8), so nothing upstream had a reason to write either.
+        //
+        // The FIRST of them is added with a value derived from its type, the same
+        // way a required column of that type would have been. Dropping to a list
+        // of tables here would be the exemption this seeder exists to refuse.
+        for (String column : named) {
+          String type = columnType(superuser, table, column);
+          if (type == null) {
+            continue;
+          }
+          columns.add(column);
+          values.add(
+              valueFor(
+                  table,
+                  new Column(column, type),
+                  tenant,
+                  UUID.randomUUID(),
+                  checkClauses(superuser, table),
+                  foreignTargets,
+                  seeded));
+          return true;
+        }
+      }
       return changed;
+    }
+
+    // A check that says a column must be PRESENT, when the row does not carry it.
+    // `media.media_object` has `(ref_count = 0) = (unreferenced_since IS NOT NULL)`
+    // and `ref_count` defaults to zero, so the left side is true and the right
+    // one has to be filled. The sibling shape on `inventory.item` --
+    // `(lifecycle_state = 'TRASHED') = (deleted_at IS NOT NULL)` -- never bit,
+    // because both halves are false by default and false equals false.
+    //
+    // Tried before the fallback below, which DROPS nullable columns: dropping is
+    // the wrong direction for a constraint complaining that something is absent.
+    Matcher present = MUST_BE_PRESENT.matcher(clause);
+    while (present.find()) {
+      String column = present.group(1);
+      if (columns.contains(column)) {
+        continue;
+      }
+      String type = columnType(superuser, table, column);
+      if (type == null) {
+        continue;
+      }
+      columns.add(column);
+      values.add(
+          valueFor(
+              table,
+              new Column(column, type),
+              tenant,
+              UUID.randomUUID(),
+              checkClauses(superuser, table),
+              foreignTargets,
+              seeded));
+      return true;
     }
 
     Set<String> nullable = nullableColumns(superuser, table);
@@ -574,6 +662,19 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     if ("tenant_id".equals(column.name())) {
       return "'" + tenant + "'";
     }
+    // THE ROW'S OWN ID, and not a fresh one. The caller records `id` as what it
+    // seeded and later rows point their foreign keys at it, so a second random
+    // value here produces a row nothing can reference -- and the failure appears
+    // in a DIFFERENT table, as a foreign key naming an id that was never written.
+    //
+    // It only arises where `id` has no column default and therefore arrives in
+    // the required columns rather than being appended afterwards.
+    // `notification.webhook_target` is the first such table (2026-09-21): its id
+    // is assigned by the application because the signing secret is sealed against
+    // it, so the row has to know its id before it exists.
+    if ("id".equals(column.name())) {
+      return "'" + id + "'";
+    }
     String target = foreignTargets.get(column.name());
     if (target != null) {
       Map<UUID, UUID> rows = seeded.getOrDefault(target, Map.of());
@@ -592,6 +693,11 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     return switch (column.type().toLowerCase(Locale.ROOT)) {
       case "uuid" -> "'" + UUID.randomUUID() + "'";
       case "timestamp with time zone", "timestamp without time zone" -> "now()";
+      // A date is not a timestamp to PostgreSQL and a text value is not a date:
+      // `inventory.maintenance_entry.performed_on` is the first column of this
+      // type the proof met, and it failed to seed rather than quietly skipping
+      // the table, which is the behaviour this seeder is written for.
+      case "date" -> "current_date";
       case "boolean" -> "false";
       // Zero unless a check demands more. `location.depth` must be 0 for the row to
       // be a root — `nlevel(path) = depth + 1` with one label, and
@@ -607,6 +713,13 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       // type; here that is `ltree`, and the only one is `location.path`, whose
       // check ties it to `depth`. One label, depth zero, no parent.
       case "user-defined" -> "text2ltree('n" + id.toString().replace("-", "") + "')";
+      // `ARRAY` is what information_schema calls any array column, whatever it
+      // holds -- the element type is in `element_types`, which this proof does
+      // not read because one element of one value is all a seed needs. One
+      // element, not none: `webhook_target.event_types` is the first array here
+      // and it carries `cardinality(...) BETWEEN 1 AND 50`, so an empty array
+      // would be refused for a reason that has nothing to do with isolation.
+      case "array" -> "array['isolation-proof-" + id.toString().replace("-", "") + "']";
       default -> textValue(check, id);
     };
   }
@@ -635,14 +748,26 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       // Verified rather than guessed: the candidates are tried against the column's
       // own expression and the first that matches wins. A shape none of them fits
       // fails here by name, which is the signal to add a candidate.
-      String expression = regex.group(1);
-      for (String candidate : List.of("ip" + unique, unique, "isolation-proof-" + unique)) {
-        if (candidate.matches(expression)) {
+      //
+      // `find` and not `matches`, since 2026-09-21: PostgreSQL's `~` asks whether
+      // the value CONTAINS a match, and `String.matches` asks whether the whole
+      // value is one. Every regex in the schema was fully anchored until
+      // `webhook_target.url ~ '^https://'`, where the two differ -- and there the
+      // stricter reading is unsatisfiable, because no string both starts with
+      // `https://` and is nothing else.
+      Pattern expression = Pattern.compile(regex.group(1));
+      for (String candidate :
+          List.of(
+              "ip" + unique,
+              unique,
+              "isolation-proof-" + unique,
+              "https://isolation-proof.example/" + unique)) {
+        if (expression.matcher(candidate).find()) {
           return "'" + candidate + "'";
         }
       }
       throw new AssertionError(
-          "The isolation proof has no seed value matching " + expression + ". Add one to the "
+          "The isolation proof has no seed value matching " + expression.pattern() + ". Add one to the "
               + "candidates in textValue rather than relaxing the constraint.");
     }
     if (check.contains("= ANY")) {
@@ -654,7 +779,27 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         return "'" + literal.group(1) + "'";
       }
     }
-    return "'isolation-proof-" + unique + "'";
+    return "'" + bounded("isolation-proof-" + unique, check) + "'";
+  }
+
+  /**
+   * The value, shortened to whatever ceiling the column's check names.
+   *
+   * <p>Truncated from the <b>front</b> so that what survives is the unique half: two rows seeded
+   * from one literal collide on the unique indexes these tables carry, and keeping the readable
+   * prefix while dropping the entropy would be exactly the wrong half to keep.
+   *
+   * @param candidate the value the seeder would otherwise use
+   * @param check the check clause naming this column, or an empty string
+   * @return the candidate, shortened when the column says so
+   */
+  private String bounded(String candidate, String check) {
+    Matcher ceiling = MAX_LENGTH.matcher(check);
+    if (!ceiling.find()) {
+      return candidate;
+    }
+    int max = Integer.parseInt(ceiling.group(1));
+    return candidate.length() <= max ? candidate : candidate.substring(candidate.length() - max);
   }
 
   /**
@@ -698,6 +843,30 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       return "decode(repeat('00', " + exact.group(1) + "), 'hex')";
     }
     return "'\\x00'::bytea";
+  }
+
+  /**
+   * The SQL type of one column, as {@code information_schema} names it.
+   *
+   * @param superuser the connection that may read the catalogue
+   * @param table the qualified table name
+   * @param column the column
+   * @return its data type, or {@code null} when the table has no such column
+   * @throws SQLException when the catalogue cannot be read
+   */
+  private String columnType(Connection superuser, String table, String column) throws SQLException {
+    String[] parts = table.split("\\.");
+    String sql =
+        "select data_type from information_schema.columns "
+            + "where table_schema = ? and table_name = ? and column_name = ?";
+    try (PreparedStatement statement = superuser.prepareStatement(sql)) {
+      statement.setString(1, parts[0]);
+      statement.setString(2, parts[1]);
+      statement.setString(3, column);
+      try (ResultSet rows = statement.executeQuery()) {
+        return rows.next() ? rows.getString(1) : null;
+      }
+    }
   }
 
   private record Column(String name, String type) {}

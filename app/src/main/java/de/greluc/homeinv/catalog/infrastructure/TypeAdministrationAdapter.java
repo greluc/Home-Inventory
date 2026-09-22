@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.infrastructure;
 
+import de.greluc.homeinv.catalog.domain.PatternSafety;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.catalog.api.AttributeUsage;
 import de.greluc.homeinv.catalog.api.FieldAdded;
@@ -208,7 +209,8 @@ public class TypeAdministrationAdapter implements TypeAdministration {
               field.searchable(),
               field.sortable(),
               field.facetable(),
-              field.sensitive()),
+              field.sensitive(),
+              field.expiry()),
           actor);
     }
     publish(type.draftVersionId(), actor);
@@ -228,10 +230,16 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     jdbc.sql(
             """
             update catalog.item_type
-            set icon = ?, updated_at = now(), updated_by = ?, version = version + 1
+            set icon = ?, useful_life_months = ?,
+                updated_at = now(), updated_by = ?, version = version + 1
             where tenant_id = ? and id = ?
             """)
-        .params(command.icon(), actor, TenantContext.require(), typeId)
+        .params(
+            command.icon(),
+            command.usefulLifeMonths(),
+            actor,
+            TenantContext.require(),
+            typeId)
         .update();
     return loadItemType(typeId).orElseThrow();
   }
@@ -485,14 +493,14 @@ public class TypeAdministrationAdapter implements TypeAdministration {
                             (id, tenant_id, item_type_version_id, location_category_version_id,
                              key, data_type, labels, help_texts, required, default_value,
                              constraints, value_list_id, visibility, field_group, display_order,
-                             searchable, sortable, facetable, sensitive, deprecated_at,
+                             searchable, sortable, facetable, sensitive, expiry, deprecated_at,
                              created_by, updated_by)
                         select uuidv7(), tenant_id,
                                case when ? then null else ? end,
                                case when ? then ? else null end,
                                key, data_type, labels, help_texts, required, default_value,
                                constraints, value_list_id, visibility, field_group, display_order,
-                               searchable, sortable, facetable, sensitive, deprecated_at, ?, ?
+                               searchable, sortable, facetable, sensitive, expiry, deprecated_at, ?, ?
                         from catalog.field_definition
                         where tenant_id = ?
                           and (item_type_version_id = ? or location_category_version_id = ?)
@@ -603,11 +611,11 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             insert into catalog.field_definition
                 (id, tenant_id, item_type_version_id, key, data_type, labels, help_texts,
                  required, default_value, constraints, value_list_id, visibility, field_group,
-                 display_order, searchable, sortable, facetable, sensitive, deprecated_at,
+                 display_order, searchable, sortable, facetable, sensitive, expiry, deprecated_at,
                  inherited_from, created_by, updated_by)
             select uuidv7(), tenant_id, ?, key, data_type, labels, help_texts,
                    required, default_value, constraints, value_list_id, visibility, field_group,
-                   display_order, searchable, sortable, facetable, sensitive, deprecated_at,
+                   display_order, searchable, sortable, facetable, sensitive, expiry, deprecated_at,
                    id, ?, ?
             from catalog.field_definition
             where tenant_id = ? and id = ?
@@ -638,9 +646,9 @@ public class TypeAdministrationAdapter implements TypeAdministration {
                 (id, tenant_id, item_type_version_id, location_category_version_id, key, data_type,
                  labels, help_texts, required, default_value, constraints, value_list_id,
                  visibility, field_group, display_order, searchable, sortable, facetable,
-                 sensitive, created_by, updated_by)
+                 sensitive, expiry, created_by, updated_by)
             values (?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?,
-                    ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?)
             """)
         .params(
             fieldId,
@@ -662,6 +670,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             command.sortable(),
             command.facetable(),
             command.sensitive(),
+            command.expiry(),
             actor,
             actor)
         .update();
@@ -689,8 +698,8 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             set data_type = ?, labels = ?::jsonb, help_texts = ?::jsonb, required = ?,
                 default_value = ?::jsonb, constraints = ?::jsonb, value_list_id = ?,
                 visibility = ?::jsonb, field_group = ?, display_order = ?, searchable = ?,
-                sortable = ?, facetable = ?, sensitive = ?, updated_at = now(), updated_by = ?,
-                version = version + 1
+                sortable = ?, facetable = ?, sensitive = ?, expiry = ?, updated_at = now(),
+                updated_by = ?, version = version + 1
             where tenant_id = ? and id = ?
             """)
         .params(
@@ -708,6 +717,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
             command.sortable(),
             command.facetable(),
             command.sensitive(),
+            command.expiry(),
             actor,
             tenantId,
             fieldId)
@@ -1010,6 +1020,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private static final String ITEM_TYPE_SELECT =
       """
       select t.id, t.key, t.kind, t.parent_id, t.icon, t.builtin, t.archived_at, t.created_at,
+             t.useful_life_months,
              (select v.id from catalog.item_type_version v
                where v.tenant_id = t.tenant_id and v.item_type_id = t.id
                  and v.published_at is not null
@@ -1127,7 +1138,11 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         rs.getBoolean("builtin"),
         rs.getTimestamp("archived_at") != null,
         rs.getObject("published_id", UUID.class),
-        rs.getObject("draft_id", UUID.class));
+        rs.getObject("draft_id", UUID.class),
+        // `getInt` would turn "this type is not depreciated" into a useful life
+        // of zero months, which the check constraint forbids and the run would
+        // divide by.
+        rs.getObject("useful_life_months", Integer.class));
   }
 
   /**
@@ -1389,6 +1404,18 @@ public class TypeAdministrationAdapter implements TypeAdministration {
    * @throws IllegalArgumentException when an enumeration names no list, or a non-enumeration does
    */
   private void requireFieldShape(FieldCommand command) {
+    // The pattern is tenant data that every item of this tenant is then matched
+    // against, and Java's regular expressions backtrack. Refused where it is
+    // written rather than met later as "saving an item hangs" (REQ-SEC-035,
+    // PatternSafety); the time limit in `BoundedRegularExpressions` is the other
+    // half, for the shapes this does not know about.
+    if (command.constraints() != null) {
+      PatternSafety.refuses(command.constraints().pattern())
+          .ifPresent(
+              reason -> {
+                throw new IllegalArgumentException(reason);
+              });
+    }
     if (command.labels() == null || command.labels().isEmpty()) {
       throw new IllegalArgumentException(
           "A field needs a label in at least one language: nothing else can name it on a form.");
@@ -1407,11 +1434,33 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     // while appearing to work, and the tenant who set both flags would meet that
     // as "the search does not find my field" weeks later. The contradiction is
     // refused where it is made.
+    if (command.sensitive() && command.expiry()) {
+      // The same contradiction one field further on: a sensitive value is stored
+      // encrypted and never projected, so an expiry that is also sensitive would
+      // be a date that never reaches the overview it was marked for -- met as
+      // "my licence dates are missing" weeks later.
+      throw new IllegalArgumentException(
+          "A sensitive field cannot also be an expiry: it is stored encrypted and is never "
+              + "mirrored, so it could never appear in the overview of what runs out. Choose one.");
+    }
     if (command.sensitive() && (command.searchable() || command.sortable() || command.facetable())) {
       throw new IllegalArgumentException(
           "A sensitive field cannot also be searchable, sortable or facetable: it is stored "
               + "encrypted, so an index over it would hold ciphertext and match nothing. Choose "
               + "one.");
+    }
+    // Only a date can expire. The database refuses it too, but a constraint
+    // violation reaches a client as a 500 while this reaches it as a 422 naming
+    // the field -- the same division of labour `requireInScope` draws in
+    // `inventory` (REQ-CORE-005).
+    if (command.expiry()
+        && command.dataType() != de.greluc.homeinv.catalog.api.FieldDataType.DATE
+        && command.dataType() != de.greluc.homeinv.catalog.api.FieldDataType.DATETIME) {
+      throw new IllegalArgumentException(
+          "Only a date field can be marked as an expiry: the overview of REQ-LIFE-013 sorts by due "
+              + "date, and a "
+              + command.dataType().token()
+              + " has none.");
     }
   }
 

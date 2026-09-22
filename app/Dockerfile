@@ -27,6 +27,23 @@ COPY app/build.gradle.kts ./app/
 # difference between an image that builds and one that does not. Its build file
 # comes with the other declarations; its sources follow below.
 COPY plugin-api/build.gradle.kts ./plugin-api/
+# And `plugins/oidc`, which joined the build on 2026-09-21 (ADR-0072). Gradle
+# configures EVERY project in `settings.gradle.kts` whatever task is asked for,
+# so a missing directory fails `:app:bootJar` with a message about a project
+# this image does not build -- which is what it did until this line existed.
+# Its build file only: the plugin's sources are its own image's business.
+COPY plugins/oidc/build.gradle.kts ./plugins/oidc/
+# And the generated Kotlin client, which joined the build on 2026-09-21
+# (REQ-API-002). Gradle configures EVERY project in `settings.gradle.kts`
+# whatever task is asked for, and refuses one whose directory is not there --
+# which is what broke this image, and the application image, and both smoke
+# runtimes with them.
+#
+# An EMPTY DIRECTORY and not its build file: a project needs a directory to be
+# configured and a build file only to do anything. Copying the build file would
+# make this image resolve and download the whole Kotlin Multiplatform toolchain
+# to build a Java artefact that does not use it.
+RUN mkdir -p api/clients/kotlin
 RUN ./gradlew --no-daemon :app:dependencies --configuration runtimeClasspath > /dev/null 2>&1 || true
 
 # The BlobStore contract. `app/build.gradle.kts` points the protobuf plugin at
@@ -49,6 +66,16 @@ COPY app/src ./app/src
 # path, so this line names the file rather than the directory: nothing else
 # under `docs/` is in the context to copy.
 COPY docs/reference/type-templates.yaml ./docs/reference/
+
+# WHICH COMMIT THIS IMAGE IS (REQ-CON-009).
+#
+# There is no git here -- no binary and no `.git` directory -- so the build
+# cannot find out for itself, and an image that reported `unknown` would leave
+# the AGPL's source offer pointing at a project rather than at a build. The
+# caller passes it: `docker build --build-arg HOMEINV_BUILD_COMMIT=$(git rev-parse --short=12 HEAD)`.
+ARG HOMEINV_BUILD_COMMIT=unknown
+ENV HOMEINV_BUILD_COMMIT=${HOMEINV_BUILD_COMMIT}
+
 RUN ./gradlew --no-daemon :app:bootJar -x test
 
 # The layered jar, so the runtime image gets the dependencies in one layer and

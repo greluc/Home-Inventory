@@ -402,7 +402,7 @@ public class OpenApiConfiguration {
   }
 
   /**
-   * Removes the two things springdoc infers that this contract must not carry.
+   * Removes the one thing springdoc infers that this contract must not carry.
    *
    * <p><strong>Servers.</strong> springdoc fills in the URL the document was fetched from, which
    * here is a test container's {@code http://localhost}. A base URL belongs to a deployment, not to
@@ -410,14 +410,22 @@ public class OpenApiConfiguration {
    * labels — so a hostname baked in here would be one a client copies from the wrong instance. The
    * {@code homeinv-no-server-urls} rule in {@code api/spectral.yaml} fails the build if one returns.
    *
-   * <p><strong>Tags.</strong> springdoc tags every operation with a slug of the class that handles
-   * it, so the contract would name {@code item-controller} and {@code media-controller} — internal
-   * class names, published, and renaming a class would be a contract change. Twelve endpoints need
-   * no taxonomy; an invented one would be a second thing to maintain.
+   * <p><strong>Tags.</strong> This removed them too until 2026-09-21, for a reason that was right
+   * when it was written and had stopped being right: springdoc tags every operation with a slug of
+   * the class that handles it, so the contract would have named {@code item-controller} and {@code
+   * media-controller} — internal class names, published, and renaming a class would be a contract
+   * change. The sentence beside it read <i>"twelve endpoints need no taxonomy"</i>, and by then
+   * there were a hundred and thirty-three paths.
    *
-   * <p>Both run after springdoc has finished building, which is why the test profile disables
-   * springdoc's document cache: a cached document is re-served through the server-filling step
-   * without passing here again.
+   * <p>So the tags are <b>chosen</b> now rather than inferred or removed: every controller carries
+   * a {@code @Tag} with a name and a sentence, {@code ArchitectureRulesTest} refuses one that does
+   * not, and the generated clients of {@code REQ-API-002} split into one file per area instead of
+   * a single class with a hundred and thirty-three methods. The names are contract — a generated
+   * client's class name derives from them — which is exactly why they are not class slugs.
+   *
+   * <p>The server stripping runs after springdoc has finished building, which is why the test
+   * profile disables springdoc's document cache: a cached document is re-served through the
+   * server-filling step without passing here again.
    *
    * @return the customiser
    */
@@ -425,11 +433,6 @@ public class OpenApiConfiguration {
   public OpenApiCustomizer homeInventoryDocumentShape() {
     return openApi -> {
       openApi.setServers(null);
-      openApi.setTags(null);
-      if (openApi.getPaths() != null) {
-        openApi.getPaths().values().forEach(path -> path.readOperations().forEach(
-            operation -> operation.setTags(null)));
-      }
       if (openApi.getComponents() == null) {
         openApi.setComponents(new Components());
       }

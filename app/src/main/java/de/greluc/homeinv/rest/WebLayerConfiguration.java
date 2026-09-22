@@ -8,6 +8,7 @@ import de.greluc.homeinv.platform.TrustedProxies;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * The servlet-level pieces that sit in front of everything else.
  */
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(RateLimitProperties.class)
 @RequiredArgsConstructor
 public class WebLayerConfiguration implements WebMvcConfigurer {
 
@@ -32,6 +34,8 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
   private final TenantAccessInterceptor tenantAccessInterceptor;
   private final SecondFactorLockInterceptor secondFactorLockInterceptor;
   private final SecondFactorFreshnessInterceptor secondFactorFreshnessInterceptor;
+  private final ApiUsageInterceptor apiUsageInterceptor;
+  private final RateLimitInterceptor rateLimitInterceptor;
 
   /**
    * Puts the permission check in front of every handler.
@@ -50,6 +54,17 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
     // records nothing for a request the interceptors below refuse, because a
     // refused request changed nothing (REQ-SEC-068).
     registry.addInterceptor(auditTrailInterceptor);
+    // Second, so its `afterCompletion` runs second-to-last and sees the status
+    // every interceptor below it settled on -- including a refusal. A shutdown
+    // decision needs to know that a deprecated endpoint is still being CALLED,
+    // and a caller who is refused is still a caller (REQ-API-009).
+    registry.addInterceptor(apiUsageInterceptor);
+    // Before the permission check, which is the OPPOSITE of where the quota
+    // sits and is the opposite reason. A call the caller was never allowed to
+    // make should not come out of their monthly allowance -- but it did cost the
+    // instance a request, and a flood of refused calls is exactly the flood
+    // worth stopping (REQ-SEC-064).
+    registry.addInterceptor(rateLimitInterceptor);
     registry.addInterceptor(permissionInterceptor);
     // Before the quota, and after the permission check. A request to a tenant
     // that is suspended or waiting to be erased answers 403 and should not come

@@ -1,0 +1,57 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+//
+// WHAT A PLUGIN MAY ASK THE CORE FOR.
+//
+// The one service in this contract that runs THE OTHER WAY ROUND: every other
+// one is served by a plugin and called by the core. This one is served by the
+// core and called by a plugin, and that direction is why it is narrow and why it
+// is going to stay narrow.
+//
+// It exists because a plugin that produces a document should not have to carry a
+// PDF library and a font pack of its own. It describes the document and asks the
+// core, which renders it with whichever DocumentRenderer the operator installed
+// -- possibly a different plugin, which the caller never addresses and never
+// learns the name of.
+//
+// WHAT IT IS NOT. It is not a way into the core's data. There is no "read the
+// item I am working on" here and there will not be one: a plugin is given what
+// it needs in the call it is answering (REQ-SEC-011), and an endpoint that let
+// it fetch more would make every capability grant a starting point rather than a
+// boundary. Everything here takes what the caller already has and gives back
+// something made from it.
+//
+// HOW IT IS GUARDED (ADR-0071):
+//   * A SEPARATE PORT on a separate listener. Port 8090 still refuses every
+//     plugin segment (REQ-SEC-100) -- this is not that port, and nothing on it
+//     answers anything but the methods below.
+//   * mTLS IN BOTH DIRECTIONS. The caller presents the certificate whose
+//     fingerprint the operator pinned at registration, which is the same
+//     fingerprint the core already pins when calling that plugin. An unknown
+//     certificate is refused before a method is dispatched.
+//   * A CAPABILITY PER METHOD. `host:render-document` is granted per tenant like
+//     every other capability (REQ-PLG-005). Without it the call is refused and
+//     logged, and the plugin has no way to tell a missing grant from a missing
+//     renderer -- both are FAILED_PRECONDITION.
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/document_renderer.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "HostProto";
+
+// What the core offers to the plugins it runs.
+service HostServices {
+  // Renders a document the caller describes.
+  //
+  // The same document model a DocumentRenderer receives, so a plugin describing
+  // one describes it once whether the core asked for it or the plugin did. The
+  // core picks the renderer; the caller does not name one, because which
+  // renderer is installed is the operator's decision and not the caller's.
+  rpc RenderDocument(stream DocumentRendererRenderRequest)
+      returns (stream DocumentRendererRenderResponse);
+}

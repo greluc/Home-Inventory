@@ -22,6 +22,13 @@ mod store;
 mod tls;
 
 /// The generated contract from `proto/home_inv/plugin/v1/blob_store.proto`.
+///
+/// `dead_code` is allowed here and nowhere else. The contract gained a `CallContext`
+/// on 2026-09-21, which pulled `common.proto` into this module with every message
+/// it carries — `Money`, `Check`, `Problem` and the rest, none of which this service
+/// constructs and all of which a plugin does. The alternative would be a second
+/// generated module per service, which is a build that knows what each consumer uses.
+#[allow(dead_code)]
 mod proto {
     tonic::include_proto!("home_inv.plugin.v1");
 }
@@ -46,6 +53,22 @@ const DEFAULT_IDENTITY: &str = "/run/secrets/mtls-blobstore";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
+    //
+    // A permissive licence asks for its notice in every copy, and a statically
+    // linked binary is a copy. This image is `scratch` — one binary and nothing
+    // else, which CI asserts — so there is no file to put beside it and the
+    // notice is compiled in, exactly as the public roots are in the plugins
+    // that speak TLS.
+    //
+    // First, before the logger: somebody reading a licence should get the
+    // licence and not a JSON log line above it. `tools/notices.py` generates
+    // the file and CI fails when it no longer describes what is linked in.
+    if std::env::args().any(|argument| argument == "--licences") {
+        print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
+        return Ok(());
+    }
+
     // JSON lines, like every other service in the deployment (REQ-NFR-041). An
     // operator reading one log format is an operator who can grep across
     // services.
@@ -118,4 +141,23 @@ fn env_port() -> u16 {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_PORT)
+}
+
+#[cfg(test)]
+mod licences {
+    /// The notice is compiled into the binary rather than read from a file
+    /// (`REQ-CON-013`). A `scratch` image has no filesystem to read one from,
+    /// so an absent notice would be a link error here and a licence breach in
+    /// production; this makes it the former.
+    #[test]
+    fn the_notice_travels_with_the_binary() {
+        let notice = include_str!("../THIRD-PARTY-NOTICES.txt");
+
+        assert!(notice.starts_with("THIRD-PARTY LICENCE NOTICES"));
+        assert!(notice.contains("tonic"));
+        assert!(
+            notice.len() > 10_000,
+            "a notice this short is a generator that failed"
+        );
+    }
 }

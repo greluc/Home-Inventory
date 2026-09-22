@@ -23,4 +23,16 @@ public interface ItemLocationUsage {
    * @return {@code true} when deleting it would orphan something
    */
   boolean anyItemIn(UUID locationId);
+
+  /**
+   * How many live items a location still holds.
+   *
+   * <p>REQ-CORE-046 asks the refusal to state <b>the number</b>, and a caller that only knew
+   * <i>whether</i> would have to say "some". Zero means the same as {@link #anyItemIn} returning
+   * {@code false}; both are kept because one reads better at a call site that only branches.
+   *
+   * @param locationId the location
+   * @return how many live items are in it
+   */
+  long itemsIn(UUID locationId);
 }

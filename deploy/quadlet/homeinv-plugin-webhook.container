@@ -1,0 +1,28 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory plugin-webhook
+
+[Container]
+ContainerName=homeinv-plugin-webhook
+Image=ghcr.io/greluc/home-inv-plugin-webhook:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-plugin-webhook.network:alias=plugin-webhook
+Environment=HOMEINV_PLUGIN_PORT=8200
+Environment=HOMEINV_MTLS_PLUGIN_FILE=/run/secrets/mtls-plugin-webhook
+Environment=HOMEINV_EGRESS_PROXY=egress-proxy:8118
+Environment=HOMEINV_WEBHOOK_TIMEOUT_SECONDS=10
+Secret=mtls-plugin-webhook,type=mount
+
+[Service]
+MemoryMax=128M
+MemoryLow=32M
+Restart=on-failure

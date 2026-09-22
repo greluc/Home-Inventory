@@ -5,9 +5,15 @@
 # Nothing secret ever lands in this repository — it is public, and every file in
 # it is world-readable from the moment it is pushed.
 #
-# This file does one thing: it stops the scanner reporting the deliberately fake
-# password the integration tests share. It does NOT relax the rules anywhere a
-# real credential could appear.
+# This file adds allowlists and nothing else: every default rule stays on. Each
+# entry below names a value that is not a credential and could not become one —
+# a deliberately fake test password, an illustrative string in a specification, a
+# broker routing key. It does NOT relax the rules anywhere a real credential
+# could appear, and each entry is scoped to the paths where its value belongs, so
+# the same string somewhere else is still a finding.
+#
+# The bar for adding one: a pattern that is WRONG for this codebase, rather than
+# one that is merely inconvenient today.
 
 [extend]
 # Every default rule stays on. This file adds an allowlist; it replaces nothing.
@@ -109,3 +115,34 @@ CI only scans the commits a push carries, so this one did not fire on 2026-09-12
 diagnosed under time pressure later.
 """
 paths = ['''design-system/.*\.prompt\.md$''']
+
+[[allowlists]]
+description = """
+The routing keys the RabbitMQ listeners bind to.
+
+`ItemIndexListener` and `MediaDerivationListener` declare their bindings with
+`key = "item-purged.v1"` and nine siblings of the same shape. The generic-api-key
+rule fires on the adjacency — a field literally called `key`, assigned a quoted
+string — and the string is a broker binding pattern that every consumer of this
+exchange has to know. A routing key is addressed to, not authenticated with:
+the broker authenticates its caller by RabbitMQ user (`12 §12.2`, ADR-0044,
+REQ-SEC-104), so knowing the name of a binding buys nothing without one.
+
+Allowlisted by SHAPE rather than by value, deliberately. Only `item-purged.v1`
+tripped the entropy threshold on 2026-09-16; the other nine are the same
+construct and differ from it by luck. Allowlisting the one that fired is how the
+same finding returns under a different name the day an event is added — the
+lesson the test passphrase above already taught this file once.
+
+`regexTarget = "line"` because the prefix is what makes this narrow: the pattern
+matches an annotation element assigned a versioned event name, not any string in
+these files. A real credential in a listener would not end in `.v<digits>`, and
+one that did would still be a finding anywhere outside these two paths.
+"""
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''app/src/main/java/de/greluc/homeinv/search/infrastructure/ItemIndexListener\.java$''',
+  '''app/src/main/java/de/greluc/homeinv/media/infrastructure/MediaDerivationListener\.java$''',
+]
+regexes = ['''key = "[a-z][a-z0-9-]*\.v[0-9]+"''']

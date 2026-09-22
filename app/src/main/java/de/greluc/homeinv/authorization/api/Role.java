@@ -125,6 +125,7 @@ public enum Role {
       // everybody sees; that is a member's to make. Taking one away from
       // everybody is not, and is ADMIN's (REQ-SRCH-008).
       Permission.SAVED_SEARCH_WRITE,
+      Permission.REMINDER_RULE_WRITE,
       // What foreign code may reach here is something anybody working in the
       // tenant has an interest in knowing; agreeing to it is ADMIN's.
       Permission.PLUGIN_READ,
@@ -161,15 +162,27 @@ public enum Role {
       Permission.TAG_ASSIGN,
       Permission.SAVED_SEARCH_WRITE,
       Permission.SAVED_SEARCH_DELETE,
+      Permission.REMINDER_RULE_WRITE,
+      Permission.REMINDER_RULE_DELETE,
       Permission.PLUGIN_READ,
       Permission.PLUGIN_CONSENT,
+      Permission.PLUGIN_CONFIGURE,
       Permission.TENANT_READ,
       Permission.TENANT_UPDATE,
       Permission.MEMBER_READ,
       Permission.MEMBER_INVITE,
       Permission.MEMBER_UPDATE,
       Permission.MEMBER_REMOVE,
-      Permission.SERVICE_ACCOUNT_ADMINISTER)),
+      Permission.SERVICE_ACCOUNT_ADMINISTER,
+      // An export is of the tenant, and configuring the tenant is ADMIN's
+      // band (ADR-0068). A scoped membership still does not hold it: that is
+      // decided by `Permission.wholeTenant`, not by the role.
+      Permission.TENANT_EXPORT,
+      // Where every change in this tenant is sent, and the log of what reached
+      // it. An integration with somebody else's system, so ADMIN's band and not
+      // a member's -- and whole-tenant, so a scoped membership holds neither.
+      Permission.WEBHOOK_READ,
+      Permission.WEBHOOK_WRITE)),
   // Deliberately NOT Permission.TENANT_DELETE: that is OWNER's, and it is what
   // makes these two different permission sets rather than only different in what
   // they may grant (REQ-TEN-011).

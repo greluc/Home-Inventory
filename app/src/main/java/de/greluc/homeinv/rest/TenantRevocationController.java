@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.tenancy.api.TenantLifecycle;
 import jakarta.validation.constraints.Size;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 07 §7.5, never from anything in the request. That is the same rule REQ-SEC-004 states for a
  * session's tenant, applied to the second flow that has no session.
  */
+@Tag(name = "Tenant revocation", description = "Withdrawing a tenant's sessions and tokens at once.")
 @RestController
 @RequestMapping("/api/v1/tenant-revocations")
 @RequiredArgsConstructor

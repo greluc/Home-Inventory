@@ -4,7 +4,7 @@
 # The gate fails on anything NOT in this list, so the list only shrinks. Adding
 # a line here is a decision to promise something and not test it; removing one
 # is the point of the file.
-docs/adr/0006-plugin-runtime.md:45:cannot
+docs/adr/0006-plugin-runtime.md:47:cannot
 docs/adr/0008-search.md:60:enforced
 docs/adr/0009-messaging-and-events.md:17:guarantees
 docs/adr/0009-messaging-and-events.md:29:cannot
@@ -37,8 +37,8 @@ docs/adr/0030-public-code-format.md:46:cannot
 docs/adr/0030-public-code-format.md:99:impossible
 docs/adr/0031-audit-chain-per-tenant.md:52:cannot
 docs/adr/0031-audit-chain-per-tenant.md:65:cannot
-docs/adr/0034-icon-set-and-no-third-party-hosts.md:22:enforces
-docs/adr/0034-icon-set-and-no-third-party-hosts.md:88:enforces
+docs/adr/0034-icon-set-and-no-third-party-hosts.md:30:enforces
+docs/adr/0034-icon-set-and-no-third-party-hosts.md:96:enforces
 docs/adr/0035-design-system.md:180:enforced
 docs/adr/0036-scanner-egress.md:61:cannot
 docs/adr/0038-csp-delivery-and-first-paint.md:63:cannot
@@ -57,38 +57,36 @@ docs/architecture/02-constraints-and-context.md:18:enforces
 docs/architecture/03-solution-strategy.md:127:enforced
 docs/architecture/03-solution-strategy.md:29:enforces
 docs/architecture/03-solution-strategy.md:46:enforces
-docs/architecture/04-building-blocks.md:478:enforced
-docs/architecture/04-building-blocks.md:483:enforced
-docs/architecture/05-runtime-view.md:256:cannot
+docs/architecture/04-building-blocks.md:563:enforced
+docs/architecture/04-building-blocks.md:568:enforced
+docs/architecture/05-runtime-view.md:270:cannot
 docs/architecture/06-deployment-view.md:109:enforces
 docs/architecture/06-deployment-view.md:160:cannot
 docs/architecture/06-deployment-view.md:173:cannot
 docs/architecture/06-deployment-view.md:379:cannot
-docs/architecture/06-deployment-view.md:457:cannot
-docs/architecture/06-deployment-view.md:510:cannot
-docs/architecture/06-deployment-view.md:536:cannot
-docs/architecture/06-deployment-view.md:722:cannot
-docs/architecture/06-deployment-view.md:793:cannot
+docs/architecture/06-deployment-view.md:458:cannot
+docs/architecture/06-deployment-view.md:511:cannot
+docs/architecture/06-deployment-view.md:543:cannot
+docs/architecture/06-deployment-view.md:741:cannot
+docs/architecture/06-deployment-view.md:812:cannot
 docs/architecture/06-deployment-view.md:83:cannot
-docs/architecture/06-deployment-view.md:914:fails the build
-docs/architecture/07-data-model.md:411:cannot
-docs/architecture/07-data-model.md:532:enforces
-docs/architecture/07-data-model.md:559:cannot
-docs/architecture/07-data-model.md:567:enforced
-docs/architecture/07-data-model.md:569:cannot
-docs/architecture/07-data-model.md:588:guaranteed
-docs/architecture/07-data-model.md:593:enforces
-docs/architecture/07-data-model.md:612:enforced
+docs/architecture/06-deployment-view.md:936:fails the build
+docs/architecture/07-data-model.md:436:cannot
+docs/architecture/07-data-model.md:598:enforces
+docs/architecture/07-data-model.md:625:cannot
+docs/architecture/07-data-model.md:633:enforced
+docs/architecture/07-data-model.md:635:cannot
+docs/architecture/07-data-model.md:654:guaranteed
+docs/architecture/07-data-model.md:659:enforces
+docs/architecture/07-data-model.md:678:enforced
 docs/architecture/08-api-contract.md:13:cannot
-docs/architecture/08-api-contract.md:321:enforced
-docs/architecture/08-api-contract.md:322:enforced
-docs/architecture/08-api-contract.md:403:cannot
-docs/architecture/08-api-contract.md:481:fails the build
-docs/architecture/09-extensibility-and-plugins.md:203:cannot
-docs/architecture/09-extensibility-and-plugins.md:216:cannot
-docs/architecture/09-extensibility-and-plugins.md:239:cannot
+docs/architecture/08-api-contract.md:348:enforced
+docs/architecture/08-api-contract.md:349:enforced
+docs/architecture/08-api-contract.md:536:fails the build
 docs/architecture/09-extensibility-and-plugins.md:22:must never
-docs/architecture/09-extensibility-and-plugins.md:316:must never
+docs/architecture/09-extensibility-and-plugins.md:277:cannot
+docs/architecture/09-extensibility-and-plugins.md:348:cannot
+docs/architecture/09-extensibility-and-plugins.md:425:must never
 docs/architecture/10-identification-and-labels.md:117:cannot
 docs/architecture/10-identification-and-labels.md:155:is impossible
 docs/architecture/10-identification-and-labels.md:21:cannot
@@ -99,10 +97,9 @@ docs/architecture/11-offline-synchronisation.md:170:cannot
 docs/architecture/11-offline-synchronisation.md:265:is refused
 docs/architecture/12-security.md:16:cannot
 docs/architecture/12-security.md:182:fails the build
-docs/architecture/12-security.md:205:enforced
-docs/architecture/12-security.md:330:enforced
-docs/architecture/13-operations-and-observability.md:129:cannot
-docs/architecture/13-operations-and-observability.md:73:cannot
+docs/architecture/12-security.md:218:enforced
+docs/architecture/12-security.md:343:enforced
+docs/architecture/13-operations-and-observability.md:137:cannot
 docs/architecture/14-quality-risks-glossary.md:117:enforces
 docs/architecture/14-quality-risks-glossary.md:80:cannot
 docs/architecture/14-quality-risks-glossary.md:91:fails the build

@@ -21,6 +21,22 @@ include(":app")
 // becomes something a build can check instead of something a reviewer has to.
 include(":plugin-api")
 
+// The one first-party plugin in Java (ADR-0072). A Gradle project rather than a
+// package, for the same reason `plugin-api` is one: it ships as its own container,
+// it compiles against the protobuf contract in `proto/` and it depends on nothing
+// in the core -- which a project makes checkable and a package would not.
+//
+// The other four plugins are Rust and are built by cargo, beside this build rather
+// than inside it.
+include(":plugins:oidc")
+
+// The generated Kotlin client of REQ-API-002, beside the document it is generated
+// from. A Gradle project because it has to COMPILE in CI -- that is the
+// requirement's acceptance criterion -- and a project of its own because it is
+// Kotlin Multiplatform and shares no toolchain with the Java above it.
+include(":api-client-kotlin")
+project(":api-client-kotlin").projectDir = file("api/clients/kotlin")
+
 dependencyResolutionManagement {
     repositories { mavenCentral() }
 }

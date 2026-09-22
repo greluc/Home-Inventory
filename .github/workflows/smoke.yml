@@ -8,9 +8,13 @@
 # demonstrate: rootless is a Linux concept, and a Windows or macOS runtime runs in
 # a virtual machine where "rootless" says nothing about the host.
 #
-# `kind`, SELinux `enforcing` and a RHEL-family distribution are REQ-NFR-064,
-# which is stage 1 — this file covers the two runtimes and says so rather than
-# claiming the third.
+# `kind` is REQ-NFR-064 and lands with the Helm chart it would run against — a
+# job without one would assert nothing. The RHEL-family run with SELinux
+# `enforcing` is NOT missing from here: it cannot be done here at all. SELinux is
+# a HOST KERNEL policy and the hosted runners are Ubuntu, so no job on one can
+# prove anything about `enforcing`. REQ-NFR-064 was amended on 2026-09-20, with
+# the owner's approval, to make it a release check with a recorded result
+# instead: deploy/smoke/README.md says how it is run and what is written down.
 #
 # It is a separate workflow rather than a job in CI: it is slower, it needs its
 # own setup per runtime, and when it fails the answer is usually about the
@@ -233,10 +237,13 @@ jobs:
       # Every one of them from the repository root. The Dockerfiles copy paths
       # like `web/package.json` and `deploy/postgres/initdb/`, so a narrower
       # context fails on a file it cannot see.
-      - name: Build the five images the deployment names
+      - name: Build the six images the deployment names
         run: |
           set -euo pipefail
-          ${{ matrix.runtime }} build -f app/Dockerfile -t ghcr.io/greluc/home-inv:latest .
+          # The commit, because the image has no git of its own and an instance
+          # that reported `unknown` would leave the AGPL's source offer pointing
+          # at a project rather than at a build (REQ-CON-009).
+          ${{ matrix.runtime }} build -f app/Dockerfile             --build-arg HOMEINV_BUILD_COMMIT="$(git rev-parse --short=12 HEAD)"             -t ghcr.io/greluc/home-inv:latest .
           ${{ matrix.runtime }} build -f web/Dockerfile -t ghcr.io/greluc/home-inv-web:latest .
           ${{ matrix.runtime }} build -f deploy/images/postgres/Dockerfile \
             -t ghcr.io/greluc/home-inv-postgres:latest .
@@ -244,6 +251,13 @@ jobs:
             -t ghcr.io/greluc/home-inv-blobstore:latest .
           ${{ matrix.runtime }} build -f egress-proxy/Dockerfile \
             -t ghcr.io/greluc/home-inv-egress-proxy:latest .
+          # The plugin. It runs in `standard` and `ha`, not in the profile this
+          # suite starts, and it is built anyway: the connectivity script starts
+          # it by name on the minimal stack to prove what its segment refuses
+          # (ADR-0037), and an image that is not there would make that check pass
+          # by never running.
+          ${{ matrix.runtime }} build -f plugins/webhook/Dockerfile \
+            -t ghcr.io/greluc/home-inv-plugin-webhook:latest .
 
       # REQ-NFR-028 and REQ-NFR-051: one command, from a fresh checkout to a
       # running stack, on both runtimes. Running the real script rather than a
@@ -355,16 +369,33 @@ jobs:
         working-directory: deploy/compose
         run: |
           set -euo pipefail
-          # The output of THIS run, not `compose logs` afterwards. `logs` shows
-          # whatever container currently carries the service name, and on
-          # 2026-09-12 it came back without the line the run had just printed, in
-          # a step that had passed twenty minutes earlier on the same code. What
-          # the second run said is the evidence this step is about, so it is read
-          # where it is produced rather than asked for again.
-          said=$(docker compose --profile minimal up bootstrap \
-                   --exit-code-from bootstrap 2>&1) || { echo "$said"; exit 1; }
+          # THE CONTAINER'S OWN LOG, and a container recreated so that log is one
+          # run's. This step has now been wrong in two different ways, and the
+          # third arrangement is the one with no race in it.
+          #
+          # `compose logs bootstrap` afterwards showed whatever container carried
+          # the service name, and on 2026-09-12 came back without the line the run
+          # had just printed. Reading the ATTACHED stream instead fixed that and
+          # introduced a race: compose attaches after starting the container, and
+          # on 2026-09-22 this captured only the last line of a run whose beginning
+          # it had missed -- green under podman and red under docker, on identical
+          # code, which is the shape of a check nobody would trust again.
+          #
+          # A container's log file is not a race: it is complete once the container
+          # has exited. What it is not is per-run -- compose reuses the container
+          # and the log accumulates, so the FIRST run's line would satisfy a check
+          # about the second. `--force-recreate` is what makes the log one run's,
+          # and reading by container id rather than by service name is what the
+          # 2026-09-12 finding asked for.
+          docker compose --profile minimal up bootstrap --force-recreate \
+            --exit-code-from bootstrap
+          said=$(docker logs "$(docker compose --profile minimal ps -aq bootstrap)" 2>&1)
           echo "$said"
-          echo "$said" | grep -q "already has its owner" \
+          # A here-string and not a pipe: `grep -q` exits on the first match and
+          # closes what it is reading, and under `pipefail` a writer that notices
+          # is a failed step. That is not hypothetical -- it is how the image
+          # notice check in `ci.yml` failed six times on the same day.
+          grep -q "already has its owner" <<< "$said" \
             || { echo "::error::the second run did not recognise the existing owner"; exit 1; }
 
       # The check that makes the rest of this job mean something: the containers

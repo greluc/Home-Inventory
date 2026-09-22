@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Page;
 import java.util.List;
 import java.util.Map;
@@ -406,7 +407,17 @@ public interface TypeAdministration {
    *
    * @param icon an icon name for the client, or {@code null} for none
    */
-  record UpdateItemTypeCommand(String icon) {}
+  record UpdateItemTypeCommand(String icon, Integer usefulLifeMonths) {
+
+    /**
+     * The command that changes only the icon.
+     *
+     * @param icon the icon, or null to clear it
+     */
+    public UpdateItemTypeCommand(String icon) {
+      this(icon, null);
+    }
+  }
 
   /**
    * A field, as it is added or changed.
@@ -426,6 +437,10 @@ public interface TypeAdministration {
    * @param sortable whether it is mirrored for ordering
    * @param facetable whether it is mirrored for counting
    * @param sensitive whether reading it needs a permission of its own (ADR-0019)
+   * @param expiry whether this date is an <b>expiry</b>, and so belongs in the overview of
+   *     REQ-LIFE-013. Only a {@code date} or {@code datetime} may carry it — a text field marked as
+   *     an expiry would be a row in an overview sorted by due date with nothing to sort by, and the
+   *     database refuses it
    */
   record FieldCommand(
       String key,
@@ -442,7 +457,67 @@ public interface TypeAdministration {
       boolean searchable,
       boolean sortable,
       boolean facetable,
-      boolean sensitive) {}
+      boolean sensitive,
+      boolean expiry) {
+
+    /**
+     * A field that is not an expiry.
+     *
+     * <p>Here so the callers written before REQ-LIFE-013 keep saying what they meant instead of
+     * each gaining a {@code false}. Almost no field is an expiry: a type has one at most, and most
+     * have none.
+     *
+     * @param key the stable key
+     * @param dataType what it holds
+     * @param labels the label per language
+     * @param helpTexts the help text per language
+     * @param required whether a value must be given
+     * @param defaultValue the default, or {@code null}
+     * @param constraints the bounds, or {@code null}
+     * @param valueListId the list an enum draws from, or {@code null}
+     * @param visibility when it is shown, or {@code null}
+     * @param group the group it appears in, or {@code null}
+     * @param displayOrder where it sits
+     * @param searchable whether it is mirrored for filtering
+     * @param sortable whether it is mirrored for ordering
+     * @param facetable whether it is mirrored for counting
+     * @param sensitive whether reading it needs a permission of its own
+     */
+    public FieldCommand(
+        String key,
+        FieldDataType dataType,
+        Map<String, String> labels,
+        Map<String, String> helpTexts,
+        boolean required,
+        String defaultValue,
+        FieldConstraints constraints,
+        UUID valueListId,
+        VisibilityRule visibility,
+        String group,
+        int displayOrder,
+        boolean searchable,
+        boolean sortable,
+        boolean facetable,
+        boolean sensitive) {
+      this(
+          key,
+          dataType,
+          labels,
+          helpTexts,
+          required,
+          defaultValue,
+          constraints,
+          valueListId,
+          visibility,
+          group,
+          displayOrder,
+          searchable,
+          sortable,
+          facetable,
+          sensitive,
+          false);
+    }
+  }
 
   /**
    * What to call a new value list.
@@ -479,12 +554,13 @@ public interface TypeAdministration {
       UUID id,
       String key,
       TypeKind kind,
-      UUID parentId,
-      String icon,
+      @Nullable UUID parentId,
+      @Nullable String icon,
       boolean builtin,
       boolean archived,
-      UUID publishedVersionId,
-      UUID draftVersionId) {}
+      @Nullable UUID publishedVersionId,
+      @Nullable UUID draftVersionId,
+      Integer usefulLifeMonths) {}
 
   /**
    * A location category as an administrator sees it.
@@ -503,12 +579,12 @@ public interface TypeAdministration {
       UUID id,
       String key,
       Map<String, String> labels,
-      String icon,
+      @Nullable String icon,
       boolean mobile,
       boolean builtin,
       boolean archived,
-      UUID publishedVersionId,
-      UUID draftVersionId) {}
+      @Nullable UUID publishedVersionId,
+      @Nullable UUID draftVersionId) {}
 
   /**
    * What one category takes underneath it (REQ-CORE-047).

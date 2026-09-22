@@ -112,20 +112,49 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
   /**
    * How many endpoints may refuse the request instead of answering {@code 404}.
    *
-   * <p>Eighteen today, and every one of them needs a body or a query string this check cannot
-   * invent. It went from seventeen on 2026-09-14 with {@code PUT /api/v1/saved-searches/{id}},
-   * which takes a name and a query — an ordinary new endpoint with a body, which is the reason
-   * this number is allowed to go up for. The number is here because the rule above has a soft edge: an endpoint that regressed
-   * from {@code 404} to {@code 400} would still satisfy it, and so would one that gained a required
-   * field and quietly stopped being reachable. Counting them turns that from a silent loss of
-   * coverage into a failing build.
+   * <p><b>Twenty-three today</b>, and every one of them needs a body or a query string this check
+   * cannot invent. The number is here because the rule above has a soft edge: an endpoint that
+   * regressed from {@code 404} to {@code 400} would still satisfy it, and so would one that gained
+   * a required field and quietly stopped being reachable. Counting them turns that from a silent
+   * loss of coverage into a failing build.
+   *
+   * <p>Where it has been, each step an ordinary new endpoint with a body:
+   *
+   * <ul>
+   *   <li>17 → 18 on 2026-09-14, {@code PUT /api/v1/saved-searches/{id}}, which takes a name and a
+   *       query (REQ-SRCH-008)
+   *   <li>18 → 19 on 2026-09-16, {@code POST /api/v1/items/{id}/maintenance}, which takes a date
+   *       and a kind of work (REQ-LIFE-003)
+   *   <li>19 → 21 on 2026-09-16, {@code POST /api/v1/items/{id}/loans} and {@code
+   *       POST /api/v1/items/{id}/loans/{loanId}/return}, which take a borrower and a date
+   *       (REQ-LIFE-005)
+   *   <li>21 → 22 on 2026-09-20, {@code POST /api/v1/items/{id}/disposal}, which takes what
+   *       became of the item and when (REQ-LIFE-007)
+   *   <li>22 → 23 on 2026-09-20, {@code PUT /api/v1/reminder-rules/{id}}, which takes a trigger, an
+   *       offset and a channel (REQ-NOTI-001)
+   *   <li>23 → 24 on 2026-09-20, {@code PUT /api/v1/plugins/{pluginId}/settings/{key}}, which
+   *       takes the value to store (REQ-PLG-017)
+   *   <li>24 → 25 on 2026-09-21, {@code PUT /api/v1/webhooks/{id}}, which takes a URL, the event
+   *       types and optionally a new signing secret (REQ-API-010)
+   *   <li>25 → 28 on 2026-09-22, the three requests on {@code /api/v1/media/uploads/{uploadId}} —
+   *       {@code HEAD}, {@code PATCH} and {@code DELETE}. They carry protocol headers rather than a
+   *       body a caller can invent: every one needs {@code Tus-Resumable} and answers {@code 412}
+   *       without it, and the {@code PATCH} needs an {@code Upload-Offset} and a content type
+   *       besides (REQ-MED-008). *Raised to 27 first, having counted two of the three: the
+   *       {@code DELETE} takes no body and still refuses, because the protocol version is a
+   *       precondition on every request rather than on the ones that carry something.*
+   * </ul>
+   *
+   * <p>*The prose said "Eighteen today" over a constant of 19 between the second and third of
+   * those: the sentence was extended instead of the count being restated, which is the drift a
+   * number written twice invites. It is written once now, and the list carries the history.*
    *
    * <p>It goes <b>down</b> freely — an endpoint that becomes reachable is a better-covered
    * endpoint. It goes <b>up</b> only with a reason, and the reason is worth writing down in the
    * commit: a new endpoint that takes a body is ordinary, an existing one that stopped answering
    * {@code 404} is not.
    */
-  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 18;
+  private static final int MOST_THAT_MAY_REFUSE_INSTEAD = 28;
 
   @Autowired private RequestMappingHandlerMapping mappings;
   @Autowired private TenantProvisioningService provisioning;

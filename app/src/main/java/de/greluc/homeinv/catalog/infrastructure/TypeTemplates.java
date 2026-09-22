@@ -67,6 +67,7 @@ public class TypeTemplates {
    * @param sortable whether it is mirrored for ordering
    * @param facetable whether it is mirrored for counting
    * @param sensitive whether it is stored encrypted and gated on a permission
+   * @param expiry whether this date belongs in the overview of what runs out (REQ-LIFE-013)
    */
   public record TemplateField(
       String key,
@@ -76,7 +77,8 @@ public class TypeTemplates {
       boolean searchable,
       boolean sortable,
       boolean facetable,
-      boolean sensitive) {
+      boolean sensitive,
+      boolean expiry) {
 
     /**
      * The constraints this field is created with.
@@ -123,7 +125,17 @@ public class TypeTemplates {
                 Boolean.TRUE.equals(field.get("searchable")),
                 Boolean.TRUE.equals(field.get("sortable")),
                 Boolean.TRUE.equals(field.get("facetable")),
-                Boolean.TRUE.equals(field.get("sensitive")));
+                Boolean.TRUE.equals(field.get("sensitive")),
+                Boolean.TRUE.equals(field.get("expiry")));
+        if (parsed.expiry()
+            && parsed.dataType() != FieldDataType.DATE
+            && parsed.dataType() != FieldDataType.DATETIME) {
+          // The type editor refuses it too. A template that could not be imported
+          // is a packaging error, and the moment to find one is startup.
+          throw new IllegalStateException(
+              "Template '" + key + "' marks '" + parsed.key() + "' as an expiry, but it holds a "
+                  + parsed.dataType().token() + ". Only a date can expire.");
+        }
         if (parsed.sensitive()
             && (parsed.searchable() || parsed.sortable() || parsed.facetable())) {
           // The type editor refuses this combination, so a template stating it

@@ -181,8 +181,21 @@ decision.
 |---|---|
 | Default | **Deny.** An endpoint without `@RequiresPermission` and without an explicit `@PublicEndpoint` marker fails the build. |
 | Subtree permissions | A role can be scoped to a location subtree (e.g. "garage only") — the check uses the `ltree` path, in the application **and** in the policies on `locations.location` and `inventory.item` ([ADR-0059](../adr/0059-subtree-scope-has-two-lines.md)). An item with no place is invisible to a scoped session: a digital item is in nobody's garage. A scope that resolves to nothing — a place since deleted — yields **nothing**, never everything |
+| Whole-tenant permissions | Some acts are about the tenant rather than about things in it, and a **scoped membership holds none of them**, whatever its role. `Permission.wholeTenant` marks one and `DefaultAccessControl.holds` refuses it whenever the caller carries a `scope_location_id`. The export is the first: there is no archive of a shelf, so the only thing a scoped caller could be handed is an archive of everything — which is exactly what the scope says they may not have ([ADR-0068](../adr/0068-an-export-opens-what-its-requester-may-read.md)). It is a property of the permission and not a check in a controller, so the next tenant-wide act is one flag rather than a rule somebody has to remember |
 | Privilege escalation | Nobody can grant permissions they do not hold themselves |
 | Proof | Every endpoint has a test for "no permission → 403" and "foreign tenant → 404" |
+
+**Sealed values in an export.** A field marked `sensitive` is stored sealed
+([ADR-0019](../adr/0019-sensitive-field-encryption.md)) and an archive of ciphertext is
+one no other instance can open — data lost on the way out with nothing having failed. An
+export therefore **opens a sealed value exactly as far as the person who requested the
+archive may read it**, through the same `AttributeRedaction` port the REST layer uses, and
+names every field it withheld in the manifest
+([ADR-0068](../adr/0068-an-export-opens-what-its-requester-may-read.md)). The authority is
+copied onto the job at request time — role, tenant-owned role and the moment the second
+factor was proved — because the worker that builds the archive minutes later has no caller
+of its own. Two consequences are deliberate: a role granted **after** the request does not
+widen the archive, and a job with no caller at all opens nothing.
 
 ## 12.6 Input
 
@@ -194,7 +207,7 @@ decision.
 | User text in Markdown | A permitted subset, sanitised server-side, no HTML, no `javascript:` targets |
 | URLs from user input | `http`/`https` only, no internal address ranges, output with `rel="noopener noreferrer"`, never fetched server-side |
 | File names | Never taken from input; storage happens under the hash |
-| Regular expressions from field definitions | Checked for catastrophic backtracking, executed with a time limit |
+| Regular expressions from field definitions | Checked for catastrophic backtracking when the definition is saved (`PatternSafety`) **and** executed under a 100 ms budget (`BoundedRegularExpressions`, wired into the schema validator). Two lines because the set of patterns that explode is larger than the set of shapes anybody has written down; a match that runs out of budget reads as not matching, which is a `422` on the value rather than a `500` on the definition (`REQ-SEC-035`, `PatternSafetyTest`) |
 
 ## 12.7 Uploads
 
@@ -382,7 +395,7 @@ application from being framed and says nothing about what it may frame itself.
 
 | Check | Frequency | Blocking |
 |---|---|---|
-| SAST (CodeQL, SpotBugs + `find-sec-bugs`, ESLint security) | every push | yes |
+| SAST (CodeQL, SpotBugs + `find-sec-bugs`, `oxlint`, `cargo clippy -D warnings`) | every push | yes | *This row named **ESLint security** until 2026-09-20, three weeks after `REQ-SEC-076` recorded that it could not be satisfied as written and named the replacements.* |
 | Dependency and container scanning | every push, daily | yes on high/critical |
 | Secret scanning | every push + pre-commit | yes |
 | **Tenant isolation** — an automated proof across all tables | every push | yes |
@@ -393,13 +406,42 @@ application from being framed and says nothing about what it may frame itself.
 | Threat model review | per release that adds a zone or a port | — |
 | Restore rehearsal | quarterly | — |
 
+### 12.12.1 Findings that are dismissed, and why
+
+A blocking gate is worth having only if a red one means something. Four CodeQL
+rules fire on this code and none of them describes a defect here; each is
+dismissed in the code-scanning UI as *false positive*, with a comment pointing at
+the row below. **The rules stay switched on**, so the same shape in code written
+tomorrow fires again — which is the difference between answering a finding and
+turning off the question.
+
+Nothing is dismissed because it was inconvenient. Where a finding is real it is
+fixed, and where the reason is a property of the system rather than of one call
+site, that property gets a test — because a sentence in a table is not evidence.
+
+> **Alerts are per ref, and a pull request has three of them.** Dismissing the
+> alerts listed by default clears them on the **default branch** and leaves the
+> pull request red, because the check that comments on a pull request analyses
+> `refs/pull/<n>/merge` — the merge commit, which is neither the branch nor the
+> base. Its alerts are separate records with their own numbers. Found on
+> 2026-09-20, after a first pass dismissed fifteen alerts and the check went on
+> reporting four that were not among them.
+
+| Rule | Where | Why it is not a defect here |
+|---|---|---|
+| `java/log-injection` (×18) | Every place a request value reaches a log statement | The only appender is the **ECS JSON encoder** (`REQ-NFR-041`), which escapes control characters inside the `message` value: a `CRLF` payload produces **one** line, not two, so nothing a caller sends can end the line and start a forged one. Held by `LogFormatIT.aValueWithNewlinesCannotForgeALine`, which logs the payload a forger would use and asserts both halves — exactly one line out, and the payload intact inside the value. **No sanitiser is added, deliberately:** scrubbing the value would make the log say less than what happened, and the attempt is the thing worth reading |
+| `java/tainted-permissions-check` (×2) | `TypeAdministrationAdapter.permittedChildren` | It is a **domain rule**, not an access-control check: `catalog.location_category_child` says which location category may sit beneath which (`REQ-CORE-047`), and the rule fires on the identifier. Authorisation for these endpoints is where [ADR-0010](../adr/0010-api-surfaces.md) puts all of it — `@RequiresPermission` in the REST adapter (`REQ-SEC-022`…`025`) — and the query is parameterised and scoped by `TenantContext.require()` under RLS |
+| `java/user-controlled-bypass` (×1) | `ServiceAccountAuthenticationFilter` | **Fail-closed.** The condition decides only whether *this* authenticator runs; a request whose `Authorization` header is absent or of another scheme continues down the chain still **unauthenticated**, which grants nothing. Every endpoint carries `@RequiresPermission` and the build fails without one (`REQ-SEC-022`), so not running the filter cannot bypass authorisation |
+| `java/potentially-weak-cryptographic-algorithm` (×1) | `DefaultPasswordPolicy.sha1Hex` | **SHA-1 by protocol, not by choice.** The breached-password check is a *k*-anonymity range query, and the range query every such service answers is defined over SHA-1 ([ADR-0067](../adr/0067-breached-passwords-from-a-shipped-list.md)). It is a **lookup key**: five of its forty characters select a bucket and the rest is compared locally, and nothing about the scheme rests on the digest being collision-resistant. What actually stores the password is Argon2id (`REQ-SEC-010`). The same finding is excluded for SpotBugs in `config/spotbugs-exclude.xml`, for the same reason |
+| `java/uncontrolled-arithmetic` (×1) | `TenantDataKeys.wrap` | `iv.length + sealed.length` adds a 12-byte GCM nonce to the AES-GCM output over a 32-byte data key. Both are bounded by the private caller, which wraps a freshly generated key and never anything a request supplies; for the sum to overflow an `int` the ciphertext would have to approach 2 GiB, which `Cipher.doFinal` would have failed to allocate long before |
+
 ## 12.13 Incident handling
 
 | Point | Decision |
 |---|---|
 | Reporting channel | `SECURITY.md` with a contact address and GPG key, coordinated disclosure, 90 days |
 | Response times | Acknowledgement within 72 h, initial assessment within 7 days |
-| Immediate measures | Terminate all sessions of a tenant, revoke tokens, disable a plugin, suspend a tenant — each available as an administrative function, not improvised |
+| Immediate measures | Terminate all sessions (an account's own, or any account's on the operator's word), revoke every token of a tenant at once, disable a plugin for every tenant, suspend a tenant — each an administrative function, not improvised, and each reversible without a re-consent or a re-enrolment. Suspension does **not** reach the erasure states in either direction: that decision is the tenant's and its withdrawal needs the revocation token (`REQ-SEC-082`, `REQ-TEN-011`, `ImmediateMeasuresIT`) |
 | Traceability | The audit log must be able to answer "what did this account do in this period". That is the requirement its design is measured against. |
 | Notification | On suspicion of personal data exposure: data subjects and the supervisory authority within 72 h (Art. 33/34 GDPR); text templates ship with the documentation |
 | Security updates | A dedicated release channel, announcement through GitHub Security Advisories, CVE request where warranted |

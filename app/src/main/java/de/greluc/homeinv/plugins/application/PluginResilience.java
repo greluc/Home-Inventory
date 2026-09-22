@@ -4,8 +4,11 @@
  */
 package de.greluc.homeinv.plugins.application;
 
+import de.greluc.homeinv.platform.CurrentTrace;
+import de.greluc.homeinv.plugin.api.CallContext;
 import de.greluc.homeinv.plugin.api.PluginException;
 import de.greluc.homeinv.plugins.api.PluginCircuitOpened;
+import de.greluc.homeinv.plugins.api.PluginSettings;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
@@ -17,6 +20,8 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.annotation.PostConstruct;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -24,6 +29,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -58,9 +64,41 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class PluginResilience {
 
+  /**
+   * The name of the span and of the timer every plugin call produces.
+   *
+   * <p>One observation yields both: a span for the trace of REQ-NFR-044 and the per-plugin call
+   * count, duration and error rate that 13 §13.3 asks for. Its tags are the plugin, the port and
+   * the method, and every one of the three is bounded by what is installed and compiled — which is
+   * what makes them safe as meter tags at all.
+   */
+  static final String CALL_OBSERVATION = "homeinv.plugin.call";
+
   private final PluginRuntimeProperties properties;
   private final MeterRegistry meters;
   private final ApplicationEventPublisher events;
+
+  /**
+   * What the tenant configured, filled into the envelope of every call (ADR-0073).
+   *
+   * <p>Here rather than in each adapter for the reason everything else in this class is here: a
+   * cross-cutting concern applied in sixteen places is applied in fifteen of them.
+   */
+  private final PluginSettings settings;
+
+  /**
+   * Where each call's own span is started (REQ-NFR-044, 13 §13.4).
+   *
+   * <p>The envelope is the one place every plugin call passes through, in-process and out, which
+   * makes it the only place a span can be started without every adapter remembering to. Without it
+   * a trace would stop at the core and resume, unconnected, in the plugin's own logs — which is the
+   * single most useful hop to have, because "the plugin was slow" and "the core was slow calling
+   * it" look identical from outside.
+   */
+  private final ObservationRegistry observations;
+
+  /** The context that span is handed to the plugin in, in the payload and in the metadata. */
+  private final CurrentTrace trace;
 
   /** One breaker per plugin, created on first use and kept. */
   private CircuitBreakerRegistry breakers;
@@ -121,7 +159,15 @@ public class PluginResilience {
         Proxy.newProxyInstance(
             port.getClassLoader(),
             new Class<?>[] {port},
-            new Envelope(target, breaker, pool, pluginId, port.getSimpleName())));
+            new Envelope(
+                target,
+                breaker,
+                pool,
+                pluginId,
+                port.getSimpleName(),
+                settings,
+                observations,
+                trace)));
   }
 
   /**
@@ -183,9 +229,19 @@ public class PluginResilience {
    * @param pool the plugin's bounded pool
    * @param pluginId for the messages
    * @param port for the messages
+   * @param settings what the tenant configured, laid into the envelope
+   * @param observations where the call's own span is started (REQ-NFR-044)
+   * @param trace the context that span is propagated from
    */
   private record Envelope(
-      Object target, CircuitBreaker breaker, Bulkhead pool, String pluginId, String port)
+      Object target,
+      CircuitBreaker breaker,
+      Bulkhead pool,
+      String pluginId,
+      String port,
+      PluginSettings settings,
+      ObservationRegistry observations,
+      CurrentTrace trace)
       implements InvocationHandler {
 
     // Deliberately narrower than InvocationHandler's own `throws Throwable`.
@@ -201,10 +257,52 @@ public class PluginResilience {
         return call(method, arguments);
       }
 
+      // The call's own span, around everything below: the wait for a slot, the
+      // breaker's decision and the call itself. A span that covered only the
+      // last of those would report a plugin as fast while callers queued for it
+      // (REQ-NFR-044).
+      Observation observation =
+          Observation.createNotStarted(CALL_OBSERVATION, observations)
+              .lowCardinalityKeyValue("plugin.id", pluginId)
+              .lowCardinalityKeyValue("plugin.port", port)
+              .lowCardinalityKeyValue("plugin.method", method.getName())
+              .start();
+
+      try (Observation.Scope scope = observation.openScope()) {
+        return invokeInScope(method, arguments);
+      } catch (Throwable failure) {
+        observation.error(failure);
+        throw failure;
+      } finally {
+        observation.stop();
+      }
+    }
+
+    /**
+     * The call itself, with the span of {@link #invoke} current.
+     *
+     * <p>Split out so that the trace parent below is read <b>inside</b> that span's scope. Read
+     * outside it, it would name the caller's span and every plugin's work would hang off the HTTP
+     * request rather than off the call that made it.
+     *
+     * @param method which port method
+     * @param arguments what the caller passed
+     * @return whatever the plugin returned
+     */
+    private Object invokeInScope(Method method, Object[] arguments) {
+      // Before the pool and before the breaker, deliberately: reading what the
+      // tenant configured is a query against our own database, and it must
+      // neither occupy one of this plugin's concurrent slots nor count towards
+      // opening its circuit if it fails. Only the call to the plugin does.
+      // A no-argument port method arrives with null arguments, which is the one
+      // case with nothing to fill; it is answered here so the helper can take
+      // and return an array rather than something nullable.
+      Object[] prepared = arguments == null ? null : preparedContext(arguments);
+
       try {
         return Bulkhead.decorateCheckedSupplier(
                 pool,
-                CircuitBreaker.decorateCheckedSupplier(breaker, () -> call(method, arguments)))
+                CircuitBreaker.decorateCheckedSupplier(breaker, () -> call(method, prepared)))
             .get();
       } catch (CallNotPermittedException open) {
         throw new PluginException(
@@ -231,6 +329,87 @@ public class PluginResilience {
         throw new PluginException(
             PluginException.Kind.INTERNAL, "The call to plugin " + pluginId + " failed", unexpected);
       }
+    }
+
+    /**
+     * The same arguments, with the envelope's own two fields filled in.
+     *
+     * <p>Every port method takes a {@link de.greluc.homeinv.plugin.api.CallContext} and none takes
+     * two, so this finds it by type rather than by position: a port added later gets both without
+     * anybody remembering that it should.
+     *
+     * <h3>The trace parent (REQ-NFR-044)</h3>
+     *
+     * <p>The W3C {@code traceparent} of the span {@link #invoke} just started, so a plugin's own
+     * log lines and spans join this trace instead of sitting beside it. Filled on <b>every</b> call
+     * including an instance one — a trace is not a tenant's data and an instance call is exactly as
+     * worth following. {@code ""} when nothing is being traced, which the contract already
+     * documents as the off state and which is what every deployment without a collector sends.
+     *
+     * <h3>The settings (ADR-0073)</h3>
+     *
+     * <p>An <b>instance</b> call carries none. There is no tenant whose settings they would be, and
+     * filling them from somewhere would be exactly the confusion ADR-0066 exists to prevent.
+     *
+     * <p><b>A setting the caller brought wins (ADR-0077).</b> The tenant's configuration is the
+     * base and what the <b>core caller</b> put in the context is laid over it. Until 2026-09-21
+     * this replaced the context's settings outright, which was right while every setting belonged
+     * to the tenant and wrong the moment one belonged to the <i>thing being acted on</i>: a webhook
+     * signing secret is per target, because one secret for a tenant lets every receiver it
+     * configured forge a delivery to every other one (REQ-API-010).
+     *
+     * <p>What this does <b>not</b> open is a way across a tenant boundary. The context's own tenant
+     * still decides whose settings are read, and only core code can put anything in a context — a
+     * plugin never sees one it did not receive.
+     *
+     * @param arguments what the caller passed, never {@code null}
+     * @return the arguments to send, the same array when there was nothing to fill
+     */
+    private Object[] preparedContext(Object[] arguments) {
+      String traceParent = trace.traceparent();
+      Object[] filled = null;
+      for (int index = 0; index < arguments.length; index++) {
+        if (!(arguments[index] instanceof CallContext context)) {
+          continue;
+        }
+        CallContext prepared = traceParent.isEmpty() ? context : context.withTraceId(traceParent);
+        if (context.tenantId() != null) {
+          prepared = withTenantSettings(prepared, context);
+        }
+        if (prepared == context) {
+          continue;
+        }
+        if (filled == null) {
+          filled = arguments.clone();
+        }
+        filled[index] = prepared;
+      }
+      return filled == null ? arguments : filled;
+    }
+
+    /**
+     * The context with this tenant's configured settings merged into it.
+     *
+     * @param prepared the context so far, which may already carry the trace parent
+     * @param original the context as the caller wrote it, whose settings are the caller's own
+     * @return a context carrying the merged settings, or {@code prepared} when there are none
+     */
+    private CallContext withTenantSettings(CallContext prepared, CallContext original) {
+      Map<String, String> configured = settings.effective(pluginId, original.tenantId());
+      Map<String, String> fromCaller =
+          original.settings().isEmpty()
+                  || settings.maySendSettings(pluginId, original.tenantId())
+              ? original.settings()
+              // Not consented to. The same answer `effective` gives, for the
+              // same reason: what a tenant has not agreed to send does not
+              // leave the core because a core caller happened to know it.
+              : Map.<String, String>of();
+      if (configured.isEmpty() && fromCaller.isEmpty()) {
+        return prepared;
+      }
+      Map<String, String> merged = new java.util.LinkedHashMap<>(configured);
+      merged.putAll(fromCaller);
+      return prepared.withSettings(merged);
     }
 
     /**

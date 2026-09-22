@@ -39,11 +39,29 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  */
 public final class PluginManifestReader {
 
+  /**
+   * What a plugin id looks like: reverse-DNS, lower case, no surprises.
+   *
+   * <p>Public and a {@code String} rather than a compiled {@link java.util.regex.Pattern} because
+   * the core validates path variables against it with a Jakarta {@code @Pattern}, which takes a
+   * constant expression. Written once here rather than a second time there: the database has its
+   * own {@code CHECK} on the column, which is the second independent line and not a second copy of
+   * this one.
+   */
+  public static final String ID_SHAPE = "[a-z0-9]+(\\.[a-z0-9-]+)+";
+
   /** How large a manifest may be. Beyond this it is not a manifest. */
   private static final int MAX_BYTES = 256 * 1024;
 
-  /** The capabilities of 09 §9.4, and nothing else. A typo is a refusal, not a silent omission. */
-  private static final Set<String> CAPABILITIES =
+  /**
+   * The capabilities of 09 §9.4, and nothing else. A typo is a refusal, not a silent omission.
+   *
+   * <p>Package-private for the same reason {@link #PORTS} is: {@code CapabilityCatalogueTest}
+   * compares it with the table in 09 §9.4, so the chapter a plugin author reads and the set a
+   * manifest is validated against cannot say different things. That is not a hypothetical — the
+   * port list beside this one drifted exactly that way.
+   */
+  static final Set<String> CAPABILITIES =
       Set.of(
           "core:item:read",
           "core:item:write",
@@ -56,10 +74,23 @@ public final class PluginManifestReader {
           "core:setting:read",
           "network:outbound",
           "ui:panel",
-          "print:target");
+          "print:target",
+          // What a plugin may ask the CORE for, rather than what it may reach
+          // (ADR-0071). The only capability on this list that is about the
+          // host channel, and the only one a plugin uses by calling in.
+          "host:render-document");
 
-  /** The extension points of REQ-PLG-001. A port outside this list is a port nobody calls. */
-  private static final Set<String> PORTS =
+  /**
+   * The extension points of REQ-PLG-001. A port outside this list is a port nobody calls.
+   *
+   * <p>Package-private rather than private so that {@code PortCatalogueTest} can compare it with
+   * the interfaces in {@code de.greluc.homeinv.plugin.api.port}. It had drifted: {@code
+   * PasswordBreachCheck} was added as the fifteenth port by ADR-0067 and never added here, which
+   * made every manifest declaring it invalid — a plugin nobody could install, failing at
+   * registration with a message listing the ports it was not among. That is exactly the shape of
+   * bug a list written twice produces, and the comparison is what stops the next one.
+   */
+  static final Set<String> PORTS =
       Set.of(
           "CodeFormat",
           "ScanSource",
@@ -74,7 +105,9 @@ public final class PluginManifestReader {
           "ImageProcessor",
           "VirusScanner",
           "ValuationProvider",
-          "ImportMapper");
+          "ImportMapper",
+          "PasswordBreachCheck",
+          "DocumentRenderer");
 
   /** The setting types a manifest may declare. */
   private static final Set<String> SETTING_TYPES =
@@ -150,7 +183,7 @@ public final class PluginManifestReader {
   private static PluginManifest.Metadata metadata(Map<?, ?> node) {
     reject(node, "metadata", Set.of("id", "name", "version", "vendor", "license", "homepage", "descriptions"));
     String id = string(node, "id", true);
-    if (!id.matches("[a-z0-9]+(\\.[a-z0-9-]+)+")) {
+    if (!id.matches(ID_SHAPE)) {
       throw new InvalidManifestException(
           "metadata.id is '"
               + id

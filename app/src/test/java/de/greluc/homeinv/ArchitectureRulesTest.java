@@ -23,6 +23,7 @@ import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.Role;
+import de.greluc.homeinv.plugins.api.ExtensionRegistry;
 import jakarta.persistence.Entity;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -31,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +55,22 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @DisplayName("The architecture rules")
 class ArchitectureRulesTest {
+
+  /**
+   * The one {@code @RestController} that is not in the published contract.
+   *
+   * <p>Spring's error dispatcher. It answers {@code /error} — the path the container forwards to,
+   * which no client calls and which springdoc leaves out of the document, as {@code api/openapi.yaml}
+   * shows by not containing it. A tag on it would name a group with nothing in it.
+   */
+  private static final Set<String> UNPUBLISHED = Set.of("ProblemErrorController");
+
+  /** Every annotation that turns a method into a GraphQL resolver. */
+  private static final List<Class<? extends Annotation>> RESOLVERS =
+      List.of(
+          org.springframework.graphql.data.method.annotation.QueryMapping.class,
+          org.springframework.graphql.data.method.annotation.SchemaMapping.class,
+          org.springframework.graphql.data.method.annotation.BatchMapping.class);
 
   /** Every annotation that turns a method into an HTTP handler. */
   private static final List<Class<? extends Annotation>> MAPPINGS =
@@ -207,6 +225,85 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("give every published controller a tag it chose itself")
+  void everyControllerCarriesAChosenTag() {
+    // REQ-API-002. A generated client puts one file per tag, so a document with
+    // none produces a single class with a hundred and thirty-three methods -- in
+    // TypeScript and in Kotlin alike.
+    //
+    // The tag is CHOSEN and not inferred: springdoc's default is a slug of the
+    // class name, which would publish `item-controller` into the contract and
+    // make a class rename a breaking change for every generated client. So the
+    // annotation is required here, and `OpenApiConfiguration` no longer strips
+    // what springdoc inferred -- there is nothing left to strip.
+    List<String> untagged = new ArrayList<>();
+
+    for (JavaClass controller : CLASSES) {
+      if (!controller.getPackageName().startsWith("de.greluc.homeinv.rest")) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(RestController.class)) {
+        continue;
+      }
+      if (UNPUBLISHED.contains(controller.getSimpleName())) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(io.swagger.v3.oas.annotations.tags.Tag.class)) {
+        untagged.add(controller.getSimpleName());
+      }
+    }
+
+    assertThat(untagged)
+        .as(
+            "every controller in the contract carries @Tag with a name it chose and a sentence "
+                + "describing it. Without one the generated clients of REQ-API-002 are one class "
+                + "each, and springdoc's inferred alternative publishes our class names")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("declare what every GraphQL resolver needs, one field at a time")
+  void everyResolverDeclaresItsAccess() {
+    // The same rule as the endpoints above and a different mechanism, because a
+    // GraphQL request is not one handler: it is as many resolvers as the client
+    // asked for, each reaching a different block. `Item.photos` is `media`,
+    // `Item.history` is `audit`, and a check at the HTTP boundary would have to
+    // check the union of everything the schema can reach — which is no check.
+    //
+    // `GraphQlPermissions` enforces the annotation at run time; this is the half
+    // that fails in the pull request, and it is the half that matters: a resolver
+    // with no annotation would simply never be checked, and nothing about the
+    // response would say so (REQ-SEC-023, ADR-0079).
+    List<String> undeclared = new ArrayList<>();
+
+    for (JavaClass resolver : CLASSES) {
+      if (!resolver.getPackageName().startsWith("de.greluc.homeinv.graphql")) {
+        continue;
+      }
+      for (JavaMethod method : resolver.getMethods()) {
+        boolean isResolver =
+            RESOLVERS.stream().anyMatch(mapping -> method.isAnnotatedWith(mapping));
+        if (!isResolver) {
+          continue;
+        }
+        boolean declared =
+            method.isAnnotatedWith(RequiresPermission.class)
+                || method.isAnnotatedWith(PublicEndpoint.class);
+        if (!declared) {
+          undeclared.add(resolver.getSimpleName() + "." + method.getName());
+        }
+      }
+    }
+
+    assertThat(undeclared)
+        .as(
+            "every GraphQL resolver carries @RequiresPermission, or an explicit @PublicEndpoint "
+                + "with a written reason. A field nobody declared is a field nobody checks "
+                + "(REQ-SEC-023)")
+        .isEmpty();
+  }
+
+  @Test
   @DisplayName("keep the shared kernel free of every block's domain")
   void theSharedKernelDependsOnNoBlock() {
     // REQ-NFR-024, mechanically. "Contains no domain logic" is not checkable as
@@ -333,6 +430,77 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("keep every class under the one package root")
+  void onePackageRoot() {
+    // REQ-CON-001. The root is `de.greluc.homeinv` — the short form, not the
+    // repository's long name (CLAUDE.md, "Display name is Home Inventory").
+    // A class outside it compiles and runs perfectly; what it breaks is the
+    // Modulith scan, which finds blocks by package, and every rule in this file,
+    // which asks about that package and would simply not see it.
+    //
+    // The importer above already scans only that package, so this rule reads
+    // THIS MODULE'S COMPILED OUTPUT instead — otherwise it could only ever
+    // confirm what it was given. By path and not by package prefix: a prefix
+    // wide enough to catch a stray class is also wide enough to catch the JDK.
+    JavaClasses everything =
+        new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPath(Path.of("build", "classes", "java", "main"));
+
+    List<String> strays =
+        everything.stream()
+            .map(JavaClass::getName)
+            .filter(name -> !name.startsWith("de.greluc.homeinv."))
+            .sorted()
+            .toList();
+
+    assertThat(strays)
+        .as("classes outside the package root de.greluc.homeinv (REQ-CON-001)")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("let only the two named blocks resolve a plugin at instance level")
+  void onlyAccountNotificationsResolveAtInstanceLevel() {
+    // ADR-0066, amended by ADR-0067. The capability model has a second level so
+    // that something reaching an account with no tenant is possible at all. It is
+    // a widening, and a widening is only as narrow as its callers: with a named
+    // list it stays what it was decided to be, with any caller it becomes a way
+    // to reach a plugin without a tenant's consent.
+    //
+    // Two callers, and each had to argue for itself. `notification` raises the
+    // security mail of REQ-NOTI-004 for an account that may be a member of
+    // nothing; `identity` asks the optional breach service of REQ-SEC-011 about
+    // a password chosen at registration or at a reset from the login page, where
+    // there is no tenant either.
+    //
+    // The plugins block itself is excluded because that is where the method is
+    // declared and implemented.
+    noClasses()
+        .that()
+        .resideOutsideOfPackages(
+            "de.greluc.homeinv.notification..",
+            "de.greluc.homeinv.identity..",
+            "de.greluc.homeinv.plugins..")
+        .should()
+        .callMethodWhere(
+            DescribedPredicate.describe(
+                "resolves a plugin for the instance rather than for a tenant",
+                target ->
+                    target
+                            .getTarget()
+                            .getOwner()
+                            .getFullName()
+                            .equals(ExtensionRegistry.class.getName())
+                        && target.getTarget().getName().equals("lookupForInstance")))
+        .because(
+            "an instance-level resolution bypasses every tenant's consent by design, and only "
+                + "the account notifications of REQ-NOTI-004 and the breach check of REQ-SEC-011 "
+                + "are allowed to need that (ADR-0066, ADR-0067)")
+        .check(CLASSES);
+  }
+
+  @Test
   @DisplayName("let no request type be bound onto an entity")
   void requestsAreNotBoundOntoEntities() {
     // REQ-SEC-030. A controller that binds a request body onto an entity accepts
@@ -415,6 +583,19 @@ class ArchitectureRulesTest {
     // ArchUnit reads bytecode, where concatenation has already become an
     // invokedynamic and the literals are gone, so this reads the sources - the
     // only place the evidence survives.
+    // The one sanctioned builder, and the requirement's own wording sanctions
+            // it: "dynamic SQL goes through a CHECKED BUILDER whose field and sort
+            // names come from an allowlist". `ImportSql` builds an upsert from a
+            // table and its columns, every one of them a Java constant declared by
+            // the block that owns the table -- and it refuses any name that is not
+            // an identifier before it emits a statement, so the allowlist is
+            // enforced in the code rather than assumed by a reader. Nothing it
+            // touches has ever seen a request: the values all travel as `?`.
+            //
+            // The list is closed. A second entry needs the same two properties and
+            // a reason written here beside this one.
+            Set<String> checkedBuilders = Set.of("de/greluc/homeinv/portability/api/ImportSql.java");
+
     List<String> offenders = new ArrayList<>();
 
     // A query split across lines for readability is two literals joined by `+`,
@@ -435,8 +616,9 @@ class ArchitectureRulesTest {
               file -> {
                 try {
                   String merged = adjacentLiterals.matcher(Files.readString(file)).replaceAll("");
-                  if (injectable.matcher(merged).find()) {
-                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  String name = sources.relativize(file).toString().replace('\\', '/');
+                  if (injectable.matcher(merged).find() && !checkedBuilders.contains(name)) {
+                    offenders.add(name);
                   }
                 } catch (IOException unreadable) {
                   throw new UncheckedIOException(unreadable);
@@ -450,6 +632,104 @@ class ArchitectureRulesTest {
         .as(
             "SQL is parameterised; a query joined to an expression is an injection waiting for a "
                 + "value that came from a request (REQ-SEC-031)")
+        .isEmpty();
+  }
+  @Test
+  @DisplayName("names no plugin of its own: being first-party buys nothing")
+  void noPluginIsPrivilegedByItsName() {
+    // ADR-0072 puts the five first-party plugins in `plugins/` in this
+    // repository, and 09 §9.9 promises they are "installed, granted and revoked
+    // exactly like a third party's -- no privileged path, because a privileged
+    // path is what would eventually be used for something else".
+    //
+    // The cheapest way that promise breaks is a plugin ID in a string literal:
+    // one `if (pluginId.equals("de.greluc.homeinv.plugin.smtp"))` and there is a
+    // path only our code can take. So the core may not NAME one. It resolves a
+    // port through `ExtensionRegistry` and asks `PluginRegistry.permits`; which
+    // plugin answers is the operator's and the tenant's business.
+    //
+    // Comments and Javadoc are stripped first: a chapter reference or an example
+    // manifest ID in prose is documentation, and this rule is about code.
+    List<String> offenders = new ArrayList<>();
+    Pattern blockComments = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+    Pattern lineComments = Pattern.compile("//[^\\n]*");
+    Pattern pluginId = Pattern.compile("\"de\\.greluc\\.homeinv\\.plugin\\.[a-z]");
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String code = Files.readString(file);
+                  code = blockComments.matcher(code).replaceAll("");
+                  code = lineComments.matcher(code).replaceAll("");
+                  if (pluginId.matcher(code).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "the core names no plugin. A first-party plugin is installed, granted and revoked "
+                + "exactly like a third party's (ADR-0072, 09 §9.9), and an id in a literal is how "
+                + "that stops being true")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("keeps what dials a datastore at startup out of the one-shot roles")
+  void nothingThatConnectsAtStartupLoadsInMigrateOrBootstrap() {
+    // `migrate` and `bootstrap` are one-shot roles on the `internal` segment and
+    // `deploy/services.yaml` says the same thing about both: "it talks to
+    // PostgreSQL and to nothing else". They have no Valkey, no broker and no
+    // search.
+    //
+    // A `SmartLifecycle` bean that CONNECTS when the context starts therefore
+    // does not merely idle there -- it throws, the refresh is cancelled, and the
+    // process exits non-zero. For `migrate` that stops the whole deployment,
+    // because `api` and `worker` start only when it exits zero.
+    //
+    // That is what `liveChangeListener` did on 2026-09-21: a listener container
+    // loaded in every profile, dialled `localhost:6379` in `migrate`, and took
+    // the rootless smoke suite down under both runtimes. The unit tests could not
+    // see it -- they run one context with everything present -- so the rule is
+    // written here, where a second such bean will meet it before CI does.
+    List<String> offenders = new ArrayList<>();
+    Pattern container = Pattern.compile("RedisMessageListenerContainer\\s+\\w+\\s*\\(");
+    Pattern excluded = Pattern.compile("@Profile\\(\"[^\"]*!\\s*migrate[^\"]*\"\\)");
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String code = Files.readString(file);
+                  if (container.matcher(code).find() && !excluded.matcher(code).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "a bean that opens a connection when the context starts must not load in `migrate` or "
+                + "`bootstrap`: both talk to PostgreSQL and nothing else, and a refused connection "
+                + "there is not a degraded feature but a deployment that does not come up")
         .isEmpty();
   }
 }

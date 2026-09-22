@@ -153,6 +153,18 @@ public class DefaultAccessControl implements AccessControl {
           caller.role());
       return false;
     }
+    if (permission.wholeTenant() && caller.scopeLocationId() != null) {
+      // A membership confined to part of the tree (REQ-TEN-007) holds no
+      // permission that is about the tenant as a whole. Not a matter of rank: an
+      // export of a shelf does not exist, so the only thing this caller could be
+      // given is an archive of everything -- which is exactly what the scope
+      // says they may not have (ADR-0068).
+      log.debug(
+          "A membership scoped to {} was refused the whole-tenant permission {}",
+          caller.scopeLocationId(),
+          permission.id());
+      return false;
+    }
     return permissionsOf(new RoleRef(caller.role(), caller.roleDefinitionId()))
         .contains(permission);
   }

@@ -94,6 +94,24 @@ permissions:
       tombstone would be retention without a reason, and the revision log answers
       who removed it.
 
+  - id: notification:reminder-rule:write
+    since: 1
+    description: >
+      Create or change a reminder rule (`REQ-NOTI-001`). A member's capability,
+      exactly as `search:saved-search:write` is and for the same reason: a rule
+      belongs to the tenant and everybody in it is reminded by it, so writing one
+      is a change to what everybody sees. Reading them needs no permission of its
+      own -- `search:index:query` covers it, because a list of rules is not more
+      sensitive than the things it watches.
+
+  - id: notification:reminder-rule:delete
+    since: 1
+    description: >
+      Remove a reminder rule (`REQ-NOTI-001`). An administrator's, because it
+      takes a reminder away from everybody and the person who notices is the one
+      who was relying on it -- the argument `search:saved-search:delete` makes
+      about a smart list.
+
   - id: plugins:plugin:read
     since: 1
     description: >
@@ -112,6 +130,17 @@ permissions:
       touch this tenant's data at all. Consent is per tenant even though
       installation is instance-wide, so an installed plugin is active for one
       tenant and invisible to the next.
+  - id: plugins:setting:write
+    since: 1
+    description: >
+      Configure an installed plugin, for this tenant (`REQ-PLG-017`, ADR-0073).
+      An administrator's, and deliberately not the same permission as consent:
+      consenting says foreign code may touch this tenant's data at all,
+      configuring says what it should do once it may — and a value set here can
+      be a secret the tenant holds with somebody else, such as a webhook signing
+      key. It grants nothing over the operator's configuration of the plugin
+      container: the SMTP host, the S3 keys and the OIDC client secret are the
+      container's own environment and never pass through the core.
 
   - id: media:object:read
     since: 0
@@ -218,6 +247,56 @@ permissions:
       rather than only different in what they may grant: erasing a tenant is the
       act nobody can undo once the grace period is over.
 
+  - id: portability:export:request
+    since: 1
+    description: >
+      Move a whole tenant, in either direction: ask for an export and download
+      the archive (REQ-PORT-003, REQ-PORT-005), and upload one to be read back
+      (REQ-PORT-004, REQ-PORT-007). Its own permission rather than
+      tenancy:tenant:read, because taking a copy of everything is not the same
+      act as reading things one at a time — and reading an archive in is the
+      more consequential half, since it writes and the archive wins wherever the
+      two disagree.
+    notable: >
+      WHOLE-TENANT. A membership confined to part of the location tree
+      (REQ-TEN-007) does not hold it, whatever its role: there is no archive of a
+      shelf, so the only thing such a caller could be handed is an archive of
+      everything. Until 2026-09-20 these endpoints asked for tenancy:tenant:read,
+      which meant a scoped VIEWER could download the whole inventory (ADR-0068,
+      open point O27).
+
+  - id: notification:webhook:read
+    since: 1
+    description: >
+      See the tenant's webhook targets and what has been delivered to them
+      (REQ-API-010). An administrator's, and deliberately not a member's the way
+      plugins:plugin:read is: what a plugin may reach is a fact about the
+      deployment that everybody working here has an interest in, while a webhook
+      target is an integration with a system outside it, and its delivery log
+      says which of this tenant's changes reached a stranger's server and when.
+    notable: >
+      WHOLE-TENANT, for the reason portability:export:request is. A target
+      receives every change in the tenant and cannot receive the changes of a
+      subtree, so a membership confined to one (REQ-TEN-007) holds neither this
+      nor the write beside it, whatever its role.
+
+  - id: notification:webhook:write
+    since: 1
+    description: >
+      Add, change or remove a webhook target (REQ-API-010): where every change in
+      this tenant is sent, which events go there, and the secret each delivery is
+      signed with. Level-1 configuration (09 §9.1), so an administrator does it
+      without a release.
+    notable: >
+      ONE PERMISSION FOR ALL THREE ACTS, which is a departure from the
+      notification:reminder-rule pair beside it. Those are split because
+      different roles hold them — a member writes a rule, an administrator takes
+      one away from everybody. Both halves of this are an administrator's
+      already, so a second permission would draw a line no role sits on.
+      Removing a target removes its delivery log with it, which is stated in the
+      API rather than given its own permission: pausing is what `enabled` is for.
+      WHOLE-TENANT, like the read above.
+
 # ---------------------------------------------------------------------------
 # BUILT-IN ROLES
 #
@@ -314,6 +393,7 @@ roles:
       - tagging:tag:update
       - tagging:tag:assign
       - search:saved-search:write
+      - notification:reminder-rule:write
       - plugins:plugin:read
       - tenancy:tenant:read
       - tenancy:member:read
@@ -351,8 +431,11 @@ roles:
       - tagging:tag:assign
       - search:saved-search:write
       - search:saved-search:delete
+      - notification:reminder-rule:write
+      - notification:reminder-rule:delete
       - plugins:plugin:read
       - plugins:capability:consent
+      - plugins:setting:write
       - tenancy:tenant:read
       - tenancy:tenant:update
       - tenancy:member:read
@@ -360,6 +443,9 @@ roles:
       - tenancy:member:update
       - tenancy:member:remove
       - identity:service-account:administer
+      - portability:export:request
+      - notification:webhook:read
+      - notification:webhook:write
 
   - name: OWNER
     rationale: >

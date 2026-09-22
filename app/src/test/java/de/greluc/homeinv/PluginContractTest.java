@@ -48,7 +48,7 @@ class PluginContractTest {
   @DisplayName("has a service for every port REQ-PLG-001 names, under the port's own name")
   void everyPortHasAService() throws Exception {
     List<String> ports = portsNamedByTheRequirement();
-    assertThat(ports).as("REQ-PLG-001 names fourteen ports").hasSize(14);
+    assertThat(ports).as("REQ-PLG-001 names sixteen ports").hasSize(16);
 
     List<String> missing = new ArrayList<>();
     List<String> misnamed = new ArrayList<>();

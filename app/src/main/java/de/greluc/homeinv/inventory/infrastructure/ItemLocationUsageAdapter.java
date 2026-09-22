@@ -21,4 +21,9 @@ public class ItemLocationUsageAdapter implements ItemLocationUsage {
   public boolean anyItemIn(UUID locationId) {
     return items.existsLiveInLocation(TenantContext.require(), locationId);
   }
+
+  @Override
+  public long itemsIn(UUID locationId) {
+    return items.countLiveInLocation(TenantContext.require(), locationId);
+  }
 }

@@ -162,14 +162,23 @@ ReceiveTimeout 60
 #     Valkey held no credential at all until ADR-0044, which meant every session
 #     and every rate-limit counter was readable by anything that could open port
 #     6379 on `internal` — `web` included, at the time.
-#   * THREE CHANNELS, and they are not optional. An ACL grants no pub/sub channel
-#     at all by default, and the indexed session store subscribes to exactly
-#     three: the keyspace notifications Valkey emits when a session key is
-#     deleted or expires, and Spring Session's own "created" pattern. They are
-#     what keeps the per-account session index of REQ-AUTH-009 from filling with
-#     sessions that are gone. Without them the application does not degrade — it
-#     refuses to start, with `NOPERM No permissions to access a channel`, which is
-#     how this line came to be written.
+#   * FOUR CHANNELS, and they are not optional. An ACL grants no pub/sub channel
+#     at all by default. Three belong to the indexed session store: the keyspace
+#     notifications Valkey emits when a session key is deleted or expires, and
+#     Spring Session's own "created" pattern. They are what keeps the per-account
+#     session index of REQ-AUTH-009 from filling with sessions that are gone.
+#     Without them the application does not degrade — it refuses to start, with
+#     `NOPERM No permissions to access a channel`, which is how this line came to
+#     be written.
+#
+#     The fourth is `homeinv.live`, the live-change nudge of REQ-API-011: a change
+#     committed on one `api` replica has to reach a browser connected to another,
+#     so every replica publishes to it and every replica subscribes. It was added
+#     on 2026-09-21, after the feature had shipped without it and the smoke suite
+#     found what the unit tests could not — they run one context against a Valkey
+#     with no ACL at all. `worker` holds the same grant: it raises the events, so
+#     it publishes, and the one listener it also starts is the cheaper half of
+#     that (see `LiveChangeSubscriber`).
 #
 #     They are spelled out rather than globbed because Valkey matches them
 #     differently for the two commands: a SUBSCRIBE channel is glob-matched
@@ -184,6 +193,7 @@ VALKEY_ACL_TEMPLATE = (
     "user default off\n"
     "user {user} on >{password} ~*"
     " &__keyevent@0__:del &__keyevent@0__:expired &spring:session:event:0:created:*"
+    " &homeinv.live"
     " +@all\n"
 )
 
@@ -377,18 +387,237 @@ def opensearch_internal_users(matrix: dict) -> str:
         client=SECRET_PLACEHOLDER.format(name="search-password"))
 
 
+def plugin_services(matrix: dict) -> dict[str, dict]:
+    """Every service the matrix marks as a plugin.
+
+    One mark, `role: plugin`, and everything else follows from it: the network
+    segment, the allowlist section, the entry in the list the core reads. A
+    second declaration somewhere else would be a second place to forget.
+
+    :param matrix: the parsed matrix
+    :return: the plugin services, by name, in the matrix's order
+    """
+    return {
+        name: service
+        for name, service in matrix["services"].items()
+        if service.get("role") == "plugin"
+    }
+
+
+def plugin_networks(matrix: dict) -> dict[str, str]:
+    """The network segment each plugin gets, and the subnet it is on.
+
+    The subnet is stated in the matrix rather than assigned here, because it is
+    the operator's network and because the egress proxy identifies a caller by
+    the interface a connection arrived on, which is a comparison against exactly
+    this value (`ADR-0037`, `ADR-0027`).
+
+    :param matrix: the parsed matrix
+    :return: network name to CIDR
+    :raises SystemExit: when a plugin declares no subnet, or two declare the same
+    """
+    networks: dict[str, str] = {}
+    for name, service in plugin_services(matrix).items():
+        subnet = (service.get("segment") or {}).get("subnet")
+        if not subnet:
+            raise SystemExit(
+                f"services.yaml marks {name} as a plugin and gives it no segment.subnet. "
+                "The egress proxy keys a plugin's allowances on it, so a plugin without one "
+                "would reach only the deployment half of the allowlist and nobody would see why.")
+        if subnet in networks.values():
+            raise SystemExit(
+                f"services.yaml gives {name} the subnet {subnet}, which another plugin already "
+                "has. Two plugins on one subnet are two plugins the proxy cannot tell apart, "
+                "and each would reach what the other declared.")
+        networks[name] = subnet
+    return networks
+
+
+def networks_of(service: dict, matrix: dict) -> list[str]:
+    """Every network a service joins, generated memberships included.
+
+    `networksByPlugin: all` is what `api`, `worker` and `egress-proxy` carry: a
+    membership per installed plugin, which is how a plugin is reachable by the
+    core and by the proxy and by nothing else (ADR-0037). Rendered here rather
+    than written out, because writing it out would mean editing three services
+    every time a fourth is installed.
+
+    :param service: one service from the matrix
+    :param matrix: the parsed matrix
+    :return: the network names
+    """
+    joined = list(service.get("networks") or [])
+    if service.get("networksByPlugin") == "all":
+        for network in plugin_networks(matrix):
+            if network not in joined:
+                joined.append(network)
+    return joined
+
+
+def plugin_manifest(matrix: dict, name: str) -> str:
+    """One plugin's manifest, exactly as its publisher wrote it.
+
+    **Verbatim, and that is the point.** A detached signature is over these
+    bytes (`REQ-PLG-004`, `ADR-0085`), so anything that re-serialised them --
+    dropping comments, reordering keys, rewrapping a line -- would produce a
+    document no publisher's signature could ever match. The core verifies what
+    it registers, so what it registers has to be what was signed.
+
+    Until 2026-09-22 this substituted `services.yaml`'s `hosts` into the
+    manifest's `network:outbound` capability, and that was wrong for a second
+    reason beside the signature. The two lists are different things: the
+    manifest's is the publisher's REQUEST, and `services.yaml`'s is the
+    deployment's GRANT. The grant is what the egress proxy enforces -- it is
+    compiled straight from `services.yaml` by :func:`egress_allowlist` and never
+    from this document -- so overwriting the request with the grant changed
+    nothing about what the plugin could reach and lost the only record of what
+    it had asked for.
+
+    What is still checked is that the two can be about each other: a plugin
+    given somewhere to reach must declare `network:outbound`, and the manifest's
+    id must be the one `services.yaml` installs.
+
+    :param matrix: the parsed matrix
+    :param name: the plugin service
+    :return: the manifest, byte for byte as the file holds it
+    :raises SystemExit: when the source manifest is missing, declares no
+        `network:outbound` while the deployment gives it somewhere to reach, or
+        calls itself something other than what `services.yaml` installs
+    """
+    service = matrix["services"][name]
+    declared = service["plugin"]
+    source = HERE.parent / declared["manifest"]
+    if not source.is_file():
+        raise SystemExit(
+            f"services.yaml points {name} at {declared['manifest']}, which does not exist.")
+
+    text = source.read_text(encoding="utf-8")
+    # Parsed only to CHECK it. The parsed form is thrown away and the text is
+    # what is returned, because the signature is over the text.
+    document = yaml.safe_load(text)
+    hosts = declared.get("hosts") or []
+    # `tcp:` is the other shape a manifest declares, and it means something
+    # different: a `host:port` for a protocol that is not HTTP -- SMTP
+    # submission, which is why O11 gave the proxy a tunnel rather than a fetch.
+    tcp = declared.get("tcp") or []
+    outbound = [
+        capability
+        for capability in document["spec"].get("capabilities") or []
+        if capability["id"] == "network:outbound"
+    ]
+    if (hosts or tcp) and not outbound:
+        raise SystemExit(
+            f"{declared['manifest']} declares no network:outbound capability, and services.yaml "
+            f"gives {name} somewhere to reach. A target that is not in a manifest is a target the "
+            "proxy refuses, so the two have to agree.")
+
+    if document["metadata"]["id"] != declared["id"]:
+        raise SystemExit(
+            f"services.yaml calls {name} {declared['id']} and its manifest calls it "
+            f"{document['metadata']['id']}. The core refuses a disagreement here, because a "
+            "grant is recorded against the id.")
+
+    return text
+
+
+def plugin_signature(matrix: dict, name: str) -> str | None:
+    """The detached signature travelling with one plugin's manifest, if there is one.
+
+    `<manifest>.sig`, beside the manifest: the base64 that `cosign sign-blob`
+    printed over exactly the bytes :func:`plugin_manifest` returns. Committed
+    rather than produced here, because producing it would need the private key
+    and the one place a signing key must never be is a build that anybody can
+    run (`ADR-0085`).
+
+    Its absence is not an error. A plugin nobody signed verifies as *unsigned*,
+    which an operator may permit deliberately with
+    `HOMEINV_PLUGINS_ALLOW_UNSIGNED`; what is never permitted is a signature
+    that does not verify, and that is the core's judgement rather than this
+    file's.
+
+    :param matrix: the parsed matrix
+    :param name: the plugin service
+    :return: the base64 signature on one line, or ``None`` when none is committed
+    """
+    declared = matrix["services"][name]["plugin"]
+    signature = HERE.parent / (declared["manifest"] + ".sig")
+    if not signature.is_file():
+        return None
+    # One line: whitespace is stripped so that a file with a trailing newline,
+    # or one `cosign` wrapped, still produces a YAML scalar rather than a
+    # surprise. The verifier tolerates both; the generated file should not have
+    # to be tolerated.
+    return "".join(signature.read_text(encoding="utf-8").split())
+
+
+def plugins_list(matrix: dict) -> str:
+    """The list the core reads at start-up (`REQ-PLG-013`).
+
+    One file for the deployment, carrying each manifest **inline**: one file
+    rather than one per plugin plus a path in each entry, and a path is a thing
+    that can be right in the list and wrong in the mount.
+
+    The fingerprint is a placeholder. The certificate does not exist until
+    `setup.sh` creates it, so the value is substituted there — the same shape the
+    secret placeholders already use.
+
+    :param matrix: the parsed matrix
+    :return: the rendered list
+    """
+    lines = [
+        BANNER,
+        "#",
+        "# WHAT THE OPERATOR INSTALLED. The core reads this and nothing else: it",
+        "# fetches nothing and it installs nothing, because installation is an",
+        "# operator's act outside the running system (REQ-PLG-013).",
+        "#",
+        "# Each entry carries its manifest INLINE. The alternative -- a path per",
+        "# entry and a file per plugin -- is a path that can be right here and",
+        "# wrong in the mount, and nothing would say which.",
+        "",
+        "plugins:",
+    ]
+    for name, service in plugin_services(matrix).items():
+        declared = service["plugin"]
+        port = (service.get("ports") or [{}])[0].get("container")
+        lines.append(f"  - id: {declared['id']}")
+        lines.append(f"    endpoint: \"{name}:{port}\"")
+        lines.append(f"    fingerprint: \"@FINGERPRINT:{declared['fingerprintFrom']}@\"")
+        # The key is a placeholder for the same reason the fingerprint is: it
+        # lives in the deployment's secret store, which does not exist until
+        # `setup.sh` has run. The SIGNATURE is not a placeholder — it travels
+        # with the manifest in this repository, because it is over exactly the
+        # bytes written just below and the two must not be able to come from
+        # different places (REQ-PLG-004, ADR-0085).
+        lines.append(f'    publicKey: "@PUBKEY:{declared["publicKeyFrom"]}@"')
+        signature = plugin_signature(matrix, name)
+        if signature:
+            lines.append(f'    signature: "{signature}"')
+        lines.append("    manifestInline: |")
+        for line in plugin_manifest(matrix, name).splitlines():
+            lines.append(f"      {line}" if line else "")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def egress_allowlist(matrix: dict) -> str:
     """The hosts the egress proxy may reach, one per line.
 
     Every value comes from the matrix: the deployment allowlist of `ADR-0036`,
-    which today holds one entry — the ClamAV signature mirror. The plugin half of
-    the list is merged in at run time from granted manifests and is stage 1
-    (`ADR-0028`); this is the closed half, consented to by nobody and changed only
-    by a change to this repository.
+    which today holds one entry — the ClamAV signature mirror — and the hosts each
+    plugin service declares. Neither half is ever merged in at run time: a host a
+    plugin may reach is one an operator wrote down, which is what makes
+    "installation is an operator's act" true of the network as well (REQ-PLG-013).
 
     A flat list rather than YAML or JSON: the proxy reads it once at start-up, and
     a parser there would be a dependency and a class of failure a container with
     32 MiB and a route out of the deployment does not need.
+
+    Since 2026-09-20 it has two halves. The **deployment** half above is every
+    line before the first section header; a **per-plugin** section follows for
+    each installed plugin, headed by the subnet of its segment and its id. The
+    proxy applies a section to the connections that arrived on that segment and
+    to no others, so a plugin reaches what its own manifest declared and not what
+    another one did (`ADR-0037`).
 
     :param matrix: the parsed matrix
     :return: the rendered allowlist
@@ -405,14 +634,33 @@ def egress_allowlist(matrix: dict) -> str:
         "# than adding a manifest host, because this is the one list no tenant ever",
         "# consents to.",
         "#",
-        "# The per-plugin half is merged in at run time from granted manifests and",
-        "# arrives with the plugin runtime in stage 1.",
+        "# The PER-PLUGIN half follows, one section per segment: [<subnet> <plugin id>].",
+        "# The proxy applies a section to the connections that arrived on that segment",
+        "# and to no others, so a plugin reaches what its own manifest declared and not",
+        "# what another plugin's did (ADR-0037).",
         "",
     ]
     for entry in allowlist.get("deployment") or []:
         lines.append(f"# {entry['id']} — for {entry['caller']}")
         for host in entry["hosts"]:
             lines.append(host)
+        lines.append("")
+
+    # The per-plugin half, one section per segment. The proxy keys it on the
+    # interface a connection arrived on, which is why the subnet is in the header
+    # and why two plugins may not share one (ADR-0037).
+    subnets = plugin_networks(matrix)
+    for name, service in plugin_services(matrix).items():
+        declared = service["plugin"]
+        lines.append(f"[{subnets[name]} {declared['id']}]")
+        lines.append(f"# {name} — the targets services.yaml allows it, compiled from its manifest")
+        for host in declared.get("hosts") or []:
+            lines.append(host)
+        # A `host:port` allows THAT port and no other; a bare host allows any,
+        # which is what `freshclam` needs on port 80. The proxy reads the
+        # difference (ADR-0027, O11).
+        for target in declared.get("tcp") or []:
+            lines.append(target)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -466,6 +714,12 @@ def generated_files(matrix: dict) -> dict[pathlib.Path, str]:
         ("valkey", "secrets"): valkey_acl,
         ("rabbitmq", "secrets"): rabbitmq_conf,
         ("opensearch", "secrets"): opensearch_internal_users,
+        # The same content for both core roles, mounted into each. Two copies of
+        # one file rather than a shared mount, because a secret is delivered per
+        # container on both runtimes and the alternative is a bind mount, which
+        # is on the forbidden list (ADR-0022).
+        ("api", "plugins"): plugins_list,
+        ("worker", "plugins"): plugins_list,
     }
     outputs: dict[pathlib.Path, str] = {}
     for name, service in matrix["services"].items():
@@ -600,10 +854,20 @@ def secret_catalogue(matrix: dict) -> str:
     lines = [
         "# GENERATED FROM ../services.yaml — DO NOT EDIT.",
         "#",
-        "# Sourced by setup.sh. One line per secret: `<name> <kind>`.",
+        "# Sourced by setup.sh. One line per secret: `<name> <kind> [<seedFrom>]`.",
+        "#",
+        "# The third field is optional and names a file IN THIS REPOSITORY that the",
+        "# secret is seeded from when it exists — which today is the public key this",
+        "# project signs its own plugin manifests with. A public key is not a secret,",
+        "# and it travels as one because that is the mechanism a deployment already",
+        "# has for getting per-plugin material into a container with a read-only root.",
         "",
         "SECRET_KINDS='"
-        + "\n".join(f"{name} {spec['kind']}" for name, spec in matrix["secrets"].items())
+        + "\n".join(
+            f"{name} {spec['kind']}"
+            + (f" {spec['seedFrom']}" if spec.get("seedFrom") else "")
+            for name, spec in matrix["secrets"].items()
+        )
         + "'",
         "",
     ]
@@ -685,10 +949,11 @@ def compose(matrix: dict) -> str:
             for profile in service["profiles"]:
                 lines.append(f"      - {profile}")
 
-        if service.get("networks"):
+        joined = networks_of(service, matrix)
+        if joined:
             lines.append("    networks:")
             aliases = service.get("networkAliases") or {}
-            for network in service["networks"]:
+            for network in joined:
                 alias = aliases.get(network)
                 if alias:
                     # The long form, for the alias. It is what makes
@@ -802,9 +1067,18 @@ def compose(matrix: dict) -> str:
         lines.append("")
 
     lines.append("networks:")
+    for name, subnet in plugin_networks(matrix).items():
+        # One segment per plugin, generated from the plugin service itself
+        # (ADR-0037). `internal: true` is the whole of "a plugin has no route
+        # out": what it reaches instead is the proxy, on this same segment.
+        lines.append(f"  {name}:")
+        lines.append("    internal: true")
+        lines.append("    ipam:")
+        lines.append("      config:")
+        lines.append(f"        - subnet: {subnet}")
     for name, network in matrix["networks"].items():
         if network.get("generated"):
-            # Per-plugin networks are created by the plugin runtime at stage 1.
+            # The template, which describes the rule the loop above applies.
             continue
         lines.append(f"  {name}:")
         if network.get("internal"):
@@ -885,11 +1159,24 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
     for name, network in matrix["networks"].items():
         if network.get("generated"):
+            # The template, which describes what the per-plugin loop below emits.
             continue
         body = [BANNER.replace("#", ";"), "", "[Unit]", f"Description=Home Inventory network {name}", "", "[Network]", f"NetworkName=homeinv-{name}"]
         if network.get("internal"):
             body.append("Internal=true")
         body += ["", "[Install]", "WantedBy=default.target", ""]
+        files[f"homeinv-{name}.network"] = "\n".join(body)
+
+    for name, subnet in plugin_networks(matrix).items():
+        # One segment per plugin (ADR-0037), with its subnet stated: the egress
+        # proxy identifies a caller by the interface a connection arrived on, and
+        # that is a comparison against this value.
+        body = [
+            BANNER.replace("#", ";"), "", "[Unit]",
+            f"Description=Home Inventory network {name}", "", "[Network]",
+            f"NetworkName=homeinv-{name}", "Internal=true", f"Subnet={subnet}",
+            "", "[Install]", "WantedBy=default.target", "",
+        ]
         files[f"homeinv-{name}.network"] = "\n".join(body)
 
     for name in matrix["volumes"]:
@@ -916,7 +1203,7 @@ def quadlet(matrix: dict) -> dict[str, str]:
         # switch SELinux labelling off instead of letting Podman label the named
         # volumes correctly, which it does on its own.
 
-        for network in service.get("networks", []):
+        for network in networks_of(service, matrix):
             # EVERY membership carries the service's own name as an alias, and
             # that is what makes the two runtimes equals rather than similar
             # (REQ-NFR-051). Compose gives a service its short name on every

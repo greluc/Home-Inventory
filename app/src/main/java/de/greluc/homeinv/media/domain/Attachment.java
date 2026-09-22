@@ -53,6 +53,16 @@ public class Attachment {
   @Column(name = "display_order", nullable = false)
   private int displayOrder;
 
+  /**
+   * What this attachment is for (REQ-LIFE-016).
+   *
+   * <p>On the attachment rather than on the file: the same scan of a receipt may be the purchase
+   * proof of one item and an ordinary document on another, and the file is stored once by content
+   * address either way (ADR-0032).
+   */
+  @Column(name = "role", nullable = false)
+  private String role;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -101,12 +111,26 @@ public class Attachment {
    * @return the new attachment
    */
   public static Attachment create(UUID id, UUID tenantId, UUID mediaObjectId, String targetKind,
-      UUID targetId, boolean primaryImage, UUID actor, Instant now) {
+      UUID targetId, boolean primaryImage, String role, UUID actor, Instant now) {
     if (!"ITEM".equals(targetKind) && !"LOCATION".equals(targetKind)) {
       throw new IllegalArgumentException("A target is an ITEM or a LOCATION");
     }
-    return new Attachment(id, tenantId, mediaObjectId, targetKind, targetId, primaryImage, actor, now);
+    Attachment attachment =
+        new Attachment(id, tenantId, mediaObjectId, targetKind, targetId, primaryImage, actor, now);
+    // Null is `PHOTO`, which is what every attachment written before the column
+    // existed was. A role the database does not allow is refused here rather
+    // than by a constraint three layers down, so the message names the field.
+    String chosen = role == null || role.isBlank() ? "PHOTO" : role;
+    if (!ROLES.contains(chosen)) {
+      throw new IllegalArgumentException("An attachment's role is one of " + ROLES);
+    }
+    attachment.role = chosen;
+    return attachment;
   }
+
+  /** What an attachment may be for; the same four the database allows. */
+  private static final java.util.Set<String> ROLES =
+      java.util.Set.of("PHOTO", "RECEIPT", "WARRANTY_PROOF", "OTHER");
 
   /**
    * Detaches, leaving a tombstone.

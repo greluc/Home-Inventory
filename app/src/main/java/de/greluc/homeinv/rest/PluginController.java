@@ -4,11 +4,16 @@
  */
 package de.greluc.homeinv.rest;
 
+import jakarta.annotation.Nullable;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.plugins.api.PluginRegistry;
+import de.greluc.homeinv.plugins.api.PluginSettings;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -22,6 +27,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -37,12 +43,14 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>There is no endpoint that installs anything. Installation is an operator's act outside the
  * running system (REQ-PLG-013), and an API that could install would make that sentence false.
  */
+@Tag(name = "Plugins", description = "What the operator installed, what this tenant consented to, and how each one is.")
 @RestController
 @RequestMapping("/api/v1/plugins")
 @RequiredArgsConstructor
 public class PluginController {
 
   private final PluginRegistry plugins;
+  private final PluginSettings settings;
 
   /**
    * The plugins the operator installed, with what this tenant has permitted each.
@@ -125,6 +133,91 @@ public class PluginController {
     plugins.revoke(pluginId, capability, user.userId());
   }
 
+
+  /**
+   * What this tenant configured for one plugin, and what it could configure.
+   *
+   * <p>Every setting the manifest declares, whether or not a value has been stored, because "what
+   * it wants" without "what it has" is not something anybody can act on — the same reasoning the
+   * capability list follows.
+   *
+   * <p><b>A secret's value never comes back.</b> {@code value} is null for one and {@code set} says
+   * whether there is one to replace, which is what a password field does everywhere else.
+   *
+   * @param pluginId the plugin
+   * @param limit how many at most; capped at 200 (REQ-NFR-010)
+   * @return the settings, in the manifest's order
+   */
+  @GetMapping(path = "/{pluginId}/settings", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.PLUGIN_READ)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.MALFORMED_REQUEST})
+  public List<SettingView> pluginSettings(
+      @PathVariable @Size(max = 200) String pluginId,
+      @RequestParam(required = false, defaultValue = "200") @Positive @Max(200) int limit) {
+    return settings.configured(pluginId).stream()
+        .limit(limit)
+        .map(
+            setting ->
+                new SettingView(
+                    setting.key(),
+                    setting.type(),
+                    setting.required(),
+                    setting.values(),
+                    setting.defaultValue(),
+                    setting.label(),
+                    setting.value(),
+                    setting.set()))
+        .toList();
+  }
+
+  /**
+   * Configures one setting, for this tenant.
+   *
+   * <p>A key the plugin's current manifest does not declare is refused rather than stored: it would
+   * sit waiting to become live the day an update declared it, which is the same mistake as
+   * consenting to a capability nobody asked for (REQ-PLG-006).
+   *
+   * @param pluginId the plugin
+   * @param key the setting the manifest declares
+   * @param body the value
+   * @param user the administrator configuring it
+   */
+  // No `consumes`: a media type on the mapping is matched BEFORE the access
+  // decision, so a caller without the permission would be told 415 rather than
+  // 403 -- which leaks that the endpoint exists and fails REQ-SEC-026's check.
+  // `MediaController` and the import upload learned this the same way.
+  @PutMapping(path = "/{pluginId}/settings/{key}")
+  @RequiresPermission(Permission.PLUGIN_CONFIGURE)
+  @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void configurePlugin(
+      @PathVariable @Size(max = 200) String pluginId,
+      @PathVariable @Size(max = 100) String key,
+      @RequestBody @Valid SettingRequest body,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    settings.set(pluginId, key, body.value(), user.userId());
+  }
+
+  /**
+   * Removes one setting, so the manifest's default applies again.
+   *
+   * <p>Removing what was never set is not an error, for the reason withdrawing a capability is not.
+   *
+   * @param pluginId the plugin
+   * @param key the setting
+   * @param user the administrator removing it
+   */
+  @DeleteMapping(path = "/{pluginId}/settings/{key}")
+  @RequiresPermission(Permission.PLUGIN_CONFIGURE)
+  @CanFail(ProblemType.NOT_FOUND)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void clearPluginSetting(
+      @PathVariable @Size(max = 200) String pluginId,
+      @PathVariable @Size(max = 100) String key,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    settings.clear(pluginId, key, user.userId());
+  }
+
   /**
    * Adds this tenant's answer to an installed plugin.
    *
@@ -145,6 +238,7 @@ public class PluginController {
         registration.runtime(),
         registration.signed(),
         registration.disabled(),
+        registration.stateReason(),
         registration.registeredAt(),
         registration.capabilities().stream()
             .map(capability -> new CapabilityView(capability, granted.contains(capability)))
@@ -160,9 +254,14 @@ public class PluginController {
    * @param vendor who publishes it
    * @param contract the contract range it supports
    * @param runtime {@code out-of-process} or {@code in-process}
-   * @param signed whether the operator verified its signature. An unsigned plugin runs only where
-   *     they allowed it, and a client shows that permanently (REQ-PLG-004)
+   * @param signed whether <b>this core</b> verified its manifest signature against the public key
+   *     the operator installed for it (REQ-PLG-004, ADR-0085). An unsigned plugin runs only where
+   *     they allowed it, and a client shows that permanently
    * @param disabled whether it is out of service
+   * @param stateReason why, in a sentence, or null when there is nothing to say. Needed beside
+   *     {@code signed} because "not signed" covers two different situations — a publisher who signed
+   *     nothing, and a document that does not match the signature travelling with it — and only one
+   *     of them is something an operator may choose to live with
    * @param registeredAt when it was first seen
    * @param capabilities everything its manifest asks for, each with whether this tenant agreed.
    *     Both halves together, because "what it wants" without "what it has" is not a decision
@@ -177,8 +276,38 @@ public class PluginController {
       String runtime,
       boolean signed,
       boolean disabled,
+      @Nullable String stateReason,
       Instant registeredAt,
       List<CapabilityView> capabilities) {}
+
+  /**
+   * One setting a plugin declares, with what this tenant made of it.
+   *
+   * @param key the manifest's key
+   * @param type {@code string}, {@code secret}, {@code enum}, {@code integer} or {@code boolean}
+   * @param required whether the plugin says it cannot work without one
+   * @param values the choices, for an {@code enum}; empty otherwise
+   * @param defaultValue what applies when nothing is set here, or null
+   * @param label what a person sees, by language tag — multilingual data, like a field label
+   * @param value what this tenant set, and <b>always null for a secret</b>
+   * @param set whether a value is stored, which is all a surface learns about a secret
+   */
+  public record SettingView(
+      String key,
+      String type,
+      boolean required,
+      List<String> values,
+      @Nullable String defaultValue,
+      java.util.Map<String, String> label,
+      String value,
+      boolean set) {}
+
+  /**
+   * The value to store.
+   *
+   * @param value the value as text, of the type the manifest declares
+   */
+  public record SettingRequest(@NotBlank @Size(max = 4096) String value) {}
 
   /**
    * One capability a plugin asks for.

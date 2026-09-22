@@ -4,12 +4,14 @@
  */
 package de.greluc.homeinv;
 
-import de.greluc.homeinv.media.api.BlobStore;
+import de.greluc.homeinv.media.api.DeploymentBlobStore;
+import de.greluc.homeinv.media.api.OffsetMismatchException;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -17,7 +19,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
 /**
- * The blob store the integration tests use.
+ * The DEPLOYMENT's blob store, as the integration tests provide it.
  *
  * <h2>Why this one is in memory and PostgreSQL is not</h2>
  *
@@ -43,13 +45,22 @@ public class TestBlobStore {
    * <p>{@code @Primary}, so it wins over the gRPC client — which is still constructed, because its
    * constructor refuses without a pin and an identity and that refusal is itself under test.
    *
+   * <p>It stands in for the <b>deployment's</b> store and not for the port: what {@code media}
+   * injects is {@code TenantBlobStore}, which asks whether this tenant granted a storage plugin and
+   * falls back to this one. A test that replaced the port instead would never exercise that choice
+   * (REQ-MED-009).
+   *
    * @return the in-memory store
    */
   @Bean
   @Primary
-  public BlobStore inMemoryBlobStore() {
+  public DeploymentBlobStore inMemoryBlobStore() {
     Map<String, byte[]> stored = new ConcurrentHashMap<>();
-    return new BlobStore() {
+    // Uploads still arriving, kept apart from finished blobs exactly as the real
+    // store keeps `staged/` apart from `sha256/`: an unfinished file must never
+    // be reachable at an address a read would answer.
+    Map<String, byte[]> staged = new ConcurrentHashMap<>();
+    return new DeploymentBlobStore() {
 
       @Override
       public boolean store(UUID tenantId, String sha256, InputStream content) throws IOException {
@@ -75,12 +86,57 @@ public class TestBlobStore {
         stored.remove(key(tenantId, sha256));
       }
 
+      // -- Staging, for an upload that arrives in pieces (REQ-MED-008) ------
+
+      @Override
+      public long append(UUID tenantId, UUID uploadId, long offset, InputStream content)
+          throws IOException {
+        // The offset check is faithful to the real store's, and it is the one
+        // property of staging worth reproducing here: it is what turns a
+        // client's wrong guess into a refusal rather than into a file of the
+        // right length and the wrong bytes.
+        byte[] present = staged.getOrDefault(key(tenantId, uploadId), new byte[0]);
+        if (present.length != offset) {
+          throw new OffsetMismatchException(present.length);
+        }
+        byte[] arriving = content.readAllBytes();
+        byte[] combined = new byte[present.length + arriving.length];
+        System.arraycopy(present, 0, combined, 0, present.length);
+        System.arraycopy(arriving, 0, combined, present.length, arriving.length);
+        staged.put(key(tenantId, uploadId), combined);
+        return combined.length;
+      }
+
+      @Override
+      public OptionalLong staged(UUID tenantId, UUID uploadId) {
+        byte[] bytes = staged.get(key(tenantId, uploadId));
+        return bytes == null ? OptionalLong.empty() : OptionalLong.of(bytes.length);
+      }
+
+      @Override
+      public InputStream openStaged(UUID tenantId, UUID uploadId) throws IOException {
+        byte[] bytes = staged.get(key(tenantId, uploadId));
+        if (bytes == null) {
+          throw new FileNotFoundException("No such staged upload");
+        }
+        return new ByteArrayInputStream(bytes);
+      }
+
+      @Override
+      public void deleteStaged(UUID tenantId, UUID uploadId) {
+        staged.remove(key(tenantId, uploadId));
+      }
+
       // The tenant is part of the key, exactly as it is part of the path in the
       // real store: addressing is per tenant and never across (ADR-0032), and a
       // fixture that keyed on the digest alone would let a test pass that the
       // deployment would fail.
       private String key(UUID tenantId, String sha256) {
         return tenantId + "/" + sha256;
+      }
+
+      private String key(UUID tenantId, UUID uploadId) {
+        return tenantId + "/staged/" + uploadId;
       }
     };
   }

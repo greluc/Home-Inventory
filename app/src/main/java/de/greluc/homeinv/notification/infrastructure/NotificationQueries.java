@@ -121,7 +121,7 @@ public class NotificationQueries {
         .sql(
             """
             select id, channel_key, address, subject, body_text, body_html, language,
-                   attempts, idempotency_key
+                   attempts, idempotency_key, webhook_target_id
             from notification.notification
             where tenant_id = ? and state = 'QUEUED' and next_attempt_at <= ?
             order by next_attempt_at
@@ -141,7 +141,8 @@ public class NotificationQueries {
                     rs.getString("body_html"),
                     rs.getString("language"),
                     rs.getInt("attempts"),
-                    rs.getString("idempotency_key")))
+                    rs.getString("idempotency_key"),
+                    rs.getObject("webhook_target_id", UUID.class)))
         .list();
   }
 
@@ -384,6 +385,10 @@ public class NotificationQueries {
    * @param language the recipient's language
    * @param attempts how many tries have been made
    * @param idempotencyKey what the channel deduplicates on, stable across every retry
+   * @param webhookTargetId the target this is a delivery to, or {@code null} when it is a message
+   *     to a person. Exactly one of the two is set, which V73 states as a constraint rather than as
+   *     a convention. The delivery run reads it for one reason: a webhook is signed with the
+   *     target's own secret (ADR-0077)
    */
   public record Due(
       UUID id,
@@ -394,5 +399,6 @@ public class NotificationQueries {
       String bodyHtml,
       String language,
       int attempts,
-      String idempotencyKey) {}
+      String idempotencyKey,
+      UUID webhookTargetId) {}
 }

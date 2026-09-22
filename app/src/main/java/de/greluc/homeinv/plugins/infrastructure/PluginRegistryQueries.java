@@ -33,6 +33,39 @@ public class PluginRegistryQueries {
   private final JdbcClient jdbc;
 
   /**
+   * Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9.4).
+   *
+   * <p>The state column already had both values and nothing could write the second one: a plugin
+   * became {@code DISABLED} when its circuit stayed permanently open, and the operator had no way
+   * to say so themselves. This is the immediate measure — one plugin stops being called at once,
+   * for every tenant, without uninstalling it and without touching a single grant, so putting it
+   * back is one call and not a re-consent by every tenant that granted it.
+   *
+   * <p>No tenant context and none needed: {@code plugin_registration} carries no {@code tenant_id}
+   * and no policy. A plugin is installed once for the instance ({@code REQ-PLG-013}) and this is
+   * the instance's decision about it.
+   *
+   * @param pluginId which plugin
+   * @param disabled true to take it out of service
+   * @param actor the operator, for the audit columns
+   * @return true when a row was changed, false when nothing is installed under that id
+   */
+  @Transactional
+  public boolean setDisabled(String pluginId, boolean disabled, UUID actor) {
+    return jdbc
+            .sql(
+                """
+                update plugins.plugin_registration
+                set state = ?, state_reason = null,
+                    updated_at = now(), updated_by = ?, version = version + 1
+                where plugin_id = ?
+                """)
+            .params(disabled ? "DISABLED" : "REGISTERED", actor, pluginId)
+            .update()
+        > 0;
+  }
+
+  /**
    * The installed plugins, by id, at most {@code limit} of them.
    *
    * @param limit how many at most, which the caller has already capped (REQ-NFR-010)
@@ -44,7 +77,7 @@ public class PluginRegistryQueries {
         .sql(
             """
             select plugin_id, plugin_version, manifest, manifest_digest, capabilities, contract,
-                   runtime, signed, state, created_at
+                   runtime, signed, state, state_reason, created_at
             from plugins.plugin_registration
             order by plugin_id
             limit ?
@@ -66,7 +99,7 @@ public class PluginRegistryQueries {
         .sql(
             """
             select plugin_id, plugin_version, manifest, manifest_digest, capabilities, contract,
-                   runtime, signed, state, created_at
+                   runtime, signed, state, state_reason, created_at
             from plugins.plugin_registration
             where plugin_id = ?
             """)
@@ -133,8 +166,8 @@ public class PluginRegistryQueries {
             """
             insert into plugins.plugin_registration
                 (plugin_id, plugin_version, manifest, manifest_digest, capabilities, contract,
-                 runtime, endpoint, fingerprint, signed, state)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 runtime, endpoint, fingerprint, signed, state, state_reason)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict (plugin_id) do update set
                 plugin_version = excluded.plugin_version,
                 manifest = excluded.manifest,
@@ -145,6 +178,35 @@ public class PluginRegistryQueries {
                 endpoint = excluded.endpoint,
                 fingerprint = excluded.fingerprint,
                 signed = excluded.signed,
+                -- WHO decided the state, and it is not always this statement.
+                -- `state` used to survive a re-registration untouched, so that an
+                -- operator's immediate measure outlived a restart (REQ-SEC-082).
+                -- Since V76 the SIGNATURE also decides it, and a manifest that
+                -- stopped verifying has to take the plugin out of service at the
+                -- next start -- which an untouched `state` would not do.
+                --
+                -- The two are told apart by the reason: `setDisabled` writes none,
+                -- because an operator is not a sentence, and a registration always
+                -- writes one when it disables. So a row that is DISABLED with no
+                -- reason is the operator's and is left exactly as it is; everything
+                -- else is this statement's to decide.
+                --
+                -- Re-enabling a plugin whose signature is broken therefore lasts
+                -- until the next start-up, and that is the intended answer rather
+                -- than an oversight: no setting runs a plugin whose document does
+                -- not match its signature.
+                state = case
+                    when plugins.plugin_registration.state = 'DISABLED'
+                         and plugins.plugin_registration.state_reason is null
+                    then 'DISABLED'
+                    else excluded.state
+                end,
+                state_reason = case
+                    when plugins.plugin_registration.state = 'DISABLED'
+                         and plugins.plugin_registration.state_reason is null
+                    then null
+                    else excluded.state_reason
+                end,
                 updated_at = now(),
                 version = plugins.plugin_registration.version + 1
             """)
@@ -159,7 +221,8 @@ public class PluginRegistryQueries {
             endpoint,
             fingerprint,
             registration.signed(),
-            registration.disabled() ? "DISABLED" : "REGISTERED")
+            registration.disabled() ? "DISABLED" : "REGISTERED",
+            registration.stateReason())
         .update();
   }
 
@@ -250,6 +313,97 @@ public class PluginRegistryQueries {
         .update();
   }
 
+  /**
+   * What the <b>instance</b> has granted one plugin (ADR-0066).
+   *
+   * <p>No tenant appears anywhere in this query, which is the whole point: these grants authorise
+   * the calls the deployment makes on its own behalf, for an account that may belong to no tenant
+   * at all (REQ-NOTI-004).
+   *
+   * @param pluginId which plugin
+   * @return the instance-level grants
+   */
+  @Transactional(readOnly = true)
+  public List<Grant> instanceGrants(String pluginId) {
+    return jdbc
+        .sql(
+            """
+            select plugin_id, capability, manifest_digest, created_at, created_by
+            from plugins.instance_capability_grant
+            where plugin_id = ?
+            order by capability
+            """)
+        .params(pluginId)
+        .query(PluginRegistryQueries::toGrant)
+        .list();
+  }
+
+  /**
+   * Whether the instance has granted this plugin this capability (ADR-0066).
+   *
+   * @param pluginId which plugin
+   * @param capability which capability
+   * @return true when an instance-level grant exists
+   */
+  @Transactional(readOnly = true)
+  public boolean grantedForInstance(String pluginId, String capability) {
+    return !jdbc
+        .sql(
+            """
+            select 1
+            from plugins.instance_capability_grant
+            where plugin_id = ? and capability = ?
+            """)
+        .params(pluginId, capability)
+        .query(Integer.class)
+        .list()
+        .isEmpty();
+  }
+
+  /**
+   * Records an instance-level consent (ADR-0066).
+   *
+   * <p>Idempotent on the unique key, and the digest is not rewritten on a second call — both for
+   * the reasons {@link #grant} gives.
+   *
+   * @param pluginId which plugin
+   * @param capability which capability
+   * @param manifestDigest what the operator was looking at
+   * @param actor which instance operator agreed
+   */
+  @Transactional
+  public void grantForInstance(
+      String pluginId, String capability, String manifestDigest, UUID actor) {
+    jdbc.sql(
+            """
+            insert into plugins.instance_capability_grant
+                (plugin_id, capability, manifest_digest, created_by)
+            values (?, ?, ?, ?)
+            on conflict (plugin_id, capability) do nothing
+            """)
+        .params(pluginId, capability, manifestDigest, actor)
+        .update();
+  }
+
+  /**
+   * Withdraws an instance-level consent (ADR-0066).
+   *
+   * @param pluginId which plugin
+   * @param capability which capability
+   * @return how many rows went, which is one or none
+   */
+  @Transactional
+  public int revokeForInstance(String pluginId, String capability) {
+    return jdbc
+        .sql(
+            """
+            delete from plugins.instance_capability_grant
+            where plugin_id = ? and capability = ?
+            """)
+        .params(pluginId, capability)
+        .update();
+  }
+
   private static Registration toRegistration(ResultSet rs, int rowNum) throws SQLException {
     Array capabilities = rs.getArray("capabilities");
     return new Registration(
@@ -266,6 +420,7 @@ public class PluginRegistryQueries {
         rs.getString("manifest_digest"),
         rs.getBoolean("signed"),
         "DISABLED".equals(rs.getString("state")),
+        rs.getString("state_reason"),
         rs.getObject("created_at", OffsetDateTime.class).toInstant());
   }
 

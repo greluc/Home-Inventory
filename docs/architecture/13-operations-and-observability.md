@@ -17,10 +17,11 @@ time*.
 |---|---|
 | Format | JSON lines, one event per line, to `stdout`, in **ECS** (`logging.structured.format.console: ecs`) — the schema the log shippers a self-hoster is likely to already run understand, and the one that carries the MDC as top-level fields rather than inside the message. `LogFormatIT` encodes an event and parses the result, which is REQ-NFR-041's "format verified" |
 | Collection | Podman/Quadlet: **journald** (`journalctl --user -u homeinv-api`) · Docker: `json-file` with rotation · Kubernetes: container logs. The operations documentation gives the commands for each way of running it. |
-| Mandatory fields | `timestamp`, `level`, `logger`, `message`, `traceId`, `tenantId`, `actorId`. `spanId` and `requestId` arrive with the tracing agent at stage 1 (REQ-NFR-044): a span id without spans would be a field with nothing in it. *This row listed all seven as if they existed — corrected 2026-09-12.* |
-| Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation. It is a 128-bit W3C trace id, put in the MDC by `TraceIdFilter` and adopted from an incoming `traceparent` when there is one, so the OpenTelemetry agent of stage 1 fills the same field with the same shape and nothing downstream changes |
+| Mandatory fields | `timestamp`, `level`, `logger`, `message`, `traceId`, `tenantId`, `actorId`, and `spanId` **on a deployment that traces** (REQ-NFR-044) — the tracer writes it into the same MDC the ECS encoder reads, so it appears without anything here changing, and is absent where there are no spans to name. *This row listed all seven as if they existed — corrected 2026-09-12; the seventh, `requestId`, was dropped on 2026-09-21, because tracing arrived and nothing produces it: `traceId` already is the per-request identifier.* |
+| Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation. It is a 128-bit W3C trace id, adopted from an incoming `traceparent` when there is one. Two things can fill it and they agree by construction: the tracer when a collector is configured, `TraceIdFilter` when there is none. `TracingIT` asserts that the id in the error document is the id of the trace the request produced, which is a stronger statement than both being present |
 | Levels | `ERROR` only when someone must act · `WARN` for degraded operation · `INFO` for state changes · `DEBUG` off, switchable per logger at runtime |
 | Personal data | No passwords, tokens, keys or `sensitive` values. A test with known test values verifies this. IP addresses removed after 7 days. |
+| Values somebody else chose | Through `LogSafe`, which removes the Unicode control, line-separator and paragraph-separator categories and bounds the length. A newline in a borrowed value writes a **second entry that never happened**, and the reader cannot tell it from the real ones. ECS JSON escapes it and the console pattern does not, so the call site is made safe rather than the formatter trusted (`LogSafeTest`, `REQ-SEC-068`) |
 | Tenant separation | `tenantId` on every line, so that analysis can be tenant-scoped |
 | Retention | 30 days on the application side, rotation through the container runtime |
 
@@ -50,7 +51,7 @@ Prometheus, Grafana and ready-made dashboards ships with the product.
 
 | Group | Metrics |
 |---|---|
-| **HTTP** | Requests per second, duration (p50/p95/p99) by route and status, error rate |
+| **HTTP** | Requests per second, duration (p50/p95/p99) by route and status, error rate. Plus `homeinv.api.requests` — usage by endpoint template, API version, client product and outcome, which is what a version shutdown is decided on (`REQ-API-009`, 08 §8). Every tag is bounded by construction: the route *template* and not the path, the product and not its version, three outcomes and not every status code |
 | **Domain** | Items per tenant, locations, media and bytes per tenant, scans per hour, print jobs by state |
 | **Database** | Connection pool utilisation, query duration, slow queries, lock wait time, table and index size, bloat, **WAL archive fill level and archiving failures** ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | **Outbox** | Unpublished entries, age of the oldest, relay throughput — **the most important metric in the system**, because a backlog here lets every derived store go stale |
@@ -65,20 +66,27 @@ Prometheus, Grafana and ready-made dashboards ships with the product.
 
 ## 13.4 Distributed tracing
 
-Stage 1. The `traceId` of [13.2](#132-logging) exists from stage 0 without it and
-is its own thing: a per-request identifier, generated in a filter, so that a user
-report and a log line can be connected on a deployment that runs nothing else.
-Spans, and therefore the chains below, need the agent.
+**Built 2026-09-21** ([ADR-0082](../adr/0082-tracing-is-a-library-and-the-sampling-is-the-operators.md),
+`REQ-NFR-044`). A trace spans: HTTP ingress → use case → database → outbox →
+RabbitMQ → worker → plugin call. Exactly the chains you cannot reconstruct
+without tracing.
 
-OpenTelemetry (Java agent, automatic). A trace spans: HTTP ingress → use case →
-database → outbox → RabbitMQ → worker → plugin call. Exactly the chains you
-cannot reconstruct without tracing.
+The `traceId` of [13.2](#132-logging) exists without any of it and is its own
+thing: a per-request identifier so that a user report and a log line can be
+connected on a deployment that traces nothing. When a collector *is* configured
+the tracer owns that field instead, with the same shape and the same name —
+`TraceIdFilter` runs behind Spring's observation filter and fills it only when it
+finds nothing there, so one request has one id (`TracingIT`).
 
 | Decision | |
 |---|---|
-| Sampling | 100 % for errors and slow requests, 5 % otherwise |
-| Enrichment | `tenantId`, `actorId`, plugin ID as attributes — never domain data |
-| Target | Configurable over OTLP; inactive when unconfigured |
+| How | **Micrometer Tracing and the OTLP exporter, as libraries** — three modules in the version catalogue, in the SBOM, gated by the licence check. *This row said "Java agent, automatic" until 2026-09-21: an agent is a binary fetched at image build time, outside all three of those, and it instruments whether or not anything is exported* |
+| Configuration | **`HOMEINV_TRACING_ENDPOINT`, and nothing else.** Empty is the default and means inactive — no span processor, no exporter, nothing recorded (`TracingOffIT`) |
+| Where the collector is | **On `internal`, run by the operator.** `api` and `worker` still reach nothing outside the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); what the collector forwards to afterwards is theirs. We ship no collector container and an example configuration instead: [`docs/reference/otel-collector.yaml`](../reference/otel-collector.yaml) |
+| Sampling | **The application sends everything; the collector decides.** Keep every trace that failed or took over a second, and 5 % of the rest — a **tail** policy, taken when the trace is complete. *This row read "100 % for errors and slow requests, 5 % otherwise" as though the application did it, and a 5 % head sample discards 95 % of the errors before anything can see that they were errors* |
+| Enrichment | `tenantId`, `actorId` and the plugin id as attributes — **never domain data**, because spans leave the deployment and outlive a log line. As *high-cardinality* key values, so they reach spans and never become meter tags (`TraceEnrichment`, `TracingIT`) |
+| The plugin hop | Ours to carry, because no library instruments it: one span per call (`homeinv.plugin.call`), the W3C `traceparent` in `CallContext.trace_id` **and** in the call's gRPC metadata, exactly as the contract already promised |
+| The broker hop | `spring.rabbitmq.template.observation-enabled` and `listener.simple.observation-enabled`, on in both roles — the publisher writes the context into the message and the consumer picks it up |
 
 ## 13.5 Health endpoints
 
@@ -153,6 +161,7 @@ vulnerability.
 | Prune the **WAL archive** | daily | Remove segments older than the newest verified base backup, and publish the volume's fill level as a metric ([ADR-0045](../adr/0045-wal-archive-volume.md)) |
 | Audit partitions | monthly | Create and archive |
 | Orphaned blobs | weekly | Check reference counts, remove unreferenced ones — **with a grace period**, never immediately |
+| Abandoned uploads | every 15 min | Remove uploads that were begun and never finished (`REQ-MED-008`). An upload nobody comes back for is a file occupying the volume for ever, and there is no user action that removes one: a client that gives up simply stops. The staged bytes go **before** the row — the opposite order to the orphan sweep above, and right for the same reason, because here the row is the only record of where the bytes are ([ADR-0084](../adr/0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md)) |
 | Expired tokens and invitations | hourly | |
 | **Erase tenants whose grace period has elapsed** | hourly | One pass per tenant, block by block in a declared order, each block in its own transaction and inside the tenant's own context; the tenant row is tombstoned last and an erasure certificate is written (`REQ-TEN-011`, [ADR-0060](../adr/0060-the-erasure-runs-in-one-pass.md)). Hourly rather than daily, because the person waiting for it is the person who asked. Finding the due tenants spans tenants, so it goes through a `SECURITY DEFINER` function ([07 §7.5](07-data-model.md)) rather than the broker — unlike the catch-up scan below, this sweep has a tenant list to start from |
 | Evaluate reminders | hourly | Warranty, maintenance, returns, minimum stock |

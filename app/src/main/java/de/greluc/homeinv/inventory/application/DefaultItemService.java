@@ -124,6 +124,15 @@ public class DefaultItemService implements ItemService {
   private final de.greluc.homeinv.inventory.api.PlaceScope scope;
 
   /**
+   * Whether an item is out on loan (REQ-LIFE-005).
+   *
+   * <p>Asked before a deletion and nowhere else here. "A lent item is ... not deletable" is
+   * REQ-LIFE-005's acceptance criterion, and the reason is that the loan row is the only record of
+   * who has the thing: trashing the item would take the question and the answer away together.
+   */
+  private final de.greluc.homeinv.inventory.api.LoanLog loans;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -204,6 +213,7 @@ public class DefaultItemService implements ItemService {
             command.notes(),
             command.minimumStock(),
             command.valuation(),
+            command.maintenanceIntervalDays(),
             actor,
             now);
 
@@ -385,6 +395,7 @@ public class DefaultItemService implements ItemService {
         command.notes(),
         command.minimumStock(),
         command.valuation(),
+        command.maintenanceIntervalDays(),
         actor,
         Instant.now(clock));
 
@@ -605,6 +616,14 @@ public class DefaultItemService implements ItemService {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
     Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+    // REQ-LIFE-005: a lent item is not deletable. Before the version check would
+    // be wrong -- a caller holding a stale version should be told that first,
+    // because re-reading is what they do about it -- and after the state change
+    // would be too late.
+    if (loans.isLent(id)) {
+      throw new de.greluc.homeinv.inventory.api.ItemLentException(
+          "This item is lent out. Record its return before deleting it.");
+    }
     item.markDeleted(actor, Instant.now(clock));
     items.flush();
     revisions.record(
@@ -618,6 +637,44 @@ public class DefaultItemService implements ItemService {
     // findable, for the whole retention period (07 §7.3, REQ-CORE-013).
     projector.clear(id);
     events.publishEvent(new de.greluc.homeinv.inventory.api.ItemDeleted(tenantId, id));
+  }
+
+  @Transactional
+  @Override
+  public de.greluc.homeinv.inventory.api.ItemView dispose(
+      UUID id,
+      de.greluc.homeinv.inventory.api.ItemService.Disposal disposal,
+      OptionalLong expectedVersion,
+      UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+
+    item.dispose(
+        disposal.state(),
+        disposal.price() == null ? null : disposal.price().amount(),
+        disposal.price() == null ? null : disposal.price().currency().getCurrencyCode(),
+        disposal.on(),
+        disposal.recipient(),
+        disposal.note(),
+        actor,
+        Instant.now(clock));
+    items.flush();
+
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
+    // The projection is NOT cleared, unlike a trashing: a sold item is still a
+    // thing the tenant had, and REQ-LIFE-007's record is worth nothing if the
+    // item stops being findable the moment it is recorded (07 §7.3).
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemDisposed(
+            tenantId, id, item.getLifecycleState(), disposal.on()));
+    log.info("Item {} left the inventory as {}", id, item.getLifecycleState());
+    return toView(item);
   }
 
   @Transactional
@@ -772,7 +829,8 @@ public class DefaultItemService implements ItemService {
             stored.minimumStock(),
             stored.itemTypeVersionId(),
             stored.lifecycleState(),
-            stored.valuation());
+            stored.valuation(),
+            stored.maintenanceIntervalDays());
     return new de.greluc.homeinv.audit.api.RevisionLog.RevisionView(
         revision.revision(),
         revision.kind(),
@@ -821,6 +879,7 @@ public class DefaultItemService implements ItemService {
         // rather than keeping today's. That is the honest reading of "restore":
         // the state as it was, including what it did not have.
         earlier.valuation(),
+        earlier.maintenanceIntervalDays(),
         actor,
         Instant.now(clock));
     items.flush();
@@ -859,8 +918,9 @@ public class DefaultItemService implements ItemService {
             item.getNotes(),
             item.getMinimumStock(),
             item.getItemTypeVersionId(),
-            item.getLifecycleState(),
-            item.valuation()));
+            item.getLifecycleState().name(),
+            item.valuation(),
+            item.getMaintenanceIntervalDays()));
   }
 
   /**
@@ -878,6 +938,8 @@ public class DefaultItemService implements ItemService {
    * @param minimumStock the restocking level, or {@code null}
    * @param itemTypeVersionId which definitions those attributes were written against
    * @param lifecycleState the state a person reads
+   * @param valuation what it cost, what covered it and what replacing it would cost
+   * @param maintenanceIntervalDays how often it needed servicing, or {@code null} (REQ-LIFE-004)
    */
   private record Snapshot(
       String name,
@@ -891,7 +953,8 @@ public class DefaultItemService implements ItemService {
       BigDecimal minimumStock,
       UUID itemTypeVersionId,
       String lifecycleState,
-      de.greluc.homeinv.inventory.api.Valuation valuation) {}
+      de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays) {}
 
   /**
    * Refuses a place outside the part of the tree this session is confined to (REQ-TEN-007).
@@ -926,17 +989,19 @@ public class DefaultItemService implements ItemService {
         item.getName(),
         item.getDescription(),
         item.getKind().name(),
+        item.getItemTypeVersionId(),
         item.getLocationId(),
         item.getQuantity(),
         item.getQuantityUnit(),
         redaction.forCaller(item.getItemTypeVersionId(), item.getId(), item.getAttributes()),
         item.getNotes(),
         item.getMinimumStock(),
-        item.getLifecycleState(),
+        item.getLifecycleState().name(),
         item.getCreatedAt(),
         item.getUpdatedAt(),
         item.valuation(),
-        item.getVersion());
+        item.getVersion(),
+        item.getMaintenanceIntervalDays());
   }
 
 }

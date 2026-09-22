@@ -61,6 +61,33 @@ jobs:
           path: app/build/reports/tests/test
           retention-days: 7
 
+      # REQ-CON-013. The licence notice each artifact carries is generated from
+      # what that artifact actually holds — the jars inside the boot jar, here —
+      # and committed, so a dependency arriving with a new licence is visible in
+      # the pull request that brings it rather than in a legal question later.
+      # This is the step that fails when the committed notice no longer
+      # describes the build.
+      - name: The licence notices describe what the artifacts carry
+        run: python3 tools/notices.py --check app plugin-oidc
+
+      # REQ-CON-010. The SBOM is produced by `build`, so it is never stale
+      # relative to the dependencies beside it, and it is kept here so that a
+      # release can attach the one that belongs to its own commit rather than
+      # one regenerated later against whatever resolved that day.
+      #
+      # Two of them, because there are two Java images: the application and the
+      # OIDC plugin resolve different classpaths, and an advisory is matched
+      # against an image rather than against a repository.
+      - name: Publish the SBOMs
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: |
+            app/build/sbom/
+            plugins/oidc/build/sbom/
+          retention-days: 90
+          if-no-files-found: error
+
   contract:
     name: API contract
     runs-on: ubuntu-latest
@@ -96,6 +123,42 @@ jobs:
         run: |
           pip install --quiet pyyaml
           python tools/render_problems.py --check
+
+      # REQ-API-006 and ADR-0079. In production the GraphQL surface serves only
+      # the queries the build registered, and the register is generated from the
+      # client's own documents -- so the two cannot drift, and a query the build
+      # never saw is refused here rather than in somebody's browser.
+      #
+      # `web/` speaks REST today, so the list is empty and this checks that it
+      # still is. The moment the client gains a `.graphql` document, this step is
+      # what makes the register move with it.
+      - name: The persisted-query register matches the client
+        run: python tools/persisted_queries.py --check
+
+      # REQ-API-002. The Kotlin Multiplatform client is generated from the same
+      # document and committed, so this is the other half of the same check the
+      # web client gets: the committed client and the document agree, or the
+      # build says which file drifted.
+      #
+      # Its COMPILATION is the `Build and test` job's -- `./gradlew build` builds
+      # every subproject, and `:api-client-kotlin` is one.
+      - name: The Kotlin client matches the API document
+        run: python tools/kotlin_client.py --check
+
+      # REQ-PLG-004 and ADR-0085. Each plugin manifest travels with a detached
+      # signature, and the core verifies it at every start-up -- so a manifest
+      # edited without its signature being renewed is a plugin that registers
+      # DISABLED in every deployment, with a message about cryptography.
+      #
+      # It fails HERE instead, where the cause is one commit away. The PUBLIC
+      # key is all this needs; the private half is never in a runner, which is
+      # the whole reason signing is a person's command rather than a build step.
+      #
+      # Unsigned manifests are reported and are not a failure: "nobody signed
+      # it" is a state an operator may permit deliberately, and this repository
+      # publishes nothing yet.
+      - name: Every manifest signature is over its manifest
+        run: python tools/manifest_signatures.py --check
 
       - uses: bufbuild/buf-setup-action@v1
         with:
@@ -201,6 +264,10 @@ jobs:
           push: false
           load: true
           tags: home-inv:ci
+          # The image has no git of its own, so the commit is handed to it
+          # (REQ-CON-009).
+          build-args: |
+            HOMEINV_BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -275,12 +342,63 @@ jobs:
       - name: Advisories and licences
         run: cargo deny check
 
+      # REQ-CON-010 and REQ-CON-013, which for a `scratch` image are answered
+      # differently: the SBOM is published with the release, because there is no
+      # filesystem in the image to put it on, and the licence NOTICE is compiled
+      # INTO the binary — generated ahead of the build, committed, and checked
+      # here (ADR-0083).
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: The SBOM, and the notice the binary carries
+        run: |
+          # `--target` and not the host's: this resolves the graph for the
+          # triple the Dockerfile builds, so the notice describes the binary
+          # that ships rather than the machine that generated it (ADR-0083).
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps --target x86_64-unknown-linux-musl
+          python3 ../tools/notices.py --check egress-proxy
+
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-egress-proxy
+          path: egress-proxy/*.cdx.json
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Image
         # `-f Dockerfile`, not `-f egress-proxy/Dockerfile`: the working directory is
         # already the crate, and the context is `..` because the Dockerfile COPYs
         # `egress-proxy/` and `proto/` from the repository root.
         run: docker build -f Dockerfile -t home-inv-egress-proxy:ci ..
         working-directory: egress-proxy
+
+
+      # REQ-CON-013, measured on the image rather than on the crate. The notice is
+      # compiled in, so this is the only place that can say it reached the thing
+      # that ships — and `scratch` has no shell, which is exactly why the flag
+      # exists (ADR-0083).
+      - name: The image can say what it is made of
+        run: |
+          set -euo pipefail
+          # To a file and not through `head`: `head -1` closes the pipe
+          # after one line, the binary writing 1600 of them is killed by
+          # SIGPIPE, and `pipefail` turns that into a failed step. The
+          # error read `write /dev/stdout: broken pipe`, which is the
+          # check working and reporting itself as the thing it checks.
+          docker run --rm home-inv-egress-proxy:ci --licences > notice.txt
+          first=$(head -1 notice.txt)
+          if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
+            echo "::error::egress-proxy does not print its licence notice; it read '$first'"
+            exit 1
+          fi
+          # And that it is the notice rather than a banner over nothing.
+          if [ "$(wc -l < notice.txt)" -lt 200 ]; then
+            echo "::error::egress-proxy printed a notice of $(wc -l < notice.txt) lines"
+            exit 1
+          fi
+          rm notice.txt
+          echo "The image prints its third-party notice."
 
       # `scratch` plus one static binary. An allowlist enforcer with a shell in
       # the image is an allowlist enforcer with a way around itself.
@@ -302,6 +420,191 @@ jobs:
             exit 1
           fi
           echo "Runs as 10001:10001."
+
+  plugins:
+    # One job per crate under `plugins/`, so a third and a fourth cost a line
+    # each. `common` is the shared library ADR-0072 predicted: it has tests and
+    # no image, which is the one place the steps below branch.
+    name: Plugin — ${{ matrix.crate }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: common
+            image: false
+          - crate: webhook
+            image: true
+          - crate: smtp
+            image: true
+          - crate: blobstore-s3
+            image: true
+          - crate: blobstore-nextcloud
+            image: true
+    defaults:
+      run:
+        working-directory: plugins/${{ matrix.crate }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: plugins/${{ matrix.crate }}
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --release --locked
+
+      # The same `-D warnings` the two core Rust services get. These compose a
+      # request from a URL a person typed, sign a payload with a tenant's secret
+      # and speak a line protocol to a mail server; a lint about an unchecked
+      # conversion is worth a build here.
+      - name: Clippy
+        run: cargo clippy --release --all-targets --locked -- -D warnings
+
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      # A first-party plugin is AGPL like the rest of the first-party code
+      # (ADR-0072), so its dependency tree has the same licence question to
+      # answer as `blobstore/` and `egress-proxy/`.
+      - name: Advisories and licences
+        run: cargo deny check
+
+      # REQ-CON-010 and REQ-CON-013. Skipped for `common`, which is a library
+      # rather than a distributed artifact: it is linked into the four plugins
+      # below and its dependencies appear in each of their notices.
+      - name: Install cargo-cyclonedx
+        if: matrix.image
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: The SBOM, and the notice the binary carries
+        if: matrix.image
+        run: |
+          # `--target` and not the host's: this resolves the graph for the
+          # triple the Dockerfile builds, so the notice describes the binary
+          # that ships rather than the machine that generated it (ADR-0083).
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps --target x86_64-unknown-linux-musl
+          python3 ../../tools/notices.py --check plugins-${{ matrix.crate }}
+
+      - name: Publish the SBOM
+        if: matrix.image
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-plugin-${{ matrix.crate }}
+          path: plugins/${{ matrix.crate }}/*.cdx.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Image
+        if: matrix.image
+        # `-f Dockerfile` with the repository root as the context, because the
+        # Dockerfile COPYs `proto/`, the shared crate and this one from there.
+        run: docker build -f Dockerfile -t home-inv-plugin-${{ matrix.crate }}:ci ../..
+
+
+      # REQ-CON-013, measured on the image rather than on the crate. The notice is
+      # compiled in, so this is the only place that can say it reached the thing
+      # that ships — and `scratch` has no shell, which is exactly why the flag
+      # exists (ADR-0083).
+      - name: The image can say what it is made of
+        if: matrix.image
+        run: |
+          set -euo pipefail
+          # To a file and not through `head`: `head -1` closes the pipe
+          # after one line, the binary writing 1600 of them is killed by
+          # SIGPIPE, and `pipefail` turns that into a failed step. The
+          # error read `write /dev/stdout: broken pipe`, which is the
+          # check working and reporting itself as the thing it checks.
+          docker run --rm home-inv-plugin-${{ matrix.crate }}:ci --licences > notice.txt
+          first=$(head -1 notice.txt)
+          if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
+            echo "::error::plugin-${{ matrix.crate }} does not print its licence notice; it read '$first'"
+            exit 1
+          fi
+          # And that it is the notice rather than a banner over nothing.
+          if [ "$(wc -l < notice.txt)" -lt 200 ]; then
+            echo "::error::plugin-${{ matrix.crate }} printed a notice of $(wc -l < notice.txt) lines"
+            exit 1
+          fi
+          rm notice.txt
+          echo "The image prints its third-party notice."
+
+      # `scratch` plus one static binary, like the two core Rust services. A
+      # plugin with a shell in its image is a plugin that can be used as one.
+      - name: The image contains the binary and nothing else
+        if: matrix.image
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint /bin/sh home-inv-plugin-${{ matrix.crate }}:ci \
+             -c 'echo reachable' 2>/dev/null; then
+            echo "::error::the runtime image contains a shell"
+            exit 1
+          fi
+          echo "No shell in the runtime image."
+
+      - name: The image does not run as root
+        if: matrix.image
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect home-inv-plugin-${{ matrix.crate }}:ci --format '{{.Config.User}}')
+          if [ "$user" != "10001:10001" ]; then
+            echo "::error::plugin-${{ matrix.crate }} runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
+            exit 1
+          fi
+          echo "Runs as 10001:10001."
+
+  # The fifth plugin is Java and is built by THIS build rather than by cargo
+  # (ADR-0072), so `./gradlew build` in the job above already compiles it, runs
+  # its tests and runs SpotBugs over it. What is left is its image.
+  plugin-oidc-image:
+    name: Plugin — oidc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # `-f Dockerfile` with the repository root as the context, because the
+      # Dockerfile COPYs the wrapper, `proto/` and the build files from there.
+      - name: Image
+        run: docker build -f plugins/oidc/Dockerfile -t home-inv-plugin-oidc:ci .
+
+      # No "the image contains no shell" check here, and the absence is
+      # deliberate: this one is a JRE on a distribution image and has one. The
+      # four Rust plugins are `scratch` plus a static binary and are checked for
+      # it; a JVM cannot be, which is part of what ADR-0072 weighed when it made
+      # this the exception.
+      - name: The image does not run as root
+        run: |
+          set -euo pipefail
+          user=$(docker image inspect home-inv-plugin-oidc:ci --format '{{.Config.User}}')
+          if [ "$user" != "10001:10001" ]; then
+            echo "::error::plugin-oidc runs as '$user'; it must be 10001:10001 (REQ-SEC-084)"
+            exit 1
+          fi
+          echo "Runs as 10001:10001."
+
+      - name: It starts, and says what it is missing rather than crashing
+        run: |
+          set -euo pipefail
+          # With no identity mounted it must REFUSE TO START (REQ-SEC-056): a
+          # plugin that came up without mTLS would take calls from anything on
+          # its segment and nothing about it would say so.
+          if docker run --rm home-inv-plugin-oidc:ci 2>&1 | tee /tmp/oidc.log; then
+            echo "::error::plugin-oidc started without an mTLS identity"
+            exit 1
+          fi
+          grep -q "mtls-plugin-oidc" /tmp/oidc.log \
+            || { echo "::error::it refused without naming the file it needs"; exit 1; }
+          echo "Refuses to start without its identity, and says which file."
 
   web:
     name: Web client
@@ -348,13 +651,17 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # The client is hand-written through stage 0 (REQ-API-002 generates it at
-      # stage 1), and a hand-written client drifts silently: a mistyped path is a
-      # 404 at run time on a screen nobody opened during review. `api/openapi.yaml`
-      # is generated from the running application, so this compares against the
-      # implementation.
-      - name: Every path it calls is in the API document
-        run: npm run contract:check
+      # REQ-API-002. The client's types ARE the API document, turned into
+      # TypeScript by `scripts/client.mjs` and committed — so a mistyped path, an
+      # invented parameter and a field the server does not send are compile
+      # errors in the step above rather than a 404 on a screen nobody opened.
+      #
+      # This step checks the other direction: that the committed types still
+      # match the document. It replaced `scripts/contract.mjs`, which compared
+      # the hand-written client's path strings against the document and could
+      # only ever check the paths.
+      - name: The generated client matches the API document
+        run: npm run client:check
 
       - name: Build
         run: npm run build
@@ -365,6 +672,25 @@ jobs:
       # instead.
       - name: The served CSP matches the built bundle
         run: npm run csp:check
+
+      # REQ-CON-013. MIT and ISC ask for their notice in every copy and a
+      # minified bundle is a copy. The list comes from Rollup rather than from
+      # the dependency tree (`vite.config.ts`): a production install resolves
+      # `typescript`, because i18next declares it as a peer dependency, and no
+      # line of it reaches a browser.
+      - name: The licence notice describes what the bundle carries
+        run: python3 ../tools/notices.py --check web
+
+      # REQ-CON-010. The bundle's own bill of materials, produced by the build
+      # that produced the bundle and shipped inside it — `dist/sbom.json` is
+      # served by the `web` image like any other file in the bundle.
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-web
+          path: web/dist/sbom.json
+          retention-days: 90
+          if-no-files-found: error
 
       # `npm run build` REWRITES nginx/default.conf, so the check above compares
       # the build with itself and cannot fail. What it cannot see is the copy in
@@ -512,12 +838,63 @@ jobs:
       - name: Advisories and licences
         run: cargo deny check
 
+      # REQ-CON-010 and REQ-CON-013, which for a `scratch` image are answered
+      # differently: the SBOM is published with the release, because there is no
+      # filesystem in the image to put it on, and the licence NOTICE is compiled
+      # INTO the binary — generated ahead of the build, committed, and checked
+      # here (ADR-0083).
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: The SBOM, and the notice the binary carries
+        run: |
+          # `--target` and not the host's: this resolves the graph for the
+          # triple the Dockerfile builds, so the notice describes the binary
+          # that ships rather than the machine that generated it (ADR-0083).
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps --target x86_64-unknown-linux-musl
+          python3 ../tools/notices.py --check blobstore
+
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-blobstore
+          path: blobstore/*.cdx.json
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Image
         # `-f Dockerfile`, not `-f blobstore/Dockerfile`: the working directory is
         # already the crate, and the context is `..` because the Dockerfile COPYs
         # `blobstore/` and `proto/` from the repository root.
         run: docker build -f Dockerfile -t home-inv-blobstore:ci ..
         working-directory: blobstore
+
+
+      # REQ-CON-013, measured on the image rather than on the crate. The notice is
+      # compiled in, so this is the only place that can say it reached the thing
+      # that ships — and `scratch` has no shell, which is exactly why the flag
+      # exists (ADR-0083).
+      - name: The image can say what it is made of
+        run: |
+          set -euo pipefail
+          # To a file and not through `head`: `head -1` closes the pipe
+          # after one line, the binary writing 1600 of them is killed by
+          # SIGPIPE, and `pipefail` turns that into a failed step. The
+          # error read `write /dev/stdout: broken pipe`, which is the
+          # check working and reporting itself as the thing it checks.
+          docker run --rm home-inv-blobstore:ci --licences > notice.txt
+          first=$(head -1 notice.txt)
+          if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
+            echo "::error::blobstore does not print its licence notice; it read '$first'"
+            exit 1
+          fi
+          # And that it is the notice rather than a banner over nothing.
+          if [ "$(wc -l < notice.txt)" -lt 200 ]; then
+            echo "::error::blobstore printed a notice of $(wc -l < notice.txt) lines"
+            exit 1
+          fi
+          rm notice.txt
+          echo "The image prints its third-party notice."
 
       # `scratch` plus one binary. Anything else in there is something an
       # attacker who reaches this process could run, and something to patch on a
@@ -590,6 +967,64 @@ jobs:
             fi
           done
           [ "$fail" -eq 0 ] && echo "Every commit is signed off and conventionally named."
+          exit $fail
+
+      # REQ-CON-006. The four files a contributor, a reporter and a packager look
+      # for first. Their absence is never noticed by a build, only by the person
+      # who went looking.
+      - name: The community files are present
+        run: |
+          set -uo pipefail
+          fail=0
+          for file in README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md; do
+            if [ ! -s "$file" ]; then
+              echo "::error::$file is missing or empty (REQ-CON-006)"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "Every community file is present."
+          exit $fail
+
+      # REQ-CON-005. A changelog with nothing in its Unreleased section during a
+      # run of feature commits is one nobody is keeping, and the first release
+      # would then have to be reconstructed from git log.
+      - name: The changelog is being kept
+        run: |
+          set -uo pipefail
+          if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no [Unreleased] section (REQ-CON-005)"
+            exit 1
+          fi
+          entries=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md | grep -c '^- ')
+          if [ "$entries" -eq 0 ]; then
+            echo "::error::CHANGELOG.md's [Unreleased] section names no change (REQ-CON-005)"
+            exit 1
+          fi
+          echo "The changelog's Unreleased section names $entries change(s)."
+
+      # REQ-CON-007. Every file says who owns it and under which licence, and
+      # the Apache-2.0 modules carry their own copy of theirs -- a plugin author
+      # who vendors `plugin-api` gets the licence with the code.
+      - name: Licences are declared for every file
+        run: |
+          set -uo pipefail
+          pipx install reuse >/dev/null 2>&1 || pip install --quiet reuse
+          reuse lint
+
+      - name: The Apache modules carry their own licence
+        run: |
+          set -uo pipefail
+          fail=0
+          for module in plugin-api proto plugin-sdk; do
+            if [ ! -s "$module/LICENSE" ]; then
+              echo "::error::$module has no LICENSE of its own (REQ-CON-007, ADR-0018)"
+              fail=1
+            elif ! head -5 "$module/LICENSE" | grep -q 'Apache License'; then
+              echo "::error::$module/LICENSE is not the Apache licence (REQ-CON-007)"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "Every Apache module carries its own licence."
           exit $fail
 
       # REQ-SEC-078. `pull_request_target` runs with the BASE repository's

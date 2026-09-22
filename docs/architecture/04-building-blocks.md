@@ -75,7 +75,7 @@ graph TB
         REST["rest<br/>OpenAPI 3.1"]
         GQL["graphql<br/>read-only"]
         GRPC["grpc<br/>plugin contract"]
-        SSE["events-stream<br/>SSE/WebSocket"]
+        SSE["eventstream<br/>SSE"]
     end
 
     subgraph Core["Consistency-critical core (not extractable)"]
@@ -181,8 +181,8 @@ Every block has: one sentence of responsibility, its own DB schema, a published
 |---|---|
 | Schema | `identity` |
 | Key notions | `User`, `Credential` (password/TOTP/passkey), `Session`, `RefreshToken`, `ServiceAccount`, `IdentityProvider` |
-| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else), `OperatorDirectory` (the paged listing of operators, its own port because paging signs a cursor and the one-shot `bootstrap` service is given no signing key), `AccountRegistry` implemented for `tenancy`, `SecondFactor` (enrolling, verifying and removing what an account authenticates with besides its password — `REQ-AUTH-002`), `SecondFactorStatus` implemented for `authorization`, `UserSessions` (what an account has open, and ending one of them — `REQ-AUTH-009`), `ServiceAccounts` (machine tokens with a role and an expiry — `REQ-AUTH-010`) |
-| Outbound ports | `PasswordHasher` (Argon2id, in-core) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
+| Publishes | `AuthenticationService`, `UserDirectory` (read-only view of users), `PrincipalView`, `AccountAdministration` (what the instance operator may change about an account — entitlements and nothing else), `OperatorDirectory` (the paged listing of operators, its own port because paging signs a cursor and the one-shot `bootstrap` service is given no signing key), `AccountRegistry` implemented for `tenancy`, `SecondFactor` (enrolling, verifying and removing what an account authenticates with besides its password — `REQ-AUTH-002`), `SecondFactorStatus` implemented for `authorization`, `UserSessions` (what an account has open, and ending one of them — `REQ-AUTH-009`), `ServiceAccounts` (machine tokens with a role and an expiry — `REQ-AUTH-010`), `PasswordReset` (a single-use token valid thirty minutes that ends every session and tells the **old** address — `REQ-SEC-018`), `PasswordPolicy` (twelve characters, no forced complexity, no forced rotation — `REQ-SEC-011`) |
+| Outbound ports | `PasswordHasher` (Argon2id, in-core) · `SecurityNotifications` (the account-level queue in `notification`, which is how a reset reaches somebody who belongs to no tenant — [ADR-0066](../adr/0066-instance-level-capability-grants.md)) · `MailSender` and `OidcClient` — **both served by plugins** ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)); `identity` knows only the ports, which is why moving them cost nothing structurally |
 | Events | `UserRegistered`, `UserDeactivated`, `CredentialChanged`, `SuspiciousLoginDetected` |
 | Notable | Knows **no** tenants and **no** permissions. Who someone is and what someone may do are separate questions. The account nevertheless carries three **instance-level** facts — `instance_operator`, `may_create_tenants` and `tenant_limit` ([ADR-0057](../adr/0057-the-instance-operator.md)) — and they are not a contradiction: nothing here evaluates them. This block stores them, `authorization` answers with them through the `AccountEntitlements` port, and no tenant can grant one. |
 
@@ -254,14 +254,15 @@ attributes, quantities, relations, lifecycle.
 | | |
 |---|---|
 | Schema | `inventory` |
-| Key notions | `Item` (aggregate root), `ItemAttributes` (JSONB), `ItemRelation`, `ItemLifecycle`, `MaintenanceEntry`, `Loan`, `Bundle`, `ConsumableStock`, `Valuation` (purchase price, current value, replacement value) |
+| Key notions | `Item` (aggregate root), `ItemAttributes` (JSONB), `ItemRelation`, `ItemLifecycle`, `MaintenanceEntry`, `Loan`, `Bundle`, `ConsumableStock`, `Valuation` (purchase price, current value, replacement value), `ValuationReport` |
+| Outbound ports (inverted) | `PlaceScope` and `PlaceTree` — whether a place is in scope, and the shape of the tree for a report that rolls figures up it. Declared **here** and implemented by `locations`, because `locations` already depends on this block: it asks whether a place still holds anything before letting it be deleted (`REQ-CORE-046`), so a call the other way closes a cycle. `PlaceTree` was added 2026-09-20 when the valuation report reached for `LocationService` and the module check refused it |
 | Publishes | `ItemService`, `ItemQuery`, `ItemRelations`, `ItemBundles`, `BulkItemOperations`, `ItemView`, `ItemRef` |
 | Outbound ports | `AttributeValidator` (catalog), `LocationLookup` (locations), `QuotaGuard` (tenancy), `AccessControl` (authorization), `CodeAssignment` (identification), **`AuditService` (audit)** — [05 §5.1](05-runtime-view.md) writes an audit entry inside the item transaction, and without this port that write would be a block reaching into a foreign schema, which [4.5](#45-mapping-blocks-to-database-schemas) forbids |
-| Events | `ItemCreated`, `ItemUpdated`, `ItemMoved`, `ItemTypeChanged`, `ItemDeleted`, `ItemRestored`, `ItemPurged`, `StockBelowMinimum` — published since 2026-09-14, when the OpenSearch indexer needed something to listen to and this block turned out to publish nothing at all. One event per operation rather than one "something changed" (decided with the owner): a consumer keeping a count per place should not have to re-read every item that was renamed. Each carries identifiers and the scalars a consumer branches on, never the item — an entity does not leave its block (REQ-NFR-022). Still to come with the features that raise them: `ItemLent`, `ItemReturned` (REQ-LIFE-005), `ItemDisposed` (REQ-LIFE-007) and `QuantityChanged` |
+| Events | `ItemCreated`, `ItemUpdated`, `ItemMoved`, `ItemTypeChanged`, `ItemDeleted`, `ItemRestored`, `ItemPurged`, `StockBelowMinimum` — published since 2026-09-14, when the OpenSearch indexer needed something to listen to and this block turned out to publish nothing at all. One event per operation rather than one "something changed" (decided with the owner): a consumer keeping a count per place should not have to re-read every item that was renamed. Each carries identifiers and the scalars a consumer branches on, never the item — an entity does not leave its block (REQ-NFR-022). `ItemLent`, `ItemReturned` (REQ-LIFE-005) and `ItemDisposed` (REQ-LIFE-007) arrived with those features on 2026-09-20. `ItemLent` carries the due date because REQ-LIFE-006's reminder branches on it, and **no borrower** — who has a thing is personal data, and a consumer that needs it asks the block that owns it. `ItemReturned` is published only when a loan actually closed, so a second return does not tell a consumer the thing came back twice. Still to come: `QuantityChanged` |
 | Item kinds | `PHYSICAL` (has a location, can carry a code) and `DIGITAL` (no physical place, instead a carrier/account, licence key, expiry, seat count) |
 | Bundles | An item contains other items **without owning where they are** (`REQ-CORE-007`): the camera bag contains the lens, the lens is still in the drawer in the study. One directed table, `inventory.item_bundle`, and no flag on the item — a thing that contains something is a bundle, and a flag would be a second answer to what the rows already say. An item may be in **several** bundles at once (decided 2026-09-13), so the shape is a directed acyclic graph rather than a second tree, and the invariant below is therefore a reachability walk: the edge is refused when the bundle can already be reached from the member. A diamond is not a cycle and is allowed. |
 | Bulk | One operation over a selection — move, tag, change type, delete (`REQ-CORE-011`) — with its target stated once and at most 500 entries. **A transaction per entry** ([ADR-0063](../adr/0063-bulk-is-a-transaction-per-entry.md)), because partial success is the requirement and JPA offers no savepoint that would keep one transaction honest. A change of type carries over the values whose key the new type declares with the same data type and drops the rest; the revision written by the change keeps what is dropped. |
-| States | `ACTIVE` → `LENT` → `ACTIVE` · `ACTIVE` → `ARCHIVED` · `ACTIVE` → `TRASHED` → `ACTIVE`/`PURGED` · `ACTIVE` → `SOLD`/`DISPOSED` |
+| States | `ACTIVE` → `LENT` → `ACTIVE` · `ACTIVE` → `ARCHIVED` · `ACTIVE` → `TRASHED` → `ACTIVE`/`PURGED` · `ACTIVE` → `SOLD`/`DISPOSED`. **One column**, `inventory.item.lifecycle_state`, constrained to that set since 2026-09-20 — it was free text writing only `ACTIVE` and `TRASHED`, and [11 §11.3](11-offline-synchronisation.md) *ranks* these values to resolve a sync conflict, which a column that could hold any word does not support. `PURGED` is deliberately **not** a value: a purge is a `DELETE` and leaves no row to carry it. `deleted_at` stays beside the state — the state says what, the timestamp says when, and a check constraint refuses a row where the two disagree. `ARCHIVED` is declared and **nothing reaches it**: no requirement describes archiving an *item* (REQ-CORE-046 is about a location) |
 | Invariants | A physical item has exactly one location · attributes are valid against the type version · quantity ≥ 0 · no item is related to itself · a bundle does not contain itself · a lent item is not deleted |
 
 ---
@@ -306,6 +307,7 @@ attributes, quantities, relations, lifecycle.
 | Key notions | `MediaObject`, `MediaVariant` (derivative), `Attachment` (link to item/location), `UploadSession` |
 | Publishes | `MediaService`, `AttachmentQuery`, `MediaView` (returns **only** signed, short-lived URLs) |
 | Outbound ports | `BlobStore` (`filesystem` in-core, speaking gRPC over mTLS to the in-deployment `blobstore` service — [ADR-0043](../adr/0043-blobstore-as-its-own-service.md), [ADR-0050](../adr/0050-blobstore-service-in-rust.md); S3 and Nextcloud/WebDAV as plugins), `ImageProcessor` (libvips, in-core), `VirusScanner` (ClamAV in the deployment) |
+| Where the bytes go | **Per tenant, decided on every call.** A tenant that granted a storage plugin has its writes go there and **only** there; one that granted none uses the deployment's `blobstore` service. A read asks the plugin and falls back to the deployment's store — including when the plugin is down — and a delete removes from both, because the blob may predate the grant. Granting a store is therefore **not a migration**: nothing is copied, and nothing uploaded before it becomes unreachable ([ADR-0074](../adr/0074-granting-a-store-routes-and-does-not-move.md)) |
 | Events | `MediaUploaded`, `MediaVariantsReady`, `MediaDeleted`, `MediaScanFailed` |
 | The scan | **In the worker, on the upload's own event** ([ADR-0024](../adr/0024-malware-scan.md), [ADR-0054](../adr/0054-the-scan-is-asynchronous.md)). `POST /api/v1/media` answers `202` with a `Location`; the object is `PENDING_SCAN` and carries no URL until the verdict arrives, and `GET /api/v1/media/{id}` is where a client learns it — `200` clean, `422` refused, `503` not yet. A finding deletes the blob and detaches the file from everything it hangs on |
 | Content addressing | Blobs are stored under `sha256/<tenantId>/<hash>` — content-addressed **within a tenant**, never across ([ADR-0032](../adr/0032-per-tenant-blob-addressing.md)). The same file uploaded twice by the same tenant is stored once, which is the case that actually occurs and what makes offline catch-up idempotent. Two tenants holding the same bytes hold two objects: a global namespace would have been an existence oracle across the tenant boundary and would have let the second tenant inherit the first one's malware verdict. Deletion follows the tenant's own reference count. |
@@ -389,12 +391,13 @@ attributes, quantities, relations, lifecycle.
 | | |
 |---|---|
 | Schema | `notification` |
-| Key notions | `NotificationRule`, `Notification`, `DeliveryAttempt`, `Reminder`, `Subscription` |
-| Publishes | `NotificationService`, `ReminderService` |
+| Key notions | `NotificationRule`, `Notification`, `DeliveryAttempt`, `Reminder`, `Subscription`, `SecurityNotification`, `WebhookTarget` |
+| Publishes | `Notifications` (a tenant's queue, delivered on the channels a person subscribed to), `SecurityNotifications` (the **account** queue: no tenant, no subscription, always delivered — `REQ-NOTI-004`, [ADR-0066](../adr/0066-instance-level-capability-grants.md)), `ReminderRules`, `WebhookTargets` (where a tenant's **changes** are sent, `REQ-API-010`) |
+| Outbound ports (inverted) | `ReminderSource` — what is due, answered by the block that owns the dates; `ReminderScope` — which things a rule's saved search covers, answered by `search`. **Both point into this block**, and that is not tidiness: `inventory` implements the first, `search` answers with items, so a call from here to `search` closes a three-hop cycle `inventory → notification → search → inventory`. The module check found it on 2026-09-20 |
 | Outbound ports | `NotificationChannel` — **every** implementation is a plugin, including e-mail and webhook, because every one of them leaves the deployment ([ADR-0026](../adr/0026-core-outbound-via-plugins.md)) |
 | Events | `NotificationRaised`, `NotificationDelivered`, `NotificationFailed` |
 | Triggers | Warranty expiry, maintenance interval, loan return date, minimum stock undercut, software licence expiry, stocktake discrepancy, security-relevant account events |
-| Notable | Reminder rules are data (level 1), not code: a condition as a saved search + a time offset + a channel. |
+| Notable | Reminder rules are data (level 1), not code: a condition as a saved search + a time offset + a channel — **plus a trigger kind**, added 2026-09-20 with the implementation. An offset must be an offset *from* something, and [08 §8.2](08-api-contract.md)'s filter grammar has no relative dates, so a saved search alone cannot say “expires within a fortnight” in a way that rolls forward; the trigger names which date and the search keeps its own job of narrowing which things. The set is `REQ-NOTI-003`'s own six. *The port was sketched here as `ReminderService` and is `ReminderRules`: the rules are what it manages, and the running is `ReminderRunner`.* **A webhook is a third thing in the same machinery, not a third queue.** A `WebhookTarget` names a URL, the event types it wants and its own signing secret; `WebhookFanOut` listens for every `TenantScopedEvent` **before the commit**, so the delivery is written in the transaction that made the change and neither lands without the other. The row it writes is an ordinary `notification.notification` with `webhook_target_id` where `user_id` would be — which is why the widening retries, the attempt log and the dead letter are the same ones, and why `GET /api/v1/webhooks/{id}/deliveries` is a filter over one log rather than a second story. The signing secret is **per target** and not per tenant ([ADR-0077](../adr/0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md)). **Two queues, not one flag.** A tenant's message is scoped, subscribed to and delivered under that tenant's plugin grant; an account's message has no tenant to be scoped by, no subscription to consult, and is delivered under an **instance-level** grant — so that a password reset reaches somebody who is a member of nothing. Keeping them apart also keeps one person's account mail out of a tenant's delivery history. |
 
 ---
 
@@ -409,6 +412,88 @@ attributes, quantities, relations, lifecycle.
 | Formats | CSV (with a configurable mapping profile, preview and dry run), JSON Lines, a full tenant export as a ZIP with media and a manifest |
 | Migration in | Mapping profiles for **Homebox** and **InvenTree** ship with the product so that switching is possible |
 | GDPR | `DataSubjectService` produces access (Art. 15) and portability (Art. 20) artifacts mechanically and triggers erasure (Art. 17) across all blocks |
+
+**The archive's shape.** One directory per building block for the rows, one for the
+bytes, and a manifest counting both (REQ-PORT-003):
+
+```text
+manifest.json                  format, tenant, when, and by which version and commit;
+                               every dataset with its row count and every file with
+                               its size
+data/<block>/<dataset>.jsonl   one JSON object per line
+media/blobs/<sha256>           the original bytes, content-addressed
+```
+
+JSON Lines rather than one document per dataset, because a single array of ten thousand
+items cannot be read without holding all of it — which would make the receiving instance
+need as much memory as the sending one, and it is the least able to promise that. Lines
+are also what lets an import report *row 4,812* instead of *the file is wrong*, which is
+what REQ-PORT-007 asks of one. `ExportJobIT` holds the shape: one line per row.
+
+A blob is named by its digest, so a row finds its file without a second index that could
+disagree with the first. Two kinds of blob carry a row but no bytes: a **derivative**
+(thumbnail, preview), because it is recomputed from the original on the other side, and
+an **infected** one, because this deployment refuses to serve it (REQ-MED-013) and an
+archive would hand it over inside a container that hides it from the scanner. Each block
+writes its own share through `ExportSource`, which is what keeps `portability` from
+reading another block's tables (REQ-NFR-019…024).
+
+**Ten blocks write themselves** — `inventory`, `locations`, `catalog`, `tagging`,
+`media`, `identity`, `tenancy`, `authorization`, `notification` and `search`. The last
+five are there because a move is not only the things: who had access and in what role,
+the roles a tenant defined for itself, which fields those roles may read, the reminders
+somebody set up and the searches they saved are all lost work otherwise, and the
+membership is the personal datum Art. 15 asks about (REQ-PORT-006).
+
+What is **not** in the archive is a list with a reason against every entry, and
+`ExportCoverageIT` holds it: it asks PostgreSQL for every tenant-scoped table there is,
+so a table that no block exports must be named there. The kinds that recur:
+
+**Reading one back.** `POST /api/v1/import-jobs` takes an archive and answers `202`
+with a job, exactly as the export does and for the same reason. The whole import is
+**one transaction** — the opposite arrangement from the export, which must not hold one
+— because `REQ-PORT-007` says an import is complete or it never happened; a dry run
+(`?dryRun=true`) does all of it and rolls back on purpose. Each block reads its own
+share through `ImportTarget`, in a declared order, because an item written against a
+type version that has not arrived is a row that cannot be inserted.
+
+Rows merge **by id** and the archive wins; the **catalogue** is the exception and is
+matched by its natural key, because every tenant is provisioned with the same built-in
+types under different ids and an archive would otherwise point at nothing. An import
+writes **no people** — no accounts, memberships, tenant-owned roles or notification
+channels — and its report says so in as many words
+([ADR-0069](../adr/0069-an-import-merges-by-id-and-writes-no-people.md),
+`ArchiveMoveIT`).
+
+**A file from somewhere else.** The same job with a mapping profile on it:
+`POST /api/v1/import-jobs?profile=homebox` reads a CSV through a set of pairs — this
+column is that field, and nothing in a profile is an expression (ADR-0020). **Homebox and
+InvenTree ship**, as constants rather than rows, with the column names taken from each
+system's own source. A place path becomes a real tree and unknown tags become tags,
+because refusing a row whose place does not exist yet refuses every row of a first
+import. What the file carries and this inventory has no field for is **reported**; a
+value that is not what its column says it is **fails the whole import**, naming the line
+(REQ-PORT-001, REQ-PORT-002, `CsvImportIT`). Every item it writes keeps a provenance row
+saying where it came from, which is also what makes importing the same file twice an
+update rather than a second copy (REQ-PORT-008).
+
+**Who may ask.** All four `/api/v1/export-jobs` endpoints and all four
+`/api/v1/import-jobs` endpoints require
+`portability:export:request`, held by `ADMIN` and `OWNER`. It is not
+`tenancy:tenant:read`, because taking a copy of everything is not the same act as reading
+things one at a time — and a membership confined to part of the location tree holds no
+whole-tenant permission at all, whatever its role
+([ADR-0068](../adr/0068-an-export-opens-what-its-requester-may-read.md), 12 §12.5). A
+value stored sealed is opened as far as that person may read it, and whatever is held
+back is named in the manifest's `withheld` list.
+
+| Kind | Example | Why it stays |
+|---|---|---|
+| A credential or key material | `identity.service_account`, `crypto.tenant_data_key`, `tenancy.tenant.revocation_token_hash` | The receiving instance issues its own. An archive is copied onto laptops and into support tickets |
+| This instance's own administration | `identity.app_user.instance_operator`, `tenancy.tenant_quota` | An import carrying them would hand its bearer operator rights on the instance receiving it |
+| A record of what this deployment did | `audit.*`, `notification.notification`, `outbox.event_publication` | Evidence is worth what the instance holding it is worth; a copy proves nothing and still names people |
+| Something derived | `inventory.item_attr_index` | Rebuilt on import from what the archive does carry, and a copy that disagreed with its source would be the one somebody trusted |
+| A third party's | `tenancy.invitation` | An open invitation holds somebody else's address and a token that still opens a door on the instance being left |
 
 ---
 
@@ -431,7 +516,7 @@ attributes, quantities, relations, lifecycle.
 |---|---|
 | Schema | `plugins` |
 | Key notions | `PluginRegistration`, `PluginManifest`, `GrantedCapability`, `PluginInstance`, `HealthState`, `PluginAuditEntry` |
-| Publishes | `ExtensionRegistry.lookup(Port.class, tenantId)`, `PluginLifecycle`, `CapabilityGuard` |
+| Publishes | `ExtensionRegistry.lookup(Port.class, tenantId)`, `PluginRegistry` (what is installed, and what each tenant and the instance have granted it), `PluginCircuitOpened` |
 | Events | `PluginRegistered`, `PluginEnabled`, `PluginDisabled`, `PluginCallFailed`, `PluginCircuitOpened` |
 | Details | [09 Extensibility](09-extensibility-and-plugins.md) |
 
@@ -445,9 +530,9 @@ translates protocol into use-case call and back.
 | Block | Task | Not permitted |
 |---|---|---|
 | `rest` | The OpenAPI 3.1 surface under `/api/v1`, content negotiation, problem details, idempotency keys, ETag/If-Match, pagination | Its own queries, its own permission checks, entities in the response model |
-| `graphql` | Read-only query surface, batch loading against N+1, depth and cost limits, persisted queries | Mutations (see [ADR-0010](../adr/0010-api-surfaces.md)) |
+| `graphql` | Read-only query surface, batch loading against N+1, depth and cost limits, persisted queries. **Built 2026-09-21** (`REQ-API-006`, `GraphQlIT`, `GraphQlGuardIT`): seven queries at `POST /graphql`, every resolver declaring its own permission so a missing one costs a field rather than the query, a `@cost` weight declared in the SDL beside each field, and a register of queries generated from the client by the build ([ADR-0079](../adr/0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md)) | Mutations (see [ADR-0010](../adr/0010-api-surfaces.md)) |
 | `grpc` | Plugin contract, mTLS, capability check per call | Direct database access |
-| `events-stream` | Server-sent events for live updating of open views | Bulk data retrieval |
+| `eventstream` | Which live streams this replica holds, and what reaches them: a **kind** and a moment, never an id and never contents (`REQ-API-011`). A change publishes a nudge to Valkey when it commits, every replica's subscriber hears it, and an open view re-reads what it shows through the ordinary API. Its HTTP endpoint is `GET /api/v1/events` and lives in `rest` with every other endpoint — a `@RestController` outside it would escape `PermissionInterceptor`, which `ArchitectureRulesTest` refuses (`REQ-SEC-023`). **The subscriber is not loaded in `migrate` or `bootstrap`**: both one-shot roles talk to PostgreSQL and nothing else ([06 §6.7](06-deployment-view.md)), and a listener container connects when the context starts — so it does not idle there, it throws, and a `migrate` that exits non-zero stops `api` and `worker` from starting at all. It did exactly that on 2026-09-21; `ArchitectureRulesTest` now refuses any such bean without a profile that excludes those two roles | Bulk data retrieval, ids, contents |
 
 ## 4.5 Mapping blocks to database schemas
 

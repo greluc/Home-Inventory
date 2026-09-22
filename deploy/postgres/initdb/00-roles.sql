@@ -58,6 +58,22 @@ CREATE ROLE homeinv_quota WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE NOSUP
 
 GRANT homeinv_quota TO homeinv_migrator;
 
+-- Owns exactly one thing: the function through which the instance operator
+-- suspends a tenant and lets it back in (`REQ-SEC-082`, `REQ-TEN-011`).
+--
+-- Separate from `homeinv_quota` for the same reason `homeinv_quota` is separate
+-- from `homeinv_bootstrap`: one role, one sentence. This one may change a
+-- tenant's lifecycle state and nothing else -- not a quota, not a membership,
+-- not a row of anybody's data -- and the function it owns refuses every state
+-- but ACTIVE and SUSPENDED, so it cannot start an erasure or end one either.
+--
+-- It needs SELECT beside UPDATE because the function reads the current state
+-- first: suspending a tenant that is already being erased is refused, and a
+-- check needs something to check.
+CREATE ROLE homeinv_tenant_state WITH NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE NOSUPERUSER;
+
+GRANT homeinv_tenant_state TO homeinv_migrator;
+
 -- The 30-second ceiling of `REQ-SEC-065`, set on the roles rather than in the
 -- application's configuration, so that it holds for every connection including
 -- the ones a psql session opens. A client can raise its own `statement_timeout`

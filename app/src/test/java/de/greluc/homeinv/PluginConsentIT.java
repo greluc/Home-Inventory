@@ -55,11 +55,18 @@ class PluginConsentIT extends AbstractIntegrationTest {
   @DisplayName("shows what it asks for and what it has, and nothing is granted to begin with")
   void bothHalves() throws Exception {
     MockHttpSession session = anAdministrator("both-halves");
-    registry.register(manifest("core:item:read", "network:outbound"), "consent:9000", null, true);
+    registry.register(manifest("core:item:read", "network:outbound"), "consent:9000", null, UNSIGNED_FIXTURE, true);
 
     JsonNode plugin = onePlugin(session);
     assertThat(plugin.get("name").asString()).isEqualTo("A plugin that asks");
-    assertThat(plugin.get("signed").asBoolean()).isTrue();
+    // What the CORE found, not what anybody claimed (REQ-PLG-004, ADR-0085).
+    // A manifest a test wrote is signed by nobody, and this registration permits
+    // that -- so the plugin runs, `signed` is false, and the reason says which of
+    // the two "not signed" situations this is. Until 2026-09-22 the line above
+    // asserted `signed` was true, because the old call passed the operator's
+    // claim straight through: it tested that a boolean survived a round trip.
+    assertThat(plugin.get("signed").asBoolean()).isFalse();
+    assertThat(plugin.get("stateReason").asString()).contains("permits unsigned plugins");
 
     // Everything asked for, nothing granted. That is the state a plugin starts
     // in and there is no base entitlement (09 §9.4).
@@ -71,7 +78,7 @@ class PluginConsentIT extends AbstractIntegrationTest {
   @DisplayName("records an agreement, and a withdrawal, and says so in the listing")
   void grantingAndWithdrawing() throws Exception {
     MockHttpSession session = anAdministrator("granting");
-    registry.register(manifest("core:item:read"), "consent:9000", null, true);
+    registry.register(manifest("core:item:read"), "consent:9000", null, UNSIGNED_FIXTURE, true);
 
     mockMvc
         .perform(
@@ -107,7 +114,7 @@ class PluginConsentIT extends AbstractIntegrationTest {
   @DisplayName("refuses consent to something the plugin never asked for")
   void consentToSomethingUnasked() throws Exception {
     MockHttpSession session = anAdministrator("unasked");
-    registry.register(manifest("core:item:read"), "consent:9000", null, true);
+    registry.register(manifest("core:item:read"), "consent:9000", null, UNSIGNED_FIXTURE, true);
 
     // It would be waiting as a permission if the plugin asked later, which is
     // the silent escalation REQ-PLG-006 exists to prevent.

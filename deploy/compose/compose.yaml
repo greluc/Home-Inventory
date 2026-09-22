@@ -73,13 +73,21 @@ services:
         aliases:
           - api-internal
       frontend: {}
+      plugin-webhook: {}
+      plugin-smtp: {}
+      plugin-blobstore-s3: {}
+      plugin-blobstore-nextcloud: {}
+      plugin-oidc: {}
     environment:
       SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
+      HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "api-internal"
+      HOMEINV_PLUGIN_HOST_PORT: "${HOMEINV_PLUGIN_HOST_PORT:-0}"
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
       HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
       HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
@@ -103,6 +111,8 @@ services:
       HOMEINV_SEARCH_PASSWORD_FILE: "/run/secrets/search-password"
       HOMEINV_MTLS_CORE_FILE: "/run/secrets/mtls-core"
     secrets:
+      - source: api-plugins.yaml
+        target: /run/secrets/plugins.yaml
       - db-password
       - data-encryption-master-key
       - jwt-signing-key
@@ -160,11 +170,18 @@ services:
         aliases:
           - worker-internal
       scanner: {}
+      plugin-webhook: {}
+      plugin-smtp: {}
+      plugin-blobstore-s3: {}
+      plugin-blobstore-nextcloud: {}
+      plugin-oidc: {}
     environment:
       SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
+      HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
+      HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
       MANAGEMENT_SERVER_PORT: "8090"
       MANAGEMENT_SERVER_ADDRESS: "worker-internal"
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
@@ -190,6 +207,8 @@ services:
       HOMEINV_SEARCH_PASSWORD_FILE: "/run/secrets/search-password"
       HOMEINV_MTLS_CORE_FILE: "/run/secrets/mtls-core"
     secrets:
+      - source: worker-plugins.yaml
+        target: /run/secrets/plugins.yaml
       - db-password
       - data-encryption-master-key
       - url-signing-key
@@ -496,6 +515,11 @@ services:
     networks:
       scanner: {}
       egress: {}
+      plugin-webhook: {}
+      plugin-smtp: {}
+      plugin-blobstore-s3: {}
+      plugin-blobstore-nextcloud: {}
+      plugin-oidc: {}
     secrets:
       - source: egress-proxy-egress-allowlist.conf
         target: /etc/homeinv/egress-allowlist.conf
@@ -612,7 +636,200 @@ services:
         reservations:
           memory: 256m
 
+  plugin-webhook:
+    image: ghcr.io/greluc/home-inv-plugin-webhook:latest
+    container_name: homeinv-plugin-webhook
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-webhook: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8200"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-webhook"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_WEBHOOK_TIMEOUT_SECONDS: "10"
+    secrets:
+      - mtls-plugin-webhook
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
+  plugin-smtp:
+    image: ghcr.io/greluc/home-inv-plugin-smtp:latest
+    container_name: homeinv-plugin-smtp
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-smtp: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8201"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-smtp"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_SMTP_HOST: "${HOMEINV_SMTP_HOST:-mail.example.org}"
+      HOMEINV_SMTP_PORT: "${HOMEINV_SMTP_PORT:-587}"
+      HOMEINV_SMTP_SECURITY: "${HOMEINV_SMTP_SECURITY:-starttls}"
+      HOMEINV_SMTP_USER: "${HOMEINV_SMTP_USER:-}"
+      HOMEINV_SMTP_SENDER: "${HOMEINV_SMTP_SENDER:-}"
+      HOMEINV_SMTP_TIMEOUT_SECONDS: "30"
+    secrets:
+      - mtls-plugin-smtp
+      - plugin-smtp-password
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
+  plugin-blobstore-s3:
+    image: ghcr.io/greluc/home-inv-plugin-blobstore-s3:latest
+    container_name: homeinv-plugin-blobstore-s3
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-blobstore-s3: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8202"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-s3"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_S3_ENDPOINT: "${HOMEINV_S3_ENDPOINT:-}"
+      HOMEINV_S3_BUCKET: "${HOMEINV_S3_BUCKET:-}"
+      HOMEINV_S3_REGION: "${HOMEINV_S3_REGION:-us-east-1}"
+      HOMEINV_S3_PREFIX: "${HOMEINV_S3_PREFIX:-}"
+      HOMEINV_S3_ADDRESSING: "${HOMEINV_S3_ADDRESSING:-path}"
+      HOMEINV_S3_ACCESS_KEY_ID: "${HOMEINV_S3_ACCESS_KEY_ID:-}"
+      HOMEINV_S3_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-s3
+      - plugin-blobstore-s3-secret-key
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+
+  plugin-blobstore-nextcloud:
+    image: ghcr.io/greluc/home-inv-plugin-blobstore-nextcloud:latest
+    container_name: homeinv-plugin-blobstore-nextcloud
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-blobstore-nextcloud: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8203"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-nextcloud"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_NEXTCLOUD_URL: "${HOMEINV_NEXTCLOUD_URL:-}"
+      HOMEINV_NEXTCLOUD_USER: "${HOMEINV_NEXTCLOUD_USER:-}"
+      HOMEINV_NEXTCLOUD_FOLDER: "${HOMEINV_NEXTCLOUD_FOLDER:-}"
+      HOMEINV_NEXTCLOUD_TIMEOUT_SECONDS: "60"
+    secrets:
+      - mtls-plugin-blobstore-nextcloud
+      - plugin-blobstore-nextcloud-password
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+
+  plugin-oidc:
+    image: ghcr.io/greluc/home-inv-plugin-oidc:latest
+    container_name: homeinv-plugin-oidc
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    profiles:
+      - standard
+      - ha
+    networks:
+      plugin-oidc: {}
+    environment:
+      HOMEINV_PLUGIN_PORT: "8204"
+      HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-oidc"
+      HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
+      HOMEINV_OIDC_ISSUER: "${HOMEINV_OIDC_ISSUER:-}"
+      HOMEINV_OIDC_CLIENT_ID: "${HOMEINV_OIDC_CLIENT_ID:-}"
+      HOMEINV_OIDC_PROVIDER_KEY: "${HOMEINV_OIDC_PROVIDER_KEY:-oidc}"
+      HOMEINV_OIDC_DISPLAY_NAME: "${HOMEINV_OIDC_DISPLAY_NAME:-Single sign-on}"
+      HOMEINV_OIDC_SCOPES: "${HOMEINV_OIDC_SCOPES:-openid email profile}"
+      HOMEINV_OIDC_TIMEOUT_SECONDS: "20"
+    secrets:
+      - mtls-plugin-oidc
+      - plugin-oidc-client-secret
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 192m
+
 networks:
+  plugin-webhook:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.31.0/24
+  plugin-smtp:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.32.0/24
+  plugin-blobstore-s3:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.33.0/24
+  plugin-blobstore-nextcloud:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.34.0/24
+  plugin-oidc:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.89.35.0/24
   edge:
   egress:
   internal:
@@ -632,6 +849,10 @@ volumes:
   blobdata:
 
 secrets:
+  api-plugins.yaml:
+    file: ../secrets/api-plugins.yaml
+  worker-plugins.yaml:
+    file: ../secrets/worker-plugins.yaml
   valkey-users.acl:
     file: ../secrets/valkey-users.acl
   clamav-freshclam.conf:
@@ -668,6 +889,34 @@ secrets:
     file: ../secrets/mtls-core
   mtls-blobstore:
     file: ../secrets/mtls-blobstore
+  mtls-plugin-webhook:
+    file: ../secrets/mtls-plugin-webhook
+  mtls-plugin-oidc:
+    file: ../secrets/mtls-plugin-oidc
+  plugin-oidc-client-secret:
+    file: ../secrets/plugin-oidc-client-secret
+  mtls-plugin-blobstore-nextcloud:
+    file: ../secrets/mtls-plugin-blobstore-nextcloud
+  plugin-blobstore-nextcloud-password:
+    file: ../secrets/plugin-blobstore-nextcloud-password
+  mtls-plugin-blobstore-s3:
+    file: ../secrets/mtls-plugin-blobstore-s3
+  plugin-blobstore-s3-secret-key:
+    file: ../secrets/plugin-blobstore-s3-secret-key
+  mtls-plugin-smtp:
+    file: ../secrets/mtls-plugin-smtp
+  cosign-plugin-webhook:
+    file: ../secrets/cosign-plugin-webhook
+  cosign-plugin-smtp:
+    file: ../secrets/cosign-plugin-smtp
+  cosign-plugin-blobstore-s3:
+    file: ../secrets/cosign-plugin-blobstore-s3
+  cosign-plugin-blobstore-nextcloud:
+    file: ../secrets/cosign-plugin-blobstore-nextcloud
+  cosign-plugin-oidc:
+    file: ../secrets/cosign-plugin-oidc
+  plugin-smtp-password:
+    file: ../secrets/plugin-smtp-password
   mtls-search:
     file: ../secrets/mtls-search
   opensearch-admin-password:

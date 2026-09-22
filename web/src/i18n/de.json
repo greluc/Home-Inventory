@@ -115,5 +115,16 @@
     "usePasskey": "Stattdessen Passkey einrichten",
     "passkeyLabel": "Dieses Gerät",
     "passkeyFailed": "Dieses Gerät konnte keinen Passkey anlegen."
+  },
+  "about": {
+    "version": "Version {{version}} ({{commit}})",
+    "source": "Quelltext",
+    "licence": "Lizenziert unter {{licence}}",
+    "notices": "Lizenzhinweise Dritter",
+    "noticesClose": "Schließen",
+    "noticesServer": "Server ({{count}} Komponenten)",
+    "noticesClient": "Web-Client ({{count}} Komponenten)",
+    "noticesLicences": "Lizenztexte",
+    "noticesUnavailable": "Die Hinweise konnten nicht geladen werden."
   }
 }

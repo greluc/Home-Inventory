@@ -29,7 +29,7 @@ plugins {
 // It runs as part of `check`, so `./gradlew build` enforces it and nobody has to
 // remember to.
 val noCoreOnTheClasspath by tasks.registering {
-    description = "Fails when anything from the core reaches plugin-api (ADR-0018, REQ-PLG-009)."
+    description = "Fails when anything from the core reaches plugin-api (REQ-CON-008, ADR-0018, REQ-PLG-009)."
     group = "verification"
 
     val classpath = configurations.named("runtimeClasspath")

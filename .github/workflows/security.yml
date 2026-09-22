@@ -47,11 +47,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Named rather than relied on. gitleaks finds a `.gitleaks.toml` in the
           # source root on its own, and "on its own" is how a config silently
-          # stops being read. It allows exactly three things, each with its
-          # reason written out, and each narrowed to the paths it belongs to:
-          # the xkcd passphrase the integration tests share, the role passwords
-          # the test container is given because production reads its own from
-          # mounted secrets, and the illustrative value in a design-system prompt.
+          # stops being read. Each entry in it allows one value that is not a
+          # credential and could not become one, with its reason written out and
+          # narrowed to the paths it belongs to — the xkcd passphrase the
+          # integration tests share, the role passwords the test container is
+          # given because production reads its own from mounted secrets, the
+          # illustrative value in a design-system prompt, the broker routing keys
+          # the listeners bind to. *This comment said "exactly three things" and
+          # counted the entries of the day it was written; it is the file that is
+          # the list, not this line.*
+          #
+          # `.gitleaksignore` sits beside it and is a different instrument: it
+          # names findings that were FIXED, pinned to the commit that carried
+          # them, so a range scan does not re-report a value the tree no longer
+          # holds. It is discovered at the source root — the action exposes no
+          # input for it — which is why its own header says what belongs in it.
           GITLEAKS_CONFIG: .gitleaks.toml
           # Pinned, and not to the action's default. The action installs 8.24.3,
           # which does not understand the top-level `[[allowlists]]` array this
@@ -88,6 +98,19 @@ jobs:
         with:
           distribution: zulu
           java-version: '25'
+
+      # The same action `ci.yml`'s build uses, and it is here for the resolving
+      # rather than for the speed. This job ran a bare `./gradlew` and therefore
+      # re-fetched EVERY dependency from Maven Central on every run -- which on
+      # 2026-09-22 came back `403 Forbidden` for the Kotlin Gradle plugin and
+      # failed an analysis that had nothing wrong with it. The same PR had
+      # already lost a job to `429 Too Many Requests` from the same host.
+      #
+      # An upstream rate limit is not something to retry until it passes: the
+      # answer is to stop asking. A warm cache turns hundreds of requests into
+      # a handful, and this was the one Gradle job in the repository without one.
+      - uses: gradle/actions/setup-gradle@v6
+        if: matrix.language == 'java-kotlin'
 
       - uses: github/codeql-action/init@v4
         with:

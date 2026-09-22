@@ -13,6 +13,8 @@ import de.greluc.homeinv.inventory.api.ItemKind;
 import de.greluc.homeinv.inventory.api.ItemService;
 import de.greluc.homeinv.inventory.api.Valuation;
 import de.greluc.homeinv.locations.api.LocationService;
+import de.greluc.homeinv.authorization.api.AccessControl;
+import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.platform.CallerContext;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
@@ -43,6 +45,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("A scoped membership")
 class LocationScopeIT extends AbstractIntegrationTest {
 
+  @Autowired private AccessControl access;
   @Autowired private LocationService locations;
   @Autowired private ItemService items;
   @Autowired private SearchService search;
@@ -272,6 +275,33 @@ class LocationScopeIT extends AbstractIntegrationTest {
             tenant.userId())
         .item()
         .id();
+  }
+
+  @Test
+  @DisplayName("holds no whole-tenant permission, because an archive of a shelf does not exist")
+  void aScopedMembershipMayNotExportTheTenant() {
+    Tenant tenant = newTenant("scope-export@example.org");
+    Places places = aHouseWithAGarage(tenant);
+
+    // Over the whole tenant, an owner may ask for an archive of it.
+    unscoped(tenant, () -> assertThat(access.holds(Permission.TENANT_EXPORT)).isTrue());
+
+    // The same person confined to the garage may not -- and it is the scope that
+    // decides rather than the role, so being an OWNER does not change it. There
+    // is no archive of a subtree, so the only thing this caller could be handed
+    // is an archive of everything, which is precisely what the scope says they
+    // may not have (ADR-0068, open point O27).
+    TenantContext.runAs(
+        tenant.tenantId(),
+        () ->
+            CallerContext.runAs(
+                new CallerContext.Caller(
+                    tenant.userId(), tenant.tenantId(), "OWNER", null, places.garage()),
+                () -> assertThat(access.holds(Permission.TENANT_EXPORT)).isFalse()));
+
+    // And only the permissions that say they are whole-tenant are affected: the
+    // scoped caller still reads items, which is the entire point of a scope.
+    scoped(tenant, places.garage(), () -> assertThat(access.holds(Permission.ITEM_READ)).isTrue());
   }
 
   /**

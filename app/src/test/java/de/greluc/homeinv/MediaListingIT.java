@@ -177,6 +177,7 @@ class MediaListingIT extends AbstractIntegrationTest {
                           "ITEM",
                           targetId,
                           false,
+                          "PHOTO",
                           context.userId())
                       .id();
                 } catch (IOException unreadable) {
