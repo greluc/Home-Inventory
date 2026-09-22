@@ -115,6 +115,14 @@ two artifacts with two dependency sets and neither covers the other.
   it: 72 kB to 155 kB each, mostly MIT and BSD copyright lines that cannot be deduplicated, because
   the copyright line *is* the notice. A licence whose text is a standalone document — Apache-2.0,
   EPL-2.0, the GPL family — is reproduced once per notice instead.
+- **A Rust notice is generated for the target that ships, not for the host.**
+  `cargo cyclonedx` resolves the dependency graph for the machine it runs on unless told
+  otherwise, so the first six notices — written on Windows — named `windows-sys` and
+  `windows-link` and left out `libc`, `errno` and `signal-hook-registry`. Five components wrong
+  in a document whose whole job is to say what the artifact contains, and green locally, because
+  the generator and the check agreed with each other. **CI is what caught it**, by running the
+  same generator on Linux; the triple is now pinned to the one every Dockerfile builds, so the
+  answer no longer depends on who asked.
 - **A licence this repository has never seen stops the tool** until its canonical text is stored
   under `tools/notices/licences/` or a component in the artifact carries a clean copy of it. That is
   deliberate: the alternative is a notice that lists a licence and does not reproduce it.

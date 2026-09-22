@@ -337,7 +337,10 @@ jobs:
 
       - name: The SBOM, and the notice the binary carries
         run: |
-          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps
+          # `--target` and not the host's: this resolves the graph for the
+          # triple the Dockerfile builds, so the notice describes the binary
+          # that ships rather than the machine that generated it (ADR-0083).
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps \n            --target x86_64-unknown-linux-musl
           python3 ../tools/notices.py --check egress-proxy
 
       - name: Publish the SBOM
@@ -460,7 +463,10 @@ jobs:
       - name: The SBOM, and the notice the binary carries
         if: matrix.image
         run: |
-          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps
+          # `--target` and not the host's: this resolves the graph for the
+          # triple the Dockerfile builds, so the notice describes the binary
+          # that ships rather than the machine that generated it (ADR-0083).
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps \n            --target x86_64-unknown-linux-musl
           python3 ../../tools/notices.py --check plugins-${{ matrix.crate }}
 
       - name: Publish the SBOM
@@ -803,7 +809,10 @@ jobs:
 
       - name: The SBOM, and the notice the binary carries
         run: |
-          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps
+          # `--target` and not the host's: this resolves the graph for the
+          # triple the Dockerfile builds, so the notice describes the binary
+          # that ships rather than the machine that generated it (ADR-0083).
+          cargo cyclonedx --format json --spec-version 1.5 --no-build-deps \n            --target x86_64-unknown-linux-musl
           python3 ../tools/notices.py --check blobstore
 
       - name: Publish the SBOM

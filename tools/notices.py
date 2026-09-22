@@ -242,6 +242,19 @@ ARTIFACTS: tuple[Artifact, ...] = (
     ),
 )
 
+# How a Rust artifact's bill of materials is produced.
+#
+# `--target` is not optional and is not a detail. `cargo cyclonedx` resolves the
+# dependency graph FOR THE HOST unless told otherwise, so a notice generated on
+# Windows named `windows-sys` and `windows-link` and left out `libc`, `errno` and
+# `signal-hook-registry` -- five components wrong in a document whose whole job is
+# to say what the artifact contains. The triple is the one every Dockerfile here
+# builds, so the notice describes the binary that ships whatever machine wrote it.
+CARGO_SBOM = (
+    "cargo cyclonedx --format json --spec-version 1.5 --no-build-deps"
+    " --target x86_64-unknown-linux-musl"
+)
+
 # The six Rust services, which are `scratch` images: one binary and nothing
 # else, by design and by a CI assertion (`blobstore/Dockerfile`). There is no
 # filesystem in them to put a notice file on, so the notice is compiled INTO
@@ -269,7 +282,7 @@ for _crate, _package, _title in (
             sbom=REPOSITORY / _crate / f"{_package}.cdx.json",
             output=REPOSITORY / _crate / "THIRD-PARTY-NOTICES.txt",
             form="text",
-            build=f"cd {_crate} && cargo cyclonedx --format json --spec-version 1.5 --no-build-deps",
+            build=f"cd {_crate} && {CARGO_SBOM}",
         ),
     )
 
