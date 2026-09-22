@@ -6,6 +6,7 @@ package de.greluc.homeinv.identity.application;
 
 import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -157,13 +158,24 @@ public class LoginRateLimiter {
     long seconds = 1L << Math.min(failures - FREE_ATTEMPTS - 1, 20);
     Duration required = Duration.ofSeconds(Math.min(seconds, MAX_DELAY.toSeconds()));
 
-    Long elapsedTtl = redis.getExpire(key);
-    if (elapsedTtl == null || elapsedTtl < 0) {
+    // MILLISECONDS, and that is not a detail. The counter's remaining time to
+    // live says how long ago the last failure was -- every failure restarts the
+    // window, so elapsed = WINDOW - remaining -- and asking for it in SECONDS
+    // rounds the remainder DOWN, which rounds the elapsed time UP by as much as
+    // a second. Every step of this delay was therefore up to a second shorter
+    // than it says, and the first step, which is exactly one second, could be no
+    // delay at all: a failure at 12:00:00.999 and a retry at 12:00:01.001 read
+    // as a full second elapsed.
+    //
+    // `PTTL` costs the same round trip as `TTL` and is exact. Found by
+    // `PasswordResetIT.theThrottleEngages` failing in CI on 2026-09-21 while
+    // passing on every developer machine -- a ~5 % flake that the extra Valkey
+    // round trip of REQ-SEC-064's rate limiter made likely enough to fire.
+    Long remainingMillis = redis.getExpire(key, TimeUnit.MILLISECONDS);
+    if (remainingMillis == null || remainingMillis < 0) {
       return Duration.ZERO;
     }
-    // The counter's remaining TTL tells us how long ago the last failure was:
-    // every failure resets the window, so elapsed = WINDOW - remaining.
-    Duration sinceLastFailure = WINDOW.minusSeconds(elapsedTtl);
+    Duration sinceLastFailure = WINDOW.minusMillis(remainingMillis);
     Duration remaining = required.minus(sinceLastFailure);
     return remaining.isNegative() ? Duration.ZERO : remaining;
   }

@@ -79,7 +79,30 @@ public final class PatternSafety {
               + ". A field validation pattern is a rule about one value, not a parser.");
     }
     try {
-      Pattern.compile(pattern);
+      // CodeQL flags this as regular expression injection (java/regex-injection),
+      // and it is right about the fact and wrong about the conclusion: the
+      // pattern IS user-provided, and compiling user-provided patterns is what
+      // this class exists to do. A field definition may carry a `pattern`
+      // (REQ-CORE-022), and the only way to find out whether what a tenant wrote
+      // is a regular expression at all is to ask the engine that will run it.
+      // There is no sanitiser: `Pattern.quote` would turn the rule into a
+      // literal and make the feature meaningless.
+      //
+      // What the query is actually about -- a caller spending unbounded time in
+      // a regular expression they chose -- is answered, and answered twice,
+      // which is what REQ-SEC-035 asks for:
+      //
+      //   * the length is bounded above, before this line;
+      //   * the shape is refused above for the forms that backtrack
+      //     catastrophically, and this call's result is discarded rather than
+      //     used, so nothing here runs the pattern against anything;
+      //   * every actual MATCH runs under a 100 ms budget
+      //     (`BoundedRegularExpressions`), which is the line that does not depend
+      //     on having anticipated the pattern.
+      //
+      // Compilation itself is linear in the pattern's length, and that length is
+      // at most 200 characters by the check above.
+      Pattern.compile(pattern); // codeql[java/regex-injection]
     } catch (PatternSyntaxException invalid) {
       return Optional.of("Not a valid regular expression: " + invalid.getDescription());
     }

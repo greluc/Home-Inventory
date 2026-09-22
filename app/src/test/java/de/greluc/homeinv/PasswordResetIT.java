@@ -244,6 +244,22 @@ class PasswordResetIT extends AbstractIntegrationTest {
     for (int attempt = 0; attempt < 4; attempt++) {
       askFrom(email, from).andExpect(status().isNoContent());
     }
+
+    // Six tenths of the first step's second, deliberately spent, and the figure
+    // is chosen rather than picked: Redis rounds `TTL` to the NEAREST second, so
+    // the defect below shows itself only once more than half a second has gone.
+    // This test used to ask again immediately, which meant it passed or failed
+    // on how long five HTTP calls happened to take -- a flake that fired in CI
+    // on 2026-09-21. Waiting past the rounding boundary makes it an assertion.
+    //
+    // It also pins the defect underneath it. `delayFor` derived the elapsed time
+    // from the counter's remaining TTL in whole SECONDS, which rounds the
+    // remainder down and so the elapsed time up by as much as a second -- a
+    // failure at 12:00:00.999 and a retry at 12:00:01.001 read as a full second
+    // gone, and the first step of every throttle in the system was, some of the
+    // time, no throttle at all. It reads `PTTL` now.
+    Thread.sleep(600);
+
     askFrom(email, from).andExpect(status().isTooManyRequests());
 
     // And it is the reset's own counter: signing in still works, because a flood
