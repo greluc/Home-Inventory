@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.authorization.infrastructure;
 
+import de.greluc.homeinv.platform.LogSafe;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.Role;
@@ -185,7 +186,13 @@ public class RoleDefinitionAdapter implements RoleAdministration {
     }
     writeGrants(tenantId, id, added, actor);
 
-    log.info("Role '{}' defined in tenant {} on {} by {}", name, tenantId, baseRole, actor);
+    // The role name is the tenant's own text; the rest are ids and an enum.
+    log.info(
+        "Role '{}' defined in tenant {} on {} by {}",
+        LogSafe.value(name),
+        tenantId,
+        baseRole,
+        actor);
     return viewOf(id, name.trim(), description, baseRole.name(), added);
   }
 

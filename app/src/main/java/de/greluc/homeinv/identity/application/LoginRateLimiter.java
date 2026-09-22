@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.identity.application;
 
+import de.greluc.homeinv.platform.LogSafe;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -191,7 +192,9 @@ public class LoginRateLimiter {
     if (count != null && count == FREE_ATTEMPTS + 1L) {
       // Logged once, when the delay starts applying, rather than on every failure:
       // an attacker must not be able to fill the log by failing.
-      log.info("Login throttling engaged for key {}", key);
+      // The key is built from an e-mail address and a client address, so it
+      // carries text somebody else chose.
+      log.info("Login throttling engaged for key {}", LogSafe.value(key));
     }
   }
 

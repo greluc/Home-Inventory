@@ -5,6 +5,7 @@
 package de.greluc.homeinv.plugins.application;
 
 import de.greluc.homeinv.crypto.api.SensitiveValues;
+import de.greluc.homeinv.platform.LogSafe;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.plugin.api.PluginManifest;
@@ -171,8 +172,11 @@ public class DefaultPluginSettings implements PluginSettings {
         secret,
         actor);
     // The value never appears here, secret or not: a plugin setting is a
-    // tenant's business and a log line is the deployment's (REQ-SEC-066).
-    log.info("Tenant configured {} of plugin {}", key, pluginId);
+    // tenant's business and a log line is the deployment's (REQ-SEC-066). The
+    // key and the id do appear and both were chosen by the caller, so both go
+    // through `LogSafe`: a newline in either writes a second entry that never
+    // happened.
+    log.info("Tenant configured {} of plugin {}", LogSafe.value(key), LogSafe.value(pluginId));
   }
 
   @Override
@@ -183,7 +187,7 @@ public class DefaultPluginSettings implements PluginSettings {
     // something that does not exist.
     declared(pluginId);
     if (settings.remove(pluginId, key)) {
-      log.info("Tenant cleared {} of plugin {}", key, pluginId);
+      log.info("Tenant cleared {} of plugin {}", LogSafe.value(key), LogSafe.value(pluginId));
     }
   }
 

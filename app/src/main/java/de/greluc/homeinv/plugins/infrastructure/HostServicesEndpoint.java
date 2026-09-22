@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.plugins.infrastructure;
 
+import de.greluc.homeinv.platform.LogSafe;
 import de.greluc.homeinv.platform.TenantContext;
 import de.greluc.homeinv.plugin.api.CallContext;
 import de.greluc.homeinv.plugin.api.PluginException;
@@ -175,7 +176,9 @@ public class HostServicesEndpoint extends HostServicesGrpc.HostServicesImplBase 
               Status.INTERNAL
                   .withDescription("The renderer could not produce the document")
                   .asRuntimeException());
-          log.warn("A host render failed for plugin {}", callerId, failed);
+          // The caller id comes off a plugin's certificate, which the operator
+          // installed but this process did not choose.
+          log.warn("A host render failed for plugin {}", LogSafe.value(callerId), failed);
         }
       }
 

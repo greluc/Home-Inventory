@@ -112,7 +112,8 @@ public class DefaultPluginRegistry implements PluginRegistry {
               + " waiting as a permission if it asked later.");
     }
     registry.grant(pluginId, capability, installed.manifestDigest(), actor);
-    log.info("Capability {} granted to plugin {}", capability, pluginId);
+    log.info(
+        "Capability {} granted to plugin {}", LogSafe.value(capability), LogSafe.value(pluginId));
     return grants(pluginId).stream()
         .filter(grant -> grant.capability().equals(capability))
         .findFirst()
@@ -130,7 +131,11 @@ public class DefaultPluginRegistry implements PluginRegistry {
     registration(pluginId);
     int removed = registry.revoke(pluginId, capability);
     if (removed > 0) {
-      log.info("Capability {} withdrawn from plugin {} by {}", capability, pluginId, actor);
+      log.info(
+          "Capability {} withdrawn from plugin {} by {}",
+          LogSafe.value(capability),
+          LogSafe.value(pluginId),
+          actor);
     }
   }
 
@@ -170,7 +175,10 @@ public class DefaultPluginRegistry implements PluginRegistry {
               + " waiting as a permission if it asked later.");
     }
     registry.grantForInstance(pluginId, capability, installed.manifestDigest(), actor);
-    log.info("Capability {} granted to plugin {} for the instance", capability, pluginId);
+    log.info(
+        "Capability {} granted to plugin {} for the instance",
+        LogSafe.value(capability),
+        LogSafe.value(pluginId));
     return instanceGrants(pluginId).stream()
         .filter(grant -> grant.capability().equals(capability))
         .findFirst()

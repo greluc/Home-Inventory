@@ -52,7 +52,7 @@ class LogSafeTest {
     // something other than what the file holds, which is the same attack
     // without a newline in it.
     assertThat(LogSafe.value("real\b\b\b\bfake")).isEqualTo("realfake");
-    assertThat(LogSafe.value("plain[2Ktext")).isEqualTo("plain[2Ktext");
+    assertThat(LogSafe.value("plain\u001b[2Ktext")).isEqualTo("plain[2Ktext");
   }
 
   @Test

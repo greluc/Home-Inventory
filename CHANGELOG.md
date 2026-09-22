@@ -25,7 +25,8 @@ commit".
   caller now go through a filter before they reach a log entry, so nothing can
   slip in a newline and add a record of something that never happened. Found by
   the code scanner on a line added the day before, and fixed everywhere such a
-  value is logged rather than only where it was reported.
+  value is logged — eight call sites, five of which the scanner had already
+  reported and nobody had got to.
 
 - **Four things you can do the moment something goes wrong.** Sign every device
   of an account out — your own, or somebody else's if you run the instance —
