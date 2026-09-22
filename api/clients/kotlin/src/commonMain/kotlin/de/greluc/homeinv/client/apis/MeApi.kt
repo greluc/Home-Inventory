@@ -23,6 +23,7 @@
 
 package de.greluc.homeinv.client.apis
 
+import de.greluc.homeinv.client.models.EndedView
 import de.greluc.homeinv.client.models.OpenSession
 import de.greluc.homeinv.client.models.Problem
 import de.greluc.homeinv.client.models.SessionView
@@ -57,6 +58,38 @@ open class MeApi : ApiClient {
         baseUrl: String,
         httpClient: HttpClient
     ): super(baseUrl = baseUrl, httpClient = httpClient)
+
+    /**
+     * Ends every session this account has, including this one (REQ-SEC-082)
+     * Ends every session this account has, including this one (REQ-SEC-082).  The measure somebody takes when they think their password reached somebody else: every device is signed out within the second, and the next thing anybody does with a stolen session cookie is sign in again — which they cannot, without the password.  It ends the caller&#39;s own session too, and that is the point rather than a side effect. Leaving one alive would mean the person taking the measure has to guess which of the listed sessions is theirs, and the browser signing itself out is the visible proof it worked.
+     * @return EndedView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun endEverySession(): HttpResponse<EndedView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.DELETE,
+            "/api/v1/me/sessions",
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
 
     /**
      * Ends one session remotely (REQ-AUTH-009)

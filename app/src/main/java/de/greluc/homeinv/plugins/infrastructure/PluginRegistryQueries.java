@@ -33,6 +33,38 @@ public class PluginRegistryQueries {
   private final JdbcClient jdbc;
 
   /**
+   * Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9.4).
+   *
+   * <p>The state column already had both values and nothing could write the second one: a plugin
+   * became {@code DISABLED} when its circuit stayed permanently open, and the operator had no way
+   * to say so themselves. This is the immediate measure — one plugin stops being called at once,
+   * for every tenant, without uninstalling it and without touching a single grant, so putting it
+   * back is one call and not a re-consent by every tenant that granted it.
+   *
+   * <p>No tenant context and none needed: {@code plugin_registration} carries no {@code tenant_id}
+   * and no policy. A plugin is installed once for the instance ({@code REQ-PLG-013}) and this is
+   * the instance's decision about it.
+   *
+   * @param pluginId which plugin
+   * @param disabled true to take it out of service
+   * @param actor the operator, for the audit columns
+   * @return true when a row was changed, false when nothing is installed under that id
+   */
+  @Transactional
+  public boolean setDisabled(String pluginId, boolean disabled, UUID actor) {
+    return jdbc
+            .sql(
+                """
+                update plugins.plugin_registration
+                set state = ?, updated_at = now(), updated_by = ?, version = version + 1
+                where plugin_id = ?
+                """)
+            .params(disabled ? "DISABLED" : "REGISTERED", actor, pluginId)
+            .update()
+        > 0;
+  }
+
+  /**
    * The installed plugins, by id, at most {@code limit} of them.
    *
    * @param limit how many at most, which the caller has already capped (REQ-NFR-010)

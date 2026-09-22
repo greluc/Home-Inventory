@@ -52,6 +52,18 @@ public class DefaultPluginRegistry implements PluginRegistry {
   }
 
   @Override
+  @Transactional
+  public boolean setDisabled(String pluginId, boolean disabled, UUID actor) {
+    boolean changed = registry.setDisabled(pluginId, disabled, actor);
+    if (changed) {
+      // At WARN and with the actor, because this is an immediate measure and the
+      // question afterwards is always "who, and when" (REQ-SEC-068, REQ-SEC-082).
+      log.warn("Operator {} {} plugin {}", actor, disabled ? "disabled" : "re-enabled", pluginId);
+    }
+    return changed;
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public List<Grant> grants(String pluginId) {
     return registry.grants(pluginId);

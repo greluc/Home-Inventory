@@ -1228,6 +1228,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/accounts/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Ends every session of one account (REQ-SEC-082)
+         * @description Ends every session of one account (REQ-SEC-082).
+         *
+         *     The operator's half of `DELETE /api/v1/me/sessions`: the person whose account it is
+         *     can sign every device out themselves, and this is for when they cannot — a stolen account, an
+         *     employee who has left, a session somebody else is holding.
+         *
+         *     It signs them out and does not lock them out. An account whose password is still good signs
+         *     straight back in, which is correct: locking is a different measure with different consequences,
+         *     and an operator who wants it clears the entitlements or suspends the tenant.
+         */
+        delete: operations["endEverySession_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/erasures": {
         parameters: {
             query?: never;
@@ -1235,14 +1263,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * One page of erasure certificates, newest first (REQ-TEN-011)
-         * @description One page of erasure certificates, newest first (REQ-TEN-011).
-         *
-         *     Read here and nowhere else. A tenant that has been erased has no members left to ask, and
-         *     the table is instance-wide for exactly that reason: evidence of an erasure has to outlive the
-         *     thing it is about (07 §7.1).
-         */
         get: operations["erasures"];
         put?: never;
         post?: never;
@@ -1355,6 +1375,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/plugins/{pluginId}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9
+         * @description Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9.4).
+         *
+         *     One plugin stops being called at once, for every tenant, without uninstalling it and without
+         *     touching a grant — so putting it back is this call again and not a re-consent by every tenant
+         *     that had granted it.
+         */
+        put: operations["setPluginState"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/tenants/{tenantId}/quotas": {
         parameters: {
             query?: never;
@@ -1397,6 +1441,44 @@ export interface paths {
          *     context and gains no other reach into the tenant by doing this.
          */
         put: operations["setQuota"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/tenants/{tenantId}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where a tenant stands, for the operator view
+         * @description Where a tenant stands, for the operator view.
+         *
+         *     All four states and not only the two the call above moves between: an operator looking at a
+         *     tenant that is waiting to be erased should see that, which is exactly why suspension will
+         *     refuse it.
+         */
+        get: operations["tenantState"];
+        /**
+         * Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011)
+         * @description Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011).
+         *
+         *     The immediate measure with the widest reach and the least damage: a suspended tenant answers
+         *     nothing at all — every request for it gets `403 tenant-inaccessible` from the interceptor
+         *     that already handles the other inaccessible states — and not one row of its data is touched.
+         *     Reinstating it is this call with `ACTIVE` and leaves no trace in what the tenant sees.
+         *
+         *     It does **not** reach `PENDING_DELETION` or `ERASED`, in either direction. An
+         *     erasure is the tenant's own decision with a grace period and a revocation token, and an
+         *     operator who could set the state directly would start that clock without either — or, worse,
+         *     end it: withdrawing a deletion request is what the token is for.
+         */
+        put: operations["setTenantState"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2160,7 +2242,19 @@ export interface paths {
         get: operations["sessions"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Ends every session this account has, including this one (REQ-SEC-082)
+         * @description Ends every session this account has, including this one (REQ-SEC-082).
+         *
+         *     The measure somebody takes when they think their password reached somebody else: every
+         *     device is signed out within the second, and the next thing anybody does with a stolen session
+         *     cookie is sign in again — which they cannot, without the password.
+         *
+         *     It ends the caller's own session too, and that is the point rather than a side effect.
+         *     Leaving one alive would mean the person taking the measure has to guess which of the listed
+         *     sessions is theirs, and the browser signing itself out is the visible proof it worked.
+         */
+        delete: operations["endEverySession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3093,7 +3187,19 @@ export interface paths {
          * @description Issues a service account, and returns its token once.
          */
         post: operations["issue"];
-        delete?: never;
+        /**
+         * Revokes every one of this tenant's tokens (REQ-SEC-082)
+         * @description Revokes every one of this tenant's tokens (REQ-SEC-082).
+         *
+         *     The immediate measure, and deliberately a different URL from revoking one rather than a
+         *     flag on it: `DELETE` on the collection is what "all of them" means in HTTP, and a
+         *     parameter that turned a single revocation into a mass one is the kind of call somebody makes
+         *     by accident.
+         *
+         *     It answers with the count rather than `204`, because "how many did that stop" is the
+         *     first question afterwards and the operator is unlikely to know.
+         */
+        delete: operations["revokeAll"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3803,6 +3909,14 @@ export interface components {
              * @enum {string}
              */
             state: "ACTIVE" | "LENT" | "ARCHIVED" | "TRASHED" | "SOLD" | "DISPOSED";
+        };
+        /** @description What a mass sign-out did. */
+        EndedView: {
+            /**
+             * Format: int32
+             * @description how many sessions stopped
+             */
+            ended: number;
         };
         /** @description What an account holds. */
         EnrolmentView: {
@@ -5861,6 +5975,18 @@ export interface components {
             /** @description the address to send the link to */
             email: string;
         };
+        /** @description Whether a plugin should be out of service. */
+        PluginStateRequest: {
+            /** @description true to disable it */
+            disabled: boolean;
+        };
+        /** @description Where a plugin stands. */
+        PluginStateView: {
+            /** @description whether it is out of service */
+            disabled: boolean;
+            /** @description which plugin */
+            pluginId: string;
+        };
         /** @description One installed plugin, as this tenant sees it. */
         PluginView: {
             /**
@@ -6391,6 +6517,19 @@ export interface components {
              */
             userId: string;
         };
+        /** @description What a mass sign-out did. */
+        SessionsEndedView: {
+            /**
+             * Format: uuid
+             * @description whose sessions
+             */
+            accountId: string;
+            /**
+             * Format: int32
+             * @description how many stopped
+             */
+            ended: number;
+        };
         /** @description The value to store. */
         SettingRequest: {
             /** @description the value as text, of the type the manifest declares */
@@ -6571,6 +6710,24 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * @description Where a tenant stands.
+         *
+         *     Not `TenantStateView`: `MemberController` already publishes one under that
+         *     name, for a tenant reading its own state, and springdoc names a schema after the simple class
+         *     name — so two of them would publish one shape and lose the other (`SchemaNameTest`,
+         *     ADR-0080). The two are genuinely different views: that one answers a member about their own
+         *     tenant, this one answers the operator about any.
+         */
+        TenantLifecycleView: {
+            /**
+             * Format: uuid
+             * @description the tenant
+             */
+            id: string;
+            /** @description its lifecycle state */
+            state: string;
+        };
         /** @description One of the caller's memberships. */
         TenantMembershipView: {
             /**
@@ -6582,6 +6739,14 @@ export interface components {
             name: string;
             /** @description the role the caller holds in it */
             role: string;
+        };
+        /** @description Which state to move a tenant to. */
+        TenantStateRequest: {
+            /**
+             * @description `ACTIVE` or `SUSPENDED`
+             * @enum {string}
+             */
+            state: "ACTIVE" | "SUSPENDED";
         };
         /** @description A tenant's state. */
         TenantStateView: {
@@ -6604,6 +6769,21 @@ export interface components {
             name: string;
             /** @description the role the caller holds in it */
             role: string;
+        };
+        /**
+         * @description What a mass revocation did.
+         *
+         *     Not `RevokedView`: springdoc names a schema after the simple class name, and
+         *     `TenantRevocationController` already publishes one under that name — two types with one
+         *     name publish one shape and lose the other, silently, in the document every generated client is
+         *     built from (`SchemaNameTest`, ADR-0080).
+         */
+        TokensRevokedView: {
+            /**
+             * Format: int32
+             * @description how many tokens stopped working
+             */
+            revoked: number;
         };
         /** @description A secret that has just been generated. */
         TotpEnrolmentView: {
@@ -12441,12 +12621,87 @@ export interface operations {
             };
         };
     };
+    endEverySession_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the account */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description how many sessions were ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEndedView"];
+                };
+            };
+            /** @description Unauthenticated (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found (`not-found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     erasures: {
         parameters: {
             query?: {
-                /** @description an opaque cursor from a previous page, or omitted for the first */
                 cursor?: string;
-                /** @description how many at most; capped at 200 */
                 limit?: number;
             };
             header?: never;
@@ -12455,7 +12710,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description the certificates */
+            /** @description OK */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -12952,6 +13207,124 @@ export interface operations {
             };
         };
     };
+    setPluginState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description which plugin */
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        /** @description whether to disable it */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginStateRequest"];
+            };
+        };
+        responses: {
+            /** @description the plugin as it now stands */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStateView"];
+                };
+            };
+            /** @description Malformed request (`malformed-request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthenticated (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found (`not-found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Payload too large (`payload-too-large`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported media type (`unsupported-media-type`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation failed (`validation-failed`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     quotasOf: {
         parameters: {
             query?: never;
@@ -13072,6 +13445,201 @@ export interface operations {
             };
             /** @description Forbidden (`forbidden`) */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Payload too large (`payload-too-large`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported media type (`unsupported-media-type`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation failed (`validation-failed`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    tenantState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description which tenant */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantLifecycleView"];
+                };
+            };
+            /** @description Unauthenticated (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found (`not-found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setTenantState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description which tenant */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        /** @description the state to move it to */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantStateRequest"];
+            };
+        };
+        responses: {
+            /** @description the state as it now stands */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantLifecycleView"];
+                };
+            };
+            /** @description Malformed request (`malformed-request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthenticated (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found (`not-found`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17315,6 +17883,62 @@ export interface operations {
             };
             /** @description Validation failed (`validation-failed`) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    endEverySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description how many sessions were ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndedView"];
+                };
+            };
+            /** @description Unauthenticated (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22637,6 +23261,83 @@ export interface operations {
             };
             /** @description Validation failed (`validation-failed`) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal error (`internal-error`) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description the tenant, which must be the session's own */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description how many were revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokensRevokedView"];
+                };
+            };
+            /** @description Unauthenticated (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Second factor stale (`second-factor-stale`), or Forbidden (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found (`not-found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (`method-not-allowed`) */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not acceptable (`not-acceptable`) */
+            406: {
                 headers: {
                     [name: string]: unknown;
                 };

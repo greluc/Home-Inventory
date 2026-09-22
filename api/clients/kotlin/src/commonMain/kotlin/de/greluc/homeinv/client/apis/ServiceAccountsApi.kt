@@ -27,6 +27,7 @@ import de.greluc.homeinv.client.models.IssuedServiceAccount
 import de.greluc.homeinv.client.models.Problem
 import de.greluc.homeinv.client.models.ServiceAccountRequest
 import de.greluc.homeinv.client.models.ServiceAccountView
+import de.greluc.homeinv.client.models.TokensRevokedView
 
 import de.greluc.homeinv.client.infrastructure.*
 import io.ktor.client.HttpClient
@@ -155,6 +156,39 @@ open class ServiceAccountsApi : ApiClient {
         val localVariableConfig = RequestConfig<kotlin.Any?>(
             RequestMethod.DELETE,
             "/api/v1/tenants/{tenantId}/service-accounts/{id}".replace("{" + "tenantId" + "}", "$tenantId").replace("{" + "id" + "}", "$id"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
+     * Revokes every one of this tenant&#39;s tokens (REQ-SEC-082)
+     * Revokes every one of this tenant&#39;s tokens (REQ-SEC-082).  The immediate measure, and deliberately a different URL from revoking one rather than a flag on it: &#x60;DELETE&#x60; on the collection is what \&quot;all of them\&quot; means in HTTP, and a parameter that turned a single revocation into a mass one is the kind of call somebody makes by accident.  It answers with the count rather than &#x60;204&#x60;, because \&quot;how many did that stop\&quot; is the first question afterwards and the operator is unlikely to know.
+     * @param tenantId the tenant, which must be the session&#39;s own
+     * @return TokensRevokedView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun revokeAll(tenantId: kotlin.String): HttpResponse<TokensRevokedView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.DELETE,
+            "/api/v1/tenants/{tenantId}/service-accounts".replace("{" + "tenantId" + "}", "$tenantId"),
             query = localVariableQuery,
             headers = localVariableHeaders,
             requiresAuthentication = false,

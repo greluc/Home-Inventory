@@ -21,6 +21,14 @@ commit".
 
 ### Added
 
+- **Four things you can do the moment something goes wrong.** Sign every device
+  of an account out — your own, or somebody else's if you run the instance —
+  revoke all of a tenant's machine tokens at once when you do not know which one
+  leaked, take a plugin out of service for everyone without anybody having to
+  grant it again afterwards, and suspend a tenant so it answers nothing at all
+  while not a single row of its data is touched. Each of them is undone by the
+  same call with the opposite argument.
+
 - **Rate limiting, and every response says where you stand.** One account, one
   organisation or one address can no longer spend the instance on a runaway
   script or a stolen session: too many requests in a minute answers `429` with a

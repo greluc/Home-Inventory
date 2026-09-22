@@ -110,6 +110,22 @@ public interface ServiceAccounts {
   void revoke(UUID id, UUID actor);
 
   /**
+   * Revokes every token this tenant has, at once (REQ-SEC-082).
+   *
+   * <p>The immediate measure. Revoking one at a time is the ordinary operation and needs somebody
+   * to know <i>which</i> one leaked; this is for the case where that is exactly what nobody knows.
+   * Every integration stops working within the second and each one is re-issued deliberately,
+   * which is the trade an immediate measure is.
+   *
+   * <p>Tenant-scoped like everything else here: it revokes the tokens of the tenant in context and
+   * cannot reach another's, whoever calls it.
+   *
+   * @param actor who took the measure, for the audit trail
+   * @return how many were revoked, so the answer can say what happened rather than "done"
+   */
+  int revokeAll(UUID actor);
+
+  /**
    * Who a token belongs to, if it is still good.
    *
    * <p>The one call that runs with no tenant context: the token is what decides which tenant the

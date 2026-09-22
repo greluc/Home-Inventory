@@ -12,9 +12,11 @@ import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.identity.api.AccountAdministration;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.OperatorDirectory;
+import de.greluc.homeinv.identity.api.UserSessions;
 import de.greluc.homeinv.tenancy.api.ErasureCertificates;
 import de.greluc.homeinv.tenancy.api.QuotaAdministration;
 import de.greluc.homeinv.tenancy.api.QuotaGuard;
+import de.greluc.homeinv.tenancy.api.TenantAdministration;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.plugins.api.PluginRegistry;
 import jakarta.validation.Valid;
@@ -22,12 +24,14 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.time.Instant;
@@ -60,6 +64,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/instance")
 @RequiredArgsConstructor
+@Slf4j
 public class InstanceController {
 
   private final AccountAdministration accounts;
@@ -67,6 +72,8 @@ public class InstanceController {
   private final QuotaAdministration quotas;
   private final ErasureCertificates certificates;
   private final PluginRegistry plugins;
+  private final TenantAdministration tenantAdministration;
+  private final UserSessions sessions;
 
   /**
    * Finds an account by its login address.
@@ -240,6 +247,156 @@ public class InstanceController {
    * @param limit how many at most; capped at 200
    * @return the certificates
    */
+  /**
+   * Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011).
+   *
+   * <p>The immediate measure with the widest reach and the least damage: a suspended tenant answers
+   * nothing at all — every request for it gets {@code 403 tenant-inaccessible} from the interceptor
+   * that already handles the other inaccessible states — and not one row of its data is touched.
+   * Reinstating it is this call with {@code ACTIVE} and leaves no trace in what the tenant sees.
+   *
+   * <p>It does <b>not</b> reach {@code PENDING_DELETION} or {@code ERASED}, in either direction. An
+   * erasure is the tenant's own decision with a grace period and a revocation token, and an
+   * operator who could set the state directly would start that clock without either — or, worse,
+   * end it: withdrawing a deletion request is what the token is for.
+   *
+   * @param tenantId which tenant
+   * @param request the state to move it to
+   * @param user the operator taking the measure
+   * @return the state as it now stands
+   */
+  @PutMapping(path = "/tenants/{tenantId}/state", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public TenantLifecycleView setTenantState(
+      @PathVariable UUID tenantId,
+      @Valid @RequestBody TenantStateRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+
+    return tenantAdministration
+        .setState(tenantId, request.state(), user.userId())
+        .map(state -> new TenantLifecycleView(tenantId, state.name()))
+        .orElseThrow(() -> new NotFoundException("tenant", tenantId));
+  }
+
+  /**
+   * Where a tenant stands, for the operator view.
+   *
+   * <p>All four states and not only the two the call above moves between: an operator looking at a
+   * tenant that is waiting to be erased should see that, which is exactly why suspension will
+   * refuse it.
+   *
+   * @param tenantId which tenant
+   * @param user the operator
+   * @return the state
+   */
+  @GetMapping(path = "/tenants/{tenantId}/state", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND})
+  public TenantLifecycleView tenantState(
+      @PathVariable UUID tenantId, @AuthenticationPrincipal AuthenticatedUser user) {
+    return tenantAdministration
+        .stateOf(tenantId)
+        .map(state -> new TenantLifecycleView(tenantId, state))
+        .orElseThrow(() -> new NotFoundException("tenant", tenantId));
+  }
+
+  /**
+   * Which state to move a tenant to.
+   *
+   * @param state {@code ACTIVE} or {@code SUSPENDED}
+   */
+  public record TenantStateRequest(@NotNull TenantAdministration.State state) {}
+
+  /**
+   * Where a tenant stands.
+   *
+   * <p>Not {@code TenantStateView}: {@code MemberController} already publishes one under that
+   * name, for a tenant reading its own state, and springdoc names a schema after the simple class
+   * name — so two of them would publish one shape and lose the other ({@code SchemaNameTest},
+   * ADR-0080). The two are genuinely different views: that one answers a member about their own
+   * tenant, this one answers the operator about any.
+   *
+   * @param id the tenant
+   * @param state its lifecycle state
+   */
+  public record TenantLifecycleView(UUID id, String state) {}
+
+  /**
+   * Ends every session of one account (REQ-SEC-082).
+   *
+   * <p>The operator's half of {@code DELETE /api/v1/me/sessions}: the person whose account it is
+   * can sign every device out themselves, and this is for when they cannot — a stolen account, an
+   * employee who has left, a session somebody else is holding.
+   *
+   * <p>It signs them out and does not lock them out. An account whose password is still good signs
+   * straight back in, which is correct: locking is a different measure with different consequences,
+   * and an operator who wants it clears the entitlements or suspends the tenant.
+   *
+   * @param id the account
+   * @param user the operator taking the measure
+   * @return how many sessions were ended
+   */
+  @DeleteMapping(path = "/accounts/{id}/sessions", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND})
+  public SessionsEndedView endEverySession(
+      @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
+    accounts.byId(id).orElseThrow(() -> new NotFoundException("account", id));
+    int ended = sessions.endAll(id);
+    log.warn("Operator {} ended every session of account {} ({})", user.userId(), id, ended);
+    return new SessionsEndedView(id, ended);
+  }
+
+  /**
+   * What a mass sign-out did.
+   *
+   * @param accountId whose sessions
+   * @param ended how many stopped
+   */
+  public record SessionsEndedView(UUID accountId, int ended) {}
+
+  /**
+   * Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9.4).
+   *
+   * <p>One plugin stops being called at once, for every tenant, without uninstalling it and without
+   * touching a grant — so putting it back is this call again and not a re-consent by every tenant
+   * that had granted it.
+   *
+   * @param pluginId which plugin
+   * @param request whether to disable it
+   * @param user the operator
+   * @return the plugin as it now stands
+   */
+  @PutMapping(path = "/plugins/{pluginId}/state", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
+  @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
+  public PluginStateView setPluginState(
+      @PathVariable @Size(max = 200) String pluginId,
+      @Valid @RequestBody PluginStateRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+
+    if (!plugins.setDisabled(pluginId, request.disabled(), user.userId())) {
+      throw new NotFoundException("plugin", pluginId);
+    }
+    return new PluginStateView(pluginId, request.disabled());
+  }
+
+  /**
+   * Whether a plugin should be out of service.
+   *
+   * @param disabled true to disable it
+   */
+  public record PluginStateRequest(@NotNull Boolean disabled) {}
+
+  /**
+   * Where a plugin stands.
+   *
+   * @param pluginId which plugin
+   * @param disabled whether it is out of service
+   */
+  public record PluginStateView(String pluginId, boolean disabled) {}
+
   @GetMapping(path = "/erasures", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
   @CanFail({ProblemType.FORBIDDEN, ProblemType.MALFORMED_REQUEST})

@@ -773,6 +773,16 @@ components:
       - 'on'
       - state
       type: object
+    EndedView:
+      description: What a mass sign-out did.
+      properties:
+        ended:
+          description: how many sessions stopped
+          format: int32
+          type: integer
+      required:
+      - ended
+      type: object
     EnrolmentView:
       description: What an account holds.
       properties:
@@ -3521,6 +3531,28 @@ components:
       required:
       - email
       type: object
+    PluginStateRequest:
+      description: Whether a plugin should be out of service.
+      properties:
+        disabled:
+          description: true to disable it
+          type: boolean
+      required:
+      - disabled
+      type: object
+    PluginStateView:
+      description: Where a plugin stands.
+      properties:
+        disabled:
+          description: whether it is out of service
+          type: boolean
+        pluginId:
+          description: which plugin
+          type: string
+      required:
+      - disabled
+      - pluginId
+      type: object
     PluginView:
       description: One installed plugin, as this tenant sees it.
       properties:
@@ -4322,6 +4354,21 @@ components:
       - tenantId
       - userId
       type: object
+    SessionsEndedView:
+      description: What a mass sign-out did.
+      properties:
+        accountId:
+          description: whose sessions
+          format: uuid
+          type: string
+        ended:
+          description: how many stopped
+          format: int32
+          type: integer
+      required:
+      - accountId
+      - ended
+      type: object
     SettingRequest:
       description: The value to store.
       properties:
@@ -4613,6 +4660,27 @@ components:
       - kind
       - labels
       type: object
+    TenantLifecycleView:
+      description: |-
+        Where a tenant stands.
+
+        Not `TenantStateView`: `MemberController` already publishes one under that
+        name, for a tenant reading its own state, and springdoc names a schema after the simple class
+        name — so two of them would publish one shape and lose the other (`SchemaNameTest`,
+        ADR-0080). The two are genuinely different views: that one answers a member about their own
+        tenant, this one answers the operator about any.
+      properties:
+        id:
+          description: the tenant
+          format: uuid
+          type: string
+        state:
+          description: its lifecycle state
+          type: string
+      required:
+      - id
+      - state
+      type: object
     TenantMembershipView:
       description: One of the caller's memberships.
       properties:
@@ -4630,6 +4698,18 @@ components:
       - id
       - name
       - role
+      type: object
+    TenantStateRequest:
+      description: Which state to move a tenant to.
+      properties:
+        state:
+          description: '`ACTIVE` or `SUSPENDED`'
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          type: string
+      required:
+      - state
       type: object
     TenantStateView:
       description: A tenant's state.
@@ -4662,6 +4742,22 @@ components:
       - id
       - name
       - role
+      type: object
+    TokensRevokedView:
+      description: |-
+        What a mass revocation did.
+
+        Not `RevokedView`: springdoc names a schema after the simple class name, and
+        `TenantRevocationController` already publishes one under that name — two types with one
+        name publish one shape and lose the other, silently, in the document every generated client is
+        built from (`SchemaNameTest`, ADR-0080).
+      properties:
+        revoked:
+          description: how many tokens stopped working
+          format: int32
+          type: integer
+      required:
+      - revoked
       type: object
     TotpEnrolmentView:
       description: A secret that has just been generated.
@@ -9389,26 +9485,85 @@ paths:
       summary: Replaces what an account is entitled to do on the instance
       tags:
       - Instance
+  /api/v1/instance/accounts/{id}/sessions:
+    delete:
+      description: |-
+        Ends every session of one account (REQ-SEC-082).
+
+        The operator's half of `DELETE /api/v1/me/sessions`: the person whose account it is
+        can sign every device out themselves, and this is for when they cannot — a stolen account, an
+        employee who has left, a session somebody else is holding.
+
+        It signs them out and does not lock them out. An account whose password is still good signs
+        straight back in, which is correct: locking is a different measure with different consequences,
+        and an operator who wants it clears the entitlements or suspends the tenant.
+      operationId: endEverySession_1
+      parameters:
+      - description: the account
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionsEndedView'
+          description: how many sessions were ended
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Ends every session of one account (REQ-SEC-082)
+      tags:
+      - Instance
   /api/v1/instance/erasures:
     get:
-      description: |-
-        One page of erasure certificates, newest first (REQ-TEN-011).
-
-        Read here and nowhere else. A tenant that has been erased has no members left to ask, and
-        the table is instance-wide for exactly that reason: evidence of an erasure has to outlive the
-        thing it is about (07 §7.1).
       operationId: erasures
       parameters:
-      - description: an opaque cursor from a previous page, or omitted for the first
-        in: query
+      - in: query
         name: cursor
         required: false
         schema:
           maxLength: 500
           minLength: 0
           type: string
-      - description: how many at most; capped at 200
-        in: query
+      - in: query
         name: limit
         required: false
         schema:
@@ -9423,7 +9578,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PageCertificate'
-          description: the certificates
+          description: OK
         '400':
           content:
             application/problem+json:
@@ -9466,7 +9621,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
-      summary: One page of erasure certificates, newest first (REQ-TEN-011)
       tags:
       - Instance
   /api/v1/instance/erasures/{tenantId}:
@@ -9831,6 +9985,101 @@ paths:
       summary: Permits one capability **for the instance itself** (ADR-0066)
       tags:
       - Instance
+  /api/v1/instance/plugins/{pluginId}/state:
+    put:
+      description: |-
+        Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9.4).
+
+        One plugin stops being called at once, for every tenant, without uninstalling it and without
+        touching a grant — so putting it back is this call again and not a re-consent by every tenant
+        that had granted it.
+      operationId: setPluginState
+      parameters:
+      - description: which plugin
+        in: path
+        name: pluginId
+        required: true
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginStateRequest'
+        description: whether to disable it
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginStateView'
+          description: the plugin as it now stands
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9
+      tags:
+      - Instance
   /api/v1/instance/tenants/{tenantId}/quotas:
     get:
       description: |-
@@ -9992,6 +10241,168 @@ paths:
                 $ref: '#/components/schemas/Problem'
           description: Internal error (`internal-error`)
       summary: Sets what a tenant may use
+      tags:
+      - Instance
+  /api/v1/instance/tenants/{tenantId}/state:
+    get:
+      description: |-
+        Where a tenant stands, for the operator view.
+
+        All four states and not only the two the call above moves between: an operator looking at a
+        tenant that is waiting to be erased should see that, which is exactly why suspension will
+        refuse it.
+      operationId: tenantState
+      parameters:
+      - description: which tenant
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLifecycleView'
+          description: the state
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Where a tenant stands, for the operator view
+      tags:
+      - Instance
+    put:
+      description: |-
+        Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011).
+
+        The immediate measure with the widest reach and the least damage: a suspended tenant answers
+        nothing at all — every request for it gets `403 tenant-inaccessible` from the interceptor
+        that already handles the other inaccessible states — and not one row of its data is touched.
+        Reinstating it is this call with `ACTIVE` and leaves no trace in what the tenant sees.
+
+        It does **not** reach `PENDING_DELETION` or `ERASED`, in either direction. An
+        erasure is the tenant's own decision with a grace period and a revocation token, and an
+        operator who could set the state directly would start that clock without either — or, worse,
+        end it: withdrawing a deletion request is what the token is for.
+      operationId: setTenantState
+      parameters:
+      - description: which tenant
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantStateRequest'
+        description: the state to move it to
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLifecycleView'
+          description: the state as it now stands
+        '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Malformed request (`malformed-request`)
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '413':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Payload too large (`payload-too-large`)
+        '415':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unsupported media type (`unsupported-media-type`)
+        '422':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Validation failed (`validation-failed`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011)
       tags:
       - Instance
   /api/v1/invitations/{token}/accept:
@@ -13410,6 +13821,52 @@ paths:
       tags:
       - Tags
   /api/v1/me/sessions:
+    delete:
+      description: |-
+        Ends every session this account has, including this one (REQ-SEC-082).
+
+        The measure somebody takes when they think their password reached somebody else: every
+        device is signed out within the second, and the next thing anybody does with a stolen session
+        cookie is sign in again — which they cannot, without the password.
+
+        It ends the caller's own session too, and that is the point rather than a side effect.
+        Leaving one alive would mean the person taking the measure has to guess which of the listed
+        sessions is theirs, and the browser signing itself out is the visible proof it worked.
+      operationId: endEverySession
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndedView'
+          description: how many sessions were ended
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Ends every session this account has, including this one (REQ-SEC-082)
+      tags:
+      - Me
     get:
       description: |-
         The sessions this account has open (REQ-AUTH-009).
@@ -17670,6 +18127,72 @@ paths:
       tags:
       - Members
   /api/v1/tenants/{tenantId}/service-accounts:
+    delete:
+      description: |-
+        Revokes every one of this tenant's tokens (REQ-SEC-082).
+
+        The immediate measure, and deliberately a different URL from revoking one rather than a
+        flag on it: `DELETE` on the collection is what "all of them" means in HTTP, and a
+        parameter that turned a single revocation into a mass one is the kind of call somebody makes
+        by accident.
+
+        It answers with the count rather than `204`, because "how many did that stop" is the
+        first question afterwards and the operator is unlikely to know.
+      operationId: revokeAll
+      parameters:
+      - description: the tenant, which must be the session's own
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokensRevokedView'
+          description: how many were revoked
+        '401':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Unauthenticated (`unauthenticated`)
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Second factor stale (`second-factor-stale`), or Forbidden (`forbidden`)
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not found (`not-found`)
+        '405':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Method not allowed (`method-not-allowed`)
+        '406':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Not acceptable (`not-acceptable`)
+        '500':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+          description: Internal error (`internal-error`)
+      summary: Revokes every one of this tenant's tokens (REQ-SEC-082)
+      tags:
+      - Service accounts
     get:
       description: The tenant's service accounts, newest first.
       operationId: list

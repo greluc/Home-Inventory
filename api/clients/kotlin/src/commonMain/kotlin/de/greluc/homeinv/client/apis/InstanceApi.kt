@@ -29,8 +29,13 @@ import de.greluc.homeinv.client.models.EntitlementsRequest
 import de.greluc.homeinv.client.models.InstancePluginView
 import de.greluc.homeinv.client.models.PageAccountView
 import de.greluc.homeinv.client.models.PageCertificate
+import de.greluc.homeinv.client.models.PluginStateRequest
+import de.greluc.homeinv.client.models.PluginStateView
 import de.greluc.homeinv.client.models.Problem
 import de.greluc.homeinv.client.models.QuotaRequest
+import de.greluc.homeinv.client.models.SessionsEndedView
+import de.greluc.homeinv.client.models.TenantLifecycleView
+import de.greluc.homeinv.client.models.TenantStateRequest
 
 import de.greluc.homeinv.client.infrastructure.*
 import io.ktor.client.HttpClient
@@ -129,6 +134,39 @@ open class InstanceApi : ApiClient {
 
 
     /**
+     * Ends every session of one account (REQ-SEC-082)
+     * Ends every session of one account (REQ-SEC-082).  The operator&#39;s half of &#x60;DELETE /api/v1/me/sessions&#x60;: the person whose account it is can sign every device out themselves, and this is for when they cannot — a stolen account, an employee who has left, a session somebody else is holding.  It signs them out and does not lock them out. An account whose password is still good signs straight back in, which is correct: locking is a different measure with different consequences, and an operator who wants it clears the entitlements or suspends the tenant.
+     * @param id the account
+     * @return SessionsEndedView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun endEverySession1(id: kotlin.String): HttpResponse<SessionsEndedView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.DELETE,
+            "/api/v1/instance/accounts/{id}/sessions".replace("{" + "id" + "}", "$id"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
      * The certificate for one tenant.
      * The certificate for one tenant.
      * @param tenantId the tenant that was erased
@@ -162,10 +200,10 @@ open class InstanceApi : ApiClient {
 
 
     /**
-     * One page of erasure certificates, newest first (REQ-TEN-011)
-     * One page of erasure certificates, newest first (REQ-TEN-011).  Read here and nowhere else. A tenant that has been erased has no members left to ask, and the table is instance-wide for exactly that reason: evidence of an erasure has to outlive the thing it is about (07 §7.1).
-     * @param cursor an opaque cursor from a previous page, or omitted for the first (optional)
-     * @param limit how many at most; capped at 200 (optional, default to 50)
+     * 
+     * 
+     * @param cursor  (optional)
+     * @param limit  (optional, default to 50)
      * @return PageCertificate
      */
     @Suppress("UNCHECKED_CAST")
@@ -385,6 +423,40 @@ open class InstanceApi : ApiClient {
 
 
 
+    /**
+     * Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9
+     * Takes a plugin out of service, or puts it back (REQ-SEC-082, 09 §9.4).  One plugin stops being called at once, for every tenant, without uninstalling it and without touching a grant — so putting it back is this call again and not a re-consent by every tenant that had granted it.
+     * @param pluginId which plugin
+     * @param pluginStateRequest whether to disable it
+     * @return PluginStateView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun setPluginState(pluginId: kotlin.String, pluginStateRequest: PluginStateRequest): HttpResponse<PluginStateView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = pluginStateRequest
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.PUT,
+            "/api/v1/instance/plugins/{pluginId}/state".replace("{" + "pluginId" + "}", "$pluginId"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return jsonRequest(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+
 
     /**
      * enum for parameter quota
@@ -450,6 +522,73 @@ open class InstanceApi : ApiClient {
             override fun deserialize(decoder: Decoder) = SetQuotaResponse(serializer.deserialize(decoder))
         }
     }
+
+    /**
+     * Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011)
+     * Suspends a tenant, or lets it back in (REQ-SEC-082, REQ-TEN-011).  The immediate measure with the widest reach and the least damage: a suspended tenant answers nothing at all — every request for it gets &#x60;403 tenant-inaccessible&#x60; from the interceptor that already handles the other inaccessible states — and not one row of its data is touched. Reinstating it is this call with &#x60;ACTIVE&#x60; and leaves no trace in what the tenant sees.  It does **not** reach &#x60;PENDING_DELETION&#x60; or &#x60;ERASED&#x60;, in either direction. An erasure is the tenant&#39;s own decision with a grace period and a revocation token, and an operator who could set the state directly would start that clock without either — or, worse, end it: withdrawing a deletion request is what the token is for.
+     * @param tenantId which tenant
+     * @param tenantStateRequest the state to move it to
+     * @return TenantLifecycleView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun setTenantState(tenantId: kotlin.String, tenantStateRequest: TenantStateRequest): HttpResponse<TenantLifecycleView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = tenantStateRequest
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.PUT,
+            "/api/v1/instance/tenants/{tenantId}/state".replace("{" + "tenantId" + "}", "$tenantId"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return jsonRequest(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+
+    /**
+     * Where a tenant stands, for the operator view
+     * Where a tenant stands, for the operator view.  All four states and not only the two the call above moves between: an operator looking at a tenant that is waiting to be erased should see that, which is exactly why suspension will refuse it.
+     * @param tenantId which tenant
+     * @return TenantLifecycleView
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun tenantState(tenantId: kotlin.String): HttpResponse<TenantLifecycleView> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody = 
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.GET,
+            "/api/v1/instance/tenants/{tenantId}/state".replace("{" + "tenantId" + "}", "$tenantId"),
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
 
     /**
      * Withdraws one instance-level capability (ADR-0066)

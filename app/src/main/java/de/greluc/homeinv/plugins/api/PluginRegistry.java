@@ -183,6 +183,25 @@ public interface PluginRegistry {
       Instant registeredAt) {}
 
   /**
+   * Takes a plugin out of service, or puts it back (REQ-SEC-082).
+   *
+   * <p>The immediate measure of 12 §12: one plugin stops being called at once, for every tenant,
+   * without uninstalling it and without touching a grant. A disabled plugin answers nothing and
+   * every call to it fails as though it were unavailable, which is the state a permanently open
+   * circuit already puts it in — this is the same state, reached on purpose.
+   *
+   * <p>Enabling is the same call with {@code false}, and it restores exactly what was there: the
+   * grants were never removed, so no tenant has to consent again to a plugin that was switched off
+   * for an afternoon.
+   *
+   * @param pluginId which plugin
+   * @param disabled true to take it out of service, false to put it back
+   * @param actor the operator making the decision
+   * @return true when a plugin was changed, false when nothing is installed under that id
+   */
+  boolean setDisabled(String pluginId, boolean disabled, UUID actor);
+
+  /**
    * One capability a tenant has granted a plugin.
    *
    * @param pluginId the plugin

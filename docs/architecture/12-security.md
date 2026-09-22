@@ -441,7 +441,7 @@ site, that property gets a test — because a sentence in a table is not evidenc
 |---|---|
 | Reporting channel | `SECURITY.md` with a contact address and GPG key, coordinated disclosure, 90 days |
 | Response times | Acknowledgement within 72 h, initial assessment within 7 days |
-| Immediate measures | Terminate all sessions of a tenant, revoke tokens, disable a plugin, suspend a tenant — each available as an administrative function, not improvised |
+| Immediate measures | Terminate all sessions (an account's own, or any account's on the operator's word), revoke every token of a tenant at once, disable a plugin for every tenant, suspend a tenant — each an administrative function, not improvised, and each reversible without a re-consent or a re-enrolment. Suspension does **not** reach the erasure states in either direction: that decision is the tenant's and its withdrawal needs the revocation token (`REQ-SEC-082`, `REQ-TEN-011`, `ImmediateMeasuresIT`) |
 | Traceability | The audit log must be able to answer "what did this account do in this period". That is the requirement its design is measured against. |
 | Notification | On suspicion of personal data exposure: data subjects and the supervisory authority within 72 h (Art. 33/34 GDPR); text templates ship with the documentation |
 | Security updates | A dedicated release channel, announcement through GitHub Security Advisories, CVE request where warranted |

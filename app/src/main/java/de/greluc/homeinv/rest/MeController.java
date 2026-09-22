@@ -129,6 +129,37 @@ public class MeController {
   }
 
   /**
+   * Ends every session this account has, including this one (REQ-SEC-082).
+   *
+   * <p>The measure somebody takes when they think their password reached somebody else: every
+   * device is signed out within the second, and the next thing anybody does with a stolen session
+   * cookie is sign in again — which they cannot, without the password.
+   *
+   * <p>It ends the caller's own session too, and that is the point rather than a side effect.
+   * Leaving one alive would mean the person taking the measure has to guess which of the listed
+   * sessions is theirs, and the browser signing itself out is the visible proof it worked.
+   *
+   * @param user the authenticated principal
+   * @return how many sessions were ended
+   */
+  @DeleteMapping(path = "/sessions", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail(ProblemType.UNAUTHENTICATED)
+  @PublicEndpoint(
+      reason =
+          "It ends the caller's own sessions and reaches nobody else's: the account is the "
+              + "authenticated principal and not a parameter.")
+  public EndedView endEverySession(@AuthenticationPrincipal AuthenticatedUser user) {
+    return new EndedView(sessions.endAll(user.userId()));
+  }
+
+  /**
+   * What a mass sign-out did.
+   *
+   * @param ended how many sessions stopped
+   */
+  public record EndedView(int ended) {}
+
+  /**
    * The caller's own session id, for marking it in the list.
    *
    * @param request the servlet request
