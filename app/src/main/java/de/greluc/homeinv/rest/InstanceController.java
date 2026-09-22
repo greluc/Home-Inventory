@@ -18,6 +18,7 @@ import de.greluc.homeinv.tenancy.api.QuotaAdministration;
 import de.greluc.homeinv.tenancy.api.QuotaGuard;
 import de.greluc.homeinv.tenancy.api.TenantAdministration;
 import de.greluc.homeinv.platform.NotFoundException;
+import de.greluc.homeinv.plugin.api.PluginManifestReader;
 import de.greluc.homeinv.plugins.api.PluginRegistry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -25,6 +26,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.EnumMap;
 import java.util.List;
@@ -372,7 +374,8 @@ public class InstanceController {
   @RequiresEntitlement(Entitlement.INSTANCE_OPERATOR)
   @CanFail({ProblemType.FORBIDDEN, ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
   public PluginStateView setPluginState(
-      @PathVariable @Size(max = 200) String pluginId,
+      @PathVariable @Size(max = 200) @Pattern(regexp = PluginManifestReader.ID_SHAPE)
+          String pluginId,
       @Valid @RequestBody PluginStateRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
 

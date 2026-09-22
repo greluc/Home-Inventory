@@ -5,6 +5,7 @@
 package de.greluc.homeinv.plugins.application;
 
 import de.greluc.homeinv.platform.NotFoundException;
+import de.greluc.homeinv.platform.LogSafe;
 import de.greluc.homeinv.plugin.api.PluginManifest;
 import de.greluc.homeinv.plugin.api.PluginManifestReader;
 import de.greluc.homeinv.plugins.api.PluginRegistry;
@@ -58,7 +59,17 @@ public class DefaultPluginRegistry implements PluginRegistry {
     if (changed) {
       // At WARN and with the actor, because this is an immediate measure and the
       // question afterwards is always "who, and when" (REQ-SEC-068, REQ-SEC-082).
-      log.warn("Operator {} {} plugin {}", actor, disabled ? "disabled" : "re-enabled", pluginId);
+      //
+      // Through `LogSafe` because the id came from a caller. It is shape-checked
+      // at the boundary and matched against a stored row before this line is
+      // reached, so it cannot in fact carry a newline -- and a log call that is
+      // safe because of two things somewhere else is one that stops being safe
+      // when either of them moves.
+      log.warn(
+          "Operator {} {} plugin {}",
+          actor,
+          disabled ? "disabled" : "re-enabled",
+          LogSafe.value(pluginId));
     }
     return changed;
   }

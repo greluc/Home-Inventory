@@ -102,7 +102,14 @@ public final class PatternSafety {
       //
       // Compilation itself is linear in the pattern's length, and that length is
       // at most 200 characters by the check above.
-      Pattern.compile(pattern); // codeql[java/regex-injection]
+      //
+      // There is no marker on this line and there was one until 2026-09-22:
+      // GitHub code scanning does not honour inline suppression comments -- that
+      // is an LGTM legacy the CLI reads and the service ignores -- so the
+      // comment said the alert was handled and it was not. The alert is a false
+      // positive for the reasons above and belongs in the Security tab's
+      // dismissals, which is the only mechanism that exists.
+      Pattern.compile(pattern);
     } catch (PatternSyntaxException invalid) {
       return Optional.of("Not a valid regular expression: " + invalid.getDescription());
     }

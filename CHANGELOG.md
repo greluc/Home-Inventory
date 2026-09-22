@@ -21,6 +21,12 @@ commit".
 
 ### Added
 
+- **A plugin id cannot write its own line in the log.** Values that come from a
+  caller now go through a filter before they reach a log entry, so nothing can
+  slip in a newline and add a record of something that never happened. Found by
+  the code scanner on a line added the day before, and fixed everywhere such a
+  value is logged rather than only where it was reported.
+
 - **Four things you can do the moment something goes wrong.** Sign every device
   of an account out — your own, or somebody else's if you run the instance —
   revoke all of a tenant's machine tokens at once when you do not know which one
@@ -932,7 +938,7 @@ commit".
   to hide the other's data — and to show nothing at all when no tenant context is
   set. A table added later with a wrong policy, or none, fails the build.
 
-- **The shared kernel is measured.** `platform` holds 39 types in the shared
+- **The shared kernel is measured.** `platform` holds 40 types in the shared
   kernel, and an architecture rule keeps it that way: it may depend on no
   building block, so it cannot come to hold one's domain. The figure moves with
   every release and a check compares it with the directory (REQ-NFR-024).

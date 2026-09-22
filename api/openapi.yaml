@@ -10002,6 +10002,7 @@ paths:
         schema:
           maxLength: 200
           minLength: 0
+          pattern: '[a-z0-9]+(\.[a-z0-9-]+)+'
           type: string
       requestBody:
         content:

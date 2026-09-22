@@ -39,6 +39,17 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  */
 public final class PluginManifestReader {
 
+  /**
+   * What a plugin id looks like: reverse-DNS, lower case, no surprises.
+   *
+   * <p>Public and a {@code String} rather than a compiled {@link java.util.regex.Pattern} because
+   * the core validates path variables against it with a Jakarta {@code @Pattern}, which takes a
+   * constant expression. Written once here rather than a second time there: the database has its
+   * own {@code CHECK} on the column, which is the second independent line and not a second copy of
+   * this one.
+   */
+  public static final String ID_SHAPE = "[a-z0-9]+(\\.[a-z0-9-]+)+";
+
   /** How large a manifest may be. Beyond this it is not a manifest. */
   private static final int MAX_BYTES = 256 * 1024;
 
@@ -172,7 +183,7 @@ public final class PluginManifestReader {
   private static PluginManifest.Metadata metadata(Map<?, ?> node) {
     reject(node, "metadata", Set.of("id", "name", "version", "vendor", "license", "homepage", "descriptions"));
     String id = string(node, "id", true);
-    if (!id.matches("[a-z0-9]+(\\.[a-z0-9-]+)+")) {
+    if (!id.matches(ID_SHAPE)) {
       throw new InvalidManifestException(
           "metadata.id is '"
               + id

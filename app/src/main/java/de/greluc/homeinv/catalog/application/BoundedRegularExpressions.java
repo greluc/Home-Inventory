@@ -7,6 +7,7 @@ package de.greluc.homeinv.catalog.application;
 import com.networknt.schema.regex.RegularExpression;
 import com.networknt.schema.regex.RegularExpressionFactory;
 import com.networknt.schema.regex.RegularExpressions;
+import de.greluc.homeinv.platform.LogSafe;
 import java.time.Duration;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
@@ -87,11 +88,13 @@ public final class BoundedRegularExpressions implements RegularExpressionFactory
       // every generated schema here is written against.
       return compiled.matcher(input).find();
     } catch (BudgetExceeded exceeded) {
+      // `LogSafe` because the pattern is a tenant's own text, and a pattern is
+      // the one value here that somebody would write a newline into on purpose.
       log.warn(
           "A field pattern was abandoned after {}: it is either an attack or a definition worth "
               + "rewriting. Pattern: {}",
           budget,
-          source);
+          LogSafe.value(source));
       return false;
     }
   }

@@ -21,6 +21,7 @@ time*.
 | Correlation | `traceId` appears in every error response — a user report carrying it leads straight to the operation. It is a 128-bit W3C trace id, adopted from an incoming `traceparent` when there is one. Two things can fill it and they agree by construction: the tracer when a collector is configured, `TraceIdFilter` when there is none. `TracingIT` asserts that the id in the error document is the id of the trace the request produced, which is a stronger statement than both being present |
 | Levels | `ERROR` only when someone must act · `WARN` for degraded operation · `INFO` for state changes · `DEBUG` off, switchable per logger at runtime |
 | Personal data | No passwords, tokens, keys or `sensitive` values. A test with known test values verifies this. IP addresses removed after 7 days. |
+| Values somebody else chose | Through `LogSafe`, which removes the Unicode control, line-separator and paragraph-separator categories and bounds the length. A newline in a borrowed value writes a **second entry that never happened**, and the reader cannot tell it from the real ones. ECS JSON escapes it and the console pattern does not, so the call site is made safe rather than the formatter trusted (`LogSafeTest`, `REQ-SEC-068`) |
 | Tenant separation | `tenantId` on every line, so that analysis can be tenant-scoped |
 | Retention | 30 days on the application side, rotation through the container runtime |
 
