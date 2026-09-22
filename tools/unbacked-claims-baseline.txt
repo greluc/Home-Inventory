@@ -70,7 +70,7 @@ docs/architecture/06-deployment-view.md:543:cannot
 docs/architecture/06-deployment-view.md:741:cannot
 docs/architecture/06-deployment-view.md:812:cannot
 docs/architecture/06-deployment-view.md:83:cannot
-docs/architecture/06-deployment-view.md:935:fails the build
+docs/architecture/06-deployment-view.md:936:fails the build
 docs/architecture/07-data-model.md:436:cannot
 docs/architecture/07-data-model.md:598:enforces
 docs/architecture/07-data-model.md:625:cannot

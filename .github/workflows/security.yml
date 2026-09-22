@@ -99,6 +99,19 @@ jobs:
           distribution: zulu
           java-version: '25'
 
+      # The same action `ci.yml`'s build uses, and it is here for the resolving
+      # rather than for the speed. This job ran a bare `./gradlew` and therefore
+      # re-fetched EVERY dependency from Maven Central on every run -- which on
+      # 2026-09-22 came back `403 Forbidden` for the Kotlin Gradle plugin and
+      # failed an analysis that had nothing wrong with it. The same PR had
+      # already lost a job to `429 Too Many Requests` from the same host.
+      #
+      # An upstream rate limit is not something to retry until it passes: the
+      # answer is to stop asking. A warm cache turns hundreds of requests into
+      # a handful, and this was the one Gradle job in the repository without one.
+      - uses: gradle/actions/setup-gradle@v6
+        if: matrix.language == 'java-kotlin'
+
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
