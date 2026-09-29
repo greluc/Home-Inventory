@@ -54,9 +54,6 @@ public class TagAdapter implements TagService, TagQueries {
   private static final String TAG_CURSOR = "tags";
   private static final String ASSIGNED_CURSOR = "tags-of";
 
-  // Ordered by the tag's own creation, not by its name, because that is what the
-  // keyset cursor can resume from: a name is not unique enough to page on once
-  // two tenants' habits collide, and the client sorts a handful of names itself.
   private static final String TAGS_OF_ITEM =
       "select t.id, t.name, t.tag_group_id, t.colour, t.icon, t.merged_into, t.created_at"
           + " from tagging.tag t"
@@ -119,9 +116,6 @@ public class TagAdapter implements TagService, TagQueries {
   private final List<TaggableTargets> targets;
 
   /** Where the last row read sat, for the next page's cursor. */
-  // Where the last row of a page sat lives in a `LastRow` per call, not in a
-  // field: this adapter is a singleton and a field would be shared by every
-  // request in flight.
 
   @Override
   @Transactional
@@ -201,9 +195,6 @@ public class TagAdapter implements TagService, TagQueries {
     tag(sourceId);
     tag(targetId);
 
-    // The duplicates go first: where both tags sat on one thing, moving the
-    // source would collide with the unique index, and the answer is that the
-    // thing already carries what it is being given.
     jdbc.sql(
             """
             delete from tagging.tag_assignment source
@@ -228,8 +219,6 @@ public class TagAdapter implements TagService, TagQueries {
             .params(targetId, actor, tenantId, sourceId)
             .update();
 
-    // A tombstone, not a deletion: a client holding the old id is redirected
-    // rather than told the tag never existed (REQ-CORE-063).
     jdbc.sql(
             """
             update tagging.tag
@@ -251,9 +240,6 @@ public class TagAdapter implements TagService, TagQueries {
     TagView tag = live(tagId);
     requireVisible(target, targetId);
 
-    // An exclusive group holds one tag per thing. Whatever else of this group is
-    // on the target comes off first, and says so, so a consumer does not believe
-    // the thing carries both.
     if (tag.groupId() != null && exclusive(tag.groupId())) {
       for (UUID displaced : otherTagsOfGroup(tag.groupId(), tagId, target, targetId)) {
         removeAssignment(displaced, target, targetId);
@@ -277,8 +263,6 @@ public class TagAdapter implements TagService, TagQueries {
                 target == TagTarget.LOCATION ? targetId : null,
                 actor)
             .update();
-    // Idempotent: a retry writes nothing and raises nothing, and only a real
-    // assignment produces an event.
     if (written > 0) {
       events.publishEvent(new TagAssigned(tenantId, tagId, target, targetId));
     }
@@ -289,9 +273,6 @@ public class TagAdapter implements TagService, TagQueries {
   public void unassign(UUID tagId, TagTarget target, UUID targetId, UUID actor) {
     UUID tenantId = TenantContext.require();
     requireVisible(target, targetId);
-    // Still idempotent about the *assignment*: taking off a tag that is not on is
-    // no error. What is refused is a target that is not there, which is a
-    // different question and the one the endpoint promises a 404 for.
     if (removeAssignment(tagId, target, targetId) > 0) {
       events.publishEvent(new TagUnassigned(tenantId, tagId, target, targetId));
     }
@@ -377,10 +358,6 @@ public class TagAdapter implements TagService, TagQueries {
             (rs, rowNum) -> groupOf(rs, last));
     return Page.of(rows, nextCursor(rows.size(), size, TAG_GROUP_CURSOR, last));
   }
-
-  // -------------------------------------------------------------------------
-  // Internals
-  // -------------------------------------------------------------------------
 
   /**
    * Removes one assignment.
@@ -492,7 +469,6 @@ public class TagAdapter implements TagService, TagQueries {
     return jdbc
         .sql(TAG_COLUMNS + " where tenant_id = ? and id = ?")
         .params(TenantContext.require(), tagId)
-        // A single row: the holder is a formality, because nothing pages one.
         .query((rs, rowNum) -> tagOf(rs, new LastRow()))
         .optional()
         .orElseThrow(() -> new NotFoundException("tag", tagId));
@@ -621,7 +597,6 @@ public class TagAdapter implements TagService, TagQueries {
       return jdbc.sql(first).params(tenantId, size).query(mapper).list();
     }
     CursorCodec.Position from = cursors.decode(cursor, fingerprint);
-    // Wrapped, not an Instant: the driver cannot infer a SQL type for one.
     java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
     return jdbc.sql(after).params(tenantId, at, at, from.id(), size).query(mapper).list();
   }
@@ -648,19 +623,6 @@ public class TagAdapter implements TagService, TagQueries {
       return List.of();
     }
     UUID tenantId = TenantContext.require();
-    // `lower(name)` on both sides, because `tag_name_unique` is on `lower(name)`
-    // and "Fragile" and "fragile" are one tag (V17__tags.sql). The names arrive
-    // as a person wrote them, and a filter that only matched the casing the tag
-    // happens to be stored in would be wrong for half of them.
-    //
-    // The recursion follows `merged_into`. `merge` repoints the assignments to
-    // the surviving tag and leaves the old one as a tombstone pointing at what
-    // it became, so a name that was merged away has no assignments of its own
-    // any more. Following the pointer is the same redirect REQ-CORE-063 gives a
-    // client holding the old id: somebody who saved the filter "broken" still
-    // finds the items, rather than an empty list that looks like an answer. The
-    // chain can be longer than one hop, because a tag that absorbed another can
-    // itself be merged later.
     return jdbc
         .sql(
             """
@@ -719,9 +681,6 @@ public class TagAdapter implements TagService, TagQueries {
       return List.of();
     }
     UUID tenantId = TenantContext.require();
-    // The configuration is chosen from a closed set of two and never from the
-    // parameter, which is what keeps this a parameterised statement with a
-    // variable stemmer rather than SQL built from input (REQ-SEC-031).
     String regconfig = "en".equals(language) ? "english" : "german";
     return jdbc
         .sql(
@@ -748,10 +707,6 @@ public class TagAdapter implements TagService, TagQueries {
       return Map.of();
     }
     UUID tenantId = TenantContext.require();
-    // `merged_into is null` here and deliberately not in `itemsTagged`: the two
-    // ask opposite questions. There, a name somebody saved has to keep working,
-    // so a tombstone is followed; here, a tombstone has no assignments left and
-    // would only contribute a bucket of zero that nobody can click.
     Map<String, Long> counts = new LinkedHashMap<>();
     jdbc.sql(
             """

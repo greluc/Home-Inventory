@@ -57,9 +57,6 @@ public class CallerIdentity implements ServerInterceptor {
             .flatMap(plugins::identify);
 
     if (caller.isEmpty()) {
-      // Belt as well as braces: the trust manager has already refused an
-      // unknown certificate, so reaching here means the two disagree -- which is
-      // a reason to close the call rather than to guess.
       call.close(
           io.grpc.Status.UNAUTHENTICATED.withDescription(
               "The caller could not be identified as a registered plugin"),

@@ -68,8 +68,6 @@ class TracingEnvironmentTest {
   @Test
   @DisplayName("is off when the collector is named as the empty string")
   void offWhenTheKnobIsEmpty() {
-    // Exactly what `HOMEINV_TRACING_ENDPOINT=` produces, which is what both
-    // generated runtimes pass when the operator has set nothing.
     MockEnvironment environment = new MockEnvironment().withProperty(OURS, "   ");
 
     process(environment);
@@ -102,9 +100,6 @@ class TracingEnvironmentTest {
   @Test
   @DisplayName("leaves a configuration written in Boot's own properties alone")
   void bootsOwnPropertyCountsAsConfigured() {
-    // An operator who sets Boot's property directly has configured tracing.
-    // Switching it off underneath them for the sole reason that they did not
-    // use our variable would be this class breaking a working deployment.
     MockEnvironment environment =
         new MockEnvironment().withProperty(BOOT_ENDPOINT, "http://collector:4318/v1/traces");
 
@@ -120,15 +115,6 @@ class TracingEnvironmentTest {
   @Test
   @DisplayName("brings no exporter that pushes anywhere on its own")
   void nothingPushesWithoutBeingAsked() {
-    // `spring-boot-starter-opentelemetry` would have been the short way to the
-    // tracing auto-configuration, and it also brings `micrometer-registry-otlp`,
-    // which PUSHES METRICS to `http://localhost:4318/v1/metrics` every minute by
-    // default. A core container that opens a connection nobody configured is
-    // what ADR-0026 exists to prevent, and a transitive dependency is exactly
-    // how one comes back.
-    //
-    // The jar names rather than the loaded classes, like `PersonalDataIT`: a
-    // library that is present and not yet used is the case worth catching.
     String classpath = System.getProperty("java.class.path", "");
     List<String> pushers =
         java.util.Arrays.stream(classpath.split(java.io.File.pathSeparator))
@@ -144,9 +130,6 @@ class TracingEnvironmentTest {
   @Test
   @DisplayName("leaves an installation that switched OpenTelemetry on itself alone")
   void anExplicitEnableCountsAsConfigured() {
-    // An operator wiring their own exporter -- and the integration tests, which
-    // record spans into a list instead of sending them. Excluding the bridge
-    // underneath either would switch off the thing they just switched on.
     MockEnvironment environment = new MockEnvironment().withProperty(ENABLED, "true");
 
     process(environment);

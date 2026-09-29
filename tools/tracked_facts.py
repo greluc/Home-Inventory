@@ -74,11 +74,6 @@ def files_in_scope(registry: dict) -> list[pathlib.Path]:
     return sorted(path for path in found if not is_excluded(path))
 
 
-# ---------------------------------------------------------------------------
-# The computations. Each one is the `compute:` expression of a registry entry,
-# written out - because a `compute:` string is prose and a reader has to be able
-# to check that the code does what it says.
-# ---------------------------------------------------------------------------
 def compute(registry: dict) -> dict[str, object]:
     """Recomputes every tracked fact from the repository.
 
@@ -100,10 +95,6 @@ def compute(registry: dict) -> dict[str, object]:
 
     components = sorted((REPOSITORY / "design-system" / "components").glob("*/*.jsx"))
     exports: set[str] = set()
-    # PascalCase, which is what the registry counts: a name that starts uppercase
-    # AND contains a lowercase letter. `STATUS`, `SCAN_LABELS` and
-    # `CONFLICT_LABELS` are exported constants rather than components, and
-    # counting them would give 58 where the design system has 55.
     pascal_case = r"([A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*)"
     for module in components:
         source = module.read_text(encoding="utf-8")
@@ -115,10 +106,6 @@ def compute(registry: dict) -> dict[str, object]:
     health_states = yaml.safe_load(
         (REPOSITORY / "docs" / "reference" / "plugin-health-states.yaml").read_text(encoding="utf-8"))
 
-    # REQ-NFR-024: the shared kernel's size is monitored. Counted as types rather
-    # than as lines, because a line count moves with a rewritten comment and the
-    # question being asked is "how much has accumulated in here", which is a
-    # question about things.
     platform_types = sorted((REPOSITORY / "app" / "src" / "main" / "java" / "de" / "greluc"
                              / "homeinv" / "platform").glob("*.java"))
 
@@ -134,11 +121,11 @@ def compute(registry: dict) -> dict[str, object]:
                                 if d.is_dir()]),
         "specimenCards": len(sorted((REPOSITORY / "design-system" / "guidelines").glob("*.html"))),
         "lucideIcons": len(sorted((REPOSITORY / "design-system" / "assets" / "icons").glob("*.svg"))),
-        "buildingBlocks": None,          # prose table; the registry's value is authoritative
+        "buildingBlocks": None,
         "pluginHealthStates": len(health_states["states"]),
         "permissionCount": len(permissions["permissions"]),
         "profileMemory": profile_memory(),
-        "contrastRatios": None,          # delegated to REQ-NFR-077's own gate
+        "contrastRatios": None,
     }
 
 
@@ -168,11 +155,6 @@ def profile_memory() -> dict[str, str]:
             if service.get("lifecycle") == "oneShot":
                 continue
             if service.get("role") == "plugin":
-                # The docstring's second convention, which had nothing to skip
-                # until 2026-09-20: `REQ-NFR-009` states a profile's base and a
-                # SEPARATE per-plugin adder ("+ 64 MB per plugin"), and folding a
-                # plugin into the base would make every restatement of the base
-                # wrong while the adder still stood beside it.
                 continue
             resources = service.get("resources") or {}
             reservation += mib(resources.get("memoryReservation"))
@@ -182,9 +164,6 @@ def profile_memory() -> dict[str, str]:
     return sums
 
 
-# ---------------------------------------------------------------------------
-# The checks
-# ---------------------------------------------------------------------------
 def check_computed(registry: dict, current: dict, files: list[pathlib.Path]) -> list[str]:
     """Compares every restatement of a tracked fact against its computed value.
 
@@ -201,9 +180,6 @@ def check_computed(registry: dict, current: dict, files: list[pathlib.Path]) -> 
         recorded = entry.get("value")
         computed = current.get(fact)
 
-        # 1. The registry's own value must equal the recomputed one. A registry
-        #    that drifts from the repository is the failure this whole file is
-        #    about, one level up.
         if computed is not None and recorded != computed:
             failures.append(
                 f"{fact}: tracked-facts.yaml records {recorded!r}, the repository has {computed!r}")

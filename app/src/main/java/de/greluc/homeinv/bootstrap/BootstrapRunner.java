@@ -84,9 +84,6 @@ public class BootstrapRunner implements ApplicationRunner {
   @Override
   public void run(ApplicationArguments args) {
     if (email.isBlank() || password.isBlank()) {
-      // Both or neither. An instance with no owner is not broken — it is one
-      // somebody has not finished setting up — so this says what is missing and
-      // stops, rather than inventing an account.
       log.error(
           "Nothing to do: set HOMEINV_BOOTSTRAP_EMAIL and mount "
               + "HOMEINV_BOOTSTRAP_PASSWORD_FILE, then run this service again.");
@@ -102,10 +99,6 @@ public class BootstrapRunner implements ApplicationRunner {
         return;
       }
 
-      // The first account is the instance operator and may create tenants
-      // (ADR-0057). Both are granted here because there is nobody else who could
-      // grant them: an instance whose first account holds neither is one nobody
-      // can administer and nobody can add a second tenant to.
       UUID owner = created.get();
       accounts.replaceEntitlements(owner, true, true, null, owner);
 
@@ -114,8 +107,6 @@ public class BootstrapRunner implements ApplicationRunner {
           "Created the first owner and tenant {}. Sign in at HOMEINV_PUBLIC_BASE_URL.", tenantId);
       exit(0);
     } catch (RuntimeException failed) {
-      // The message is what an operator reads and the exit code is what the
-      // runtime acts on; `api` does not start on a non-zero one.
       log.error("Could not create the first owner.", failed);
       exit(1);
     }

@@ -34,12 +34,9 @@ class MoneyTest {
     assertThat(Money.of("49.9", EUR)).hasSameHashCodeAs(Money.of("49.90", EUR));
     assertThat(Money.of("49.9", EUR).amountAsText()).isEqualTo("49.90");
 
-    // Yen has no minor unit, and a dinar has three.
     assertThat(Money.of("1000", JPY).amountAsText()).isEqualTo("1000");
     assertThat(Money.of("2.5", Currency.getInstance("KWD")).amountAsText()).isEqualTo("2.500");
 
-    // More digits than the currency has are rounded half up on construction:
-    // this is not arithmetic, it is the currency saying how many digits it has.
     assertThat(Money.of("1.005", EUR).amountAsText()).isEqualTo("1.01");
     assertThat(Money.of("1.004", EUR).amountAsText()).isEqualTo("1.00");
   }
@@ -75,8 +72,6 @@ class MoneyTest {
   @Test
   @DisplayName("is not Comparable, so a mixed-currency list cannot be sorted at all")
   void notComparable() {
-    // By construction rather than by exception: there is no comparator to reach
-    // for, so the mistake cannot be made and then discovered in production.
     assertThat(Comparable.class.isAssignableFrom(Money.class)).isFalse();
 
     assertThat(Money.of("10.00", EUR).isGreaterThan(Money.of("9.99", EUR))).isTrue();
@@ -88,9 +83,6 @@ class MoneyTest {
   @DisplayName("rounds only where the caller says how")
   void multiplicationRoundsExplicitly() {
     Money price = Money.of("100.00", EUR);
-    // 33.355 exactly: the halfway case, where HALF_UP and HALF_DOWN part company
-    // and UP and DOWN each go their own way. A factor whose product landed on a
-    // whole cent would prove nothing about rounding at all.
     BigDecimal factor = new BigDecimal("0.33355");
 
     assertThat(price.multipliedBy(factor, RoundingMode.HALF_UP)).isEqualTo(Money.of("33.36", EUR));
@@ -98,7 +90,6 @@ class MoneyTest {
     assertThat(price.multipliedBy(factor, RoundingMode.UP)).isEqualTo(Money.of("33.36", EUR));
     assertThat(price.multipliedBy(factor, RoundingMode.DOWN)).isEqualTo(Money.of("33.35", EUR));
 
-    // There is no overload that guesses a mode, and null is not one.
     assertThatThrownBy(() -> price.multipliedBy(factor, null))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(() -> price.multipliedBy(null, RoundingMode.HALF_UP))
@@ -115,7 +106,6 @@ class MoneyTest {
     assertThat(Money.of("0.00", EUR).isNegative()).isFalse();
     assertThat(Money.of("0.01", EUR).isNegative()).isFalse();
 
-    // A plain string, never scientific notation: this is what goes into JSON.
     assertThat(Money.of("1E+3", EUR).amountAsText()).isEqualTo("1000.00");
     assertThat(Money.of("12.34", EUR).currencyCode()).isEqualTo("EUR");
     assertThat(Money.of("12.34", EUR)).hasToString("12.34 EUR");
@@ -131,7 +121,6 @@ class MoneyTest {
     assertThatThrownBy(() -> new Money(BigDecimal.ONE, null))
         .isInstanceOf(NullPointerException.class);
 
-    // The string factory and the currency factory agree.
     assertThat(Money.of("7.00", "EUR")).isEqualTo(Money.of("7.00", EUR));
   }
 }

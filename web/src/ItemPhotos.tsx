@@ -85,26 +85,14 @@ export function ItemPhotos({
   }, [itemId, onError, t]);
 
   useEffect(() => {
-    // The request is the synchronisation with the outside world; the state is
-    // set when it answers, which is a render later and not a cascading one.
     void reload();
   }, [reload]);
 
   async function upload(file: File): Promise<void> {
     setBusy(true);
     try {
-      // Resumable (REQ-MED-008): the file goes in pieces, and a chunk that
-      // fails is retried from where the server says the upload actually is
-      // rather than from the beginning. On the connection a phone has while
-      // standing in front of a shelf, that is the difference between a
-      // photograph arriving and a photograph never arriving.
       const location = await resumableUpload(file, { targetKind: "ITEM", targetId: itemId });
       const accepted = { id: location.slice(location.lastIndexOf("/") + 1) };
-      // The upload is answered before the malware scan has run, so this waits for
-      // the verdict rather than showing a permanent placeholder: the scan happens
-      // in the worker and the file is not retrievable until it has cleared it.
-      // A refusal is told to the user here, because an infected file is detached
-      // from the item and would otherwise simply not appear.
       await settled(accepted.id);
       await reload();
     } catch (cause) {
@@ -138,9 +126,7 @@ export function ItemPhotos({
         <ul className="photo-strip">
           {photos.map((photo) => (
             <li key={photo.id} className={photo.primaryImage ? "primary" : undefined}>
-              {/* Named, not only outlined: which photograph lists show is
-                  carried by a border colour, and colour alone is not a
-                  distinction everybody can see (WCAG 2.2 AA, REQ-NFR-072). */}
+              {}
               {photo.primaryImage && <span className="visually-hidden">{t("media.primary")}</span>}
               {photo.urls.thumb !== undefined ? (
                 <img
@@ -173,7 +159,6 @@ export function ItemPhotos({
             if (file) {
               void upload(file);
             }
-            // Cleared so that choosing the same file twice fires a change again.
             event.target.value = "";
           }}
         />

@@ -94,8 +94,6 @@ class ImmediateMeasuresIT extends AbstractIntegrationTest {
         .perform(
             delete("/api/v1/tenants/" + tenant + "/service-accounts").session(session).with(csrf()))
         .andExpect(status().isOk())
-        // The count rather than 204: "how many did that stop" is the first
-        // question afterwards and the operator is unlikely to know.
         .andExpect(jsonPath("$.revoked").value(1));
 
     mockMvc
@@ -113,8 +111,6 @@ class ImmediateMeasuresIT extends AbstractIntegrationTest {
         status -> accounts.replaceEntitlements(operator, true, false, null, operator));
     MockHttpSession session = login("measure-plugin@example.org");
 
-    // Nothing is installed under this id, and a measure that reported success
-    // for a plugin that is not there would be the worst possible answer here.
     mockMvc
         .perform(
             put("/api/v1/instance/plugins/de.greluc.homeinv.plugin.nothing/state")
@@ -150,9 +146,6 @@ class ImmediateMeasuresIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.state").value("SUSPENDED"));
 
-    // It answers nothing at all -- the interceptor that already handles the
-    // other inaccessible states covers this one without a change -- and the
-    // session is still perfectly valid, which is what makes reinstating cheap.
     mockMvc.perform(get("/api/v1/items").session(theirs)).andExpect(status().isForbidden());
 
     mockMvc

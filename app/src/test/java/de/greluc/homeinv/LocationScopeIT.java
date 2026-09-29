@@ -62,7 +62,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
 
     Places places = aHouseWithAGarage(tenant);
 
-    // Unscoped, everything is there.
     unscoped(
         tenant,
         () -> {
@@ -70,8 +69,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
           assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, null, List.of(), List.of(), 50)).data()).hasSize(2);
         });
 
-    // Confined to the garage: one place, one item, and the ordinary list methods
-    // are the ones being asked.
     scoped(
         tenant,
         places.garage(),
@@ -84,14 +81,11 @@ class LocationScopeIT extends AbstractIntegrationTest {
               .singleElement()
               .satisfies(item -> assertThat(item.id()).isEqualTo(places.inGarage()));
 
-          // By id, the room upstairs is simply not there — which is what a place
-          // somebody may not see looks like to them (REQ-SEC-025).
           assertThatThrownBy(() -> locations.get(places.bedroom()))
               .isInstanceOf(NotFoundException.class);
           assertThatThrownBy(() -> items.get(places.inBedroom()))
               .isInstanceOf(NotFoundException.class);
 
-          // And its own is.
           assertThat(items.get(places.inGarage()).id()).isEqualTo(places.inGarage());
         });
   }
@@ -106,7 +100,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
         tenant,
         places.garage(),
         () -> {
-          // A place under a parent it cannot see.
           assertThatThrownBy(
                   () ->
                       locations.create(
@@ -115,7 +108,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
-          // A root, which is outside every subtree including its own.
           assertThatThrownBy(
                   () ->
                       locations.create(
@@ -124,7 +116,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
-          // An item in a place it cannot see.
           assertThatThrownBy(
                   () ->
                       items.create(
@@ -143,7 +134,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
                           tenant.userId()))
               .isInstanceOf(NotFoundException.class);
 
-          // Inside, it works.
           assertThat(
                   locations
                       .create(
@@ -161,8 +151,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("scope-gone@example.org");
     Places places = aHouseWithAGarage(tenant);
 
-    // A scope pointing at a place this tenant does not have. The empty string
-    // would mean "no scope" and would fail open; ADR-0059 makes it fail closed.
     scoped(
         tenant,
         UUID.randomUUID(),
@@ -171,13 +159,9 @@ class LocationScopeIT extends AbstractIntegrationTest {
           assertThat(search.query(new SearchService.SearchRequest("", "en", null, null, null, List.of(), List.of(), 50)).data()).isEmpty();
         });
 
-    // And the tenant itself is untouched: the scope was the session's, not the
-    // data's.
     unscoped(tenant, () -> assertThat(locations.list(null, 50).data()).hasSize(3));
     assertThat(places.garage()).isNotNull();
   }
-
-  // -------------------------------------------------------------------------
 
   /** The places and items one test builds. */
   private record Places(UUID house, UUID garage, UUID bedroom, UUID inGarage, UUID inBedroom) {}
@@ -237,8 +221,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
    * @return the category's id
    */
   private UUID categoryOf(Tenant tenant) {
-    // In a transaction, because `app.tenant_id` is published when one begins: a
-    // read outside one runs with no tenant set and the policy returns nothing.
     return transactions.execute(
         status ->
             jdbc
@@ -283,14 +265,8 @@ class LocationScopeIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("scope-export@example.org");
     Places places = aHouseWithAGarage(tenant);
 
-    // Over the whole tenant, an owner may ask for an archive of it.
     unscoped(tenant, () -> assertThat(access.holds(Permission.TENANT_EXPORT)).isTrue());
 
-    // The same person confined to the garage may not -- and it is the scope that
-    // decides rather than the role, so being an OWNER does not change it. There
-    // is no archive of a subtree, so the only thing this caller could be handed
-    // is an archive of everything, which is precisely what the scope says they
-    // may not have (ADR-0068, open point O27).
     TenantContext.runAs(
         tenant.tenantId(),
         () ->
@@ -299,8 +275,6 @@ class LocationScopeIT extends AbstractIntegrationTest {
                     tenant.userId(), tenant.tenantId(), "OWNER", null, places.garage()),
                 () -> assertThat(access.holds(Permission.TENANT_EXPORT)).isFalse()));
 
-    // And only the permissions that say they are whole-tenant are affected: the
-    // scoped caller still reads items, which is the entire point of a scope.
     scoped(tenant, places.garage(), () -> assertThat(access.holds(Permission.ITEM_READ)).isTrue());
   }
 

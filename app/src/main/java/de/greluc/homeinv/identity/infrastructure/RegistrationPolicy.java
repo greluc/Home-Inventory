@@ -57,13 +57,6 @@ public class RegistrationPolicy {
           unknown);
     }
 
-    // `open` used to be refused here outright, because confirming an address needs
-    // a plugin and there was no plugin runtime. There is one now (ADR-0028), so the
-    // refusal moved to where it can look: `OpenRegistrationReadiness` asks, once the
-    // application is up and the registry is readable, whether anything installed can
-    // confirm an address at all. A constructor cannot ask that — it runs before the
-    // database is reachable — and a mode parsed here and checked there is one
-    // decision in two places rather than two decisions.
     log.info("Registration mode: {}", mode);
   }
 

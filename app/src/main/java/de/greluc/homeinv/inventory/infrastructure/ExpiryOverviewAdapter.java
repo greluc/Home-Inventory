@@ -113,9 +113,6 @@ public class ExpiryOverviewAdapter implements ExpiryOverview {
     LocalDate floor = includePast ? ALWAYS : LocalDate.now();
     int rows = Math.clamp(limit, 1, MAX_ROWS);
 
-    // `in (:keys)` with an empty list is not valid SQL, and a tenant whose types
-    // mark no expiry attribute is the ordinary case rather than an edge: the
-    // warranty half still has something to say.
     JdbcClient.StatementSpec statement =
         fields.isEmpty()
             ? jdbc.sql(DUE_WARRANTIES_ONLY)

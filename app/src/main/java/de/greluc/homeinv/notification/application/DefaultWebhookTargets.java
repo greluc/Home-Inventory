@@ -107,8 +107,6 @@ public class DefaultWebhookTargets implements WebhookTargets {
     check(command, true);
     requireUrlFree(tenantId, command.url(), null);
 
-    // Generated here and not by the column default: the secret is sealed against
-    // this id, so the id has to exist before the row does.
     UUID id = UUID.randomUUID();
     targets.insert(
         tenantId,
@@ -164,9 +162,6 @@ public class DefaultWebhookTargets implements WebhookTargets {
   @Transactional(readOnly = true)
   public List<Notifications.QueuedNotification> deliveries(UUID id, int limit) {
     UUID tenantId = TenantContext.require();
-    // Asked first, so that another tenant's id is a 404 rather than an empty
-    // list -- which would be a "this exists and is quiet" that REQ-SEC-025 does
-    // not allow us to say.
     targets.target(tenantId, id).orElseThrow(() -> new NotFoundException("webhook target", id));
     return targets.deliveries(tenantId, id, limit);
   }

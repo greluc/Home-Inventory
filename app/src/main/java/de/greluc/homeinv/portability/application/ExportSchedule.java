@@ -40,10 +40,6 @@ public class ExportSchedule {
         runner.runAsTenant(tenantId);
       }
     } catch (RuntimeException failed) {
-      // Logged and swallowed, for `DeliverySchedule`'s reason: a scheduled task
-      // that throws stops being scheduled in some runtimes, and an export queue
-      // that silently stopped is somebody waiting for an archive that never
-      // arrives.
       log.error("The export run failed; the next one will pick it up", failed);
     }
   }

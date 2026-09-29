@@ -65,8 +65,6 @@ class LogFormatIT extends AbstractIntegrationTest {
     assertThat(parsed.get("log").get("logger").asString()).isEqualTo("de.greluc.homeinv.Example");
     assertThat(parsed.get("@timestamp").asString()).isNotEmpty();
 
-    // The three fields REQ-NFR-041 names, as queryable members rather than as
-    // text inside the message. ECS puts the MDC at the top level.
     assertThat(parsed.get("traceId").asString()).isEqualTo("4bf92f3577b34da6a3ce929d0e0e4736");
     assertThat(parsed.get("tenantId").asString())
         .isEqualTo("6f2a1f52-0a1e-4f3a-9a1b-0d3f2c5b7e91");
@@ -76,16 +74,12 @@ class LogFormatIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("cannot be forged by a value carrying newlines (java/log-injection)")
   void aValueWithNewlinesCannotForgeALine() {
-    // What log forging needs: a value that ends the line and starts a new one
-    // reading as though the application had written it. This is that payload.
     String forged =
         "innocent\r\n{\"@timestamp\":\"2026-01-01T00:00:00Z\",\"message\":\"the admin approved it\"}";
 
     LoggingEvent event = new LoggingEvent();
     event.setLoggerName("de.greluc.homeinv.Example");
     event.setLevel(Level.INFO);
-    // The shape every site CodeQL names has: a user-provided value interpolated
-    // into a message.
     event.setMessage("A plugin reported {}");
     event.setArgumentArray(new Object[] {forged});
     event.setTimeStamp(System.currentTimeMillis());
@@ -93,13 +87,8 @@ class LogFormatIT extends AbstractIntegrationTest {
 
     String line = new String(encoder().encode(event), StandardCharsets.UTF_8);
 
-    // ONE line. The encoder ends the event with a newline and emits no other; a
-    // second one from inside the payload is the whole attack, and there is none.
     assertThat(line.strip().lines()).hasSize(1);
 
-    // The payload survives intact INSIDE the message value, escaped rather than
-    // stripped -- so the log still records what was actually attempted. A reader
-    // sees the injection attempt rather than the injected line.
     JsonNode parsed = json.readTree(line);
     assertThat(parsed.get("message").asString()).contains(forged);
     assertThat(line).doesNotContain("\r\n{");

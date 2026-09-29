@@ -77,15 +77,10 @@ public class ExpiryFieldReminders implements ReminderSource {
     return ReminderTrigger.LICENCE_EXPIRY;
   }
 
-  // No `@Transactional`, and not by omission: the runner calls this from inside
-  // its own transaction, which is where `SET LOCAL app.tenant_id` was applied.
   @Override
   public List<Due> dueBy(LocalDate by, int limit) {
     List<String> keys = types.expiryFields().stream().map(TypeRegistry.ExpiryField::key).toList();
     if (keys.isEmpty()) {
-      // No type in this tenant marks a field as an expiry, so there is nothing
-      // to watch. Returning early rather than running a query with an empty
-      // array, which PostgreSQL answers correctly and slowly.
       return List.of();
     }
     return jdbc

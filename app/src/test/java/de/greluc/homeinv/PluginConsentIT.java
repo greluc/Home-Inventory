@@ -59,17 +59,9 @@ class PluginConsentIT extends AbstractIntegrationTest {
 
     JsonNode plugin = onePlugin(session);
     assertThat(plugin.get("name").asString()).isEqualTo("A plugin that asks");
-    // What the CORE found, not what anybody claimed (REQ-PLG-004, ADR-0085).
-    // A manifest a test wrote is signed by nobody, and this registration permits
-    // that -- so the plugin runs, `signed` is false, and the reason says which of
-    // the two "not signed" situations this is. Until 2026-09-22 the line above
-    // asserted `signed` was true, because the old call passed the operator's
-    // claim straight through: it tested that a boolean survived a round trip.
     assertThat(plugin.get("signed").asBoolean()).isFalse();
     assertThat(plugin.get("stateReason").asString()).contains("permits unsigned plugins");
 
-    // Everything asked for, nothing granted. That is the state a plugin starts
-    // in and there is no base entitlement (09 §9.4).
     assertThat(capability(plugin, "core:item:read")).isFalse();
     assertThat(capability(plugin, "network:outbound")).isFalse();
   }
@@ -86,7 +78,6 @@ class PluginConsentIT extends AbstractIntegrationTest {
         .andExpect(status().isNoContent());
     assertThat(capability(onePlugin(session), "core:item:read")).isTrue();
 
-    // Twice is once: agreeing again changes nothing and says so by succeeding.
     mockMvc
         .perform(
             put(PLUGINS + "/" + PLUGIN + "/capabilities/core:item:read").session(session).with(csrf()))
@@ -100,8 +91,6 @@ class PluginConsentIT extends AbstractIntegrationTest {
         .andExpect(status().isNoContent());
     assertThat(capability(onePlugin(session), "core:item:read")).isFalse();
 
-    // And withdrawing what is not there is not an error: what a caller wants is
-    // "this plugin may not do this here", and that is already true.
     mockMvc
         .perform(
             delete(PLUGINS + "/" + PLUGIN + "/capabilities/core:item:read")
@@ -116,8 +105,6 @@ class PluginConsentIT extends AbstractIntegrationTest {
     MockHttpSession session = anAdministrator("unasked");
     registry.register(manifest("core:item:read"), "consent:9000", null, UNSIGNED_FIXTURE, true);
 
-    // It would be waiting as a permission if the plugin asked later, which is
-    // the silent escalation REQ-PLG-006 exists to prevent.
     mockMvc
         .perform(
             put(PLUGINS + "/" + PLUGIN + "/capabilities/network:outbound")
@@ -135,8 +122,6 @@ class PluginConsentIT extends AbstractIntegrationTest {
         .perform(get(PLUGINS + "/de.greluc.homeinv.plugin.nowhere").session(session))
         .andExpect(status().isNotFound());
   }
-
-  // -------------------------------------------------------------------------
 
   private JsonNode onePlugin(MockHttpSession session) throws Exception {
     String body =

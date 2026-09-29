@@ -36,7 +36,7 @@ all others, because it touches the two most load-bearing decisions in the corpus
 | # | Question | Short answer |
 |---|---|---|
 | **Q-A** | Can the system run on Kubernetes, MicroK8s first? | **Yes, and it is already designed for it.** [ADR-0015](../adr/0015-deployment.md) maintains a Helm chart *as an equal*; [06 §6.8](../architecture/06-deployment-view.md) already specifies the objects; `REQ-NFR-052` and `REQ-SEC-087` are stage 2. The chart is currently empty. Eight things do not translate 1:1 and are enumerated in Part A.2 — one of them, rootless, is a genuine conflict with a stage-0 requirement, not a detail. |
-| **Q-B** | Should Podman/Quadlet and Docker/Compose be dropped so Kubernetes is the *only* path? | **Not recommended, and not now.** On a **single node** Kubernetes delivers exactly one capability the other two lack — rolling updates without downtime. High availability, the one thing the project's own comparison table names as Kubernetes' advantage, needs at least three nodes. The cost is 21 requirements, 16 ADRs, 7 of the 14 architecture chapters, 50 files, the integration-test strategy and the ten-minute contributor path. See Part A.4. |
+| **Q-B** | Should Podman/Quadlet and Docker/Compose be dropped so Kubernetes is the *only* path? | **Not recommended, and not now.** On a **single node** Kubernetes delivers exactly one capability the other two lack — rolling updates without downtime. High availability, the one thing the project's own comparison table names as Kubernetes' advantage, needs at least three nodes. The cost is 21 requirements, 16 ADRs, seven of the architecture chapters (fourteen at the time), 50 files, the integration-test strategy and the ten-minute contributor path. See Part A.4. |
 | **Q-C** | Should the modular monolith become a full microservices architecture? | **No, on the evidence available.** [ADR-0002](../adr/0002-modular-monolith.md) and [03 §3.6](../architecture/03-solution-strategy.md) assessed this in full and named ten blocks that may be extracted, each with a trigger. **Not one trigger has fired.** Since the decision, 52 110 lines of code have been written that assume one transaction and one RLS session, so the cost of splitting has gone **up**, not down. Part B. |
 | **Q-D** | MicroK8s or Minikube for the homelab? | **MicroK8s.** Minikube's own documentation describes it as a tool for "application developers and new Kubernetes users"; it is a development environment, not a host for a long-running service. k3s is the serious third option and is named rather than glossed. Part C. |
 
@@ -374,7 +374,7 @@ a migration acquires costs nobody priced.
   found real defects twice.
 - `REQ-SEC-083` as written (A.2 ①).
 
-**Scope of the edit**: 21 requirements, 16 ADRs, 7 of the 14 architecture chapters, 50
+**Scope of the edit**: 21 requirements, 16 ADRs, seven of the architecture chapters (fourteen at the time), 50
 files. Several of those ADRs are *accepted decisions that would need superseding
 ADRs*, not text edits: 0015, 0021, 0022, 0027 §2, 0037, 0041, 0042, 0044, 0045.
 

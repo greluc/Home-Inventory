@@ -90,16 +90,6 @@ public record FieldDefinitionView(
    * @return true when a write must project this field
    */
   public boolean projected() {
-    // `expiry` joins the three since 2026-09-20: the overview of REQ-LIFE-013 is
-    // a QUERY over attribute values, and `item_attr_index` is the table that
-    // answers those. A field marked only as an expiry was written to the JSONB
-    // and to nowhere queryable, so the overview found the warranties and none of
-    // the attributes -- which the test caught before anybody shipped it.
-    //
-    // `sensitive` still wins, as it does for the other three: the value is stored
-    // encrypted, so a row here would hold ciphertext. The type editor refuses
-    // that combination outright, and this is the half that also covers a field
-    // marked sensitive after it was already an expiry.
     return (searchable || sortable || facetable || expiry) && dataType.projectable() && !sensitive;
   }
 }

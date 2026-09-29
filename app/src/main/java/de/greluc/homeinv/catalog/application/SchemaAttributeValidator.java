@@ -79,10 +79,6 @@ public class SchemaAttributeValidator implements AttributeValidator {
             .formatAssertionsEnabled(Boolean.TRUE)
             .pathType(PathType.JSON_POINTER)
             .locale(Locale.ENGLISH)
-            // 100 ms per pattern, which is two orders of magnitude above what a
-            // field validation pattern needs on a value of a few hundred
-            // characters and far below the 150 ms a detail view is allowed in
-            // total (13 §13.6). A budget nobody legitimate reaches.
             .regularExpressionFactory(new BoundedRegularExpressions(Duration.ofMillis(100)))
             .build();
     this.registry =
@@ -115,9 +111,6 @@ public class SchemaAttributeValidator implements AttributeValidator {
         errors.stream()
             .map(error -> new Violation(pointer(error), error.getMessage()))
             .toList();
-    // At debug, and without a value: a rejected attribute set may hold a licence
-    // key or an account number, and a log line is the one place a `secret` must
-    // never reach (REQ-SEC-041, LogHygieneIT).
     log.debug("Attribute set rejected against version {}: {} violation(s)", typeVersionId, violations.size());
     return new ValidationResult(violations);
   }

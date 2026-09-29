@@ -116,9 +116,6 @@ public class ItemController {
   @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.ITEM_CREATE)
   @CanFail(ProblemType.RESOURCE_EXISTS)
-  // The one endpoint with two success codes, so the second one is written down:
-  // springdoc derives a single response from the return type and cannot see that
-  // this method chooses between them.
   @ApiResponse(
       responseCode = "201",
       description = "This request created the item. `Location` names it.",
@@ -222,9 +219,6 @@ public class ItemController {
             : Optional.of(
                 IdempotencyKeys.of(
                     key,
-                    // What the key is spent on: this operation, this target, this
-                    // item. The same key sent later for a different change is then
-                    // a conflict rather than a change nobody asked for twice.
                     new BulkEntryFingerprint(
                         request.operation().name(),
                         request.locationId(),
@@ -406,9 +400,6 @@ public class ItemController {
   @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.SEARCH_QUERY)
   @CanFail(ProblemType.MALFORMED_REQUEST)
-  // Declared by hand because `filter` is not in the signature. It cannot be: a
-  // `List<String>` parameter is converted from a single value by splitting it on
-  // commas, and the comma is this grammar's own `in` separator.
   @Parameter(
       name = "filter",
       in = ParameterIn.QUERY,
@@ -497,9 +488,6 @@ public class ItemController {
   @RequiresPermission(Permission.ITEM_READ)
   @CanFail(ProblemType.NOT_FOUND)
   public ResponseEntity<ItemView> getItem(@PathVariable UUID id) {
-    // The ETag a write has to send back (REQ-API-004). The version and not a hash
-    // of the body: the body is redacted per caller, so a hash would differ between
-    // two people looking at the same unchanged row.
     ItemView view = items.get(id);
     return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(view);
   }
@@ -1209,10 +1197,6 @@ public class ItemController {
           request.replacementSource(),
           request.currentValue(),
           request.currentValueAsOf(),
-          // Never taken from the request: a caller saying "a plugin worked this
-          // out" about a number they typed would put the figure beyond the reach
-          // of the refresh run that is supposed to keep it current. What arrives
-          // through the API is MANUAL, and the entity says so.
           null);
     }
   }

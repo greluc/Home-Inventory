@@ -105,17 +105,6 @@ const GET_BUFFER: usize = 4;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
-    //
-    // A permissive licence asks for its notice in every copy, and a statically
-    // linked binary is a copy. This image is `scratch` — one binary and nothing
-    // else, which CI asserts — so there is no file to put beside it and the
-    // notice is compiled in, exactly as the public roots are in the plugins
-    // that speak TLS.
-    //
-    // First, before the logger: somebody reading a licence should get the
-    // licence and not a JSON log line above it. `tools/notices.py` generates
-    // the file and CI fails when it no longer describes what is linked in.
     if std::env::args().any(|argument| argument == "--licences") {
         print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
         return Ok(());
@@ -146,9 +135,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let unready = unready(&defaults, proxy.as_deref());
     for missing in &unready {
-        // Said once, at startup, and each one names what to set. A plugin that
-        // cannot store is a plugin an operator has to be able to diagnose
-        // without reading its source (REQ-PLG-015).
         warn!("plugin-blobstore-s3 is not ready: {missing}");
     }
     if !defaults.touched() {
@@ -295,9 +281,6 @@ impl Store {
             Some(context) => {
                 let envelope = context.tenant_id.trim();
                 if !envelope.is_empty() && envelope != tenant {
-                    // A caller bug, and the one that would put one tenant's
-                    // bytes under another's key. Refused rather than resolved
-                    // towards either of them.
                     return Err(Status::invalid_argument(format!(
                         "the envelope is for tenant {envelope} and the address is for {tenant}"
                     )));
@@ -342,9 +325,6 @@ impl BlobStore for Store {
         let (target, key) = self.resolve(&first.blob, &first.context)?;
         let declared = first.blob.as_ref().expect("resolved above").sha256.clone();
 
-        // Already there? The address is the content hash, so a key that exists
-        // holds these exact bytes and uploading them again would spend the
-        // tenant's bandwidth to arrive at the same object (ADR-0007).
         if let Some(size) = self.head_key(&proxy, &target, &key).await? {
             drain(&mut stream).await?;
             return Ok(Response::new(PutResponse {
@@ -387,10 +367,6 @@ impl BlobStore for Store {
 
         let actual = hex(&running.finish());
         if actual != declared {
-            // Refused, and an upload already begun is abandoned rather than
-            // completed. A store that kept these bytes under the declared
-            // address would be content-addressed in name only, and the next read
-            // would return a file that is not the one asked for.
             if let Some(started) = upload {
                 started.abort(self, &proxy, &target, &key).await;
             }
@@ -444,9 +420,6 @@ impl BlobStore for Store {
             loop {
                 match answer.next_chunk().await {
                     Ok(Some(chunk)) => {
-                        // A send that fails means the core hung up, which is not
-                        // an error here: it happens whenever a client stops
-                        // reading a download.
                         if sender.send(Ok(GetResponse { chunk })).await.is_err() {
                             break;
                         }
@@ -474,15 +447,6 @@ impl BlobStore for Store {
             byte_size: found.unwrap_or(0),
         }))
     }
-
-    // -- Staging (REQ-MED-008, ADR-0084) -----------------------------------
-    //
-    // Answered UNIMPLEMENTED, which the contract expressly permits. The core
-    // calls these on the IN-DEPLOYMENT store and on nothing else: an upload
-    // that has not finished has no content address, and pushing an unfinished
-    // object into a tenant's own bucket would leave litter there that only the
-    // deployment knows how to clean up. What this plugin receives is the
-    // FINISHED blob, through `Put`, exactly as before (ADR-0074).
 
     async fn append_staged(
         &self,
@@ -535,9 +499,6 @@ impl BlobStore for Store {
         .await
         .map_err(Status::unavailable)?;
 
-        // 404 is `removed: false` rather than an error: deletion is retried
-        // after a partial failure, and a retry that failed because the work was
-        // already done would be a retry nobody could make succeed.
         if answer.status == 404 {
             return Ok(Response::new(DeleteResponse { removed: false }));
         }
@@ -715,10 +676,6 @@ impl Upload {
         if !(200..300).contains(&answer.status) {
             return Err(Status::unavailable(failure(answer.status, &body)));
         }
-        // A completion may answer 200 AND carry an error document: the store
-        // starts the response before it knows the outcome, so that a slow
-        // assembly does not look like a dead connection. A client that read the
-        // status alone would report success for a failed upload.
         let text = String::from_utf8_lossy(&body).to_string();
         if text.contains("<Error>") {
             return Err(Status::unavailable(failure(answer.status, &body)));
@@ -788,9 +745,6 @@ impl PluginHealth for Health {
             state: if self.unready.is_empty() {
                 HealthState::Ok as i32
             } else {
-                // NOT_CONFIGURED and not a failure: the difference matters to an
-                // operator, and `plugin-health-states.yaml` names it for this
-                // reason (REQ-PLG-015).
                 HealthState::NotConfigured as i32
             },
             detail: self.unready.join("; "),
@@ -873,7 +827,6 @@ mod tests {
 
     #[test]
     fn an_envelope_for_another_tenant_is_refused() {
-        // The one that would put one tenant's bytes under another's key.
         let failure = store()
             .resolve(
                 &blob("tenant-a", &"ab".repeat(32)),
@@ -914,9 +867,6 @@ mod tests {
 
     #[test]
     fn a_call_without_an_envelope_still_works_on_the_deployments_bucket() {
-        // The in-deployment service was the only implementation when this
-        // contract was written and sent no envelope. A plugin that refused one
-        // would refuse a caller that is still correct.
         let (target, _) = store()
             .resolve(&blob("tenant-a", &"ab".repeat(32)), &None)
             .expect("resolves");
@@ -925,8 +875,6 @@ mod tests {
 
     #[test]
     fn a_deployment_that_configures_nothing_is_ready() {
-        // Every tenant brings its own account, which is a supported way to run
-        // this and not a half-configured one.
         assert!(unready(&Defaults::default(), Some("egress-proxy:3128")).is_empty());
     }
 

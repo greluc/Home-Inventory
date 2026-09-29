@@ -30,8 +30,6 @@ function bundledPackages(): Plugin {
           continue;
         }
         for (const id of Object.keys(chunk.modules)) {
-          // The LAST `node_modules` in the path: a package that vendors another
-          // one nests them, and the innermost is the one the module belongs to.
           const marker = id.lastIndexOf("node_modules/");
           if (marker < 0) {
             continue;
@@ -67,17 +65,11 @@ function bundledPackages(): Plugin {
  */
 export default defineConfig({
   plugins: [react(), bundledPackages()],
-  // The client names itself to the server in `X-Home-Inv-Client` (REQ-API-009),
-  // and the version has to come from somewhere the build controls: a browser
-  // will not let a page set `User-Agent`, which is why ADR-0011's original
-  // arrangement could not be honoured here.
   define: {
     APP_VERSION: JSON.stringify(version),
   },
   build: {
     cssCodeSplit: false,
-    // Named, hashed files so a deployment can cache them for a year and a new
-    // release invalidates only what changed.
     rollupOptions: {
       output: {
         entryFileNames: "assets/[name]-[hash].js",
@@ -88,8 +80,6 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Development only. In production `web` and `api` are separate containers
-      // behind one hostname, and this proxy does not exist.
       "/api": { target: "http://localhost:8080", changeOrigin: false },
     },
   },

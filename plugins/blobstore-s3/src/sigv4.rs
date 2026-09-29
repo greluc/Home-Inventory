@@ -105,9 +105,6 @@ pub fn authorization(
         ("x-amz-date".to_string(), stamp.to_string()),
     ];
     headers.extend(signable.extra.iter().cloned());
-    // Sorted by name, because the canonical form is defined that way and a
-    // sender that sorted differently signs a different request than the server
-    // verifies.
     headers.sort_by(|left, right| left.0.cmp(&right.0));
 
     let signed_headers = headers
@@ -126,9 +123,6 @@ pub fn authorization(
     for (name, value) in &headers {
         canonical.push_str(name);
         canonical.push(':');
-        // Trimmed and with runs of spaces collapsed, which is the canonical
-        // form's rule. None of our values contain either, and following the
-        // rule costs one line.
         canonical.push_str(
             value
                 .split_whitespace()
@@ -205,9 +199,6 @@ mod tests {
     use super::*;
 
     fn example() -> Credentials {
-        // The credentials of the published AWS test suite. Not a secret and not
-        // usable: they exist so that every implementation can check itself
-        // against the same arithmetic.
         Credentials {
             access_key_id: "AKIDEXAMPLE".to_string(),
             secret_access_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY".to_string(),
@@ -297,8 +288,6 @@ mod tests {
             "20231114",
             "20231114T221320Z",
         );
-        // Alphabetical, which is the canonical order rather than the order they
-        // were added in.
         assert!(header.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date"));
         assert!(header.contains("Credential=AKIDEXAMPLE/20231114/eu-central-1/s3/aws4_request"));
     }

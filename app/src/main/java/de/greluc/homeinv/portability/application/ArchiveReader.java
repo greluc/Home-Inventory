@@ -80,9 +80,6 @@ public final class ArchiveReader implements ImportTarget.Archive {
           continue;
         }
         String name = entry.getName();
-        // Read with a running total rather than trusting the entry's declared
-        // size: the declared size is a number in the file, written by whoever
-        // made it, and a zip bomb is exactly the case where it lies.
         byte[] content = readAtMost(zip, MAX_UNPACKED - unpacked, name);
         unpacked += content.length;
 
@@ -181,9 +178,6 @@ public final class ArchiveReader implements ImportTarget.Archive {
       try {
         rows.add(json.readValue(each, Map.class));
       } catch (RuntimeException malformed) {
-        // Named by line, which is the whole reason the format is JSON Lines
-        // rather than one document: "row 4,812" is actionable and "the file is
-        // wrong" is not.
         throw new IllegalArgumentException(
             "The archive could not be read at line " + line + ": " + malformed.getMessage());
       }

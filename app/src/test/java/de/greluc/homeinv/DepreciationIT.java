@@ -55,9 +55,6 @@ class DepreciationIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("depreciation-none@example.org");
     anItem(tenant, "A drill", new BigDecimal("300.00"), LocalDate.of(2024, 1, 1));
 
-    // No shipped type carries a useful life, on purpose: how long a household's
-    // furniture lasts is a judgement about that household, and inventing one
-    // here would put this application's guess in somebody's insurance report.
     assertThat(refreshOn(tenant, LocalDate.of(2026, 1, 1))).isZero();
     assertThat(currentValue(tenant)).isNull();
   }
@@ -69,19 +66,14 @@ class DepreciationIT extends AbstractIntegrationTest {
     usefulLifeMonths(tenant, 60);
     anItem(tenant, "A washing machine", new BigDecimal("600.00"), LocalDate.of(2024, 1, 1));
 
-    // Two years in, three of five remain.
     assertThat(refreshOn(tenant, LocalDate.of(2026, 1, 1))).isEqualTo(1);
     assertThat(currentValue(tenant)).isEqualByComparingTo("360.0000");
     assertThat(currentSource(tenant)).isEqualTo("DEPRECIATION");
     assertThat(currentAsOf(tenant)).isEqualTo(LocalDate.of(2026, 1, 1));
 
-    // Later, less.
     refreshOn(tenant, LocalDate.of(2027, 7, 1));
     assertThat(currentValue(tenant)).isEqualByComparingTo("180.0000");
 
-    // Past the end of its life a thing is worth nothing, which is what a
-    // straight line to zero means. The replacement value is the separate figure
-    // for what buying it again would cost (REQ-LIFE-014), and it is untouched.
     refreshOn(tenant, LocalDate.of(2030, 1, 1));
     assertThat(currentValue(tenant)).isEqualByComparingTo("0.0000");
   }
@@ -93,12 +85,9 @@ class DepreciationIT extends AbstractIntegrationTest {
     usefulLifeMonths(tenant, 60);
     UUID itemId = anItem(tenant, "A bicycle", new BigDecimal("900.00"), LocalDate.of(2024, 1, 1));
 
-    // Somebody values it themselves.
     setCurrentValue(tenant, itemId, new BigDecimal("750.00"));
     assertThat(currentSource(tenant)).isEqualTo("MANUAL");
 
-    // The run passes it by. This is the property the whole `current_source`
-    // column exists for.
     assertThat(refreshOn(tenant, LocalDate.of(2026, 1, 1))).isZero();
     assertThat(currentValue(tenant)).isEqualByComparingTo("750.00");
     assertThat(currentSource(tenant)).isEqualTo("MANUAL");
@@ -112,10 +101,6 @@ class DepreciationIT extends AbstractIntegrationTest {
     UUID itemId = anItem(tenant, "A sofa", new BigDecimal("600.00"), LocalDate.of(2024, 1, 1));
     refreshOn(tenant, LocalDate.of(2026, 1, 1));
 
-    // A client reads the item, changes its name and writes the whole thing back
-    // -- sending the depreciated figure it was just given. Treating that as
-    // somebody typing it would freeze the value for ever, because the run never
-    // touches what a person owns.
     Valuation asRead = inOwn(tenant, () -> items.get(itemId).valuation());
     inOwn(
         tenant,
@@ -129,7 +114,6 @@ class DepreciationIT extends AbstractIntegrationTest {
                 tenant.userId()));
 
     assertThat(currentSource(tenant)).isEqualTo("DEPRECIATION");
-    // And it keeps ageing.
     refreshOn(tenant, LocalDate.of(2027, 1, 1));
     assertThat(currentValue(tenant)).isEqualByComparingTo("240.0000");
   }
@@ -145,14 +129,10 @@ class DepreciationIT extends AbstractIntegrationTest {
 
     usefulLifeMonths(tenant, null);
 
-    // A figure nothing stands behind any more is worse than none: it reads as a
-    // fact and is the last thing a rule that no longer exists said.
     assertThat(refreshOn(tenant, LocalDate.of(2026, 1, 1))).isEqualTo(1);
     assertThat(currentValue(tenant)).isNull();
     assertThat(currentSource(tenant)).isNull();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Runs the refresh inside the tenant's own context.

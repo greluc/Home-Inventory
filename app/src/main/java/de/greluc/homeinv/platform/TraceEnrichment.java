@@ -52,9 +52,6 @@ public class TraceEnrichment implements ObservationFilter {
     UUID tenant = TenantContext.current().orElse(null);
     UUID actor = CallerContext.current().map(CallerContext.Caller::userId).orElse(null);
     if (tenant == null && actor == null) {
-      // Every observation that is not a request: a scheduled relay run, a
-      // startup probe. Nothing to say about either, and saying "unknown" would
-      // be a value somebody eventually filters on.
       return context;
     }
     if (tenant != null) {

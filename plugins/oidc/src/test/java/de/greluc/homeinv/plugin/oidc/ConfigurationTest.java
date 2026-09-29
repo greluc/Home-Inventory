@@ -35,9 +35,6 @@ class ConfigurationTest {
   @Test
   @DisplayName("refuses an issuer that is not https, because everything else follows it")
   void plaintextIssuer() {
-    // Discovery, the token endpoint and the key set are all reached from this
-    // value. An `http://` issuer would send a client secret and an
-    // authorization code over a connection nothing protects.
     assertThat(configuration("http://provider.example", "client", "egress-proxy:8118").missing())
         .anyMatch(line -> line.contains("not an https:// URL"));
     assertThat(configuration("https://provider.example", "client", "egress-proxy:8118").missing())
@@ -47,9 +44,6 @@ class ConfigurationTest {
   @Test
   @DisplayName("asks for `openid` whether or not the operator remembered it")
   void theScopeThatMakesItOidc() {
-    // Without it a provider runs a plain OAuth flow and returns no ID token,
-    // which is the only thing this plugin trusts. Added rather than refused: an
-    // operator who left it out meant to sign somebody in.
     Configuration without =
         new Configuration(
             "https://provider.example",
@@ -66,9 +60,6 @@ class ConfigurationTest {
   @Test
   @DisplayName("is a public client when no secret was mounted")
   void aPublicClient() {
-    // A supported configuration rather than an oversight: PKCE is what binds the
-    // authorization code to this deployment, and a provider that issues no
-    // secret is one an operator may still use.
     assertThat(configuration("https://provider.example", "client", "egress-proxy:8118")
             .isConfidential())
         .isFalse();

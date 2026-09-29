@@ -1,17 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// WHAT A PLUGIN SAYS ABOUT ITSELF.
-//
-// Every plugin serves this, whatever ports it implements. The core asks once a
-// minute (13 §13.7) and shows the answer in the operator's plugin list
-// (13 §13.11).
-//
-// NOT gRPC's own health checking protocol. That one answers SERVING or
-// NOT_SERVING about a service, which is the question "is the process up" — and
-// the process being up is exactly the case where an integration is silently
-// broken: the plugin is running, its credentials were revoked yesterday, and the
-// next upload is accepted and lost.
 
 syntax = "proto3";
 

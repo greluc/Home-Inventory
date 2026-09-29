@@ -1,16 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// TURNING A CODE INTO WHAT IS KNOWN ABOUT THE THING IT IDENTIFIES.
-//
-// ISBN through Open Library or the DNB, EAN and GTIN through Open Food Facts or
-// GS1, MPN, Discogs, TMDB, IGDB. EVERY implementation is a plugin, without
-// exception: each calls a host outside the deployment, and the core has no
-// outbound route at all (ADR-0026).
-//
-// What comes back is a PROPOSAL and never a change. The core records it, a
-// person accepts or rejects it, and only then does an item change. A resolver
-// that could write would be foreign data entering the inventory unseen.
 
 syntax = "proto3";
 

@@ -54,16 +54,9 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
 
     List<FieldDefinitionView> fields = types.fields(typeVersionId);
     if (fields.stream().noneMatch(FieldDefinitionView::sensitive)) {
-      // The common case: nothing about this type is sensitive, so there is
-      // nothing to decide and nothing to parse.
       return attributesJson;
     }
 
-    // REQ-AUTH-011: reading a sensitive field is one of the operations that asks
-    // for the second factor again. A proof older than the window removes the
-    // field rather than refusing the request — a list with one sensitive column
-    // in it would otherwise become unreadable, and a 403 somebody meets while
-    // scrolling is a 403 they learn to click past (12 §12.4).
     boolean recentlyProved =
         CallerContext.current()
             .map(caller -> secondFactor.provedRecently(caller.secondFactorAt()))
@@ -78,9 +71,6 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
 
     JsonNode parsed = json.readTree(attributesJson);
     if (!(parsed instanceof ObjectNode attributes)) {
-      // The attribute set is an object by construction — a database CHECK says so
-      // — so this is a row that arrived some other way. Nothing is redacted and
-      // nothing is guessed at; the value is returned as it was found.
       log.warn("The attributes of type version {} are not an object; nothing was redacted.",
           typeVersionId);
       return attributesJson;
@@ -97,15 +87,9 @@ public class DefaultAttributeRedaction implements AttributeRedaction {
         changed = true;
         continue;
       }
-      // The caller may read it, so it is opened: the value is stored sealed
-      // (ADR-0019), and handing back ciphertext would be showing the field
-      // without showing the value.
       JsonNode value = attributes.get(key);
       String text = value.isTextual() ? value.asString() : value.toString();
       if (!crypto.isSealed(text)) {
-        // Written before the field was marked sensitive, or before this code
-        // existed. Shown as it stands rather than refused: it is the value, and
-        // the next write seals it.
         continue;
       }
       attributes.put(key, crypto.open(entityId, key, text));

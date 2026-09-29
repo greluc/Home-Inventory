@@ -92,9 +92,6 @@ public class AuthController {
     AuthenticatedUser user =
         authentication.login(request.email(), request.password(), clientAddressOf(httpRequest));
 
-    // Half a login. The password was right, and the account has a second factor,
-    // so nothing is authenticated yet: the principal waits in the session and the
-    // caller answers at /api/v1/auth/mfa.
     if (secondFactor.isRequiredFor(user.userId())) {
       pendingLogin.remember(httpRequest, user);
       throw new SecondFactorRequiredException();

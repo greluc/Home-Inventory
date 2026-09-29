@@ -89,8 +89,6 @@ mod tests {
 
     #[test]
     fn the_oldest_key_falls_out_when_the_capacity_is_reached() {
-        // Bounded, so a long-running process does not grow a list of every
-        // message it has ever sent.
         let keys = Remembered::holding(2);
         keys.already("one");
         keys.already("two");

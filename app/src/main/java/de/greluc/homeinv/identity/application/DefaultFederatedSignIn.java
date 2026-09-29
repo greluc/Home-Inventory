@@ -86,9 +86,6 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
           .map(plugin -> plugin.describe(instanceCall()))
           .map(descriptor -> new Provider(descriptor.providerKey(), descriptor.displayName()));
     } catch (PluginException unreachable) {
-      // A sign-in page that failed to render because a plugin is down would take
-      // the password login with it. The button is absent instead, and the reason
-      // is in the log where an operator looks.
       log.warn("The identity provider could not be described", unreachable);
       return Optional.empty();
     }
@@ -121,9 +118,6 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
                 SingleUseTokens.challengeFor(verifier),
                 loginHint == null ? "" : loginHint));
 
-    // Written after the plugin answered: a provider that refuses to start a flow
-    // leaves no row, and a row that outlived its own failure would be a handle
-    // nothing can ever present.
     flows.start(
         SingleUseTokens.hash(handle),
         descriptor.providerKey(),
@@ -184,9 +178,6 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
   private Outcome linkTo(
       FederatedLoginQueries.Flow flow, IdentityProvider.Identity identity, Optional<UUID> linked) {
     if (linked.isPresent()) {
-      // Including the case where it is already linked to THIS account: saying
-      // "already linked elsewhere" to somebody who linked it themselves is
-      // confusing, so that one is a success with nothing to do.
       if (linked.get().equals(flow.userId())) {
         return new Outcome(Result.LINKED, flow.userId(), flow.returnTo());
       }
@@ -204,8 +195,6 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
             identity.subject(),
             identity.emailVerified() ? emptyToNull(identity.email()) : null);
     if (!made) {
-      // Somebody linked the same identity between the read above and this insert.
-      // The unique index decided, which is the point of letting it.
       return new Outcome(Result.LINKED_ELSEWHERE, flow.userId(), flow.returnTo());
     }
     log.info("User {} linked an identity at {}", flow.userId(), identity.issuer());
@@ -221,9 +210,6 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
    */
   private Outcome maybeCreate(FederatedLoginQueries.Flow flow, IdentityProvider.Identity identity) {
     if (registration.mode() != RegistrationMode.OPEN) {
-      // The same answer whether or not the address is one this instance knows.
-      // A different one for a known address would be an account oracle, and
-      // acting on the match itself is the takeover REQ-AUTH-006 forbids.
       log.info(
           "Refused an unlinked identity at {}: registration is {}",
           identity.issuer(),
@@ -231,9 +217,6 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
       return new Outcome(Result.NOT_LINKED, null, flow.returnTo());
     }
     if (!identity.emailVerified() || identity.email().isBlank()) {
-      // An unverified address is a claim about somebody else: creating an account
-      // from one would let a provider that lets people type anything create
-      // accounts here in other people's names.
       return new Outcome(Result.ADDRESS_UNVERIFIED, null, flow.returnTo());
     }
 
@@ -242,14 +225,8 @@ public class DefaultFederatedSignIn implements FederatedSignIn {
             identity.email(),
             identity.displayName().isBlank() ? identity.email() : identity.displayName(),
             "en",
-            // A password nobody has and nobody needs: this account signs in
-            // through the provider. The column is NOT NULL, and a person who
-            // later wants a local password asks for a reset like anybody else.
             SingleUseTokens.mint());
     if (created.isEmpty()) {
-      // The address already has an account. It is NOT linked automatically:
-      // that is exactly REQ-AUTH-006, and the person signs in and links it from
-      // their own settings.
       log.info("Refused to create an account at {}: the address already has one", identity.issuer());
       return new Outcome(Result.ADDRESS_TAKEN, null, flow.returnTo());
     }

@@ -100,9 +100,6 @@ class MediaScanIT extends AbstractIntegrationTest {
 
     MediaView accepted = upload(tenantId, userId);
 
-    // The upload is answered before the verdict exists. `urls` is empty and the
-    // state says so: a client that rendered whatever came back would render
-    // nothing, which is the correct amount (REQ-MED-013).
     assertThat(accepted.scanState()).isEqualTo(ScanState.PENDING_SCAN.name());
     assertThat(accepted.urls()).isEmpty();
 
@@ -114,8 +111,6 @@ class MediaScanIT extends AbstractIntegrationTest {
               MediaObject object = loadAs(tenantId, accepted.id()).orElseThrow();
               assertThat(object.getScanState()).isEqualTo(ScanState.CLEAN);
               assertThat(object.isRetrievable()).isTrue();
-              // Derived only after the verdict. A thumbnail of an infected file
-              // would be a second blob the deletion does not reach.
               assertThat(object.getDerivedAt()).isNotNull();
             });
   }
@@ -140,17 +135,10 @@ class MediaScanIT extends AbstractIntegrationTest {
               assertThat(object.getScanState()).isEqualTo(ScanState.INFECTED);
               assertThat(object.getScanVerdict()).isEqualTo("Eicar-Test-Signature");
               assertThat(object.isRetrievable()).isFalse();
-              // The decisive one. A row that says INFECTED next to bytes still in
-              // the store is one signed URL away from being served.
-              //
-              // In the tenant's context, like every caller in `media`: which store holds
-              // a tenant's bytes depends on that tenant's plugin grants, and grants are
-              // read under row-level security (ADR-0074).
               assertThat(
                       TenantContext.callAs(
                           tenantId, () -> blobs.exists(tenantId, object.getSha256())))
                   .isFalse();
-              // And nothing was derived from it.
               assertThat(object.getThumbSha256()).isNull();
               assertThat(object.getPreviewSha256()).isNull();
             });
@@ -169,13 +157,9 @@ class MediaScanIT extends AbstractIntegrationTest {
 
     MediaView accepted = upload(tenantId, userId);
 
-    // REQ-SEC-092's `503` after ADR-0054 moved the scan out of the upload: the
-    // status moved with it, from the POST to the GET a client polls.
     assertThatThrownBy(() -> as(tenantId, userId, () -> media.findOne(accepted.id())))
         .isInstanceOf(ScannerUnavailableException.class);
 
-    // And the object ends up SCAN_FAILED rather than looping for ever — the
-    // listener records it and the retry queue holds the next attempt.
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
@@ -184,8 +168,6 @@ class MediaScanIT extends AbstractIntegrationTest {
                 assertThat(loadAs(tenantId, accepted.id()).orElseThrow().getScanState())
                     .isEqualTo(ScanState.SCAN_FAILED));
 
-    // SCAN_FAILED is the absence of a verdict, not one: a later run may record a
-    // real one, which is what makes the catch-up possible at all (ADR-0054).
     BEHAVIOUR.set(content -> new VirusScanner.Verdict(true, null));
     TenantContext.runAs(
         tenantId,
@@ -195,8 +177,6 @@ class MediaScanIT extends AbstractIntegrationTest {
     assertThat(loadAs(tenantId, accepted.id()).orElseThrow().getScanState())
         .isEqualTo(ScanState.CLEAN);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A scanner whose answer each test chooses, and a stand-in for libvips.
@@ -272,9 +252,6 @@ class MediaScanIT extends AbstractIntegrationTest {
                     "de",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

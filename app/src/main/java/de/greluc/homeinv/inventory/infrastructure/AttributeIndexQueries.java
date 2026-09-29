@@ -69,9 +69,6 @@ public class AttributeIndexQueries {
             select id, item_type_version_id, attributes::text as attributes
             from inventory.item
             where tenant_id = ? and deleted_at is null
-              -- The cast is not decoration: PostgreSQL cannot infer a type for a
-              -- bare parameter in `? is null`, and the statement is rejected
-              -- before it runs.
               and (?::uuid is null or id > ?::uuid)
             order by id
             limit ?
@@ -105,8 +102,6 @@ public class AttributeIndexQueries {
     if (items.isEmpty()) {
       return held;
     }
-    // `any(?::uuid[])` with a String[] parameter: a UUID[] binds to nothing here
-    // and matches no row without saying so, which cost an afternoon once.
     String[] ids = items.stream().map(UUID::toString).toArray(String[]::new);
     jdbc.sql(
             """

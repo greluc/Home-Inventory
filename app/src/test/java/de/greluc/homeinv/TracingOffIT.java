@@ -84,9 +84,6 @@ class TracingOffIT extends AbstractIntegrationTest {
     Observation.createNotStarted("test.work", observations)
         .observe(() -> parent.set(trace.traceparent()));
 
-    // `CallContext.trace_id` is documented as "empty when tracing is off", and
-    // this is the state that sentence describes. A plugin reading it gets an
-    // absence rather than a well-formed parent pointing at a span nobody kept.
     assertThat(parent.get()).isEmpty();
   }
 
@@ -96,8 +93,6 @@ class TracingOffIT extends AbstractIntegrationTest {
     MvcResult result = mockMvc.perform(get("/api/v1/items/" + UUID.randomUUID())).andReturn();
 
     String traceId = JsonPath.read(result.getResponse().getContentAsString(), "$.traceId");
-    // TraceIdFilter, exactly as at stage 0. A self-hoster who runs no collector
-    // -- which is most of them -- loses nothing they had.
     assertThat(traceId).matches("[0-9a-f]{32}");
   }
 }

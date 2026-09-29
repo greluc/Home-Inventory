@@ -143,8 +143,6 @@ class HostChannelIT extends AbstractIntegrationTest {
     assertThat(new String(answer.content(), StandardCharsets.UTF_8))
         .isEqualTo("%PDF- rendered for a plugin");
 
-    // What the caller described reached the renderer unchanged. The core chooses
-    // the recipient and reads nothing on the way.
     assertThat(drawn.stream().filter(Block::hasHeading).map(block -> block.getHeading().getText()))
         .containsExactly("Written by a plugin");
   }
@@ -154,14 +152,11 @@ class HostChannelIT extends AbstractIntegrationTest {
   void theTwoRefusalsAreOneAnswer() throws Exception {
     int rendererPort = startRenderer(new ArrayList<>());
 
-    // A tenant that has a renderer, called by a plugin that was never granted
-    // the capability.
     UUID withRenderer = aTenant("ungranted");
     installRenderer("two", rendererPort, withRenderer);
     installCaller("two", rendererPort);
     Status ungranted = refusalFor(withRenderer, callerIdentity());
 
-    // A tenant with no renderer at all, called by a plugin that holds the grant.
     UUID withoutRenderer = aTenant("norenderer");
     String caller = installCaller("three", rendererPort);
     TenantContext.runAs(
@@ -171,8 +166,6 @@ class HostChannelIT extends AbstractIntegrationTest {
 
     assertThat(ungranted.getCode()).isEqualTo(Status.Code.FAILED_PRECONDITION);
     assertThat(noRenderer.getCode()).isEqualTo(Status.Code.FAILED_PRECONDITION);
-    // The point of the test: a caller cannot tell the two apart, so it cannot
-    // enumerate what a tenant has consented to, one probe at a time (ADR-0071).
     assertThat(noRenderer.getDescription()).isEqualTo(ungranted.getDescription());
     assertThat(ungranted.getDescription()).contains("Either none is installed");
   }
@@ -184,7 +177,6 @@ class HostChannelIT extends AbstractIntegrationTest {
     UUID granted = aTenant("tenant-a");
     UUID other = aTenant("tenant-b");
 
-    // Both tenants have the same renderer installed; only one granted the caller.
     installRenderer("four", rendererPort, granted);
     installRenderer("four", rendererPort, other);
     String caller = installCaller("four", rendererPort);
@@ -200,21 +192,13 @@ class HostChannelIT extends AbstractIntegrationTest {
   @DisplayName("gives no connection at all to a certificate no registration pins")
   void anUnpinnedCertificateNeverGetsIn() throws Exception {
     UUID tenant = aTenant("stranger");
-    // Signed by the deployment's own CA, so a valid member of the deployment --
-    // and not a plugin. Trusting the CA alone is exactly what would let it in
-    // (ADR-0044).
     TestPki.Identity stranger = PKI.issue("a-neighbour");
 
     Status refused = refusalFor(tenant, stranger);
 
-    // Refused by the transport, before a method is reached. Which code a failed
-    // handshake surfaces as depends on the platform; what matters is that it is
-    // not an application status, because no application code ran.
     assertThat(refused.getCode())
         .isIn(Status.Code.UNAVAILABLE, Status.Code.UNKNOWN, Status.Code.INTERNAL);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Calls the host channel the way a plugin would.
@@ -234,10 +218,6 @@ class HostChannelIT extends AbstractIntegrationTest {
             .build();
     ManagedChannel channel =
         Grpc.newChannelBuilder("localhost:" + host.port(), credentials)
-            // The core's own certificate names `api`, which is what it is called
-            // inside the deployment. A test dialling localhost has to say which
-            // name it expects, or it would be asserting that the core forgot to
-            // present one.
             .overrideAuthority("api")
             .build();
     try {
@@ -459,7 +439,6 @@ class HostChannelIT extends AbstractIntegrationTest {
 
                       @Override
                       public void onError(Throwable error) {
-                        // The core hung up. Nothing to undo in a test renderer.
                       }
 
                       @Override

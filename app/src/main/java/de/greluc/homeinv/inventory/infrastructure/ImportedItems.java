@@ -79,9 +79,6 @@ public class ImportedItems implements CsvIngest {
       return new Ingested(created, notDeclared);
     }
 
-    // A second import of the same file. The row is the newer truth, which is the
-    // same rule the archive side follows and the reason a source key is worth
-    // carrying at all (REQ-PORT-008).
     items.update(
         existing,
         new ItemService.UpdateItemCommand(
@@ -135,9 +132,6 @@ public class ImportedItems implements CsvIngest {
     if (row.purchaseAmount() == null || row.purchaseCurrency() == null) {
       return Valuation.NONE;
     }
-    // Purchase only. A CSV from another system says what something cost and
-    // when; what it is worth now and what it would cost to replace are this
-    // application's own notions and nothing in the file speaks to them.
     return new Valuation(
         new de.greluc.homeinv.platform.Money(
             row.purchaseAmount(), java.util.Currency.getInstance(row.purchaseCurrency())),

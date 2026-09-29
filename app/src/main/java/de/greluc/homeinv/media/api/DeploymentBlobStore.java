@@ -68,16 +68,6 @@ public interface DeploymentBlobStore {
    */
   void delete(UUID tenantId, String sha256) throws IOException;
 
-  // -------------------------------------------------------------------------
-  // Staging, for an upload that arrives in pieces (REQ-MED-008, ADR-0084).
-  // -------------------------------------------------------------------------
-  //
-  // On THIS port and not on {@link BlobStore}: a half-arrived file has no
-  // content address, so it cannot be addressed the way a blob is, and pushing an
-  // unfinished object into a tenant's own bucket would leave litter in somebody
-  // else's storage that only this deployment knows how to clean up. A tenant's
-  // store receives the finished blob and nothing else (ADR-0074).
-
   /**
    * Appends bytes to a staged upload, creating it on the first call.
    *

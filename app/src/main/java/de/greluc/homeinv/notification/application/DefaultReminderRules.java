@@ -136,9 +136,6 @@ public class DefaultReminderRules implements ReminderRules {
    */
   private void check(NewReminderRule command) {
     if (!served.contains(command.trigger())) {
-      // Refused here rather than accepted and then never firing. A rule that
-      // looks saved and does nothing is the failure a reminder feature cannot
-      // afford, and it would look like working software until somebody needed it.
       throw new UnservedTriggerException(
           "Nothing can answer the trigger "
               + command.trigger()
@@ -146,8 +143,6 @@ public class DefaultReminderRules implements ReminderRules {
               + served.stream().map(Enum::name).sorted().collect(Collectors.joining(", ")));
     }
     if (command.savedSearchId() != null && !scope.exists(command.savedSearchId())) {
-      // Another tenant's search is the 404 an unknown one is (REQ-SEC-025),
-      // rather than the foreign-key violation the database would raise.
       throw new NotFoundException("saved search", command.savedSearchId());
     }
   }

@@ -48,10 +48,6 @@ export function NewItemForm({
 
     setBusy(true);
     try {
-      // Keys are omitted rather than set to undefined. With
-      // `exactOptionalPropertyTypes` the two are different things, and the
-      // distinction is real on the wire: an absent field and a null one mean
-      // different things to a JSON API.
       await api.createItem({
         name,
         kind,

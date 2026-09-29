@@ -69,8 +69,6 @@ class FieldTighteningTest {
   void theValueListMayNotChange() {
     UUID list = UUID.randomUUID();
 
-    // Nothing here can tell whether a different list is a subset of the first,
-    // so both directions are refused rather than one of them guessed at.
     assertThat(
             FieldTightening.widens(
                 field(FieldDataType.TEXT, false, UUID.randomUUID(), FieldConstraints.NONE),
@@ -139,9 +137,6 @@ class FieldTighteningTest {
   void thePatternMayNotChange() {
     FieldDefinitionView parent = text(constraints().pattern("[A-Z]{3}").build());
 
-    // Not "a narrower pattern is fine": deciding whether one regular expression
-    // accepts a subset of another is not something this rule can do, so a
-    // different pattern is refused and an added one is allowed.
     assertThat(FieldTightening.widens(text(FieldConstraints.NONE), parent)).contains("the pattern");
     assertThat(FieldTightening.widens(text(constraints().pattern("[A-Z]+").build()), parent))
         .contains("the pattern");
@@ -157,7 +152,6 @@ class FieldTighteningTest {
   void theUnitMayNotChange() {
     FieldDefinitionView parent = number(constraints().unit("EUR").build());
 
-    // A field that accepted only euros must not start accepting dollars.
     assertThat(FieldTightening.widens(number(FieldConstraints.NONE), parent)).contains("the unit");
     assertThat(FieldTightening.widens(number(constraints().unit("USD").build()), parent))
         .contains("the unit");
@@ -266,7 +260,7 @@ class FieldTighteningTest {
         null,
         constraints,
         valueListId,
-        null, // a visibility rule; the tightening rule never reads one
+        null,
         null,
         0,
         false,

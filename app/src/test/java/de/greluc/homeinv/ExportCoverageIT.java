@@ -113,24 +113,8 @@ class ExportCoverageIT extends AbstractIntegrationTest {
   private static final Map<String, Set<String>> NOT_EXPORTED =
       Map.of(
           "inventory.item",
-          // Generated columns: the stored form of what `name`, `description` and
-          // `notes` already say, through a text analyser the receiving instance
-          // chooses for itself.
           Set.of("tenant_id", "search_vector_de", "search_vector_en"),
           "identity.app_user",
-          // Two different reasons in one row.
-          //
-          // The credential path first: an archive is handed to a person and
-          // then copied -- onto a laptop, into a cloud drive, through a support
-          // ticket -- and a password hash in it is one somebody can grind
-          // offline at their leisure. The receiving instance issues its own.
-          //
-          // Then the instance's own administration. `instance_operator`,
-          // `may_create_tenants` and `tenant_limit` are what THIS deployment's
-          // operator decided about an account, not anything the account owns.
-          // An import that carried them would let an archive hand its bearer
-          // operator rights on the instance receiving it, which is a
-          // privilege escalation with a friendly name on it.
           Set.of(
               "password_hash",
               "password_changed_at",
@@ -138,10 +122,6 @@ class ExportCoverageIT extends AbstractIntegrationTest {
               "may_create_tenants",
               "tenant_limit"),
           "tenancy.tenant",
-          // A pending deletion belongs to the instance being left: importing
-          // "deletion requested" would schedule the copy somebody just made for
-          // removal. And `revocation_token_hash` is key material -- the thing
-          // that calls a deletion off -- which no archive carries.
           Set.of("deletion_requested_at", "deletion_requested_by", "revocation_token_hash"));
 
   /**
@@ -249,9 +229,6 @@ class ExportCoverageIT extends AbstractIntegrationTest {
   @DisplayName("carries every column of every table it claims to hold, or declares the omission")
   void noColumnIsSilentlyLost() throws Exception {
     Tenant tenant = newTenant("export-coverage@example.org");
-    // A row in each of the tables under test. The catalogue ones are already
-    // populated: provisioning gives a tenant the built-in types, categories and
-    // value lists, which is what makes this test cheap enough to be worth having.
     UUID place = aPlace(tenant, "A shed");
     UUID item = anItem(tenant, "A drill", place);
     UUID second = anItem(tenant, "A drill bit", place);
@@ -262,9 +239,6 @@ class ExportCoverageIT extends AbstractIntegrationTest {
                 new de.greluc.homeinv.tagging.api.TagService.CreateTagCommand(
                     "valuable", null, null, null),
                 tenant.userId()));
-    // Written directly: reaching a media object through the API means uploading
-    // through a scanner, and this test is about columns rather than about
-    // uploads.
     aMediaObject(tenant, item);
     theConfigurationATenantAccumulates(tenant);
     theRecordsAnItemAccumulates(tenant, item, second);
@@ -279,11 +253,6 @@ class ExportCoverageIT extends AbstractIntegrationTest {
       String file = archive.get(dataset.getKey());
       assertThat(file).as("the archive holds %s", dataset.getKey()).isNotNull();
       if (file.isBlank()) {
-        // No row means no keys to read, so the columns of that table would go
-        // unexamined -- silently, which is the failure this test exists to
-        // prevent one level up. The fixture above puts a row in every table
-        // named in DATASETS, so a blank file is a fixture that stopped working
-        // and not a tenant that happens to own nothing.
         unpopulated.add(dataset.getKey());
         continue;
       }
@@ -317,9 +286,6 @@ class ExportCoverageIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("leaves out no tenant-scoped table without saying so")
   void everyTenantTableIsExportedOrDeclared() {
-    // Partitions are excluded: `audit.audit_entry` is partitioned by month, and
-    // counting its partitions would turn one decision into one row per month
-    // that nobody makes.
     Set<String> tenantScoped =
         new TreeSet<>(
             jdbc
@@ -350,17 +316,12 @@ class ExportCoverageIT extends AbstractIntegrationTest {
                 + "(REQ-PORT-006)")
         .isEmpty();
 
-    // And the other direction, so the list cannot outlive the tables it
-    // describes: a reason for a table nobody has any more is a reason nobody
-    // will read, and it hides the next one.
     Set<String> stale = new TreeSet<>(NOT_IN_THE_ARCHIVE.keySet());
     stale.removeAll(tenantScoped);
     assertThat(stale)
         .as("every declared omission names a table that exists")
         .isEmpty();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A clean media object, an attachment hanging off an item, and a derivative.
@@ -499,10 +460,6 @@ class ExportCoverageIT extends AbstractIntegrationTest {
               .param(tenant.userId())
               .param(tenant.userId())
               .update();
-          // A plugin setting, one sealed and one not: the archive carries the key
-          // of both and the value of only the second (REQ-PLG-017, ADR-0073).
-          // Written straight into the table rather than through `PluginSettings`,
-          // because what is under test here is the export and not the validation.
           jdbc.sql(
                   """
                   insert into plugins.plugin_setting

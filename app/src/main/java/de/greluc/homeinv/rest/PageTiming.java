@@ -76,8 +76,6 @@ public class PageTiming implements ResponseBodyAdvice<Page<?>> {
     }
     Object startedAt = servlet.getServletRequest().getAttribute(STARTED_AT);
     if (!(startedAt instanceof Long nanos)) {
-      // No measurement rather than a wrong one. A page that reached here without
-      // passing the filter is a wiring fault, not a request that took zero.
       return body;
     }
     return body.tookMillis((System.nanoTime() - nanos) / 1_000_000);
@@ -104,8 +102,6 @@ public class PageTiming implements ResponseBodyAdvice<Page<?>> {
     protected void doFilterInternal(
         HttpServletRequest request, HttpServletResponse response, FilterChain chain)
         throws ServletException, IOException {
-      // nanoTime, not currentTimeMillis: this is a duration, and a wall clock that
-      // steps backwards over an NTP correction would report a negative one.
       request.setAttribute(STARTED_AT, System.nanoTime());
       chain.doFilter(request, response);
     }

@@ -41,10 +41,6 @@ public class TenantAdministrationAdapter implements TenantAdministration {
       result =
           jdbc.sql(SET).params(tenantId, state.name(), actor).query(String.class).optional();
     } catch (DataIntegrityViolationException refused) {
-      // The function raises `check_violation` for a tenant that is waiting to be
-      // erased or already erased. Refused rather than ignored: an immediate
-      // measure that silently did nothing is worse than one that fails, because
-      // the operator taking it believes it worked.
       throw new IllegalStateException(
           "This tenant is being erased or has been erased, and suspension does not reach that"
               + " state. Withdrawing a deletion request is what the revocation token is for"
@@ -54,9 +50,6 @@ public class TenantAdministrationAdapter implements TenantAdministration {
 
     result.ifPresent(
         now ->
-            // REQ-SEC-068 wants every mutating action attributable. Until the
-            // audit log carries instance-level entries, this line is what says
-            // who suspended whom.
             log.warn("Operator {} set tenant {} to {}", actor, tenantId, now));
     return result.map(State::valueOf);
   }

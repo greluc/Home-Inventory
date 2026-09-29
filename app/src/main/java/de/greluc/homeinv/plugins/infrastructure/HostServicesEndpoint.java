@@ -92,11 +92,6 @@ public class HostServicesEndpoint extends HostServicesGrpc.HostServicesImplBase 
                     part.getHeader().getPage().getLandscape(),
                     part.getHeader().getPage().getMarginMillimetres());
           }
-          // THE TENANT COMES FROM THE ENVELOPE AND IS NOT TAKEN ON TRUST AS AN
-          // IDENTITY: what it selects is which tenant's renderer and which
-          // tenant's grant apply, both of which are checked below. A caller
-          // naming a tenant it has no grant for gets the same refusal as one
-          // naming a tenant that does not exist.
           String named = part.getHeader().getContext().getTenantId();
           tenantId = named.isBlank() ? null : UUID.fromString(named);
           language =
@@ -118,8 +113,6 @@ public class HostServicesEndpoint extends HostServicesGrpc.HostServicesImplBase 
 
       @Override
       public void onError(Throwable error) {
-        // The caller hung up. Nothing was written and nothing needs undoing:
-        // rendering a document changes no state.
         log.debug("A plugin abandoned a render request", error);
       }
 
@@ -163,7 +156,6 @@ public class HostServicesEndpoint extends HostServicesGrpc.HostServicesImplBase 
                   .build());
           responses.onCompleted();
         } catch (NotAllowed refused) {
-          // One answer for two conditions, deliberately (ADR-0071).
           responses.onError(
               Status.FAILED_PRECONDITION
                   .withDescription(
@@ -176,8 +168,6 @@ public class HostServicesEndpoint extends HostServicesGrpc.HostServicesImplBase 
               Status.INTERNAL
                   .withDescription("The renderer could not produce the document")
                   .asRuntimeException());
-          // The caller id comes off a plugin's certificate, which the operator
-          // installed but this process did not choose.
           log.warn("A host render failed for plugin {}", LogSafe.value(callerId), failed);
         }
       }

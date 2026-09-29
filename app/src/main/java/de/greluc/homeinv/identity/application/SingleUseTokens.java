@@ -72,8 +72,6 @@ final class SingleUseTokens {
     try {
       return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
     } catch (NoSuchAlgorithmException impossible) {
-      // Every JVM ships SHA-256; the checked exception is a relic of an era when
-      // that was not true. Failing loudly beats pretending to have hashed.
       throw new IllegalStateException("SHA-256 is not available in this JVM", impossible);
     }
   }

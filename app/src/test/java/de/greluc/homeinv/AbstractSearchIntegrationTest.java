@@ -60,8 +60,6 @@ public abstract class AbstractSearchIntegrationTest extends AbstractIntegrationT
           .withEnv("DISABLE_SECURITY_PLUGIN", "true")
           .withEnv("DISABLE_INSTALL_DEMO_CONFIG", "true")
           .withEnv("bootstrap.memory_lock", "false")
-          // Half a gigabyte of heap rather than the image's default quarter of
-          // the host: a CI runner has other containers to hold.
           .withEnv("OPENSEARCH_JAVA_OPTS", "-Xms512m -Xmx512m")
           .waitingFor(
               Wait.forHttp("/_cluster/health")
@@ -86,10 +84,6 @@ public abstract class AbstractSearchIntegrationTest extends AbstractIntegrationT
         () -> "http://" + OPENSEARCH.getHost() + ":" + OPENSEARCH.getMappedPort(9200));
     registry.add("homeinv.search.username", () -> "irrelevant-without-the-security-plugin");
     registry.add("homeinv.search.password", () -> "irrelevant-without-the-security-plugin");
-    // The indexing path is asynchronous and swallows what it cannot do, because
-    // a derived store may fail (CLAUDE.md rule 10). In a test that silence is
-    // the difference between "not indexed yet" and "not indexed at all", so the
-    // block logs at debug here.
     registry.add("logging.level.de.greluc.homeinv.search", () -> "DEBUG");
     registry.add("logging.level.org.springframework.modulith", () -> "DEBUG");
   }

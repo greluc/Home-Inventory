@@ -1,15 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Defaults that hold in every profile. Anything environment-specific comes from
-# HOMEINV_* variables, and anything secret from a FILE the container mounts —
-# never from a value in this file, because this file is public (CLAUDE.md).
-#
-# `homeinv.secret.<name>` is where SecretFiles publishes the content of every
-# mounted secret, read from the path a HOMEINV_<NAME>_FILE variable names
-# (06 §6.11). A missing one leaves the placeholder unresolved and startup fails
-# with Spring's own message — which is the intended behaviour: there is no
-# generated default and there must not be (REQ-NFR-046).
 
 spring:
   application:
@@ -20,13 +10,8 @@ spring:
     username: ${HOMEINV_DB_USER:homeinv_app}
     password: ${homeinv.secret.db-password}
     hikari:
-      # The application role holds no DDL rights and no BYPASSRLS; the pool
-      # must never be configured with the migrator's credentials.
       pool-name: homeinv-app
       maximum-pool-size: ${HOMEINV_DB_POOL_MAX:10}
-      # A connection returning to the pool must not carry a tenant. SET LOCAL is
-      # transaction-scoped and discarded at commit, so this is belt and braces —
-      # but the test that proves it (REQ-SEC-005) is worth keeping honest.
       auto-commit: false
 
   data:
@@ -39,78 +24,35 @@ spring:
   session:
     data:
       redis:
-        # Indexed, so a session can be found by the account it belongs to. That
-        # is what REQ-AUTH-009's session overview and its remote sign-out are: a
-        # list of one account's sessions, and the removal of one of them. The
-        # default repository stores sessions by id alone and can answer neither.
-        #
-        # What it is indexed BY is not the default either: see SessionIndex,
-        # which keys it on the account id rather than on a principal name that
-        # would carry an e-mail address into a Valkey key.
         repository-type: indexed
 
   jpa:
     open-in-view: false
     hibernate:
-      # Flyway owns the schema. Hibernate must never touch it: `update` against a
-      # role with no DDL rights fails at startup, and against one with them it
-      # would silently diverge from the migrations.
       ddl-auto: validate
     properties:
       hibernate:
-        # Spring Modulith's event_publication entity carries no schema of its
-        # own, so it lands wherever the default points. Our own entities all
-        # name their schema explicitly and are unaffected; without this the
-        # registry looks for the table in `public`, where the role script
-        # deliberately allows nothing.
         default_schema: outbox
         jdbc.time_zone: UTC
-        # Batch writes, but keep ordering so the optimistic-lock version checks
-        # stay meaningful.
         jdbc.batch_size: 50
         order_inserts: true
         order_updates: true
 
   flyway:
-    enabled: false # The application never migrates; the one-shot `migrate` service does (ADR-0041).
-    # Flyway keeps its history in a schema of its own, not in `public`. The role
-    # script revokes everything on `public` so that a table created there by
-    # accident cannot exist without a policy - and Flyway's history table would
-    # have been the first such table.
+    enabled: false
     schemas: flyway
     default-schema: flyway
 
   jackson:
     deserialization:
-      # An unknown field is a rejection, not something to ignore (REQ-SEC-029).
-      # Spring Boot turns this OFF by default, which is the friendly choice and
-      # the wrong one here: a client sending `tenantId` or `version` in a create
-      # request would have it silently dropped and would believe it was honoured.
-      # A 422 naming the field is the answer that lets them fix it.
       fail-on-unknown-properties: true
-      # Same reasoning one level down: a null where the record declares a
-      # primitive is a client error, not a zero.
       fail-on-null-for-primitives: true
 
-  # The broker. `api` publishes media events onto it and `worker` consumes them
-  # (ADR-0051). The outbox in `outbox.event_publication` is the source of truth;
-  # this is only the delivery, so a broker outage delays thumbnails and loses
-  # nothing.
   rabbitmq:
     host: ${HOMEINV_MQ_HOST:localhost}
     port: ${HOMEINV_MQ_PORT:5672}
     username: ${HOMEINV_MQ_USER:homeinv}
     password: ${homeinv.secret.mq-password:}
-    # The broker hop, observed on both sides (REQ-NFR-044). This is what makes a
-    # trace continue across it: the publisher writes the W3C context into the
-    # message headers and the consumer picks it up, so a thumbnail that never
-    # appeared is one trace from the upload request to the encode that failed —
-    # which is the chain 13 §13.4 exists for and the one nothing else can
-    # reconstruct.
-    #
-    # On in both roles rather than under the worker profile: `api` publishes and
-    # `worker` consumes, and a publisher that did not write the context would
-    # leave the consumer starting a new trace with nothing to attach it to.
     template:
       observation-enabled: true
     listener:
@@ -119,14 +61,6 @@ spring:
 
   servlet:
     multipart:
-      # ABOVE the upload pipeline's own 25 MiB ceiling, on purpose. Whichever
-      # limit fires first decides what the client is told, and the pipeline's is
-      # the one that answers with the RFC 9457 document REQ-API-003 promises;
-      # Spring's answers with its own exception. So Spring's is the outer bound
-      # that stops an unbounded read, and the pipeline's is the one users meet.
-      #
-      # `web` is bounded higher again (64 MB), so an oversized body is always
-      # rejected by `api` rather than by the proxy as HTML (06 §6.7).
       max-file-size: 32MB
       max-request-size: 34MB
 
@@ -136,87 +70,30 @@ spring:
 
 springdoc:
   api-docs:
-    # OFF in every deployment. The document is generated at BUILD time, committed,
-    # and drift-checked (ADR-0049) — serving it would be a second HTTP surface on
-    # an internet-facing application, describing every endpoint it has, for a
-    # document that is already in the repository.
-    #
-    # The test profile turns it on, which is the one place it is read.
     enabled: false
   swagger-ui:
-    # Never, in any profile. Swagger UI is a page that executes requests against
-    # the running application; the `-api` artefact does not ship it and this makes
-    # the absence deliberate rather than incidental.
     enabled: false
 
 server:
   port: 8080
   tomcat:
-    # The other half of `REQ-SEC-065`'s ceiling, and the half that is about the
-    # client rather than the work: a request whose headers or body arrive slowly
-    # holds a thread while it does. `connection-timeout` bounds the wait for the
-    # request to arrive, `keep-alive-timeout` the wait for the next one on an
-    # idle connection.
-    #
-    # The query ceiling is not here. It is on the database roles
-    # (`deploy/postgres/initdb/00-roles.sql`), where a client cannot forget to
-    # configure it and where it also applies to a psql session.
     connection-timeout: 30s
     keep-alive-timeout: 30s
     max-keep-alive-requests: 100
-  # No server-side error page: every error leaves through the RFC 9457 handler,
-  # and a whitelabel page would be a second, undocumented error format.
   error:
     whitelabel:
       enabled: false
   shutdown: graceful
-  # The application does NOT trust forwarded headers by itself. Spring's
-  # `framework` strategy would apply them from any peer, which in front of a
-  # proxy is a client telling us its own address. TrustedForwardedHeaderFilter
-  # applies them only from the configured hops (REQ-SEC-063).
   forward-headers-strategy: none
 
 management:
   server:
-    # A listener of its own, bound to the internal segment and to nothing else.
-    # Not published to the host AND not reachable from a plugin segment: `api`
-    # sits on every one of them, so "unpublished" alone would have let any plugin
-    # read the per-tenant metrics of 13 §13.3 without holding a capability
-    # (REQ-SEC-099, ADR-0037).
     port: ${MANAGEMENT_SERVER_PORT:8090}
     address: ${MANAGEMENT_SERVER_ADDRESS:127.0.0.1}
   tracing:
-    # OFF unless the operator names a collector. `HOMEINV_TRACING_ENDPOINT` is
-    # the one knob, and `TracingEnvironment` turns its emptiness into the
-    # absence an environment variable cannot express -- without which every
-    # default deployment would build an exporter for the address "" and fail to
-    # start. Unset, it switches OpenTelemetry off AND excludes the three
-    # auto-configurations that build the observation-to-span bridge -- because
-    # Boot disabled still installs an SDK that records spans into a processor
-    # which discards them. So unset means no tracer, no spans and no sampler,
-    # and the `traceId` of 13 §13.2 goes on coming from `TraceIdFilter`, exactly
-    # as at stage 0 (REQ-NFR-044).
     sampling:
-      # EVERYTHING, on purpose, and this is not a placeholder for "tune later".
-      # The sampling decision of 13 §13.4 -- all errors and slow requests, a
-      # fraction of the rest -- is a TAIL decision: it can only be made once a
-      # trace is complete, so it belongs in the operator's collector and the
-      # collector can only see what was sent to it. A head sample of 5% here
-      # would throw away 95% of the errors before anything could decide they
-      # were errors.
-      #
-      # Lowering this is therefore a real trade: it buys bandwidth to the
-      # collector and it costs the tail policy its input.
       probability: ${HOMEINV_TRACING_SAMPLE_RATE:1.0}
     propagation:
-      # W3C, because the plugin contract says so. `CallContext.trace_id` is
-      # specified as a W3C `traceparent` (proto/home_inv/plugin/v1/common.proto),
-      # and producing B3 here would not merely change a header -- it would put a
-      # B3 identifier in a published field that promises otherwise.
-      #
-      # Only what we PRODUCE is pinned. What we accept stays Boot's default,
-      # which also reads B3: being liberal about an incoming id costs nothing
-      # and joins a trace that started in front of a proxy we did not choose.
       produce: [W3C]
   endpoints:
     web:
@@ -226,71 +103,26 @@ management:
     health:
       probes:
         enabled: true
-      show-details: never # Health details name internal hosts; operators read metrics.
+      show-details: never
       group:
-        # `/livez` — is the process alive. It checks NOTHING external, and that is
-        # the whole point: a liveness probe that touches the database turns a
-        # database outage into a restart loop, which is the one response
-        # guaranteed to make the outage worse (REQ-NFR-045, 13 §13.3).
         livez:
           include: livenessState
           additional-path: "management:/livez"
-        # `/readyz` — may this instance take traffic. The database has to be
-        # reachable and the schema has to be the one this build expects; a
-        # skipped migration stops the rollout here rather than surfacing later as
-        # a missing column at request time (ADR-0041, REQ-SEC-101).
         readyz:
           include: readinessState,db,schemaVersionCheck
           additional-path: "management:/readyz"
 
 logging:
   level:
-    # Two framework loggers print credential material at DEBUG, and an operator
-    # turning debugging on to investigate something is exactly when that would
-    # happen (REQ-SEC-050). Pinned above it rather than trusted:
-    #
-    #   - `orm.core` lists every flushed entity with every property, which for
-    #     `AppUser` includes `passwordHash` — an offline cracking target, not a
-    #     password, and not a thing to write into a log file either. It is a broad
-    #     category and pinning it costs the session and flush messages; the parts
-    #     an operator actually debugs with are elsewhere (`org.hibernate.SQL`,
-    #     `orm.connections`, `orm.jdbc`) and are untouched.
-    #   - `orm.jdbc.bind` prints bound statement parameters, which is the same
-    #     hash again on its way to the database.
-    #
-    # `LogHygieneIT` looks for the values rather than for these logger names, so
-    # a third one that starts printing them fails the build.
     org.hibernate.orm.core: info
     org.hibernate.orm.jdbc.bind: info
   structured:
     format:
-      # JSON lines (REQ-NFR-041). ECS rather than Logstash or GELF: it is the
-      # schema the log shippers a self-hoster is likely to already run understand,
-      # and it carries the MDC as top-level fields — so `traceId`, `tenantId` and
-      # `actorId` are queryable rather than buried in a message string.
-      #
-      # The console only. A container logs to stdout and the runtime collects it
-      # from there; a log FILE inside a container is a file nobody reads and a
-      # volume somebody has to remember to rotate.
       console: ecs
   pattern:
-    # For the console when a developer overrides the structured format to read it.
-    # The MDC fields are named here too so that switching the format back does not
-    # silently drop them from the line (REQ-NFR-041).
     level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-},%X{tenantId:-},%X{actorId:-}]"
 
 homeinv:
-  # What one caller may ask for in a minute (REQ-SEC-064, 12 §12). Three scopes
-  # that each answer a question the others do not: one account, one tenant
-  # across all of its accounts, and one address -- which is the only one that
-  # applies before anybody has signed in. The fourth is stricter and covers
-  # `/api/v1/auth/**`, where an attacker spends their requests and an honest
-  # client makes a handful a day.
-  #
-  # Set so that NO honest client meets them: opening a list view with its
-  # facets, the location tree and twenty thumbnails is about thirty requests.
-  # They bound what a loop can do; the monthly allowance is REQ-TEN-009 and
-  # answers 403, which is a different thing to tell somebody.
   rate-limit:
     per-user-per-minute: ${HOMEINV_RATE_LIMIT_USER:600}
     per-tenant-per-minute: ${HOMEINV_RATE_LIMIT_TENANT:3000}
@@ -298,95 +130,30 @@ homeinv:
     auth-per-minute: ${HOMEINV_RATE_LIMIT_AUTH:30}
 
   tracing:
-    # Where the operator's OTLP collector listens, and the whole of the tracing
-    # configuration (REQ-NFR-044, 13 §13.4). Empty -- the default -- means no
-    # tracing at all.
-    #
-    # It names a collector INSIDE the deployment. `api` and `worker` have no
-    # outbound route to the internet (ADR-0026) and this does not give them one:
-    # the operator places a collector on a segment they are already on, and what
-    # that collector forwards to afterwards is theirs and outside this topology.
     endpoint: ${HOMEINV_TRACING_ENDPOINT:}
 
-  # The read-only GraphQL surface (REQ-API-006, 08 §8.4). Every number here is a
-  # ceiling rather than a target: a query that stays under all of them is not
-  # thereby cheap, and one that exceeds any of them is refused before it runs.
   graphql:
-    # Below the maximum location depth of 12, deliberately: a deep tree cannot be
-    # walked to its leaves in one query, and `locationTree(rootId:, depth:)` is
-    # the intended path.
     max-depth: ${HOMEINV_GRAPHQL_MAX_DEPTH:10}
-    # The budget a query may spend against the `@cost` weights in the schema.
     max-cost: ${HOMEINV_GRAPHQL_MAX_COST:5000}
-    # How often one field may appear. Aliasing one field fifty times executes it
-    # fifty times, and the depth and cost limits both count it once.
     max-repeated-fields: ${HOMEINV_GRAPHQL_MAX_REPEATED_FIELDS:20}
-    # Who may send a query the build did not register, and read the schema:
-    # NEVER, ADMINISTRATORS or ANYONE. The default is what 08 §8.4 describes.
     free-form: ${HOMEINV_GRAPHQL_FREE_FORM:ADMINISTRATORS}
 
-  # The base URL that ends up printed on labels. It is the only configuration
-  # value that writes itself into the physical world, and a later change breaks
-  # every label already printed (CLAUDE.md rule 9).
   public-base-url: ${HOMEINV_PUBLIC_BASE_URL:http://localhost:8080}
-  # A dedicated hostname for media. Same-site with the application host, or the
-  # `Cross-Origin-Resource-Policy: same-site` the media responses carry blocks
-  # our own pages from loading them (06 §6.11, REQ-SEC-061).
   media-base-url: ${HOMEINV_MEDIA_BASE_URL:http://media.localhost:8080}
-  # Both hops in front of `api`: the operator's reverse proxy and `web`'s address
-  # on the frontend segment (REQ-SEC-103). No default — see TrustedProxies.
   trusted-proxies: ${HOMEINV_TRUSTED_PROXIES:}
-  # The name the ingress answers to on the frontend segment. Resolved at startup
-  # and checked against the list above, because a deployment where it is missing
-  # produces no error at all — only wrong numbers (06 §6.7).
   ingress-host: ${HOMEINV_INGRESS_HOST:web}
-  # Who may come to exist on this instance (REQ-AUTH-004). `invite_only` by
-  # default; `closed` creates no account at all, and `open` needs a confirmed
-  # address and therefore plugin-smtp — an instance configured for it without one
-  # refuses to start rather than offering a sign-up nobody can finish.
   registration-mode: ${HOMEINV_REGISTRATION_MODE:invite_only}
   plugins:
-    # Where the generated list of installed plugins is (REQ-PLG-013). Generated
-    # from deploy/services.yaml beside the Quadlet units, the per-plugin network
-    # segment (ADR-0037) and the egress allowlist, so the topology and the
-    # registration cannot disagree. Unset - which is what `minimal` leaves it -
-    # means no plugins, which is a complete deployment and not a degraded one.
     file: ${HOMEINV_PLUGINS_FILE:}
   search:
-    # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` is the
-    # default because every profile has it; `minimal` never gets OpenSearch and
-    # says so by leaving this unset. Choosing `opensearch` without the three
-    # settings below aborts startup rather than quietly using the other engine.
     engine: ${HOMEINV_SEARCH_ENGINE:postgresql}
-    # Where OpenSearch is, and as whom. Named the way the other stores are:
-    # HOMEINV_DB_URL, HOMEINV_VALKEY_USER, HOMEINV_MQ_USER — and
-    # HOMEINV_SEARCH_USER and the `search-password` secret were already declared
-    # in deploy/services.yaml before anything read them.
     url: ${HOMEINV_SEARCH_URL:}
     username: ${HOMEINV_SEARCH_USER:homeinv}
-    # A file like every other secret; the value is never an environment
-    # variable (06 §6.11, REQ-SEC-050).
     password: ${homeinv.secret.search-password:}
   security:
     url-signing-key-file: ${HOMEINV_URL_SIGNING_KEY_FILE:}
-    # Seals the TOTP secrets of REQ-AUTH-002. Its own key, because rotating the
-    # one that signs media URLs must not invalidate every account's second
-    # factor, and because a credential belongs to a person rather than to a
-    # tenant, whose keys ADR-0019 wraps with a different master.
     credential-key-file: ${HOMEINV_CREDENTIAL_KEY_FILE:}
-    # Wraps every tenant's data key, which in turn seals every field marked
-    # `sensitive` (ADR-0019). Two versions may be active at once, which is what
-    # REQ-SEC-049 asks for and what makes a rotation possible without touching a
-    # single ciphertext: mount the new key as the active one, bump the version,
-    # keep the old one mounted as `previous` until the re-wrap has finished.
-    #
-    # Decided 2026-09-13 as two FILES rather than two keys in one file: every
-    # other secret here is one file holding one key, which is what a container
-    # runtime's secret is, and a file with a syntax of its own would need a
-    # parser here and tooling everywhere else.
     data-encryption-master-key-file: ${HOMEINV_DATA_ENCRYPTION_MASTER_KEY_FILE:}
     data-encryption-master-key-version: ${HOMEINV_DATA_ENCRYPTION_MASTER_KEY_VERSION:1}
     data-encryption-previous-master-key-file: ${HOMEINV_DATA_ENCRYPTION_PREVIOUS_MASTER_KEY_FILE:}
-    # What an authenticator app calls this instance in its list. Shown to a
-    # person and nothing depends on it, which is why it has a default.
     totp-issuer: ${HOMEINV_TOTP_ISSUER:Home Inventory}

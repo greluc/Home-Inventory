@@ -75,7 +75,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
             .getContentAsString(StandardCharsets.UTF_8);
     UUID id = UUID.fromString(json.readTree(first).get("id").asString());
 
-    // The same key and the same body: the same answer, and no second item.
     String again =
         mockMvc
             .perform(
@@ -92,9 +91,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
     assertThat(json.readTree(again).get("id").asString()).isEqualTo(id.toString());
     assertThat(itemsNamed(session.tenantId(), "Kettle")).isEqualTo(1);
 
-    // Reformatted -- more whitespace, the fields the other way round -- is the
-    // same request. A client that retries through a different HTTP library must
-    // not be told it sent something else.
     mockMvc
         .perform(
             post("/api/v1/items")
@@ -106,8 +102,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
         .andExpect(status().isCreated());
     assertThat(itemsNamed(session.tenantId(), "Kettle")).isEqualTo(1);
 
-    // And the record is a row, not a cache entry: the requirement's second half
-    // is about surviving a cache being cleared, and there is nothing to clear.
     assertThat(recordsFor(session.tenantId())).isEqualTo(1);
   }
 
@@ -127,8 +121,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
                 .content("{\"name\":\"Lamp\",\"kind\":\"DIGITAL\"}"))
         .andExpect(status().isCreated());
 
-    // A different body under a spent key is a client bug. Answering it with the
-    // lamp would make a request that created nothing look like one that worked.
     mockMvc
         .perform(
             post("/api/v1/items")
@@ -143,8 +135,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
                 .value("https://home-inv.example/problems/idempotency-key-conflict"));
     assertThat(itemsNamed(session.tenantId(), "Radio")).isZero();
 
-    // The same key at a different endpoint is the same bug: a key is spent once,
-    // not once per path.
     String categories =
         mockMvc
             .perform(get("/api/v1/locations/categories?limit=200").session(session.http()))
@@ -180,8 +170,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
                   .content(body))
           .andExpect(status().isCreated());
     }
-    // Two requests with no key are two requests. The header is what makes a
-    // repeat a repeat, which is what keeps it adoptable one client at a time.
     assertThat(itemsNamed(session.tenantId(), "Spare")).isEqualTo(2);
     assertThat(recordsFor(session.tenantId())).isZero();
   }
@@ -232,14 +220,8 @@ class IdempotencyIT extends AbstractIntegrationTest {
         .andExpect(status().isCreated());
     assertThat(recordsFor(session.tenantId())).isEqualTo(1);
 
-    // Backdated rather than waited for, and written as a delete and an insert
-    // because the application has no UPDATE on this table and should not: a
-    // record is made once and expires, and nothing edits one.
     backdate(session.tenantId(), key);
 
-    // Past its day, the record is treated as absent even though it is still a
-    // row. That is the point of expiring on READ: "valid for 24 h" is true at the
-    // moment it matters rather than at the moment a job last succeeded.
     mockMvc
         .perform(
             post("/api/v1/items")
@@ -251,8 +233,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
         .andExpect(status().isCreated());
     assertThat(itemsNamed(session.tenantId(), "Ephemeral")).isEqualTo(2);
 
-    // And the stale row is gone, swept by the very write that ignored it: one
-    // record for the key that was just spent, none for the day before.
     assertThat(recordsFor(session.tenantId())).isEqualTo(1);
   }
 
@@ -271,9 +251,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
         .andExpect(status().isCreated());
     assertThat(recordsFor(session.tenantId())).isEqualTo(1);
 
-    // The block's own share of REQ-TEN-011. It is also the only thing that ever
-    // clears a tenant that stopped writing: expiry runs on the path that spends a
-    // key, and a tenant spending none has none to expire.
     TenantErasure.BlockReport report =
         TenantContext.callAs(
             session.tenantId(), () -> erasure.erase(session.tenantId()));
@@ -281,8 +258,6 @@ class IdempotencyIT extends AbstractIntegrationTest {
     assertThat(report.rowsRemoved()).isEqualTo(1);
     assertThat(recordsFor(session.tenantId())).isZero();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Moves a record a day into the past.

@@ -48,10 +48,6 @@ public class ProcessedRequests implements IdempotentRequests {
         .params(TenantContext.require(), key)
         .query(
             (rs, rowNum) -> {
-              // Constant-time on the hash. It is not a secret and nothing here is
-              // authenticating, so this is not closing a hole -- it is refusing to
-              // teach the next reader that comparing two hashes with `equals` is
-              // fine, which in the place where it matters it is not.
               boolean sameRequest =
                   MessageDigest.isEqual(
                       requestHash.getBytes(StandardCharsets.UTF_8),
@@ -69,11 +65,6 @@ public class ProcessedRequests implements IdempotentRequests {
   public void remember(
       String operation, String key, String requestHash, String response, UUID actor) {
 
-    // Before the insert, not after, and that ordering is load-bearing: `replay`
-    // has just treated an expired row as absent, so the key may still be occupied
-    // by one -- and the primary key would refuse the row rather than replace it.
-    // Sweeping first is also where the sweep belongs at all, because here is
-    // where a tenant context exists.
     expireForThisTenant();
 
     jdbc.sql(

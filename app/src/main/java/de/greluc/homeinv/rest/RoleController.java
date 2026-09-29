@@ -192,9 +192,6 @@ public class RoleController {
    * @throws RoleEscalationException when the result would hold something the caller does not
    */
   private void requireWithinReach(AuthenticatedUser user, Role base, Set<Permission> added) {
-    // The decision is `authorization`'s, and reading the grant sets here instead
-    // would be a second place that answers "may" — which ArchUnit refuses, and
-    // which this method did on its first attempt.
     if (!accessControl.mayDefine(
         new RoleRef(user.role(), user.roleDefinitionId()), base, added)) {
       throw new RoleEscalationException(String.valueOf(user.role()), base.name());

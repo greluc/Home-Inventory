@@ -64,9 +64,6 @@ public class GraphQlPermissions {
   @Around("@annotation(required)")
   public Object check(ProceedingJoinPoint joinPoint, RequiresPermission required) throws Throwable {
     if (!joinPoint.getTarget().getClass().getPackageName().startsWith("de.greluc.homeinv.graphql")) {
-      // The same annotation is on every REST endpoint, where the interceptor
-      // already checks it. Checking twice would be harmless and would make a
-      // denial's stack trace say two different things about where it came from.
       return joinPoint.proceed();
     }
     accessControl.require(required.value());

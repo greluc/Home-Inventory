@@ -216,7 +216,6 @@ class ManifestSignatureTest {
       case "EC" -> generator.initialize(new ECGenParameterSpec("secp256r1"));
       case "RSA" -> generator.initialize(2048);
       default -> {
-        // Ed25519 has one parameter set and takes no initialisation.
       }
     }
     return generator.generateKeyPair();

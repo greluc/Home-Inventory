@@ -178,23 +178,6 @@ public class PluginRegistryQueries {
                 endpoint = excluded.endpoint,
                 fingerprint = excluded.fingerprint,
                 signed = excluded.signed,
-                -- WHO decided the state, and it is not always this statement.
-                -- `state` used to survive a re-registration untouched, so that an
-                -- operator's immediate measure outlived a restart (REQ-SEC-082).
-                -- Since V76 the SIGNATURE also decides it, and a manifest that
-                -- stopped verifying has to take the plugin out of service at the
-                -- next start -- which an untouched `state` would not do.
-                --
-                -- The two are told apart by the reason: `setDisabled` writes none,
-                -- because an operator is not a sentence, and a registration always
-                -- writes one when it disables. So a row that is DISABLED with no
-                -- reason is the operator's and is left exactly as it is; everything
-                -- else is this statement's to decide.
-                --
-                -- Re-enabling a plugin whose signature is broken therefore lasts
-                -- until the next start-up, and that is the intended answer rather
-                -- than an oversight: no setting runs a plugin whose document does
-                -- not match its signature.
                 state = case
                     when plugins.plugin_registration.state = 'DISABLED'
                          and plugins.plugin_registration.state_reason is null
@@ -408,9 +391,6 @@ public class PluginRegistryQueries {
     Array capabilities = rs.getArray("capabilities");
     return new Registration(
         rs.getString("plugin_id"),
-        // The name and the vendor are read back out of the manifest by the
-        // application layer, which is the one place that parses it. This row
-        // carries the manifest itself so that nothing has to be stored twice.
         null,
         rs.getString("plugin_version"),
         null,

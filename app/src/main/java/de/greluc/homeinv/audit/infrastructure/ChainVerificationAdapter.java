@@ -56,11 +56,6 @@ public class ChainVerificationAdapter implements ChainVerification {
             .query(ChainVerificationAdapter::toRow)
             .list();
 
-    // Without a marker the chain starts at the tenant's genesis. With one it
-    // starts at the oldest RETAINED entry, whose own hash the marker pins
-    // (ADR-0046) — that entry's `prev_hash` names a predecessor a retention run
-    // removed on purpose, so it is the one place the chain is not followed
-    // backwards.
     byte[] expectedPrevious =
         truncation.isPresent() ? null : AuditLogAdapter.genesisOf(tenantId);
 
@@ -173,9 +168,6 @@ public class ChainVerificationAdapter implements ChainVerification {
       if (!java.util.Arrays.equals(recomputedHash, anchor.anchorHash())) {
         broken.add(anchor.windowStart());
       } else if (anchor.pruned()) {
-        // Its entries are gone by a rule somebody wrote down. Recomputing the
-        // root over what is left would report tampering every day the retention
-        // run does its job (ADR-0046).
         pruned++;
       } else {
         List<byte[]> hashes =

@@ -46,11 +46,6 @@ class ValkeyChannelGrantTest {
   void theLiveChannelIsGranted() throws IOException {
     String acl = Files.readString(ACL, StandardCharsets.UTF_8);
 
-    // `&<channel>` is how Valkey spells a pub/sub grant. Literal rather than a
-    // glob, because Valkey matches the two commands differently: a SUBSCRIBE
-    // channel is glob-matched against the patterns, and a PSUBSCRIBE pattern has
-    // to appear literally -- so `&homeinv.*` would look like it covered this and
-    // would not (deploy/generate.py says the same thing at more length).
     assertThat(acl)
         .as(
             "the application publishes to `%s` and subscribes to it on every replica. An ACL that"
@@ -65,10 +60,6 @@ class ValkeyChannelGrantTest {
   void theDefaultUserIsOff() throws IOException {
     String acl = Files.readString(ACL, StandardCharsets.UTF_8);
 
-    // Valkey ships `default` enabled and without a password. Leaving it on would
-    // make every grant below it decoration: anything that reached port 6379 on
-    // `internal` would read every session and every rate-limit counter
-    // (REQ-SEC-104, ADR-0044).
     assertThat(acl).contains("user default off");
   }
 }

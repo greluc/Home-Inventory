@@ -59,9 +59,6 @@ public class DefaultPasswordPolicy implements PasswordPolicy {
           "A password needs at least " + MINIMUM_LENGTH + " characters.");
     }
     if (breached.contains(password)) {
-      // What the person is told and what they are not: that it is known, and
-      // nothing about where from. "This password appears in a breach list" is
-      // actionable; naming the list would only invite an argument about it.
       throw new WeakPasswordException(
           "This password appears in a list of passwords that are already known to attackers."
               + " Choose a different one.");
@@ -101,9 +98,6 @@ public class DefaultPasswordPolicy implements PasswordPolicy {
           .stream()
           .anyMatch(known -> asciiUpper(known).equals(suffix));
     } catch (PluginException unreachable) {
-      // The list already had its say. An unreachable plugin must not refuse a
-      // password nobody has evidence against, and must not be an outage that
-      // stops people changing their password.
       log.warn(
           "The password breach service could not be reached; the shipped list's verdict stands: {}",
           unreachable.getMessage());

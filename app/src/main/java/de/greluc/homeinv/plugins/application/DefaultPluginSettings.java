@@ -84,9 +84,6 @@ public class DefaultPluginSettings implements PluginSettings {
       return Map.of();
     }
     if (!registrations.permits(pluginId, CAPABILITY)) {
-      // Configured and not consented to. Said once, at debug, because it is a
-      // real diagnosis -- a plugin that behaves as if it were unconfigured
-      // usually is -- and because it must not become a line per call.
       log.debug(
           "Plugin {} declares settings and this tenant has not granted {}, so it is sent none",
           pluginId,
@@ -101,8 +98,6 @@ public class DefaultPluginSettings implements PluginSettings {
       if (value != null) {
         resolved.put(setting.key(), open(pluginId, setting.key(), value));
       } else if (setting.defaultValue() != null && !setting.defaultValue().isBlank()) {
-        // The manifest's own default, so a plugin sees one map rather than
-        // having to know which entries the tenant touched.
         resolved.put(setting.key(), setting.defaultValue());
       }
     }
@@ -111,9 +106,6 @@ public class DefaultPluginSettings implements PluginSettings {
 
   @Override
   public boolean maySendSettings(String pluginId, UUID tenantId) {
-    // The tenant is the ambient one -- `registrations.permits` reads a grant
-    // under row-level security -- and the parameter is here so that a caller
-    // cannot ask about one tenant while acting for another without saying so.
     return TenantContext.current().filter(tenantId::equals).isPresent()
         && registrations.permits(pluginId, CAPABILITY);
   }
@@ -121,10 +113,6 @@ public class DefaultPluginSettings implements PluginSettings {
   @Override
   @Transactional(readOnly = true)
   public List<PluginSettings.Setting> configured(String pluginId) {
-    // `declared` and not `declaredOrNothing`: this is a surface, and a plugin id
-    // nothing is installed under must answer "not found" rather than an empty
-    // list. An endpoint that answers 200 for an id that does not exist is the
-    // shape REQ-SEC-025 forbids, and `EndpointNegativeCoverageIT` drives it.
     List<PluginManifest.Setting> settingsOfManifest = declared(pluginId);
     Map<String, PluginSettingQueries.Stored> stored = storedByKey(pluginId);
     List<PluginSettings.Setting> answer = new ArrayList<>();
@@ -139,7 +127,6 @@ public class DefaultPluginSettings implements PluginSettings {
               setting.values(),
               setting.defaultValue(),
               setting.label(),
-              // A secret's value never comes back out here, stored or not.
               secret || value == null ? null : value.value(),
               value != null));
     }
@@ -171,27 +158,17 @@ public class DefaultPluginSettings implements PluginSettings {
         secret ? sealing.seal(entityOf(pluginId), key, checked) : checked,
         secret,
         actor);
-    // The value never appears here, secret or not: a plugin setting is a
-    // tenant's business and a log line is the deployment's (REQ-SEC-066). The
-    // key and the id do appear and both were chosen by the caller, so both go
-    // through `LogSafe`: a newline in either writes a second entry that never
-    // happened.
     log.info("Tenant configured {} of plugin {}", LogSafe.value(key), LogSafe.value(pluginId));
   }
 
   @Override
   @Transactional
   public void clear(String pluginId, String key, UUID actor) {
-    // Asked first, and for the same reason `configured` asks: clearing a setting
-    // of a plugin nobody installed is not "already true", it is a request about
-    // something that does not exist.
     declared(pluginId);
     if (settings.remove(pluginId, key)) {
       log.info("Tenant cleared {} of plugin {}", LogSafe.value(key), LogSafe.value(pluginId));
     }
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The settings the plugin's current manifest declares.
@@ -224,8 +201,6 @@ public class DefaultPluginSettings implements PluginSettings {
           .spec()
           .settings();
     } catch (RuntimeException unreadable) {
-      // The same answer the resolution gives an unreadable manifest: skip it and
-      // say so once, rather than failing the call that happened to be first.
       log.warn(
           "The stored manifest of {} cannot be read, so it is sent no settings: {}",
           pluginId,

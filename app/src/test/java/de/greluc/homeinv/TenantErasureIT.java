@@ -57,7 +57,6 @@ class TenantErasureIT extends AbstractIntegrationTest {
     Tenant tenant = tenantWithOwner("erase-owner@example.org", "Going");
     MockHttpSession owner = login("erase-owner@example.org");
 
-    // Before: ordinary work is possible.
     mockMvc
         .perform(get("/api/v1/items").param("q", "").param("language", "en").session(owner))
         .andExpect(status().isOk());
@@ -73,40 +72,33 @@ class TenantErasureIT extends AbstractIntegrationTest {
             .getContentAsString();
     String token = json.readTree(requested).get("revocationToken").asString();
 
-    // "Access blocked immediately" — the same session, the next request.
     mockMvc
         .perform(get("/api/v1/items").param("q", "").param("language", "en").session(owner))
         .andExpect(status().isForbidden())
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/tenant-inaccessible"));
 
-    // The state stays readable, because a member being refused everything else is
-    // entitled to know why.
     mockMvc
         .perform(get("/api/v1/tenants/" + tenant.tenantId()).session(owner))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.state").value("PENDING_DELETION"));
 
-    // Asking twice is a conflict carrying the date, not a second token.
     mockMvc
         .perform(delete("/api/v1/tenants/" + tenant.tenantId()).session(owner).with(csrf()))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/deletion-pending"))
         .andExpect(jsonPath("$.eraseAfter").isNotEmpty());
 
-    // The link works with no session at all.
     mockMvc
         .perform(post("/api/v1/tenant-revocations/" + token))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(tenant.tenantId().toString()))
         .andExpect(jsonPath("$.state").value("ACTIVE"));
 
-    // And the tenant answers again.
     mockMvc
         .perform(get("/api/v1/items").param("q", "").param("language", "en").session(owner))
         .andExpect(status().isOk());
 
-    // The token is spent: a second use is answered like one that never existed.
     mockMvc
         .perform(post("/api/v1/tenant-revocations/" + token))
         .andExpect(status().isGone())
@@ -134,7 +126,6 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/forbidden"));
 
-    // The tenant is untouched.
     mockMvc
         .perform(
             get("/api/v1/tenants/" + tenant.tenantId())
@@ -156,7 +147,6 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .perform(delete("/api/v1/tenants/" + going.tenantId()).session(session).with(csrf()))
         .andExpect(status().isAccepted());
 
-    // Switching away is one of the three things a blocked tenant does not stop.
     mockMvc
         .perform(
             post("/api/v1/me/tenant")
@@ -181,12 +171,9 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .perform(delete("/api/v1/tenants/" + tenant.tenantId()).session(owner).with(csrf()))
         .andExpect(status().isAccepted());
 
-    // The request is backdated rather than the grace period shortened, so the
-    // thirty days the requirement names stay the ones under test.
     backdate(tenant);
     runner.eraseDueTenants();
 
-    // An ordinary account does not reach the instance surface at all.
     UUID ordinary = createUser("erase-onlooker@example.org");
     provisioning.provision("Onlooker", ordinary);
     mockMvc
@@ -209,15 +196,11 @@ class TenantErasureIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.requestedBy").value(tenant.ownerId().toString()))
         .andExpect(jsonPath("$.report[?(@.block == 'audit')].note").exists());
 
-    // A tenant that was never erased has no certificate, and says so the way
-    // every other unknown thing does.
     mockMvc
         .perform(get("/api/v1/instance/erasures/" + UUID.randomUUID()).session(operator))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/not-found"));
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Moves a request past its grace period.
@@ -287,9 +270,6 @@ class TenantErasureIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

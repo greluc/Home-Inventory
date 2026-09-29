@@ -133,9 +133,6 @@ public final class TracingEnvironment implements EnvironmentPostProcessor {
   public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication app) {
     String ours = trimmed(environment.getProperty(ENDPOINT));
     String boots = trimmed(environment.getProperty(BOOT_ENDPOINT));
-    // `parseBoolean` rather than `equalsIgnoreCase`, which SpotBugs flags:
-    // case folding is locale-sensitive and a Turkish locale folds "I"
-    // somewhere other than where this would expect it.
     boolean enabledOutright = Boolean.parseBoolean(trimmed(environment.getProperty(BOOT_ENABLED)));
 
     Map<String, Object> derived = new LinkedHashMap<>();
@@ -166,11 +163,6 @@ public final class TracingEnvironment implements EnvironmentPostProcessor {
     String bridge = String.join(",", BRIDGE);
     return existing.isEmpty() ? bridge : existing + "," + bridge;
   }
-
-  // `excluding` reads the property this class is about to shadow, which is
-  // deliberate and is why the merge happens before the source is added: what is
-  // published contains what was there.
-
 
   /**
    * A property value with no surrounding space, and never {@code null}.

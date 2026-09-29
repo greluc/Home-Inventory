@@ -130,17 +130,12 @@ public class TypeTemplates {
         if (parsed.expiry()
             && parsed.dataType() != FieldDataType.DATE
             && parsed.dataType() != FieldDataType.DATETIME) {
-          // The type editor refuses it too. A template that could not be imported
-          // is a packaging error, and the moment to find one is startup.
           throw new IllegalStateException(
               "Template '" + key + "' marks '" + parsed.key() + "' as an expiry, but it holds a "
                   + parsed.dataType().token() + ". Only a date can expire.");
         }
         if (parsed.sensitive()
             && (parsed.searchable() || parsed.sortable() || parsed.facetable())) {
-          // The type editor refuses this combination, so a template stating it
-          // would be a template that cannot be imported -- discovered by the
-          // first tenant to try rather than by the build.
           throw new IllegalStateException(
               "Template '" + key + "' marks '" + parsed.key() + "' sensitive as well as "
                   + "searchable, sortable or facetable. A sensitive field is stored encrypted, so "

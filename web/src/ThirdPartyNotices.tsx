@@ -44,9 +44,6 @@ export function ThirdPartyNotices({ onClose }: { onClose: () => void }): React.J
     };
     void Promise.all([
       api.notices().then(carry(setServer)),
-      // The bundle's own, beside it in the same image. `fetch` and not the
-      // typed client: this is not an API call, it is a file this artifact
-      // ships, and nginx serves it from the document root.
       fetch("/third-party-notices.json", { credentials: "omit" })
         .then((answer) => (answer.ok ? (answer.json() as Promise<Notices>) : Promise.reject()))
         .then(carry(setClient)),

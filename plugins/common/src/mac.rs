@@ -49,8 +49,6 @@ pub fn sha256(bytes: &[u8]) -> [u8; 32] {
 ///
 /// The tag, raw.
 pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
-    // A key longer than the block is hashed first; a shorter one is padded with
-    // zeroes. Both are the RFC's own rule rather than a choice.
     let mut block = [0_u8; BLOCK];
     if key.len() > BLOCK {
         let digest = Sha256::digest(key);

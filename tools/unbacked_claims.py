@@ -30,9 +30,6 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "tools" / "unbacked-claims-baseline.txt"
 
-# What the corpus says when it is promising a property rather than describing one.
-# Taken from 14 §14.3's own list, plus the three spellings that turned out to carry
-# the same weight in practice.
 CLAIM = re.compile(
     r"\b("
     r"enforced|enforces|cannot|can never|must never|never happens|"
@@ -42,23 +39,18 @@ CLAIM = re.compile(
     re.IGNORECASE,
 )
 
-# What counts as naming the thing that checks it.
 BACKING = re.compile(
     r"("
-    r"REQ-[A-Z]+-\d+"              # a requirement, which carries an acceptance criterion
-    r"|ADR-\d{4}"                  # a decision, which carries its consequences
-    r"|\b\w+(?:Test|IT)\b"         # a test class: ArchitectureRulesTest, MediaScanIT
-    r"|\.github/workflows/"        # a named workflow
-    r"|tools/\w+\.py"              # a named gate script
-    r"|gradlew\s+\S+"              # a named Gradle task
-    r"|deploy/smoke/\w+\.sh"       # the smoke suites
+    r"REQ-[A-Z]+-\d+"
+    r"|ADR-\d{4}"
+    r"|\b\w+(?:Test|IT)\b"
+    r"|\.github/workflows/"
+    r"|tools/\w+\.py"
+    r"|gradlew\s+\S+"
+    r"|deploy/smoke/\w+\.sh"
     r")"
 )
 
-# Prose lives in docs/. The requirements catalogue is excluded: every row there IS a
-# requirement with an acceptance criterion beside it, so the rule would match itself
-# on every line. ADRs are in scope — a decision that promises a property and names no
-# check is exactly what R16 describes.
 SCANNED = ("docs/architecture", "docs/adr", "docs/design", "docs/reference")
 SKIPPED_NAMES = {"0000-open-points.md"}
 

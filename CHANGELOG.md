@@ -1067,7 +1067,7 @@ commit".
   and certificates, each according to its declared kind — and renders the
   configuration files that have to live *inside* a container.
 
-- The architecture as 14 arc42-oriented chapters, covering the building blocks,
+- The architecture as 15 arc42-oriented chapters, covering the building blocks,
   the runtime and deployment views, the data model, the API contract, the plugin
   system, identification and labels, offline synchronisation, security and
   operations.

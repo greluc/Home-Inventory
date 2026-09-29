@@ -93,15 +93,11 @@ mod tests {
 
     #[test]
     fn a_leap_day() {
-        // 2024-02-29 is day 19 782, and a date routine that gets this wrong gets
-        // one day in 1 461 wrong, which is the kind of defect that is found in
-        // February.
         assert_eq!(civil_from_days(19_782), (2024, 2, 29));
     }
 
     #[test]
     fn the_stamps_agree_and_are_utc() {
-        // 2023-11-14T22:13:20Z, the timestamp the webhook tests also use.
         let (date, stamp) = amz_stamps(1_700_000_000);
         assert_eq!(date, "20231114");
         assert_eq!(stamp, "20231114T221320Z");

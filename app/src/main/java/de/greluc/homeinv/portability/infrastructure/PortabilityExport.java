@@ -70,9 +70,6 @@ public class PortabilityExport implements ExportSource, ImportTarget {
 
   @Override
   public int order() {
-    // Last, and it could be first: a mapping profile points at nothing. Behind
-    // everything else so that a failure in it is the last thing to happen rather
-    // than the thing that stops the inventory arriving.
     return 70;
   }
 

@@ -65,8 +65,6 @@ class PatternSafetyTest {
         "(abc)+"
       })
   void ordinaryPatternsPass(String pattern) {
-    // The point of the refusals above is that these still work. A guard that
-    // refused half of what a tenant legitimately writes would be switched off.
     assertThat(PatternSafety.refuses(pattern)).isEmpty();
   }
 
@@ -74,15 +72,9 @@ class PatternSafetyTest {
   @DisplayName("is read correctly through the constructs that hide structure")
   @ValueSource(
       strings = {
-        // A quote block: everything between \Q and \E is literal, so this `)`
-        // is not a closing parenthesis however much it looks like one.
         "\\Q)\\E",
-        // A group that is not repeated at all cannot explode, whatever is in it.
         "(a+)d",
-        // A `]` escaped inside a character class, which ends the class only if
-        // the escape is missed.
         "[\\]]+",
-        // Branches that begin with different things: a literal and a class.
         "(a|[xy])*"
       })
   void theseAreReadCorrectlyAndAllowed(String pattern) {
@@ -93,14 +85,6 @@ class PatternSafetyTest {
   @DisplayName("is refused conservatively when a branch begins with something unreadable")
   @ValueSource(strings = {"((ab)|c)+", "(^a|b)+", "(?:a|ab)*", "(?<code>a|ab)*"})
   void whatCannotBeReadIsRefusedRatherThanAdmitted(String pattern) {
-    // `((ab)|c)+` is in fact harmless and is refused anyway: the first branch
-    // begins with a group, and reading inside it would mean building the
-    // automaton this rule exists to avoid. The cost of refusing is a rewritten
-    // pattern and a sentence saying why; the cost of admitting is an instance
-    // that stops answering.
-    //
-    // The last two are the same question through a non-capturing and a named
-    // group, whose `?` prefix is not where the branch starts.
     assertThat(PatternSafety.refuses(pattern)).isPresent();
   }
 
@@ -123,10 +107,6 @@ class PatternSafetyTest {
   @Test
   @DisplayName("gives up rather than running long, whatever shape it has")
   void theBudgetStopsAMatchTheRuleDidNotForesee() {
-    // `(a|aa)+$` is catastrophic AND is refused at definition time -- both
-    // branches begin with `a`. It is compiled directly here, past that guard, to
-    // stand in for the pattern nobody anticipated: the budget must stop a match
-    // it was never warned about, which is the whole reason there are two lines.
     RegularExpression bounded =
         new BoundedRegularExpressions(Duration.ofMillis(50)).getRegularExpression("(a|aa)+$");
     String nearlyMatching = "a".repeat(40) + "!";

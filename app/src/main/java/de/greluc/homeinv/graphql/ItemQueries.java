@@ -86,9 +86,6 @@ public class ItemQueries {
     try {
       return items.get(id);
     } catch (NotFoundException absent) {
-      // GraphQL's nullable field IS the "not found" of this surface: there is no
-      // status code to carry one, and an error entry would say the same thing
-      // with more words.
       return null;
     }
   }

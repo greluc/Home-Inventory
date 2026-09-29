@@ -1,15 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// READING SOMEBODY ELSE'S EXPORT AND SAYING WHAT IT CONTAINS.
-//
-// The CSV profile is in the core image. Homebox, InvenTree and Snipe-IT are
-// plugins, because each is a foreign format somebody else keeps changing.
-//
-// A MAPPER PROPOSES AND NEVER WRITES. It turns a file into rows of key and
-// value; the core validates them against the tenant's own type definitions,
-// refuses what does not fit and writes what does. A mapper that could create
-// fields would be a foreign file changing the type system (ADR-0020).
 
 syntax = "proto3";
 

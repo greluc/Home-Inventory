@@ -74,26 +74,17 @@ class CsvImportIT extends AbstractIntegrationTest {
     assertThat(names(tenant))
         .containsExactlyInAnyOrder("A cordless drill", "A box of screws", "A bicycle");
 
-    // The place path became a tree rather than three places called "Garage /
-    // Shelf": a path is nested, which is what `HB.location` means over there.
     assertThat(placeNames(tenant)).containsExactlyInAnyOrder("Garage", "Shelf");
     assertThat(childCount(tenant, "Garage")).isEqualTo(1);
 
-    // Tags that did not exist were made, and the ones shared by two rows are one
-    // tag rather than two.
     assertThat(tagNames(tenant)).containsExactlyInAnyOrder("tools", "valuable");
     assertThat(assignmentCount(tenant)).isEqualTo(4);
 
-    // REQ-PORT-008: each item knows where it came from and what it was called
-    // there, which is what makes a second import an update.
     assertThat(provenance(tenant, "A cordless drill")).isEqualTo("ref-1");
 
     JsonNode report = json.readTree(done.report());
     assertThat(report.get("created").asInt()).isEqualTo(3);
     assertThat(report.get("updated").asInt()).isZero();
-    // A Homebox file carries a serial number; whether an item here has a field
-    // for one is the tenant's decision, so the column is reported rather than
-    // refused (ADR-0020).
     assertThat(report.get("fieldsTheTypeDoesNotDeclare").valueStream().map(JsonNode::asString))
         .contains("serialNumber");
     assertThat(report.get("preview")).isNotEmpty();
@@ -115,8 +106,6 @@ class CsvImportIT extends AbstractIntegrationTest {
     ImportService.ImportJobView done = inOwn(tenant, () -> imports.job(second.id()));
     assertThat(done.state()).as("the second import finished: %s", done.failure()).isEqualTo("DONE");
 
-    // Three items, not six: `HB.import_ref` is the key the other system used and
-    // the provenance row is what remembers it (REQ-PORT-008).
     assertThat(names(tenant)).hasSize(3).contains("A rather good drill");
     JsonNode report = json.readTree(done.report());
     assertThat(report.get("updated").asInt()).isEqualTo(3);
@@ -137,9 +126,6 @@ class CsvImportIT extends AbstractIntegrationTest {
     JsonNode report = json.readTree(done.report());
     assertThat(report.get("dryRun").asBoolean()).isTrue();
     assertThat(report.get("created").asInt()).isEqualTo(3);
-    // The preview is what REQ-PORT-001 asks for beside the dry run: the mapped
-    // rows, so somebody can see that `HB.location` became a place before they
-    // commit to five hundred of them.
     assertThat(report.get("preview").valueStream().map(row -> row.get("name").asString()).toList())
         .contains("A cordless drill");
 
@@ -164,8 +150,6 @@ class CsvImportIT extends AbstractIntegrationTest {
         .contains("purchasedOn")
         .contains("nothing was written");
 
-    // REQ-PORT-007, and the reason the whole import is one transaction: the two
-    // rows that were fine did not arrive either.
     assertThat(names(tenant)).isEmpty();
   }
 
@@ -179,15 +163,11 @@ class CsvImportIT extends AbstractIntegrationTest {
     assertThat(profiles).extracting(MappingProfile::key).contains("homebox", "inventree");
     MappingProfile homebox =
         profiles.stream().filter(p -> p.key().equals("homebox")).findFirst().orElseThrow();
-    // Verbatim from Homebox's own `io_row.go`, which is the point of a shipped
-    // profile: a header that is nearly right maps nothing at all.
     assertThat(homebox.columns())
         .containsEntry("HB.name", "name")
         .containsEntry("HB.location", "location")
         .containsEntry("HB.import_ref", "sourceKey");
   }
-
-  // -------------------------------------------------------------------------
 
   private ImportService.ImportJobView upload(
       Tenant tenant, String csv, String profile, boolean dryRun) {

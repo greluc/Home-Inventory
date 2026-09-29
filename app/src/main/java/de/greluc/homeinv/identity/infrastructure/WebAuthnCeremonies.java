@@ -149,10 +149,6 @@ public class WebAuthnCeremonies {
                         new PublicKeyCredentialDescriptor(
                             PublicKeyCredentialType.PUBLIC_KEY, decode(id), null))
                 .toList(),
-            // A second factor, not a replacement for the password (REQ-AUTH-002),
-            // so no resident key is asked for: the account is already known when
-            // the passkey is used, and a discoverable credential would take a slot
-            // on a hardware key for nothing.
             new AuthenticatorSelectionCriteria(
                 null, ResidentKeyRequirement.DISCOURAGED, UserVerificationRequirement.PREFERRED),
             null,
@@ -213,11 +209,6 @@ public class WebAuthnCeremonies {
               new RegistrationParameters(
                   new ServerProperty(origin, relyingPartyId, challengeOf(challenge)), null, false));
 
-      // Read once and checked rather than assumed. A verified response has all
-      // three — the library would not have returned otherwise — but the types say
-      // they are nullable because the same class carries a response that has only
-      // been parsed, and a response that verified while carrying no public key is
-      // a library bug this should refuse rather than dereference.
       AttestationObject attestation = data.getAttestationObject();
       AuthenticatorData<RegistrationExtensionAuthenticatorOutput> authenticator =
           attestation == null ? null : attestation.getAuthenticatorData();

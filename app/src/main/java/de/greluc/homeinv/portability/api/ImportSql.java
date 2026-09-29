@@ -119,11 +119,6 @@ public final class ImportSql {
             .filter(column -> !"id".equals(column))
             .map(column -> column + " = excluded." + column)
             .collect(Collectors.joining(", "));
-    // Joined rather than formatted. A text block with `%s` in it is a format
-    // string, and a format string containing a line break is a SpotBugs finding
-    // (`VA_FORMAT_STRING_USES_NEWLINE`) whose remedy is `%n` -- which is the
-    // platform's line separator and would make the statement differ between a
-    // developer's machine and the runner for no reason at all.
     return String.join(
         "\n",
         "insert into " + table + " (tenant_id, " + String.join(", ", columns) + ")",

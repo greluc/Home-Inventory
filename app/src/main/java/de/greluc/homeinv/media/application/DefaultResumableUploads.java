@@ -104,8 +104,6 @@ public class DefaultResumableUploads implements ResumableUploads {
       UUID actor) {
 
     if (declaredLength > maxBytes) {
-      // Before a byte arrives, which is what REQ-SEC-037 asks for and what the
-      // one-shot path can only approximate by cutting the stream off mid-read.
       throw new PayloadTooLargeException(
           "The upload declares %d bytes; the limit is %d".formatted(declaredLength, maxBytes));
     }
@@ -140,16 +138,10 @@ public class DefaultResumableUploads implements ResumableUploads {
 
     UploadSession session = load(uploadId);
     if (session.isComplete()) {
-      // Everything already arrived, and this is a client repeating a request
-      // whose answer it lost. Told where it is rather than refused: a refusal
-      // would send it back to the beginning of a file that is already stored.
       return UploadCompletion.view(session, session.getDeclaredLength());
     }
     long staged = staging.append(session.getTenantId(), uploadId, offset, content);
     if (staged > session.getDeclaredLength()) {
-      // More than was promised. The bytes are discarded rather than trimmed:
-      // a client that sent the wrong amount does not know what it sent, and a
-      // file assembled out of a guess is worse than one that failed.
       staging.deleteStaged(session.getTenantId(), uploadId);
       throw new PayloadTooLargeException(
           "The upload declared %d bytes and has sent %d"
@@ -225,9 +217,6 @@ public class DefaultResumableUploads implements ResumableUploads {
     try {
       staging.deleteStaged(tenantId, uploadId);
     } catch (IOException failed) {
-      // Logged rather than thrown. Every caller of this has already done the
-      // thing that mattered — stored the file, or abandoned the upload — and a
-      // staged file nobody removed is reclaimed by the sweep.
       log.warn("Staged bytes could not be discarded; the sweep will take them", failed);
     }
   }

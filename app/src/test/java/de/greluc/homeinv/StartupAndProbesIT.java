@@ -38,16 +38,11 @@ class StartupAndProbesIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("the probe groups exist, and livez consults nothing external (REQ-NFR-045)")
   void probeGroupsAreConfiguredAsDocumented() {
-    // The membership is configuration, and configuration is exactly what drifts.
-    // `livez` must contain the liveness state and nothing else: an external check
-    // there turns a database outage into a restart loop, which is the one
-    // response guaranteed to make the outage worse (13 §13.3).
     assertThat(environment.getProperty("management.endpoint.health.group.livez.include"))
         .isEqualTo("livenessState");
     assertThat(environment.getProperty("management.endpoint.health.group.livez.additional-path"))
         .isEqualTo("management:/livez");
 
-    // `readyz` has to consult both, or a skipped migration takes traffic.
     assertThat(environment.getProperty("management.endpoint.health.group.readyz.include"))
         .contains("db")
         .contains("schemaVersionCheck");
@@ -58,8 +53,6 @@ class StartupAndProbesIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("readyz names contributors that actually exist")
   void readinessNamesRealContributors() {
-    // A group that names a contributor nobody registered is silently empty, and
-    // the probe then reports UP for a check that never ran.
     assertThat(healthContributors.getContributor("db")).isNotNull();
     assertThat(healthContributors.getContributor("schemaVersionCheck")).isNotNull();
   }
@@ -67,8 +60,6 @@ class StartupAndProbesIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("the schema check compares against the migrations this build ships (REQ-SEC-101)")
   void schemaCheckComparesAgainstTheShippedMigrations() {
-    // Nothing is hardcoded: adding V11 raises the expectation by existing, so
-    // there is no number anybody can forget to update.
     assertThat(schemaVersion.expected()).isGreaterThanOrEqualTo(10);
     assertThat(schemaVersion.applied()).isEqualTo(schemaVersion.expected());
     assertThat(schemaVersion.satisfied()).isTrue();
@@ -87,8 +78,6 @@ class StartupAndProbesIT extends AbstractIntegrationTest {
         assertThat(rows.getInt(1)).isPositive();
       }
 
-      // Reading which migrations ran is metadata. Claiming one ran is not: the
-      // role must not be able to write the very fact the startup check reads.
       assertThat(canWriteHistory(statement)).isFalse();
     }
   }
@@ -98,7 +87,6 @@ class StartupAndProbesIT extends AbstractIntegrationTest {
   void theTenantContextDoesNotSurviveTheConnection() throws Exception {
     UUID tenant = UUID.randomUUID();
 
-    // Exactly what the transaction manager does, on a connection of our own.
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement()) {
       statement.execute("select set_config('app.tenant_id', '" + tenant + "', true)");
@@ -106,13 +94,9 @@ class StartupAndProbesIT extends AbstractIntegrationTest {
         rows.next();
         assertThat(rows.getString(1)).isEqualTo(tenant.toString());
       }
-      // `true` is the local flag: the setting belongs to the transaction and is
-      // discarded when it ends.
       connection.rollback();
     }
 
-    // A fresh borrow. If the GUC survived, this connection would answer with the
-    // previous caller's tenant - and every policy would compare against it.
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement();
         ResultSet rows = statement.executeQuery("select current_setting('app.tenant_id', true)")) {

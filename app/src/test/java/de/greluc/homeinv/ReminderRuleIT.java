@@ -75,18 +75,13 @@ class ReminderRuleIT extends AbstractIntegrationTest {
     UUID ruleId =
         inOwn(tenant, () -> rules.create(rule("Warranties", ReminderTrigger.WARRANTY_EXPIRY, 14), tenant.userId())).id();
 
-    // Fifteen days out: outside the fortnight, so nothing yet.
     assertThat(run(tenant, "2026-09-16")).isZero();
 
-    // Fourteen days out: due.
     assertThat(run(tenant, "2026-09-17")).isEqualTo(1);
 
-    // And not again tomorrow, or ever, for the same date. This is the property a
-    // reminder feature lives or dies by.
     assertThat(run(tenant, "2026-09-18")).isZero();
     assertThat(run(tenant, "2026-09-30")).isZero();
 
-    // Unless the date moves: an extended warranty is a new thing to be told about.
     warrantyUntil(tenant, itemId, "2027-01-15");
     assertThat(run(tenant, "2027-01-02")).isEqualTo(1);
 
@@ -100,7 +95,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("reminder-service@example.org");
     UUID itemId = anItem(tenant, "A boiler");
     subscribe(tenant, ReminderTrigger.MAINTENANCE_DUE);
-    // Serviced on the first of March, every 90 days.
     interval(tenant, itemId, 90);
     inOwn(
         tenant,
@@ -113,12 +107,9 @@ class ReminderRuleIT extends AbstractIntegrationTest {
 
     inOwn(tenant, () -> rules.create(rule("Servicing", ReminderTrigger.MAINTENANCE_DUE, 0), tenant.userId()));
 
-    // 1 March + 90 days = 30 May.
     assertThat(run(tenant, "2026-05-29")).isZero();
     assertThat(run(tenant, "2026-05-30")).isEqualTo(1);
 
-    // SERVICING IT AGAIN MOVES THE NEXT ONE rather than leaving it where it was:
-    // "every 90 days" means 90 days since it was last done.
     inOwn(
         tenant,
         () ->
@@ -140,8 +131,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
 
     inOwn(tenant, () -> rules.create(rule("Servicing", ReminderTrigger.MAINTENANCE_DUE, 0), tenant.userId()));
 
-    // Most things are never serviced, and an interval nobody set is not an
-    // interval of zero.
     assertThat(run(tenant, "2030-01-01")).isZero();
   }
 
@@ -151,13 +140,9 @@ class ReminderRuleIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("reminder-unsubscribed@example.org");
     UUID itemId = anItem(tenant, "A dishwasher");
     warrantyUntil(tenant, itemId, "2026-10-01");
-    // Deliberately no subscription.
 
     inOwn(tenant, () -> rules.create(rule("Warranties", ReminderTrigger.WARRANTY_EXPIRY, 14), tenant.userId()));
 
-    // The reminder is still RECORDED -- it was due, and a subscription appearing
-    // tomorrow should not produce a backlog of everything that was ever due --
-    // but nothing is queued for anybody.
     assertThat(run(tenant, "2026-09-20")).isZero();
     assertThat(queuedFor(tenant)).isEmpty();
   }
@@ -177,12 +162,11 @@ class ReminderRuleIT extends AbstractIntegrationTest {
                     null, "A neighbour", LocalDate.parse("2026-09-01"), LocalDate.parse("2026-09-10"), null),
                 tenant.userId()));
 
-    // -1 means "the day after it was due", which is what an OVERDUE reminder is.
     inOwn(tenant, () -> rules.create(rule("Overdue loans", ReminderTrigger.LOAN_DUE, -1), tenant.userId()));
 
-    assertThat(run(tenant, "2026-09-10")).isZero(); // due today, not late
+    assertThat(run(tenant, "2026-09-10")).isZero();
     assertThat(run(tenant, "2026-09-11")).isEqualTo(1);
-    assertThat(run(tenant, "2026-09-12")).isZero(); // and not every day after
+    assertThat(run(tenant, "2026-09-12")).isZero();
   }
 
   @Test
@@ -201,8 +185,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
 
     inOwn(tenant, () -> rules.create(rule("Overdue loans", ReminderTrigger.LOAN_DUE, 0), tenant.userId()));
 
-    // There is nothing for it to be late against, and treating "no date" as "due
-    // now" would make a reminder out of a lend nobody put a date on.
     assertThat(run(tenant, "2027-01-01")).isZero();
   }
 
@@ -235,7 +217,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
                     "Watched warranties", ReminderTrigger.WARRANTY_EXPIRY, searchId, 14, CHANNEL, true),
                 tenant.userId()));
 
-    // One of the two, not both: the search is what decides which.
     assertThat(run(tenant, "2026-09-20")).isEqualTo(1);
     assertThat(queuedFor(tenant)).hasSize(1);
     assertThat(queuedFor(tenant).get(0)).contains("Zzz watched appliance");
@@ -247,8 +228,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
   void anUnservedTriggerIsRefusedOnSave() {
     Tenant tenant = newTenant("reminder-unserved@example.org");
 
-    // Stocktaking is stage 2. Accepting this and then never firing would look
-    // like working software until the day somebody needed it.
     assertThatThrownBy(
             () ->
                 inOwn(
@@ -266,8 +245,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
             ReminderTrigger.LOAN_DUE,
             ReminderTrigger.MINIMUM_STOCK,
             ReminderTrigger.LICENCE_EXPIRY)
-        // Stocktaking is stage 2, so its trigger is still declared and served by
-        // nothing -- which is the state this test exists to keep visible.
         .doesNotContain(ReminderTrigger.STOCKTAKE_DISCREPANCY);
   }
 
@@ -276,9 +253,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
   void anExpiryFieldFires() {
     Tenant tenant = newTenant("reminder-expiry@example.org");
     UUID itemId = anItem(tenant, "A licence for something");
-    // The tenant marks one of its own date fields as an expiry. That flag is the
-    // column `LICENCE_EXPIRY` was waiting for: until it existed the trigger was
-    // declared and served by nothing, because nothing stored such a date.
     expiryField(tenant, "validUntil");
     expiryOn(tenant, itemId, "validUntil", "2026-10-01");
     subscribe(tenant, ReminderTrigger.LICENCE_EXPIRY);
@@ -289,8 +263,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
 
     assertThat(run(tenant, "2026-09-16")).isZero();
     assertThat(run(tenant, "2026-09-17")).isEqualTo(1);
-    // Once, like every other trigger: the unique index on (rule, subject, date)
-    // is what stops a reminder becoming something people switch off.
     assertThat(run(tenant, "2026-09-18")).isZero();
   }
 
@@ -315,8 +287,6 @@ class ReminderRuleIT extends AbstractIntegrationTest {
                 tenant.userId()));
 
     assertThat(run(tenant, "2026-09-20")).isZero();
-    // The rule is still there with what was written in it, so turning it back on
-    // does not ask again.
     ReminderRules.ReminderRuleView stored = inOwn(tenant, () -> rules.get(created.id()));
     assertThat(stored.enabled()).isFalse();
     assertThat(stored.offsetDays()).isEqualTo(14);
@@ -330,13 +300,8 @@ class ReminderRuleIT extends AbstractIntegrationTest {
     ReminderRules.ReminderRuleView stored =
         inOwn(tenant, () -> rules.create(rule("Low stock", ReminderTrigger.MINIMUM_STOCK, 30), tenant.userId()));
 
-    // "Three days before the coffee runs out" is not a thing anybody can know, so
-    // the offset is normalised away rather than kept and ignored -- a rule whose
-    // screen says "30 days early" and behaves otherwise is a rule that lies.
     assertThat(stored.offsetDays()).isZero();
   }
-
-  // -------------------------------------------------------------------------
 
   private de.greluc.homeinv.search.api.SavedSearches searches() {
     return applicationContext.getBean(de.greluc.homeinv.search.api.SavedSearches.class);

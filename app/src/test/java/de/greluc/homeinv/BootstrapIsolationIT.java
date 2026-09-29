@@ -90,8 +90,6 @@ class BootstrapIsolationIT {
             .createIfAbsent(email, "Owner", "en", "correct-horse-battery-staple-42")
             .orElseThrow();
 
-    // The question the runner asks on a second run, and the reason it must not be
-    // answered by a paged listing: paging signs a cursor.
     assertThat(accounts.hasInstanceOperator()).isFalse();
 
     accounts.replaceEntitlements(userId, true, true, null, userId);

@@ -115,9 +115,6 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
                   });
 
       try {
-        // The first message carries the reference and no bytes, which is the
-        // contract's own framing: a store can create its target before the
-        // first chunk arrives.
         requests.onNext(
             PutRequest.newBuilder()
                 .setBlob(refOf(context, sha256))
@@ -139,9 +136,6 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
       }
 
       await(finished, failed, "store a blob");
-      // `created` false means the bytes were already there, which is not a
-      // failure: the address is the hash, so storing the same bytes twice is the
-      // same file (ADR-0032).
       return answer.get() != null && answer.get().getCreated();
     }
 
@@ -169,8 +163,6 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
         throw new UncheckedIOException("A pipe could not be opened", impossible);
       }
 
-      // A daemon thread: a caller that abandons the stream must not keep the
-      // application alive, and closing the read end raises here, which ends it.
       Thread pump =
           new Thread(
               () -> {
@@ -179,10 +171,6 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
                     out.write(chunks.next().getChunk().toByteArray());
                   }
                 } catch (IOException | StatusRuntimeException stopped) {
-                  // The reader closed early, or the plugin stopped sending. Both
-                  // end this thread; the reader sees the broken pipe, which is
-                  // what a truncated read should look like rather than a short
-                  // file that looks complete.
                   Thread.currentThread().interrupt();
                 }
               },
@@ -234,8 +222,6 @@ public class BlobStoreAdapter implements PortAdapter<BlobStore> {
      */
     private void await(CountDownLatch finished, AtomicReference<Throwable> failed, String what) {
       try {
-        // A little longer than the stub's own deadline, so a plugin that answers
-        // just inside it is not cut off by the wait rather than by the policy.
         if (!finished.await(deadlineMillis + 1_000L, TimeUnit.MILLISECONDS)) {
           throw new PluginException(
               PluginException.Kind.DEADLINE_EXCEEDED,

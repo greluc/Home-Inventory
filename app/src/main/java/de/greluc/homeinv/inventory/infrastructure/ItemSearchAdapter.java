@@ -51,12 +51,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
    * values that were written here.
    */
   private static boolean isEnglish(String language) {
-    // Exact, and deliberately not case-insensitive. Case folding is
-    // locale-dependent — in Turkish `I` folds to a dotless character and "EN"
-    // stops equalling "en" — and this value decides which generated column a
-    // query reads. The API accepts the two-letter code the principal's display
-    // language produces, which is lowercase; a caller that sends "EN" gets the
-    // German vector, which is a wrong answer rather than a silent one.
     return "en".equals(language);
   }
 
@@ -118,11 +112,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
         where i.tenant_id = ?
           and i.deleted_at is null
         """
-            // Four matches joined by "or", which is REQ-SRCH-011's list. The
-            // first two are this block's own: the generated vector over name,
-            // description and notes, and the mirrored attribute values. The other
-            // two arrived as ids from the blocks that own them, because a
-            // generated column can only read its own row.
             + (filtered
                 ? """
                     and (
@@ -143,27 +132,14 @@ public class ItemSearchAdapter implements ItemSearchQuery {
                             ? ""
                             : "%n                      or i.location_id = any(?)".formatted())
                 : "")
-            // `= any(?)` and not an IN list built from the ids: the number of
-            // locations varies per request, and a generated IN list would be
-            // both a new prepared statement each time and the one place in this
-            // query where a value shapes the SQL.
             + (byLocation ? "  and i.location_id = any(?)%n".formatted() : "")
-            // The two restrictions another block resolved. Both are `= any(?)`
-            // for the same reason as the locations above: the count varies per
-            // request, and a generated IN list would be the one place a value
-            // shapes the statement.
             + (byType ? "  and i.item_type_version_id = any(?)%n".formatted() : "")
             + (byId ? "  and i.id = any(?)%n".formatted() : "")
-            // One `exists` per filter rather than one join per filter. A join
-            // would multiply the rows when two filters match two different
-            // attributes of the same item, and the fix for that is a `distinct`
-            // that throws away the sort order with the duplicates.
             + filters.stream().map(this::predicateFor).collect(Collectors.joining());
 
     List<Object> values = new java.util.ArrayList<>();
     values.add(tenantId);
     if (filtered) {
-      // Twice: once for the row's vector and once for the attribute values.
       values.add(text);
       values.add(text);
       if (!alsoMatched.isEmpty()) {
@@ -194,8 +170,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
 
   @Override
   public Map<UUID, Long> countByColumn(Criteria criteria, CountColumn column) {
-    // From a closed set of two, which is what makes this a checked builder and
-    // not a column name from a request (REQ-SEC-031).
     String grouped =
         switch (column) {
           case TYPE_VERSION -> "i.item_type_version_id";
@@ -227,10 +201,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   @Override
   public Map<String, Long> countByAttribute(Criteria criteria, String fieldKey) {
     Where where = whereFor(criteria);
-    // `coalesce` across the storage classes rather than a column chosen from the
-    // field's type: a facet's bucket is the token a filter takes back, and that
-    // is text whichever column the value lives in. Exactly one of them is
-    // non-null per row, because the projector writes one (AttributeProjector).
     String sql =
         """
         select coalesce(
@@ -254,8 +224,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
         """
             .formatted(where.sql());
 
-    // The join's parameter comes first, because the join is written before the
-    // where clause.
     var spec = jdbc.sql(sql).param(fieldKey);
     for (Object value : where.values()) {
       spec = spec.param(value);
@@ -284,9 +252,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
   @Override
   public Optional<SearchableItem> searchable(UUID itemId) {
     UUID tenantId = TenantContext.require();
-    // Two statements rather than one join: the attribute values multiply the row
-    // and a `string_agg` would hand back a delimiter nobody chose. The second is
-    // a lookup on `iai_item`, over the rows the first has just touched.
     List<SearchableItem> rows =
         jdbc.sql(
                 """
@@ -313,10 +278,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
       return Optional.empty();
     }
 
-    // From the side table and not from the JSONB: the projector has already
-    // dropped what may not be indexed - a `sensitive` field is ciphertext and is
-    // never mirrored (ADR-0019) - and rendered every value as something
-    // comparable. Reading the JSONB here would have to repeat both rules.
     List<String> values =
         jdbc.sql(
                 """
@@ -374,10 +335,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     SortPlan plan = planFor(sort);
     Where where = whereFor(criteria);
 
-    // Assembled from fixed fragments, never from input. The one variable part
-    // beyond the shared clause is the sort expression, which `planFor` resolves
-    // from a field the application layer has already checked against the
-    // tenant's allowlist.
     String sql =
         """
         select i.id, i.created_at%s
@@ -391,8 +348,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
 
     var spec = jdbc.sql(sql);
     if (plan.attributeKey() != null) {
-      // The join's parameter comes first, because the join is written before the
-      // where clause.
       spec = spec.param(plan.attributeKey());
     }
     for (Object value : where.values()) {
@@ -402,30 +357,18 @@ public class ItemSearchAdapter implements ItemSearchQuery {
       for (String value : plan.split(after.get().sortValue())) {
         spec = spec.param(value);
       }
-      // OffsetDateTime, for the same reason the reader uses it: the driver has no
-      // direct mapping for Instant on a timestamptz parameter either.
       spec =
           spec.param(after.get().createdAt().atOffset(java.time.ZoneOffset.UTC))
               .param(after.get().id());
     }
-    // One more than asked for, so the caller learns whether another page exists
-    // without a second count query - which would be a second answer that can
-    // disagree with the first.
     spec = spec.param(limit + 1);
 
-    // Identifiers and the sort key, nothing else. The rows are loaded by
-    // `ItemService.byIds`, which is the path every other read takes and
-    // therefore the one place the redaction lives (REQ-SRCH-007).
     record Hit(UUID id, java.time.Instant createdAt, String sortValue) {}
     List<Hit> hits =
         spec.query(
                 (rs, rowNum) ->
                     new Hit(
                         rs.getObject("id", UUID.class),
-                        // OffsetDateTime, not Instant: the PostgreSQL driver
-                        // refuses a direct conversion from timestamptz to
-                        // Instant, and the error says so at runtime rather than
-                        // at compile time.
                         rs.getObject("created_at", OffsetDateTime.class).toInstant(),
                         plan.readSortValue(rs)))
             .list();
@@ -488,8 +431,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
     String join() {
       return attributeKey == null
           ? ""
-          // LEFT, because an item that does not have the field still belongs in
-          // the list -- it sorts to the end rather than disappearing.
           : """
             left join inventory.item_attr_index a
               on a.tenant_id = i.tenant_id and a.item_id = i.id and a.field_key = ?
@@ -503,9 +444,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
       String direction = descending ? " desc" : " asc";
       StringBuilder order = new StringBuilder();
       for (String expression : expressions) {
-        // NULLS LAST in both directions. PostgreSQL would put them first when
-        // descending, and a person who clicks a column heading twice should not
-        // be handed a page of items that do not have the field at all.
         order.append(expression).append(direction).append(" nulls last, ");
       }
       return order + "i.created_at, i.id";
@@ -561,7 +499,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
         return List.of();
       }
       List<String> parts = List.of(sortValue.split(SEPARATOR, -1));
-      // Once for the inequality and once for the equality branch.
       List<String> both = new java.util.ArrayList<>(parts);
       both.addAll(parts);
       return both;
@@ -654,17 +591,9 @@ public class ItemSearchAdapter implements ItemSearchQuery {
           case GTE -> column + " >= " + cast;
           case LT -> column + " < " + cast;
           case LTE -> column + " <= " + cast;
-          // Never reached: `subtree` walks the location tree, `search` resolves
-          // it to ids through `locations`, and only attribute conditions get
-          // this far. Named rather than defaulted, so that adding an operator
-          // fails here instead of silently choosing one.
           case SUBTREE ->
               throw new IllegalArgumentException("An attribute has no subtree to walk");
         };
-    // One template with two holes, never a query joined to an expression: the
-    // holes hold a column name from the switch above and an operator, and
-    // REQ-SEC-031 is that the difference is visible in the source rather than
-    // argued for in a comment.
     return """
              and exists (select 1 from inventory.item_attr_index f
                           where f.tenant_id = i.tenant_id
@@ -715,8 +644,6 @@ public class ItemSearchAdapter implements ItemSearchQuery {
 
     List<String> expressions =
         type.carriesUnit()
-            // The unit first, always. `iai_unit` is ordered the same way, so this
-            // is the index's own order rather than a sort on top of it.
             ? List.of("a.unit_value", "a.num_value")
             : List.of(
                 switch (type.storageClass()) {

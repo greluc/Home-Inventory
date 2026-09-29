@@ -74,10 +74,6 @@ public class DefaultLocationService implements LocationService {
   /** Where {@code LocationMoved} goes (REQ-CORE-043). */
   private final ApplicationEventPublisher events;
   private final ItemLocationUsage itemUsage;
-  // A location stores the category VERSION it was written against; a caller names
-  // the category. Only `catalog` may turn one into the other, because the tables
-  // that answer it belong to `catalog` and 04 §4.5 does not let this block read
-  // them.
   private final TypeRegistry types;
 
   /** Seals what the category marks sensitive, and keeps what this caller was never shown. */
@@ -131,9 +127,6 @@ public class DefaultLocationService implements LocationService {
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
     Instant now = Instant.now(clock);
 
-    // Inside this transaction, before anything is written: a spent key answers
-    // what it answered before and creates nothing (REQ-API-005). The record and
-    // the place it protects share one COMMIT (ADR-0009).
     Optional<String> answered =
         idempotency.flatMap(key -> requests.replay(CREATE_LOCATION, key.key(), key.requestHash()));
     if (answered.isPresent()) {
@@ -142,17 +135,9 @@ public class DefaultLocationService implements LocationService {
 
     requireInScope(command.parentId());
 
-    // Asked before the insert, so the caller gets a `409` naming the name rather
-    // than the `500` a constraint violation surfaced as until 2026-09-12. The
-    // index stays the truth — this is a race away from being wrong, and losing
-    // that race still leaves the database refusing the row.
     requireNameFree(tenantId, command.parentId(), command.name(), null);
 
-    // Resolved once, here, and stored: the location keeps the fields the category
-    // declared at this moment even after the category moves on (REQ-CORE-025).
     UUID categoryVersionId = types.publishedCategoryVersion(command.categoryId());
-    // Merge, validate, seal (ADR-0019). A place carries attributes like an item
-    // does, and a category may mark one sensitive like a type may.
     String attributes =
         sealing.sealed(
             categoryVersionId,
@@ -179,9 +164,6 @@ public class DefaultLocationService implements LocationService {
     log.debug("Location {} created in tenant {}", id, tenantId);
 
     LocationView view = toView(created, Map.of(categoryVersionId, command.categoryId()));
-    // After the work and before the commit, which is the ordering the decision
-    // turns on: written first it could outlive work that failed, written after
-    // the commit it could be lost while the place stayed.
     idempotency.ifPresent(
         key ->
             requests.remember(
@@ -227,8 +209,6 @@ public class DefaultLocationService implements LocationService {
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
     Versions.requireCurrent("location", id, expectedVersion, location.getVersion());
-    // Excluding itself, so renaming "Cellar" to "cellar" is a rename and not a
-    // conflict with the row being renamed.
     requireNameFree(tenantId, location.getParentId(), name, id);
     location.rename(name, actor, Instant.now(clock));
     return toView(location, categoryOf(location));
@@ -267,14 +247,10 @@ public class DefaultLocationService implements LocationService {
     Location location =
         locations.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("location", id));
     Versions.requireCurrent("location", id, expectedVersion, location.getVersion());
-    // Both ends: somebody confined to a subtree may not move a place out of it,
-    // and may not move one in from outside (REQ-TEN-007).
     requireInScope(id);
     requireInScope(newParentId);
 
     if (Objects.equals(location.getParentId(), newParentId)) {
-      // Already there. Not an error, for the reason deleting twice is not: a
-      // client retrying a request whose answer it never saw.
       return toView(location, categoryOf(location));
     }
 
@@ -290,8 +266,6 @@ public class DefaultLocationService implements LocationService {
 
     requireNameFree(tenantId, newParentId, location.getName(), id);
 
-    // Measured on the deepest descendant, not on the location itself: moving a
-    // box two levels down takes everything in it two levels down as well.
     int deepest = tree.deepestBelow(tenantId, id);
     int levelsMoved = (target == null ? 0 : target.getDepth() + 1) - location.getDepth();
     if (deepest + levelsMoved > Location.MAX_DEPTH) {
@@ -306,18 +280,9 @@ public class DefaultLocationService implements LocationService {
             : target.getPath() + "." + Location.labelOf(id);
 
     location.movedTo(target, newPath, actor, now);
-    // Flushed before the descendants are rewritten so that the two writes cannot
-    // be reordered: Hibernate does not see a native statement and would otherwise
-    // be free to hold this row until commit, leaving the subtree pointing at a
-    // path its root no longer has. It is also what takes the moved row out of the
-    // rewrite below, whose prefix it no longer matches.
     locations.flush();
     int followed = tree.rewriteSubtree(tenantId, id, oldPath, newPath, now, actor);
 
-    // One event for the lot (REQ-CORE-043). The items inside are untouched by
-    // construction: an item names the place it is in, and that place still is the
-    // same place -- which is why moving a box with 200 items in it is one event
-    // and not 201.
     events.publishEvent(new LocationMoved(tenantId, id, fromParentId, newParentId, followed + 1));
     log.info("Location {} moved in tenant {}; {} place(s) followed it.", id, tenantId, followed);
     return toView(location, categoryOf(location));
@@ -331,9 +296,6 @@ public class DefaultLocationService implements LocationService {
    * @throws InvalidMoveException when that would be a cycle
    */
   private static void requireNotInsideItself(Location location, Location target) {
-    // On the paths and not on a walk up the parents: the path is what a cycle
-    // would corrupt, so the check is written in the same terms. The trailing
-    // separator matters -- without it "ab" reads as a descendant of "a".
     String subtree = location.getPath() + ".";
     if (target.getId().equals(location.getId()) || (target.getPath() + ".").startsWith(subtree)) {
       throw new InvalidMoveException(
@@ -382,9 +344,6 @@ public class DefaultLocationService implements LocationService {
     }
     long held = itemUsage.itemsIn(id);
     if (held > 0) {
-      // REQ-CORE-046 asks the attempt to state the NUMBER. "It still contains
-      // things" sends somebody looking; "it still contains 14 things" tells them
-      // what they are in for, and whether to empty it or move it wholesale.
       throw new LocationNotEmptyException(
           id, held == 1 ? "it still contains 1 item" : "it still contains " + held + " items");
     }
@@ -417,8 +376,6 @@ public class DefaultLocationService implements LocationService {
     if (text == null || text.isBlank()) {
       return List.of();
     }
-    // From a closed set of two, never from the parameter: the configuration name
-    // goes into the statement and the text goes into a parameter (REQ-SEC-031).
     return tree.matchingSubtrees(
         TenantContext.require(), text, "en".equals(language) ? "english" : "german");
   }
@@ -437,9 +394,6 @@ public class DefaultLocationService implements LocationService {
     }
     UUID tenantId = TenantContext.require();
 
-    // How many labels an answer's path has. A root of the tree has one; a child
-    // of `root` has one more than `root` does. Reading the root also checks that
-    // this tenant can see it, which is why it is read rather than assumed.
     int labels = 1;
     if (root != null) {
       Location place =
@@ -471,21 +425,16 @@ public class DefaultLocationService implements LocationService {
     if (cursor == null || cursor.isBlank()) {
       rows = locations.findLive(tenantId, PageRequest.of(0, size));
     } else {
-      // Throws when the cursor was tampered with or belongs to another listing.
       CursorCodec.Position after = cursors.decode(cursor, CURSOR_FINGERPRINT);
       rows =
           locations.findLiveAfter(
               tenantId, after.createdAt(), after.id(), PageRequest.of(0, size));
     }
 
-    // One lookup for the page rather than one per row: a full page carries two
-    // hundred locations, and the category of each is a join this block may not make.
     Map<UUID, UUID> categories =
         types.categoriesOfVersions(rows.stream().map(Location::getCategoryVersionId).toList());
     List<LocationView> views = rows.stream().map(row -> toView(row, categories)).toList();
 
-    // A cursor only when the page was full: a short page is the last one, and a
-    // cursor for it would cost a client a request to discover that.
     String nextCursor = null;
     if (rows.size() == size) {
       Location last = rows.get(rows.size() - 1);
@@ -523,17 +472,9 @@ public class DefaultLocationService implements LocationService {
         categories.get(location.getCategoryVersionId()),
         location.getParentId(),
         location.getDepth(),
-        // On the way out, for the reason the item path gives: what is stored is
-        // complete, and what a particular person is shown is a projection of it
-        // (REQ-TEN-008).
         redaction.forCaller(
             location.getCategoryVersionId(), location.getId(), location.getAttributes()),
         tree.ancestorNames(location.getTenantId(), location.getId()),
-        // The concurrency token, which is what a client sends back as `If-Match`.
-        // In the view rather than derived from a hash of it: a hash changes when
-        // a redacted field is added or removed for a caller, and two people with
-        // different field permissions would then disagree about what the same
-        // unchanged location's tag is (REQ-API-004).
         location.getVersion());
   }
 

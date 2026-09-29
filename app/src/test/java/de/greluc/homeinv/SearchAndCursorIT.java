@@ -64,7 +64,6 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     UUID second = create(tenant, "Beta", "two");
     UUID third = create(tenant, "Gamma", "three");
 
-    // What the port answers: identifiers, in the order they are to be shown.
     SearchIndex.Hits hits =
         inTenant(
             tenant,
@@ -77,12 +76,8 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
         .as("the index names the items and hands over nothing else")
         .containsExactly(first, second, third);
 
-    // And what the service makes of them: the same items, in the same order,
-    // loaded through the ordinary read.
     assertThat(namesOf(tenant, "")).containsExactly("Alpha", "Beta", "Gamma");
 
-    // An id the index names and the tenant cannot see is absent rather than an
-    // error. A derived index that has gone stale can only ever cost a row.
     List<de.greluc.homeinv.inventory.api.ItemView> loaded =
         inTenant(tenant, () -> items.byIds(List.of(first, UUID.randomUUID(), third)));
     assertThat(loaded.stream().map(de.greluc.homeinv.inventory.api.ItemView::name).toList())
@@ -96,9 +91,6 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     Fixture tenant = newTenant("stem@example.org");
     create(tenant, "Bohrmaschinen", "Zwei blaue Geräte im Keller");
 
-    // "Bohrmaschine" stems to the same root as "Bohrmaschinen". A prefix match
-    // would find it too, so the second search is the real check: "Geraet" shares
-    // no prefix with "Geräte" but stems alike under the German configuration.
     assertThat(namesOf(tenant, "Bohrmaschine")).containsExactly("Bohrmaschinen");
     assertThat(namesOf(tenant, "blaue Geräte")).containsExactly("Bohrmaschinen");
   }
@@ -124,7 +116,7 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
     } while (cursor != null && pages < 10);
 
     assertThat(seen).hasSize(7).doesNotHaveDuplicates();
-    assertThat(pages).isEqualTo(3); // 3 + 3 + 1
+    assertThat(pages).isEqualTo(3);
   }
 
   @Test
@@ -140,8 +132,6 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
             .nextCursor();
     assertThat(cursor).isNotNull();
 
-    // Flip one character of the payload. The signature no longer matches, and the
-    // answer must be a refusal rather than a page starting somewhere else.
     String tampered = (cursor.charAt(0) == 'A' ? 'B' : 'A') + cursor.substring(1);
     assertThatThrownBy(
             () ->
@@ -166,8 +156,6 @@ class SearchAndCursorIT extends AbstractIntegrationTest {
             .nextCursor();
     assertThat(cursor).isNotNull();
 
-    // Same tenant, same session, untampered cursor - and a different search.
-    // REQ-SRCH-009: a cursor with changed filters is rejected.
     assertThatThrownBy(
             () ->
                 inTenant(

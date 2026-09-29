@@ -93,9 +93,6 @@ class SessionTerminationIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.ended").value(2));
 
-    // Both, including the one that asked. Leaving the caller's alive would mean
-    // the person taking the measure has to guess which of the listed sessions is
-    // theirs, and the browser signing itself out is the visible proof.
     mockMvc.perform(get("/api/v1/me/sessions").cookie(laptop)).andExpect(status().isUnauthorized());
     mockMvc.perform(get("/api/v1/me/sessions").cookie(phone)).andExpect(status().isUnauthorized());
   }
@@ -121,14 +118,9 @@ class SessionTerminationIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.ended").value(1));
 
     mockMvc.perform(get("/api/v1/me/sessions").cookie(theirs)).andExpect(status().isUnauthorized());
-    // The operator's own session is untouched: this measure names an account and
-    // reaches that account only.
     mockMvc
         .perform(get("/api/v1/me/sessions").cookie(operatorSession))
         .andExpect(status().isOk());
-    // Signed out and NOT locked out. The password is still good, which is
-    // correct: locking is a different measure with different consequences, and
-    // an operator who wants it clears the entitlements or suspends the tenant.
     assertThat(signIn("terminate-victim@example.org")).isNotEmpty();
   }
 

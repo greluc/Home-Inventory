@@ -119,9 +119,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
                 });
 
     try {
-      // The first frame carries the reference and no bytes; every later one
-      // carries bytes and no reference. The server enforces that, and sending it
-      // any other way is a protocol error rather than a quietly different result.
       frames.onNext(PutRequest.newBuilder().setBlob(reference).build());
 
       byte[] buffer = new byte[CHUNK_BYTES];
@@ -132,8 +129,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
       }
       frames.onCompleted();
     } catch (IOException | RuntimeException thrown) {
-      // Cancels the call rather than leaving the server waiting for frames that
-      // will never arrive, and for a deadline to notice.
       frames.onError(thrown);
       throw thrown instanceof IOException io ? io : new IOException("The upload failed", thrown);
     }
@@ -154,11 +149,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
           blockingStub
               .withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
               .get(GetRequest.newBuilder().setBlob(reference(tenantId, sha256)).build());
-      // The blocking stub returns a LAZY iterator: the call has not been made
-      // when it hands one back, so a missing blob's NOT_FOUND would surface on
-      // the first read rather than here. Callers expect `open` to be the method
-      // that fails, and one that returned a stream which throws on its first
-      // byte would turn "no such blob" into a truncated file.
       hasFirst = frames.hasNext();
     } catch (StatusRuntimeException refused) {
       throw asIoException(refused, "open");
@@ -206,10 +196,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
               .head(HeadRequest.newBuilder().setBlob(reference(tenantId, sha256)).build());
       return response.getExists();
     } catch (StatusRuntimeException refused) {
-      // False rather than an exception. Every caller of this method is deciding
-      // whether to do work, and "the store could not be asked" and "the blob is
-      // not there" lead to the same next step: do the work. Logging it keeps the
-      // difference visible to an operator.
       log.warn("The blob store could not be asked about {}: {}", sha256, refused.getStatus());
       return false;
     }
@@ -226,10 +212,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
     }
   }
 
-
-  // ---------------------------------------------------------------------------
-  // Staging (REQ-MED-008, ADR-0084)
-  // ---------------------------------------------------------------------------
 
   @Override
   public long append(UUID tenantId, UUID uploadId, long offset, InputStream content)
@@ -261,9 +243,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
                 });
 
     try {
-      // The first frame carries the address and the offset; every later one
-      // carries bytes alone. The same shape `store` uses, and the server
-      // enforces it.
       frames.onNext(
           AppendStagedRequest.newBuilder().setStaged(address(tenantId, uploadId)).setOffset(offset).build());
 
@@ -284,11 +263,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
     awaitCompletion(finished);
     Throwable thrown = failure.get();
     if (thrown instanceof StatusRuntimeException refused) {
-      // Two of the store's refusals are not failures of this deployment but
-      // answers about this upload, and each has its own meaning at the HTTP
-      // surface (409 and 423). Turning them into an IOException would lose
-      // both and leave a client with "something went wrong" where it needed
-      // "here is where you actually are".
       if (refused.getStatus().getCode() == Status.Code.FAILED_PRECONDITION) {
         throw new OffsetMismatchException(currentOffset(tenantId, uploadId));
       }
@@ -311,11 +285,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
               .headStaged(StagedRequest.newBuilder().setStaged(address(tenantId, uploadId)).build());
       return response.getExists() ? OptionalLong.of(response.getByteSize()) : OptionalLong.empty();
     } catch (StatusRuntimeException refused) {
-      // Empty rather than an exception, and it is NOT the same choice `exists`
-      // makes for blobs: there, "the store could not be asked" and "not there"
-      // lead to the same next step. Here they do not — a client told an upload
-      // is gone starts again — so this is logged at warn and the caller turns
-      // an empty answer into 404, which is what tus says an unknown upload is.
       log.warn("The blob store could not be asked about a staged upload: {}", refused.getStatus());
       return OptionalLong.empty();
     }
@@ -424,9 +393,6 @@ public class GrpcBlobStore implements DeploymentBlobStore {
     if (refused.getStatus().getCode() == Status.Code.NOT_FOUND) {
       return new java.io.FileNotFoundException("No such blob");
     }
-    // The status DESCRIPTION is included and the blob address is not: the
-    // description is written by our own service, and the address would end up in
-    // a log line that an operator may paste somewhere.
     return new IOException(
         "The blob store refused %s: %s".formatted(operation, refused.getStatus()));
   }

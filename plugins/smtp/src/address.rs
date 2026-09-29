@@ -34,7 +34,6 @@ pub fn normalise(supplied: &str) -> Result<String, String> {
         return Err("the subscription holds no address".to_string());
     }
     if bare.len() > 320 {
-        // 64 + 1 + 255, the longest address RFC 5321 allows.
         return Err("the address is longer than an address may be".to_string());
     }
     if bare.chars().any(|c| c.is_ascii_control() || c == ' ') {
@@ -89,8 +88,6 @@ mod tests {
 
     #[test]
     fn a_newline_is_refused_because_it_would_be_a_second_command() {
-        // The one that matters: `RCPT TO:<a@b\r\nRCPT TO:<c@d>` is two
-        // recipients, and the second is whoever wrote the subscription.
         assert!(normalise("person@example.org\r\nRCPT TO:<somebody@else.org>").is_err());
         assert!(normalise("person@example.org\nBcc: somebody@else.org").is_err());
     }

@@ -61,8 +61,9 @@ in the same unit of work.
 Reading order for a first session: [`docs/README.md`](docs/README.md) →
 [`01 Introduction and Goals`](docs/architecture/01-introduction-and-goals.md) →
 [`03 Solution Strategy`](docs/architecture/03-solution-strategy.md) →
-[`04 Building Blocks`](docs/architecture/04-building-blocks.md) → the chapter your task
-touches.
+[`04 Building Blocks`](docs/architecture/04-building-blocks.md) →
+[`15 Implementation Rules`](docs/architecture/15-implementation-rules.md) → the chapter
+your task touches.
 
 ## Requirements, specs and decisions (binding)
 
@@ -266,6 +267,8 @@ negotiable:
 ./gradlew :app:test        # tests only
 ```
 
+- SpotBugs with find-sec-bugs runs in `./gradlew build` for `:app` and fails it on any
+  finding.
 - Gradle 9 with Kotlin DSL, always through the wrapper (`./gradlew`), never the IDE test
   runner. Dependency versions live in the **version catalog**
   (`gradle/libs.versions.toml`) — edit that, not `build.gradle.kts`.
@@ -292,8 +295,9 @@ negotiable:
 - **Records** for DTOs and immutable config wrappers; **Lombok** used generously to avoid
   boilerplate; `@Slf4j` for logging — never instantiate a logger by hand.
 - **Javadoc is mandatory** on every class, interface, enum, record and public/protected
-  method, and it must describe *actual* behaviour, parameters, side effects and non-obvious
-  invariants. Generic boilerplate ("Gets the value", "Helper method") is forbidden. If you
+  method, in Google style: one summary sentence
+  that describes *actual* behaviour, a contract sentence only where a caller needs one, then
+  the tags. Generic boilerplate ("Gets the value", "Helper method") is forbidden. If you
   cannot write a concrete, code-specific sentence, read the implementation again.
 - **Only parameterised SQL.** Dynamic SQL goes through a checked builder whose field and
   sort names come from an allowlist derived from `field_definition` — never from user input.
@@ -305,6 +309,30 @@ negotiable:
 - **Every new feature ships with tests.** No exceptions.
 - **Never use real credentials in tests or local stacks.** Anything that enters a worktree,
   a CI log, a container volume or a screenshot must be assumed leaked.
+
+## Code comments (HARD RULE)
+
+**The code carries no comments besides the language's documentation comments, those are short
+and precise, and no history is kept in either.** Decided by the owner for all projects on
+2026-09-26 and applied to this repository on 2026-09-29.
+
+- **No comments** in any source, test or configuration file — no `//`, `/* */`, `#`, `--`,
+  `<!-- -->` — and no commented-out code.
+- **What stays:** Javadoc and KDoc `/** */`, rustdoc `///` and `//!`, TSDoc/JSDoc `/** */`,
+  Python docstrings, protobuf leading comments on declarations (they are the contract's
+  documentation); licence headers (SPDX), shebangs; and tool directives with no prose after
+  them — `# shellcheck disable=`, `# syntax=`, `# yaml-language-server:`, `// @ts-expect-error`,
+  `oxlint-disable…`, the design system's `<!-- @dsCard … -->` markers.
+- **Documentation comments are short:** one summary sentence, a contract sentence only when a
+  caller needs it, then the tags. No dates, no "previously", no incident stories, no rationale
+  essays; a bare `REQ-` or `ADR-` id is fine.
+- **The reasoning goes into the commit message, the PR body and `docs/`.** The rules the code
+  follows that no single class states are [chapter 15](docs/architecture/15-implementation-rules.md);
+  a suppressed scanner finding is justified in [12 §12.12](docs/architecture/12-security.md).
+- **Out of scope:** applied Flyway migrations (their checksum covers comments), generated and
+  vendored files, Markdown, and test fixtures whose comments are the data under test.
+- Before deleting a comment, check it held no live syntax — a marker a tool reads, a template
+  placeholder, a directive.
 
 ## Documentation duties
 

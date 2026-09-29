@@ -3,49 +3,18 @@ import java.math.BigDecimal
 import java.util.zip.ZipFile
 import java.util.Base64
 
-// The Spring Boot application. One Gradle project, eighteen building blocks as
-// packages — the boundary is enforced by Spring Modulith and ArchUnit, not by
-// the build (ADR-0002, app/README.md).
-
 plugins {
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.protobuf)
     alias(libs.plugins.spotbugs)
-    // The SBOM of REQ-CON-010, in CycloneDX.
     alias(libs.plugins.cyclonedx)
-    // REQ-NFR-070 asks for `Money` to be held at 100 % branch coverage. The plugin
-    // is here for that one class and for nothing else -- see the verification
-    // rule below.
     jacoco
 }
 
-// Two transitive versions Spring Boot's BOM pins, raised past the ones trivy
-// refuses. Both are SERVED to the internet by this application, which is why
-// they are overridden here rather than waited out until the next Boot release:
-//
-//   * tomcat-embed-core 11.0.24 carries three CRITICAL advisories — a security
-//     constraint bypass and two authentication bypasses (CVE-2026-65182,
-//     CVE-2026-65905, CVE-2026-68525). It is the servlet container every request
-//     arrives through.
-//   * amqp-client 5.30.0 carries three HIGH ones (CVE-2026-63337, CVE-2026-69219,
-//     CVE-2026-69220). Boot pins it BELOW what its own starter asks for — the
-//     dependency graph reads `5.31.0 -> 5.30.0`.
-//
-// These properties are the BOM's own, so raising them moves every module that
-// resolves through it rather than one edge of the graph. Remove an entry once
-// Boot's managed version passes it; `./gradlew :app:dependencies` and the image
-// scan both say when that is.
 extra["tomcat.version"] = "11.0.25"
 extra["rabbit-amqp-client.version"] = "5.35.0"
 
-// `opensearch-java` speaks its wire format through Jackson 2, which is a second
-// JSON library beside this project's Jackson 3 (`tools.jackson`). Accepted with
-// the owner on 2026-09-14: it is the supported way to talk to the server, and
-// hand-rolling one would be a query builder to maintain. The two do not collide
-// - different packages - but the second one has a CVE surface of its own, so the
-// version it resolves to is pinned here rather than left to a transitive, for
-// the same reason amqp-client above is.
 extra["jackson2.version"] = "2.21.5"
 
 dependencies {
@@ -54,110 +23,50 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.security)
-    // Argon2id (REQ-SEC-010). Spring Security's encoder has no implementation of
-    // its own and silently is not there without this.
     implementation(libs.bouncycastle)
     implementation(libs.spring.boot.starter.validation)
-    // The attribute validator of the configurable type system (ADR-0056). It
-    // checks the generated document itself, so the server and an offline client
-    // reach the same verdict rather than two implementations of the same rules.
     implementation(libs.json.schema.validator)
     implementation(libs.jackson.dataformat.csv)
-    // WebAuthn/passkeys (REQ-AUTH-002). Configured with no metadata service and
-    // no certificate-path validation: the core opens no outbound connection
-    // (ADR-0026), and a self-hosted instance has nothing to attest against.
     implementation(libs.webauthn4j.core)
-    // Only so javac can read webauthn4j's annotated signatures; its own POM marks
-    // these provided, and nothing needs them at run time.
     compileOnly(libs.jetbrains.annotations)
     implementation(libs.spring.boot.starter.actuator)
 
-    // Sessions live in Valkey, not in the JVM heap: the api role scales
-    // horizontally and a session must survive the instance that created it
-    // (06 Deployment view).
     implementation(libs.spring.boot.starter.data.redis)
 
-    // The read-only GraphQL surface (REQ-API-006, 08 §8.4). Read-only is not a
-    // convention here: the schema declares no `Mutation` type at all, and
-    // `GraphQlSchemaTest` fails if one appears (ADR-0010).
     implementation(libs.spring.boot.starter.graphql)
 
-    // For `GraphQlPermissions`: one aspect, so that every GraphQL resolver is checked
-    // against what it declares without every method beginning with the same line
-    // (REQ-SEC-023, ADR-0079). Boot's `AopAutoConfiguration` turns AspectJ proxying
-    // on when this is present, which is what makes `@Aspect` work.
     implementation(libs.aspectjweaver)
 
-    // `platform.ContextPropagation`: a thread-local ends at the thread, and the
-    // GraphQL surface's DataLoader dispatches do not run on the request's.
     implementation(libs.context.propagation)
 
-    // `@Nullable`, which the API document is generated from (ADR-0081). It arrives
-    // with several starters anyway; naming it is what keeps the contract from
-    // depending on which of them happens to be on the classpath.
     implementation(libs.jakarta.annotation.api)
 
-    // Tracing (REQ-NFR-044). Three modules and not the starter, which would also
-    // bring an OTLP METRICS registry that pushes to localhost by default -- see
-    // the note in the version catalogue. The first carries Boot's
-    // auto-configuration, the bridge turns Micrometer's observations -- which
-    // Spring Boot already creates for the web layer, scheduling and AMQP -- into
-    // OpenTelemetry spans, and the exporter sends them. All three do NOTHING until
-    // an endpoint is configured, which is what "inactive when unconfigured" means
-    // here and what `TracingEnvironment` makes true.
     implementation(libs.spring.boot.micrometer.tracing.opentelemetry)
     implementation(libs.micrometer.tracing.bridge.otel)
     implementation(libs.opentelemetry.exporter.otlp)
     implementation(libs.spring.boot.session.data.redis)
 
-    // The primary `SearchIndex` adapter (ADR-0008, REQ-SRCH-005). Not a Spring
-    // Boot starter: there is none for OpenSearch, and the client is configured by
-    // hand against `HOMEINV_SEARCH_ENGINE` so that the `minimal` profile - which
-    // never gets OpenSearch - starts without one.
-    // The manifest model and its reader, which the core and a plugin author's SDK
-    // both read (REQ-PLG-004). AGPL depending on Apache-2.0, which is the
-    // direction that works; the reverse is what ADR-0018 forbids and what
-    // `:plugin-api:noCoreOnTheClasspath` checks.
     implementation(project(":plugin-api"))
 
     implementation(libs.opensearch.java)
 
     implementation(libs.spring.modulith.starter.core)
     implementation(libs.spring.modulith.starter.jpa)
-    // The worker generates media derivatives from an event `api` publishes, and
-    // the two are separate processes (ADR-0051). The outbox in
-    // `outbox.event_publication` is the source of truth; AMQP is the delivery.
     implementation(libs.spring.boot.starter.amqp)
     implementation(libs.spring.modulith.events.amqp)
     runtimeOnly(libs.spring.modulith.actuator)
     runtimeOnly(libs.spring.modulith.observability)
 
-    // The BlobStore contract lives in `proto/` and is Apache-2.0 (ADR-0018). The
-    // in-core `filesystem` adapter is a CLIENT of the in-deployment `blobstore`
-    // service, which speaks it (ADR-0043) - so the core generates a client here
-    // and depends on nothing in that directory beyond the generated code.
     implementation(libs.grpc.netty.shaded)
     implementation(libs.grpc.protobuf)
     implementation(libs.grpc.stub)
     implementation(libs.protobuf.java)
-    // grpc-java's generated stubs reference javax.annotation.Generated, which
-    // left the JDK in 11. Without it the generated sources do not compile.
     compileOnly(libs.javax.annotation.api)
 
-    // The envelope around every plugin call: a bounded pool per plugin and a
-    // breaker that stops calling one that is failing (REQ-PLG-007, ADR-0065).
-    // The deadline and the payload limit are gRPC's own and need no library.
     implementation(libs.resilience4j.circuitbreaker)
     implementation(libs.resilience4j.bulkhead)
-    // The same numbers in the metrics endpoint an operator already reads
-    // (13 §13.7). Without it the breaker's state would be visible only in a log
-    // line, which is not where anybody looks for it.
     implementation(libs.resilience4j.micrometer)
 
-    // Generates the OpenAPI document from the running application (ADR-0049).
-    // `implementation` rather than a test dependency: the document is produced
-    // from the real context, and a version that existed only in tests would be a
-    // document describing a program that is not the one that ships.
     implementation(libs.springdoc.openapi.webmvc)
     implementation(libs.therapi.javadoc)
     annotationProcessor(libs.therapi.javadoc.scribe)
@@ -180,37 +89,16 @@ dependencies {
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.rabbitmq)
     testImplementation(libs.archunit.junit5)
-    // The authenticator emulator, so the passkey ceremonies are proved against
-    // real attestation and assertion objects rather than against a stub that
-    // agrees with the code under test.
     testImplementation(libs.webauthn4j.test)
     testImplementation(libs.bouncycastle.pkix)
 }
 
-// The integration tests start PostgreSQL with the *production* role script, so
-// that NOBYPASSRLS is the property under test rather than an assumption. Copying
-// it in at build time keeps the test independent of the working directory and
-// makes a drifted copy impossible - there is only one file.
-// The URL signing key the tests sign media URLs and pagination cursors with
-// (REQ-SEC-106). GENERATED rather than committed, and that is the whole point:
-// `.gitignore` refuses `*.key`, so the file every container-based test needs has
-// never been in the repository and CI has never had it — every one of those tests
-// failed there while passing on the machine that had written the file once, by
-// hand, months earlier.
-//
-// The value is a fixed, obviously-fake literal. It must be: `CLAUDE.md` says never
-// use real credentials in tests, and a key that is regenerated at random would
-// make a signature from one run unverifiable in the next, which is a flaky test
-// nobody would enjoy diagnosing.
 val generateTestUrlSigningKey by tasks.registering {
     val target = layout.buildDirectory.file("generated/test-secrets/test-url-signing.key")
     outputs.file(target)
     doLast {
         val file = target.get().asFile
         file.parentFile.mkdirs()
-        // 48 bytes, comfortably over UrlSigningKey's 32-byte floor, written as the
-        // base64 line a secret manager would hand over — which is the shape the
-        // production path reads, so the tests exercise the same branch.
         val material = "home-inv test url signing key - not a secret - REQ-SEC-106"
             .toByteArray(Charsets.UTF_8)
             .copyOf(48)
@@ -224,10 +112,6 @@ val generateTestCredentialKey by tasks.registering {
     doLast {
         val file = target.get().asFile
         file.parentFile.mkdirs()
-        // 32 bytes, which is CredentialKey's AES-256 floor, as the base64 line a
-        // secret manager would hand over. A fixed value on purpose: it seals
-        // nothing that outlives a test container, and a random one would make a
-        // failure depend on which run wrote it.
         val material = "home-inv test credential key - not a secret - REQ-AUTH-002"
             .toByteArray(Charsets.UTF_8)
             .copyOf(32)
@@ -235,11 +119,6 @@ val generateTestCredentialKey by tasks.registering {
     }
 }
 
-// The master keys of ADR-0019, in the two-file shape REQ-SEC-049 needs: an
-// active version and the one below it, so a test can rotate and prove that
-// re-wrapping touches no ciphertext. Fixed values, like every key above: they
-// seal nothing that outlives a test container, and a random one would make a
-// failure depend on which run wrote it.
 val generateTestDataEncryptionKeys by tasks.registering {
     val active = layout.buildDirectory.file("generated/test-secrets/test-data-encryption.key")
     val previous =
@@ -260,23 +139,10 @@ val generateTestDataEncryptionKeys by tasks.registering {
     }
 }
 
-// REQ-NFR-070 asks for `Money` to be held at 100 % branch coverage, and this is
-// what holds it there. Scoped to that ONE class deliberately: a coverage number
-// over a whole application is a number people learn to argue with, while a
-// hundred and fifty lines carrying every monetary invariant in the system either
-// have every branch exercised or do not.
 jacoco {
     toolVersion = "0.8.13"
 }
 
-// What coverage is measured over. The generated protobuf classes are NOT code
-// anybody wrote or could test: `de.greluc.homeinv.plugin.v1` is 34 000 of the
-// 49 000 lines here, at 13 % -- so measured with them, "the domain logic" reads
-// 34 % and means nothing at all. Excluded, the same tests measure 84 %, which is
-// the number REQ-NFR-025 is about.
-//
-// Nothing else is excluded. A hand-written class that is hard to test is a class
-// with a coverage problem, not a class with an exclusion.
 val coveredClasses: FileCollection =
     fileTree(layout.buildDirectory.dir("classes/java/main")) {
         exclude("de/greluc/homeinv/plugin/v1/**")
@@ -286,28 +152,15 @@ tasks.named<JacocoReport>("jacocoTestReport") {
     dependsOn(tasks.named("test"))
     classDirectories.setFrom(coveredClasses)
     reports {
-        // XML because a machine reads it: the gate below, and anything an
-        // operator of this repository points at a report. HTML because a person
-        // does.
         xml.required = true
         html.required = true
     }
 }
 
-// REQ-NFR-025: the domain logic at 80 %, the `domain` packages at 90 %,
-// "measured in CI; falling below fails the build". Until 2026-09-21 neither half
-// was true -- one rule existed, covering ONE class, and no job ever ran the task
-// that would have checked it. Wired into `check` below, so it runs wherever
-// `./gradlew build` runs and not only where somebody remembered a CI step.
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.named("test"))
     classDirectories.setFrom(coveredClasses)
     violationRules {
-        // LINE, and that is a reading of the requirement rather than a
-        // restatement of it: it says "test coverage" and names no counter.
-        // Lines are what the number means to a person looking at a report.
-        // BRANCH is deliberately not the gate -- it is 61 % in `domain` today
-        // and a gate set there would be a gate somebody lowers.
         rule {
             element = "BUNDLE"
             limit {
@@ -317,9 +170,6 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
             }
         }
 
-        // PER PACKAGE and not aggregated: `catalog.domain` sat at 74 % while the
-        // six domain packages together were over 90, and it is the small
-        // packages that carry the rules nobody exercised.
         rule {
             element = "PACKAGE"
             includes = listOf("de.greluc.homeinv.*.domain")
@@ -330,9 +180,6 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
             }
         }
 
-        // Money is arithmetic that throws across currencies, and every branch of
-        // it is a refusal somebody would otherwise meet in production
-        // (ADR-0025).
         rule {
             element = "CLASS"
             includes = listOf("de.greluc.homeinv.platform.Money")
@@ -353,16 +200,8 @@ tasks.named("check") {
     dependsOn(tasks.named("jacocoTestCoverageVerification"))
 }
 
-// The item type templates of REQ-CORE-030. The file in docs/reference is the
-// source of truth -- reviewed where the other reference files are reviewed -- and
-// the artifact carries a copy, so the running application reads exactly what a
-// reader read.
 tasks.named<ProcessResources>("processResources") {
     val templates = rootProject.file("docs/reference/type-templates.yaml")
-    // Checked rather than assumed. A `from()` over a file that is not there copies
-    // nothing and says nothing, and the first sign of it is `api` refusing to start
-    // inside an image because the resource it reads at startup is missing -- which
-    // is exactly what happened when `.dockerignore` excluded `docs/`.
     doFirst {
         if (!templates.isFile) {
             throw GradleException(
@@ -391,18 +230,9 @@ tasks.named<ProcessResources>("processTestResources") {
     from(rootProject.file("deploy/postgres/initdb/00-roles.sql")) {
         into("db")
     }
-    // And the service matrix, for the same reason: the tests take their image
-    // coordinates from the file the deployment is generated from, so "the same
-    // images as production" (REQ-NFR-027) is one list rather than two kept in
-    // step by hand. They were not in step - the tests ran rabbitmq:4-alpine
-    // against a deployment running 4-management-alpine.
     from(rootProject.file("deploy/services.yaml")) {
         into("deploy")
     }
-    // The base the first-party postgres image is built FROM. The tests cannot pull
-    // ghcr.io/greluc/home-inv-postgres - it is built from this repository, not
-    // published - so they run its base and copy the same role script in. The base
-    // is named in one file, and this is that file.
     from(rootProject.file("deploy/images/postgres/Dockerfile")) {
         into("deploy")
         rename { "postgres-image.Dockerfile" }
@@ -410,26 +240,12 @@ tasks.named<ProcessResources>("processTestResources") {
 }
 
 tasks.withType<Test>().configureEach {
-    // Integration tests run against the same image digests as production.
-    // H2 is forbidden: JSONB, ltree and row-level security behave differently,
-    // which is exactly where the bugs would be (CLAUDE.md, REQ-NFR-030).
     systemProperty("spring.profiles.active", "test")
 
-    // Gradle gives a test JVM 512 MB by default, and ArchUnit needs more than
-    // that on its own: it imports every class of the application into an object
-    // model, annotations and all, before a single rule runs. At 512 MB the suite
-    // died in `JavaAnnotation.getProperties` with a heap error rather than a test
-    // failure, which reads like a broken build and is a missing setting.
-    //
-    // 2 GB, the same ceiling the daemon has in `gradle.properties`, so a laptop
-    // running the container stack beside this still fits.
     maxHeapSize = "2g"
 }
 
 
-// The BlobStore contract is generated from `proto/`, which is shared with the
-// plugin SDKs and with the Rust service in `blobstore/`. One definition, three
-// implementations, and none of them may drift from it (ADR-0043).
 sourceSets {
     named("main") {
         proto { srcDir(rootProject.file("proto")) }
@@ -442,18 +258,8 @@ protobuf {
         id("grpc") { artifact = libs.grpc.protoc.gen.java.get().toString() }
     }
     generateProtoTasks {
-        // Only the main source set: the contract is generated once, and asking
-        // for it in `test` as well would produce a second copy of every class on
-        // the test classpath.
-        //
-        // The service stubs, not only the messages. Without the `grpc` plugin the
-        // build produces the request and response types and no client at all,
-        // which compiles and does nothing.
         ofSourceSet("main").forEach { task ->
             task.plugins {
-                // Guarded, because the protobuf plugin evaluates this block more
-                // than once during configuration and registering the same name
-                // twice is an error rather than a no-op.
                 if (findByName("grpc") == null) {
                     create("grpc")
                 }
@@ -462,57 +268,18 @@ protobuf {
     }
 }
 
-// THE SBOM (REQ-CON-010).
-//
-// CycloneDX, generated from the resolved runtime classpath, so it lists what the
-// artefact actually carries rather than what the build files ask for -- the
-// transitive dependency nobody chose is exactly the one an advisory names.
-//
-// It runs as part of `build`, so it cannot be forgotten at release time and is
-// never stale relative to the dependencies beside it. `deploy/` publishes it with
-// the release.
 tasks.cyclonedxDirectBom {
-    // 1.6 is the schema version the current tooling reads; naming it beats
-    // whatever the plugin's default becomes in a later release.
     schemaVersion = org.cyclonedx.Version.VERSION_16
     projectType = org.cyclonedx.model.Component.Type.APPLICATION
     jsonOutput = layout.buildDirectory.file("sbom/home-inv-sbom.json")
     xmlOutput = layout.buildDirectory.file("sbom/home-inv-sbom.xml")
-    // Runtime only. A build-time dependency is not in the artefact, and an SBOM
-    // that listed the test framework would make every advisory against it look
-    // like an advisory against the product.
     includeConfigs = listOf("runtimeClasspath")
 }
 
 tasks.named("build") { dependsOn(tasks.named("cyclonedxDirectBom")) }
 
-// And `test` too, because `ThirdPartyNoticesTest` compares the licence notice
-// against it (REQ-CON-013): the two describe the same build and the test is
-// what says so. Without this the test would be conditional on whatever ran
-// before it, which is a test that passes by not running.
 tasks.named("test") { dependsOn(tasks.named("cyclonedxDirectBom")) }
 
-// AND IT TRAVELS IN THE ARTIFACT (REQ-CON-010) WITHOUT A LINE HERE.
-//
-// Spring Boot's Gradle plugin notices the CycloneDX plugin and puts the SBOM
-// into the jar itself, at `META-INF/sbom/application.cdx.json` -- which is
-// where a scanner looks. Verified by reading the jar rather than assumed:
-// `SbomTravelsTest` fails if a Boot upgrade ever stops doing it, because the
-// alternative is an image whose bill of materials is only on a workflow page
-// that expires in ninety days.
-//
-// A copy under `BOOT-INF/classes` was added here and then removed: it made the
-// actuator endpoint answer, and an SBOM is read from the image by whoever
-// scans it rather than from a management port nothing publishes. What IS
-// reachable from the running installation is the licence NOTICE, at
-// /api/v1/version/notices, because that one is owed to a user (REQ-CON-013).
-
-// THE SBOM IS IN THE JAR, CHECKED RATHER THAN ASSUMED (REQ-CON-010).
-//
-// Boot's plugin puts it there today. Nothing in this repository asks it to, so
-// nothing in this repository would notice if a later version stopped -- and the
-// failure would be silent: an image that ships without its bill of materials
-// looks exactly like one that ships with it.
 val sbomTravels by tasks.registering {
     description = "Fails when the boot jar carries no SBOM (REQ-CON-010)."
     group = "verification"
@@ -536,25 +303,8 @@ val sbomTravels by tasks.registering {
 
 tasks.named("check") { dependsOn(sbomTravels) }
 
-// WHICH BUILD THIS IS, AND WHERE ITS SOURCE IS (REQ-CON-009).
-//
-// The AGPL obligation is not satisfied by a version number: somebody running an
-// instance has to be able to get to the source OF THAT INSTANCE, which means the
-// exact commit. So the commit reaches the artefact at build time and the
-// application serves it (`VersionController`).
-//
-// Read from git, overridable by `HOMEINV_BUILD_COMMIT` for a build that has no
-// git directory -- a container build from a source tarball is the usual one --
-// and "unknown" where neither is available, which is a statement rather than a
-// silent zero.
 val buildCommit: String =
     providers.environmentVariable("HOMEINV_BUILD_COMMIT").orNull?.takeIf { it.isNotBlank() }
-        // `runCatching` and not `isIgnoreExitValue`: the latter covers a git that
-        // ANSWERED badly, and the case that actually happens is a git that is not
-        // there at all -- the container build has no git binary and no `.git`
-        // directory, and Gradle turns a missing executable into a configuration
-        // failure. That broke the image build on 2026-09-16, in the very case
-        // the comment above had named.
         ?: runCatching {
             providers.exec {
                 commandLine("git", "rev-parse", "--short=12", "HEAD")
@@ -567,26 +317,16 @@ springBoot {
     buildInfo {
         properties {
             additional.put("commit", buildCommit)
-            // Where the source of THIS build is. A link to the project rather
-            // than to the commit, because the commit is beside it and a reader
-            // can reach either.
             additional.put("source", "https://github.com/greluc/Home-Inventory")
         }
     }
 }
 
-// SpotBugs with find-sec-bugs (REQ-SEC-076). It reads bytecode, so it sees what
-// the compiler produced rather than what the source looked like — which is the
-// point for a class of finding that lives in what a framework generates around
-// the code somebody wrote.
 dependencies {
     spotbugsPlugins(libs.findsecbugs)
 }
 
 spotbugs {
-    // `max` effort, `low` threshold: this runs on a codebase of a few thousand
-    // lines, where the whole analysis costs seconds, and a threshold that hides
-    // findings is a threshold that hides the one that mattered.
     effort = com.github.spotbugs.snom.Effort.MAX
     reportLevel = com.github.spotbugs.snom.Confidence.LOW
     excludeFilter = rootProject.file("config/spotbugs-exclude.xml")
@@ -594,35 +334,18 @@ spotbugs {
 
 tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
     reports.create("sarif") {
-        // SARIF, so GitHub shows a finding on the line that caused it rather than
-        // in a log somebody has to open.
         required = true
         outputLocation = layout.buildDirectory.file("reports/spotbugs/${name}.sarif")
     }
     reports.create("html") { required = true }
 }
 
-// The TEST sources are not analysed. SpotBugs runs to find what could be attacked
-// in the code that SHIPS, and test code is neither shipped nor reachable — while
-// it is full of the shapes find-sec-bugs is designed to shout about: a throwaway
-// certificate authority, a hardcoded fixture password, a temporary file named by
-// the test. Analysing it would bury the findings that matter under the ones that
-// cannot (REQ-SEC-076).
 tasks.named("spotbugsTest") { enabled = false }
 
-// The generated protobuf classes are not ours to fix, and SpotBugs has plenty to
-// say about generated builders. Analysing them would bury every real finding.
 tasks.named<com.github.spotbugs.snom.SpotBugsTask>("spotbugsMain") {
     classes = classes?.filter { !it.path.contains("plugin${File.separator}v1") }
 }
 
-// The OpenAPI document is a build output that is committed (ADR-0049), like the
-// Quadlet units and `web/nginx/default.conf`. `:app:test` fails while it and the
-// code disagree; this task is how an intended change is written down.
-// The check REQ-API-001 names. It is the same test the `test` task already runs —
-// registered under its own name because a requirement that names a command is a
-// requirement somebody will type, and one that does not exist reads as a project
-// that stopped caring.
 tasks.register<Test>("openApiCheck") {
     description = "Fails while api/openapi.yaml and the implementation disagree."
     group = "verification"
@@ -647,7 +370,5 @@ tasks.register<Test>("updateOpenApi") {
     systemProperty("spring.profiles.active", "test")
     systemProperty("homeinv.openapi.regenerate", "true")
 
-    // Never up to date: the point of running it is to look at the repository
-    // again, and its inputs are the whole application.
     outputs.upToDateWhen { false }
 }

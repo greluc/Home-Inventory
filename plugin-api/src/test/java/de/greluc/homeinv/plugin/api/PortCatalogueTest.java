@@ -71,12 +71,6 @@ class PortCatalogueTest {
   @Test
   @DisplayName("lets a manifest declare every port there is, and no port there is not")
   void theManifestReaderKnowsTheSamePorts() {
-    // The list a manifest is validated against is a third copy of the same fact
-    // — the requirement, the package, and `PluginManifestReader.PORTS` — and it
-    // had already drifted: `PasswordBreachCheck` was added as the fifteenth port
-    // and never added there, so every manifest declaring it was rejected at
-    // registration with a message listing the ports it was not among. A plugin
-    // nobody could install, and nothing said why.
     List<String> named = portsNamedByTheRequirement();
 
     assertThat(PluginManifestReader.PORTS)
@@ -103,8 +97,6 @@ class PortCatalogueTest {
                         "REQ-PLG-001 is not in docs/requirements/01-functional.md. It is the "
                             + "requirement this whole package implements."));
 
-    // The description cell only. The verification cell after it names test
-    // classes and chapters in backticks too, and those are not ports.
     String[] cells = row.split("\\|");
     String description = cells.length > 2 ? cells[2] : "";
 

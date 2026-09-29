@@ -31,10 +31,6 @@ try:
 except ImportError:  # pragma: no cover - the message is the point
     sys.exit("PyYAML is required: pip install pyyaml")
 
-# The matrix writes `${SECRET_FILE:name}` where a value is the *path* to a
-# mounted secret. It is the matrix's own notation, not shell or Compose
-# interpolation - Compose rejects it outright - so it is translated here, in the
-# one place that knows where each runtime mounts secrets.
 SECRET_FILE = re.compile(r"\$\{SECRET_FILE:([a-z0-9-]+)\}")
 
 HERE = pathlib.Path(__file__).parent
@@ -43,27 +39,8 @@ COMPOSE_OUT = HERE / "compose" / "compose.yaml"
 QUADLET_DIR = HERE / "quadlet"
 GENERATED_DIR = HERE / "generated"
 
-# A generated file is delivered through each runtime's SECRET mount, because a
-# read-only root filesystem and the no-bind-mount rule (ADR-0022) leave no other
-# way to get a file into a container. It is not thereby a secret; only the
-# delivery path is shared with one.
 SECRET_PLACEHOLDER = "@SECRET:{name}@"
 
-# `${HOMEINV_PUBLIC_BASE_URL}` and its kind: a value the operator supplies,
-# which Compose interpolates from compose/.env and systemd does not.
-#
-# The `${VAR:-default}` form counts too, and did not until 2026-09-15. Compose
-# interpolates it and systemd passes the twelve-odd characters through, so
-# `HOMEINV_SEARCH_ENGINE` reached the container as the literal text
-# `${HOMEINV_SEARCH_ENGINE:-postgresql}` — which Spring read as a placeholder
-# referring to itself and refused to start on ("Circular placeholder reference").
-# The rootless smoke suite caught it under Podman while Docker passed, which is
-# exactly the difference the two-runtime matrix exists to find.
-#
-# A placeholder with a default is omitted from the unit like any other: the
-# default belongs to the application (`@Value("${homeinv.search.engine:postgresql}")`)
-# and stating it a second time in a generated unit would be a second place for it
-# to be wrong.
 PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}")
 
 BANNER = (
@@ -75,9 +52,6 @@ BANNER = (
 )
 
 
-# The scanner's configuration. Compared byte for byte against
-# deploy/expected/clamav-freshclam.conf, which was written before this generator
-# existed precisely so that it could be wrong against something.
 FRESHCLAM_TEMPLATE = """# GENERATED — do not edit. Source: deploy/services.yaml, services.clamav.egress
 #
 # THIS FILE IS A FIXTURE, NOT A LIVE CONFIGURATION. It is the exact output the
@@ -141,54 +115,6 @@ ConnectTimeout 30
 ReceiveTimeout 60
 """
 
-# NO COMMENTS AND NO BLANK LINES. Valkey parses an ACL file strictly: every line
-# must begin with the `user` keyword, and anything else aborts start-up with
-# "should start with user keyword followed by the username" — for every line. The
-# first version of this template carried the usual explanation in the file and the
-# server refused to start, which the connectivity suite found as "valkey answered
-# an unauthenticated PING": the server was running from an earlier start, without
-# the ACL.
-#
-# So the reasoning lives here instead:
-#
-#   * `default off` — leaving the built-in account on with `nopass` is the
-#     default, and it is how an authenticated Valkey ends up accepting anonymous
-#     commands anyway.
-#   * one user, allowed exactly what sessions, the login throttle and the
-#     short-lived OIDC state need. After ADR-0044 the only members of `internal`
-#     that can reach the port are `api` and `worker`.
-#   * the password is a `@SECRET:` placeholder; `deploy/setup.sh` substitutes the
-#     operator's secret into a copy under deploy/secrets/, which is git-ignored.
-#     Valkey held no credential at all until ADR-0044, which meant every session
-#     and every rate-limit counter was readable by anything that could open port
-#     6379 on `internal` — `web` included, at the time.
-#   * FOUR CHANNELS, and they are not optional. An ACL grants no pub/sub channel
-#     at all by default. Three belong to the indexed session store: the keyspace
-#     notifications Valkey emits when a session key is deleted or expires, and
-#     Spring Session's own "created" pattern. They are what keeps the per-account
-#     session index of REQ-AUTH-009 from filling with sessions that are gone.
-#     Without them the application does not degrade — it refuses to start, with
-#     `NOPERM No permissions to access a channel`, which is how this line came to
-#     be written.
-#
-#     The fourth is `homeinv.live`, the live-change nudge of REQ-API-011: a change
-#     committed on one `api` replica has to reach a browser connected to another,
-#     so every replica publishes to it and every replica subscribes. It was added
-#     on 2026-09-21, after the feature had shipped without it and the smoke suite
-#     found what the unit tests could not — they run one context against a Valkey
-#     with no ACL at all. `worker` holds the same grant: it raises the events, so
-#     it publishes, and the one listener it also starts is the cheaper half of
-#     that (see `LiveChangeSubscriber`).
-#
-#     They are spelled out rather than globbed because Valkey matches them
-#     differently for the two commands: a SUBSCRIBE channel is glob-matched
-#     against the allowed patterns, but a PSUBSCRIBE pattern has to be one of them
-#     LITERALLY. `&__key*__:*` therefore looks like it covers everything here and
-#     covers nothing — which is what the first attempt did.
-#
-#     The `0` is the database index. The deployment does not set one, so it is
-#     Valkey's default; an operator who changes it changes these three lines with
-#     it.
 VALKEY_ACL_TEMPLATE = (
     "user default off\n"
     "user {user} on >{password} ~*"
@@ -263,10 +189,6 @@ def secret_environment(service: dict) -> dict[str, str]:
     :param service: one service from the matrix
     :return: variable name to mount path, in the order the secrets are declared
     """
-    # Only the services running OUR image read these. `postgres` mounts
-    # db-password too, but it is told where by POSTGRES_PASSWORD_FILE and its own
-    # init script; handing it HOMEINV_* variables would be noise that reads like
-    # configuration.
     if service.get("role") not in {"api", "worker", "migrate", "bootstrap"}:
         return {}
     return {
@@ -308,7 +230,7 @@ def memory(value: str, target: str) -> str:
     quantity = str(value).strip()
     if not quantity.endswith("i"):
         return quantity
-    stripped = quantity[:-1]                      # 768Mi -> 768M
+    stripped = quantity[:-1]
     return stripped.lower() if target == "compose" else stripped.upper()
 
 
@@ -492,13 +414,8 @@ def plugin_manifest(matrix: dict, name: str) -> str:
             f"services.yaml points {name} at {declared['manifest']}, which does not exist.")
 
     text = source.read_text(encoding="utf-8")
-    # Parsed only to CHECK it. The parsed form is thrown away and the text is
-    # what is returned, because the signature is over the text.
     document = yaml.safe_load(text)
     hosts = declared.get("hosts") or []
-    # `tcp:` is the other shape a manifest declares, and it means something
-    # different: a `host:port` for a protocol that is not HTTP -- SMTP
-    # submission, which is why O11 gave the proxy a tunnel rather than a fetch.
     tcp = declared.get("tcp") or []
     outbound = [
         capability
@@ -543,10 +460,6 @@ def plugin_signature(matrix: dict, name: str) -> str | None:
     signature = HERE.parent / (declared["manifest"] + ".sig")
     if not signature.is_file():
         return None
-    # One line: whitespace is stripped so that a file with a trailing newline,
-    # or one `cosign` wrapped, still produces a YAML scalar rather than a
-    # surprise. The verifier tolerates both; the generated file should not have
-    # to be tolerated.
     return "".join(signature.read_text(encoding="utf-8").split())
 
 
@@ -583,12 +496,6 @@ def plugins_list(matrix: dict) -> str:
         lines.append(f"  - id: {declared['id']}")
         lines.append(f"    endpoint: \"{name}:{port}\"")
         lines.append(f"    fingerprint: \"@FINGERPRINT:{declared['fingerprintFrom']}@\"")
-        # The key is a placeholder for the same reason the fingerprint is: it
-        # lives in the deployment's secret store, which does not exist until
-        # `setup.sh` has run. The SIGNATURE is not a placeholder — it travels
-        # with the manifest in this repository, because it is over exactly the
-        # bytes written just below and the two must not be able to come from
-        # different places (REQ-PLG-004, ADR-0085).
         lines.append(f'    publicKey: "@PUBKEY:{declared["publicKeyFrom"]}@"')
         signature = plugin_signature(matrix, name)
         if signature:
@@ -646,9 +553,6 @@ def egress_allowlist(matrix: dict) -> str:
             lines.append(host)
         lines.append("")
 
-    # The per-plugin half, one section per segment. The proxy keys it on the
-    # interface a connection arrived on, which is why the subnet is in the header
-    # and why two plugins may not share one (ADR-0037).
     subnets = plugin_networks(matrix)
     for name, service in plugin_services(matrix).items():
         declared = service["plugin"]
@@ -656,9 +560,6 @@ def egress_allowlist(matrix: dict) -> str:
         lines.append(f"# {name} — the targets services.yaml allows it, compiled from its manifest")
         for host in declared.get("hosts") or []:
             lines.append(host)
-        # A `host:port` allows THAT port and no other; a bare host allows any,
-        # which is what `freshclam` needs on port 80. The proxy reads the
-        # difference (ADR-0027, O11).
         for target in declared.get("tcp") or []:
             lines.append(target)
         lines.append("")
@@ -714,10 +615,6 @@ def generated_files(matrix: dict) -> dict[pathlib.Path, str]:
         ("valkey", "secrets"): valkey_acl,
         ("rabbitmq", "secrets"): rabbitmq_conf,
         ("opensearch", "secrets"): opensearch_internal_users,
-        # The same content for both core roles, mounted into each. Two copies of
-        # one file rather than a shared mount, because a secret is delivered per
-        # container on both runtimes and the alternative is a bind mount, which
-        # is on the forbidden list (ADR-0022).
         ("api", "plugins"): plugins_list,
         ("worker", "plugins"): plugins_list,
     }
@@ -725,13 +622,9 @@ def generated_files(matrix: dict) -> dict[pathlib.Path, str]:
     for name, service in matrix["services"].items():
         for entry in service.get("files") or []:
             if entry.get("source"):
-                # A directory of certificates, delivered from a secret as it
-                # stands. There is nothing to render: the secret IS the content.
                 continue
             render = renderers.get((name, entry.get("generatedFrom")))
             if render is None:
-                # A declared file nothing renders would be mounted as an empty
-                # secret, fail at run time, and look like the image's fault.
                 raise SystemExit(
                     f"services.yaml declares {name}:{entry['target']} as generatedFrom "
                     f"{entry.get('generatedFrom')!r} and generate.py has no renderer for it.")
@@ -910,20 +803,11 @@ def compose(matrix: dict) -> str:
 
     for name, service in matrix["services"].items():
         image = service["image"]
-        # The digest, not the tag. "The same image digests as production" is what
-        # makes an integration test mean anything (CLAUDE.md, Build).
         reference = f"{image['name']}@{image['digest']}" if image.get("digest") \
             else f"{image['name']}:{image.get('tag', 'latest')}"
 
         lines.append(f"  {name}:")
         lines.append(f"    image: {reference}")
-        # The same name both runtimes use. Quadlet sets `ContainerName=` already,
-        # and without this Compose would call it `home-inv-api-1` — so every
-        # command an operator is given (`docker logs homeinv-api`,
-        # `journalctl --user -u homeinv-api`) would be right on one runtime and
-        # wrong on the other, and so would every check in the smoke suite.
-        # Nothing in this matrix scales, which is the one thing `container_name`
-        # would prevent.
         lines.append(f"    container_name: homeinv-{name}")
         lines.append(f"    user: \"{service.get('user', d['user'])}\"")
         lines.append("    read_only: true" if service.get("readOnlyRootFilesystem", d["readOnlyRootFilesystem"]) else "    read_only: false")
@@ -932,15 +816,8 @@ def compose(matrix: dict) -> str:
             lines.append(f"      - {capability}")
         lines.append("    security_opt:")
         lines.append("      - no-new-privileges:true")
-        # A one-shot has finished when it exits, and `on-failure` would restart a
-        # deterministic failure — a missing HOMEINV_BOOTSTRAP_EMAIL, a migration
-        # that cannot apply — until somebody noticed. Dependants wait on
-        # `service_completed_successfully`, which a restarting container never
-        # reaches. services.yaml said this was generated; it was not.
         restart = service.get("restart", d["restart"])
         if service.get("lifecycle") == "oneShot":
-            # Quoted: YAML 1.1 reads a bare `no` as false, and a Compose file
-            # is parsed by more than one implementation.
             restart = '"no"'
         lines.append(f"    restart: {restart}")
 
@@ -956,19 +833,12 @@ def compose(matrix: dict) -> str:
             for network in joined:
                 alias = aliases.get(network)
                 if alias:
-                    # The long form, for the alias. It is what makes
-                    # `management.server.address` bindable to ONE segment: a name
-                    # declared on a network resolves to the container's address on
-                    # THAT network, and a listener bound to it is unreachable from
-                    # every other (REQ-SEC-099).
                     lines.append(f"      {network}:")
                     lines.append("        aliases:")
                     lines.append(f"          - {alias}")
                 else:
                     lines.append(f"      {network}: {{}}")
 
-        # A service's own `command:` wins; `settings_arguments` is the
-        # postgres-shaped path that builds one from the `settings` block.
         command = service.get("command") or settings_arguments(service)
         if command:
             lines.append("    command: [" + ", ".join(f"\"{part}\"" for part in command) + "]")
@@ -986,9 +856,6 @@ def compose(matrix: dict) -> str:
         files = delivered_files(service, name)
         if service.get("secrets") or files:
             lines.append("    secrets:")
-            # A delivered file is mounted at a path of its own; a plain secret
-            # lands at /run/secrets/<name>, which is what the application's
-            # HOMEINV_*_FILE variables point at.
             for secret, target in files:
                 lines.append(f"      - source: {secret}")
                 lines.append(f"        target: {target}")
@@ -998,24 +865,8 @@ def compose(matrix: dict) -> str:
         if service.get("volumes") or service.get("tmpfs"):
             lines.append("    volumes:")
             for volume in service.get("volumes") or []:
-                # Named volumes only. A bind mount into a host directory is on the
-                # forbidden list, because with rootless user namespaces the file
-                # ownership on the host is not the ownership in the container.
                 lines.append(f"      - {volume['name']}:{volume['path']}")
             for path in service.get("tmpfs") or []:
-                # A read-only root filesystem still needs somewhere to write — and
-                # the mode is the part that makes it true. A tmpfs mounted without
-                # one arrives root-owned and 0755, so the non-root user every
-                # container runs as cannot write to the directory that was mounted
-                # for it. `0o1777` is what /tmp is on any host.
-                #
-                # Found by starting the stack: clamav could not create its lock
-                # file and never became healthy, so nothing that waits for it
-                # started — and `api` would have failed its first upload, because
-                # the pipeline spools to /tmp.
-                #
-                # The long form rather than the `tmpfs:` short one, which takes a
-                # path and no options. Compose accepts both forms in one list.
                 lines.append("      - type: tmpfs")
                 lines.append(f"        target: {path}")
                 lines.append("        tmpfs:")
@@ -1032,10 +883,6 @@ def compose(matrix: dict) -> str:
             lines.append("    depends_on:")
             for dependency in service["dependsOn"]:
                 lines.append(f"      {dependency}:")
-                # A one-shot has no health check and never becomes healthy, so
-                # `service_healthy` on it would block its dependants for ever.
-                # What is actually required of `migrate` is that it EXITED 0
-                # before `api` starts (ADR-0041, 06 §6.12).
                 if matrix["services"][dependency].get("lifecycle") == "oneShot":
                     lines.append("        condition: service_completed_successfully")
                 else:
@@ -1044,12 +891,6 @@ def compose(matrix: dict) -> str:
         health = service.get("health")
         if health and health.get("command"):
             lines.append("    healthcheck:")
-            # Split into argv rather than passed as one string. Compose runs a
-            # single-element CMD as one executable name, so `valkey-cli ping`
-            # became a search for a binary called "valkey-cli ping" and the
-            # container was never healthy — and a dependant gated on
-            # `service_healthy` therefore never started. CMD-SHELL is not the
-            # answer either: two of these images are `scratch` and have no shell.
             argv = ", ".join(f'"{part}"' for part in shlex.split(health["command"]))
             lines.append(f"      test: [\"CMD\", {argv}]")
             lines.append(f"      interval: {health.get('interval', '15s')}")
@@ -1068,9 +909,6 @@ def compose(matrix: dict) -> str:
 
     lines.append("networks:")
     for name, subnet in plugin_networks(matrix).items():
-        # One segment per plugin, generated from the plugin service itself
-        # (ADR-0037). `internal: true` is the whole of "a plugin has no route
-        # out": what it reaches instead is the proxy, on this same segment.
         lines.append(f"  {name}:")
         lines.append("    internal: true")
         lines.append("    ipam:")
@@ -1078,13 +916,9 @@ def compose(matrix: dict) -> str:
         lines.append(f"        - subnet: {subnet}")
     for name, network in matrix["networks"].items():
         if network.get("generated"):
-            # The template, which describes the rule the loop above applies.
             continue
         lines.append(f"  {name}:")
         if network.get("internal"):
-            # No route out. This is what makes "the core opens no outbound
-            # connection" a property of the network rather than a promise in the
-            # code (ADR-0026, ADR-0027).
             lines.append("    internal: true")
     lines.append("")
 
@@ -1101,8 +935,6 @@ def compose(matrix: dict) -> str:
             lines.append(f"  {secret}:")
             lines.append(f"    file: ../secrets/{secret}")
     for name in matrix["secrets"]:
-        # Files, not environment variables: an environment variable is readable by
-        # anything that can list the process and survives in crash dumps.
         lines.append(f"  {name}:")
         lines.append(f"    file: ../secrets/{name}")
     lines.append("")
@@ -1159,7 +991,6 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
     for name, network in matrix["networks"].items():
         if network.get("generated"):
-            # The template, which describes what the per-plugin loop below emits.
             continue
         body = [BANNER.replace("#", ";"), "", "[Unit]", f"Description=Home Inventory network {name}", "", "[Network]", f"NetworkName=homeinv-{name}"]
         if network.get("internal"):
@@ -1168,9 +999,6 @@ def quadlet(matrix: dict) -> dict[str, str]:
         files[f"homeinv-{name}.network"] = "\n".join(body)
 
     for name, subnet in plugin_networks(matrix).items():
-        # One segment per plugin (ADR-0037), with its subnet stated: the egress
-        # proxy identifies a caller by the interface a connection arrived on, and
-        # that is a comparison against this value.
         body = [
             BANNER.replace("#", ";"), "", "[Unit]",
             f"Description=Home Inventory network {name}", "", "[Network]",
@@ -1199,20 +1027,8 @@ def quadlet(matrix: dict) -> dict[str, str]:
         for capability in service.get("dropCapabilities", d["dropCapabilities"]):
             body.append(f"DropCapability={capability}")
         body.append("NoNewPrivileges=true")
-        # Not SecurityLabelDisable=true, which is on the forbidden list: it would
-        # switch SELinux labelling off instead of letting Podman label the named
-        # volumes correctly, which it does on its own.
 
         for network in networks_of(service, matrix):
-            # EVERY membership carries the service's own name as an alias, and
-            # that is what makes the two runtimes equals rather than similar
-            # (REQ-NFR-051). Compose gives a service its short name on every
-            # network it joins, for free; Quadlet names the container
-            # `homeinv-<service>` and aliases nothing, so `postgres` resolved
-            # under Docker and raised UnknownHostException under Podman — the
-            # migrate one-shot could not reach the database, and every service
-            # gated on it stayed down. Every URL in this matrix uses the short
-            # name, so this is the line that makes them true on both.
             aliases = [name]
             extra = (service.get("networkAliases") or {}).get(network)
             if extra and extra not in aliases:
@@ -1224,18 +1040,7 @@ def quadlet(matrix: dict) -> dict[str, str]:
         for volume in service.get("volumes", []):
             body.append(f"Volume=homeinv-{volume['name']}.volume:{volume['path']}")
         for path in service.get("tmpfs", []):
-            # `mode=1777` for the reason the Compose side gives: without it the
-            # mount is root-owned and 0755, and the container's own user cannot
-            # write to it.
             body.append(f"Tmpfs={path}:mode=1777")
-        # The operator's own variables come from a file, exactly as they do on the
-        # Compose side. systemd does NOT interpolate `${VAR}` in `Environment=` —
-        # it passes the eight characters — so a unit written that way handed the
-        # container the literal text, and `bootstrap` reported "set
-        # HOMEINV_BOOTSTRAP_EMAIL and run this service again" on a deployment
-        # where the operator had set it. `EnvironmentFile=` is read first and a
-        # later `Environment=` overrides it, so a placeholder must not be written
-        # twice; the loop below skips them.
         if any(
             PLACEHOLDER.fullmatch(str(value))
             for value in (service.get("env") or {}).values()
@@ -1254,14 +1059,8 @@ def quadlet(matrix: dict) -> dict[str, str]:
             body.append(f"Secret={secret},type=mount")
         for secret, target in delivered_files(service, name):
             body.append(f"Secret={secret},type=mount,target={target}")
-        # A service's own `command:` wins; `settings_arguments` is the
-        # postgres-shaped path that builds one from the `settings` block.
         command = service.get("command") or settings_arguments(service)
         if command:
-            # systemd splits Exec= on whitespace, and `archive_command` contains
-            # some. Quoted, or PostgreSQL starts with an archive command that is
-            # the first word of one - and WAL archiving silently does nothing,
-            # which is the failure ADR-0045 exists to prevent.
             body.append("Exec=" + " ".join(literal(shlex.quote(part)) for part in command))
         for port in service.get("ports") or []:
             if port.get("host"):
@@ -1269,36 +1068,12 @@ def quadlet(matrix: dict) -> dict[str, str]:
 
         health = service.get("health")
         if health and health.get("command"):
-            # The array WITHOUT Compose's `CMD` prefix, which is the one form
-            # Podman reads as a command.
-            #
-            # Given `["CMD", ...]` Podman sees the keyword, decides the value is
-            # Docker's string form after all, and re-splits the RAW TEXT on
-            # whitespace — so the check it stored for `api` was the four words
-            # `["CMD",` and `"/usr/bin/healthcheck"]`, brackets and quotes and
-            # all. It could never pass. `api` started in fourteen seconds, ran
-            # perfectly, and was killed at 210 s for never reporting healthy,
-            # because `Notify=healthy` waits for a check that cannot run.
-            #
-            # Without the prefix, Podman takes an array of TWO OR MORE words as
-            # the command to execute, and a single word as something to hand to
-            # `/bin/sh -c`. That is why the two `scratch` images — `blobstore`
-            # and `egress-proxy`, which have no shell — declare their check with
-            # an argument: `/homeinv-blobstore --health` is executed, and a bare
-            # `/homeinv-blobstore` would have been handed to a shell that is not
-            # in the image. `deploy/smoke/connectivity.sh` asserts that every
-            # container the stack starts actually reports healthy, on both
-            # runtimes, which is what makes that a caught mistake rather than a
-            # silent one.
             body.append(
                 "HealthCmd=" + literal(json.dumps(shlex.split(health["command"])))
             )
             body.append(f"HealthInterval={health.get('interval', '15s')}")
             body.append(f"HealthStartPeriod={health.get('startPeriod', '30s')}")
             if health.get("notify") == "healthy":
-                # systemd waits for the container to report healthy before it
-                # considers the unit started, which is what makes Requires=/After=
-                # mean "ready" rather than "process exists" (REQ-NFR-067).
                 body.append("Notify=healthy")
 
         one_shot = service.get("lifecycle") == "oneShot"
@@ -1306,16 +1081,6 @@ def quadlet(matrix: dict) -> dict[str, str]:
         resources = service.get("resources")
         body += ["", "[Service]"]
 
-        # A unit that waits for the container to report HEALTHY needs longer than
-        # systemd's default 90 s to start, because the health check is not even
-        # consulted until the start period is over. `api` declares a 90 s start
-        # period, so systemd gave up at the exact moment the container became
-        # eligible to pass — "Job for homeinv-api.service failed because a timeout
-        # was exceeded", with nothing wrong and nothing in a failed state.
-        #
-        # Derived from the matrix rather than picked: the start period, four
-        # intervals for the check to actually run and pass, and a minute for a
-        # cold image on slow storage.
         health = service.get("health") or {}
         if health.get("notify") == "healthy":
             start_period = seconds(health.get("startPeriod", "0s"))
@@ -1326,39 +1091,14 @@ def quadlet(matrix: dict) -> dict[str, str]:
             body.append(f"MemoryMax={memory(resources.get('memoryLimit', '512Mi'), 'systemd')}")
             body.append(f"MemoryLow={memory(resources.get('memoryReservation', '128Mi'), 'systemd')}")
         if one_shot:
-            # Without these the unit is "started" the moment the container is
-            # launched, so a `Requires=`/`After=` dependant starts alongside the
-            # migration rather than after it — which is the ordering REQ-NFR-067
-            # asks for and the generator did not produce. `RemainAfterExit` keeps
-            # the unit active once it has exited 0, so the dependency holds for the
-            # rest of the boot instead of going away with the process.
             body.append("Type=oneshot")
             body.append("RemainAfterExit=yes")
             body.append("Restart=no")
         else:
             body.append(f"Restart={service.get('restart', d['restart'])}")
 
-        # No [Install] on a container, deliberately. Every unit carried
-        # `WantedBy=default.target` until 2026-09-12, which enabled all of them:
-        # a `minimal` deployment would have started OpenSearch at the operator's
-        # next login, because nothing in a Quadlet unit knows what a profile is.
-        # The profile target below carries the [Install] instead, so enabling one
-        # target enables exactly the deployment that was installed.
         files[f"homeinv-{name}.container"] = "\n".join(body)
 
-    # A target per profile, because systemd has no profiles and Compose does.
-    #
-    # `deploy/setup.sh podman` used to install the units and say
-    # "start with: systemctl --user start homeinv-api". That starts `api` and
-    # what `api` requires — and leaves `web` down, which is the only published
-    # port in the deployment, so the documented command produced a stack with
-    # nothing to connect to. The website meanwhile promised a `homeinv.target`
-    # that did not exist.
-    #
-    # `Requires=` and `After=`, not `Wants=`: the target is reached once the
-    # whole profile is up, so `systemctl --user start homeinv-minimal.target`
-    # returns when the deployment is running and fails when it is not. That is
-    # what makes it the one command of REQ-NFR-028 on this runtime.
     for profile in profiles(matrix):
         members = [
             f"homeinv-{name}.service"

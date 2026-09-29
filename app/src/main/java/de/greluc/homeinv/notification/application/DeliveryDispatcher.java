@@ -46,9 +46,6 @@ public class DeliveryDispatcher {
   public int deliverDue(Instant now) {
     int attempted = 0;
     for (UUID tenantId : queries.tenantsWithSomethingDue(now)) {
-      // The context around the transaction and never inside it: `SET LOCAL
-      // app.tenant_id` is applied when the transaction begins, from the context
-      // current at that moment.
       List<NotificationQueries.Due> due =
           TenantContext.callAs(tenantId, () -> runner.dueNotifications(now));
       for (NotificationQueries.Due notification : due) {

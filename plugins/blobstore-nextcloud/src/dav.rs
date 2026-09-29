@@ -107,9 +107,6 @@ pub async fn make_collection(
     )
     .await?;
     match answer.status {
-        // Created, or there already — which is the common case and not an
-        // error: two uploads of the same tenant race to create the same parent,
-        // and the loser has nothing to be sorry about.
         201 | 405 => Ok(()),
         status => {
             let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();

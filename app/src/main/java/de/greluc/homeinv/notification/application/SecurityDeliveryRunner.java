@@ -86,17 +86,8 @@ public class SecurityDeliveryRunner {
     Optional<NotificationChannel> channel =
         extensions
             .lookupForInstance(NotificationChannel.class)
-            // The row names its channel and the instance grant names a plugin,
-            // and the two have to agree. An operator who granted
-            // `plugin-webhook` an instance-level capability would otherwise have
-            // every password reset posted to a URL as an event document -- it
-            // would fail, because a mail address is not an https target, but it
-            // would fail after leaving the deployment rather than before.
             .filter(candidate -> servesChannel(candidate, notification.channelKey()));
     if (channel.isEmpty()) {
-      // Not a refusal by the far side — there is no far side. Retried, because
-      // an operator who grants the capability afterwards should find the queued
-      // messages go out rather than a pile of dead letters from before.
       log.warn(
           "No plugin serves account notifications here: nothing is installed with an"
               + " instance-level grant (ADR-0066), so {} is waiting rather than delivered."
@@ -143,7 +134,6 @@ public class SecurityDeliveryRunner {
       if (worthRetrying) {
         reschedule(notification, attemptNo, now);
       } else {
-        // "That is not an address" does not become one by being repeated.
         deadLetter(notification.id(), attemptNo);
       }
     }
@@ -180,9 +170,6 @@ public class SecurityDeliveryRunner {
 
   private void deadLetter(UUID notificationId, int attemptNo) {
     queries.deadLetter(notificationId, attemptNo);
-    // Warning rather than info: a security notification that never arrived is
-    // something an operator has to know about, because the person it was for is
-    // the one who cannot tell.
     log.warn(
         "The account notification {} was not delivered after {} attempt(s) and is dead-lettered;"
             + " every attempt and what it said is in notification.security_delivery_attempt",

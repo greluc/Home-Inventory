@@ -53,9 +53,6 @@ public class DefaultImportService implements ImportService {
       throws IOException {
     UUID tenantId = TenantContext.require();
     if (profileKey != null && profiles.profileOf(profileKey).isEmpty()) {
-      // Refused here, in the request that named it, rather than by the worker
-      // minutes later: a typo in a profile name is a mistake somebody can fix
-      // while they are still looking at the screen.
       throw new IllegalArgumentException(
           "No mapping profile is called '" + profileKey + "'. "
               + profiles.all().stream().map(MappingProfile::key).toList());
@@ -68,11 +65,6 @@ public class DefaultImportService implements ImportService {
       } catch (NoSuchAlgorithmException impossible) {
         throw new IllegalStateException("SHA-256 is not available in this JVM", impossible);
       }
-      // Through the file rather than into memory: the digest has to be known
-      // before the blob store will take the bytes, and holding the archive in a
-      // byte array to hash it would put the ceiling on how large an inventory
-      // may be -- which is the wrong place for a ceiling, on the way in as much
-      // as on the way out.
       long size;
       try (OutputStream out = new DigestOutputStream(Files.newOutputStream(temporary), digest)) {
         size = archive.transferTo(out);
@@ -85,10 +77,6 @@ public class DefaultImportService implements ImportService {
         blobs.store(tenantId, sha256, stored);
       }
 
-      // Straight to the query object, which carries its own `@Transactional`.
-      // A wrapper here would be a self-invocation -- `this.queue(...)` does not
-      // pass through the proxy -- so the annotation would do nothing at all and
-      // the tests would still pass, because they call through the bean.
       UUID id = jobs.queue(tenantId, actor, sha256, size, dryRun, profileKey);
       log.info("An archive of {} byte(s) was accepted for tenant {}", size, tenantId);
       return jobs.byId(tenantId, id).orElseThrow();

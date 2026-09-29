@@ -42,9 +42,6 @@ public class RoleHoldersAdapter implements RoleHolders {
   @Override
   @Transactional(readOnly = true)
   public List<UUID> holdersOf(RoleRef role) {
-    // No tenant predicate: the context is established and the policy scopes the
-    // read to this tenant's memberships, which is the only scope this question
-    // has an answer in.
     TenantContext.require();
     if (role.definitionId() != null) {
       return jdbc.sql(BY_DEFINITION)

@@ -83,8 +83,6 @@ public class MediaScanRunner {
 
     Optional<MediaObject> found = objects.findById(mediaObjectId);
     if (found.isEmpty()) {
-      // Deleted between the publish and the delivery. Not an error: the outbox
-      // guarantees the event arrives, not that its subject still exists.
       log.debug("Media object {} is gone; nothing to scan.", mediaObjectId);
       return ScanState.PENDING_SCAN;
     }
@@ -98,14 +96,8 @@ public class MediaScanRunner {
 
     VirusScanner.Verdict verdict;
     try (InputStream stored = blobs.open(tenantId, object.getSha256())) {
-      // Throws ScannerUnavailableException, which is the whole point: no verdict
-      // must ever be turned into a clean one here.
       verdict = scanner.scan(stored);
     } catch (IOException unreadable) {
-      // The bytes are not there to scan. That is not "clean", and it is not a
-      // scanner outage either — retrying will not make the blob reappear — so it
-      // is recorded as a failed scan and left to the catch-up run, which will
-      // report the same thing again and keep the object unretrievable.
       log.warn(
           "Could not read the bytes of media object {} of tenant {}: {}",
           mediaObjectId,
@@ -123,16 +115,9 @@ public class MediaScanRunner {
       return ScanState.CLEAN;
     }
 
-    // The bytes go first. An infected blob that stays in the store is an
-    // infected blob somebody will later serve, and the row alone is enough to
-    // tell the uploader what happened.
     try {
       blobs.delete(tenantId, object.getSha256());
     } catch (IOException undeletable) {
-      // Recorded and carried on with. Leaving the object PENDING_SCAN because a
-      // delete failed would leave a KNOWN infected blob in a state whose meaning
-      // is "not yet judged", and the retrieval path would then be the only thing
-      // standing between it and a client.
       log.error(
           "Media object {} of tenant {} is infected and its blob could not be deleted: {}",
           mediaObjectId,
@@ -140,9 +125,6 @@ public class MediaScanRunner {
           undeletable.getMessage());
     }
 
-    // Detached from everything. The upload was accepted before the verdict, so
-    // this file may already be an item's primary image; leaving it there would
-    // make a list show a picture that cannot be served.
     for (Attachment attachment : attachments.findLiveOf(tenantId, mediaObjectId)) {
       attachment.markDeleted(object.getCreatedBy(), now);
       attachments.save(attachment);
@@ -151,9 +133,6 @@ public class MediaScanRunner {
 
     object.recordVerdict(ScanState.INFECTED, verdict.signature(), now);
     objects.save(object);
-    // WARN and not INFO: an infected upload is a security event. The signature
-    // name is the scanner's, not the uploader's, so it carries nothing of the
-    // file itself (REQ-NFR-042 forbids user content in logs).
     log.warn(
         "Media object {} of tenant {} was refused by the scanner: {}",
         mediaObjectId,

@@ -53,8 +53,6 @@ pub fn parse(url: &str) -> Result<Target, String> {
         return Err("the webhook target has no host".to_string());
     }
     if authority.contains('@') {
-        // Credentials in a URL are sent on every request and end up in logs on
-        // both sides. A receiver that needs authentication gets the signature.
         return Err("a webhook target may not carry credentials in its URL".to_string());
     }
 
@@ -92,8 +90,6 @@ fn refused_address(host: &str) -> Option<String> {
         return refused("localhost");
     }
     if host.starts_with('[') {
-        // IPv6 literal. `::1` is loopback and `fc00::/7` is unique-local; both
-        // are inside the deployment's world rather than outside it.
         let inner = host.trim_start_matches('[').trim_end_matches(']');
         if inner == "::1"
             || inner.starts_with("fc")
@@ -111,7 +107,6 @@ fn refused_address(host: &str) -> Option<String> {
             .iter()
             .all(|part| part.chars().all(|c| c.is_ascii_digit()))
     {
-        // A name. The proxy decides.
         return None;
     }
     let numbers: Vec<u16> = octets.iter().filter_map(|part| part.parse().ok()).collect();
@@ -173,8 +168,6 @@ mod tests {
 
     #[test]
     fn the_metadata_endpoint_is_refused() {
-        // The one that matters: a URL from a form, pointed at the cloud
-        // provider's metadata service, is how a webhook becomes credential theft.
         assert!(parse("https://169.254.169.254/latest/meta-data/")
             .unwrap_err()
             .contains("link-local"));
@@ -203,7 +196,6 @@ mod tests {
 
     #[test]
     fn a_refusal_never_repeats_the_url() {
-        // A delivery log is read by people who did not configure the target.
         let message = parse("https://10.0.0.5/secret-path?token=abc").unwrap_err();
         assert!(!message.contains("secret-path"));
         assert!(!message.contains("token"));

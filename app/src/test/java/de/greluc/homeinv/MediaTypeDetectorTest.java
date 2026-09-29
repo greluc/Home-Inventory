@@ -36,8 +36,6 @@ class MediaTypeDetectorTest {
   @Test
   @DisplayName("accepts HEIC, which is what phones produce")
   void acceptsHeic() {
-    // REQ-MED-003: accepted and transcoded to AVIF on ingest, never stored as it
-    // arrived. Detection is the half this test covers.
     assertThat(MediaTypeDetector.detect(isoBmff("heic")).mediaType()).isEqualTo("image/heic");
     assertThat(MediaTypeDetector.detect(isoBmff("mif1")).mediaType()).isEqualTo("image/heic");
   }
@@ -45,9 +43,6 @@ class MediaTypeDetectorTest {
   @Test
   @DisplayName("tells AVIF and HEIC apart by brand, not by guessing")
   void distinguishesIsoBmffDialects() {
-    // Both are the same container. Only the four bytes after 'ftyp' differ, and
-    // getting this wrong would mean transcoding a file that needed no transcoding
-    // or storing one that did.
     assertThat(MediaTypeDetector.detect(isoBmff("avif")).mediaType()).isEqualTo("image/avif");
     assertThat(MediaTypeDetector.detect(isoBmff("heix")).mediaType()).isEqualTo("image/heic");
     assertThatThrownBy(() -> MediaTypeDetector.detect(isoBmff("mp42")))
@@ -62,8 +57,6 @@ class MediaTypeDetectorTest {
         .isInstanceOf(UnsupportedMediaTypeException.class)
         .hasMessageContaining("image/svg+xml");
 
-    // Also when it arrives with an XML declaration first, which is the ordinary
-    // way an SVG file starts.
     byte[] declared = pad("<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"/>");
     assertThatThrownBy(() -> MediaTypeDetector.detect(declared))
         .isInstanceOf(UnsupportedMediaTypeException.class);
@@ -72,12 +65,7 @@ class MediaTypeDetectorTest {
   @Test
   @DisplayName("ignores what the file claims to be")
   void trustsOnlyTheBytes() {
-    // The attack this closes: an HTML page that a browser would render, arriving
-    // as photo.jpg with Content-Type: image/jpeg. Neither the name nor the header
-    // reaches the detector - only these bytes do.
     byte[] html = pad("<!DOCTYPE html><html><body><script>fetch('/steal')</script></body></html>");
-    // It is not an image; it sniffs as text, which is served as a download and
-    // never as a document from our origin.
     assertThat(MediaTypeDetector.detect(html).mediaType()).isEqualTo("text/plain");
     assertThat(MediaTypeDetector.detect(html).image()).isFalse();
   }
@@ -145,7 +133,7 @@ class MediaTypeDetectorTest {
    */
   private static byte[] isoBmff(String brand) {
     byte[] b = new byte[MediaTypeDetector.PROBE_BYTES];
-    b[3] = 0x20; // box size, not inspected
+    b[3] = 0x20;
     System.arraycopy("ftyp".getBytes(StandardCharsets.US_ASCII), 0, b, 4, 4);
     System.arraycopy(brand.getBytes(StandardCharsets.US_ASCII), 0, b, 8, 4);
     return b;

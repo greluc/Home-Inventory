@@ -74,12 +74,9 @@ class TypeEditorIT extends AbstractIntegrationTest {
           assertThat(published.published()).isTrue();
           assertThat(published.fields()).extracting(FieldDefinitionView::key).containsExactly("isbn");
 
-          // The document is what a client validates against offline (ADR-0056), so
-          // it has to carry the field and the fact that it is demanded.
           String schema = registry.jsonSchema(published.id());
           assertThat(schema).contains("\"isbn\"").contains("\"required\"");
 
-          // And the type now answers "which version do new items reference".
           assertThat(registry.publishedItemTypeVersion(book.id())).isEqualTo(published.id());
         });
   }
@@ -91,9 +88,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
     inTenant(
         tenant,
         () -> {
-          // `model` is text on the tool and an integer on the appliance. The same
-          // key in two storage classes lives in two columns of
-          // `item_attr_index`, so no single predicate over it means anything.
           TypeAdministration.ItemTypeView tool = newType(tenant, "queryable-tool");
           types.addField(
               tool.draftVersionId(),
@@ -122,8 +116,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
               .contains("manufacturer", "power")
               .doesNotContain("model");
 
-          // The flags are the union across the published versions, because a
-          // query spans types: a key sortable anywhere is sortable.
           assertThat(queryable)
               .filteredOn(field -> field.key().equals("manufacturer"))
               .singleElement()
@@ -134,8 +126,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
                     assertThat(field.facetable()).isTrue();
                   });
 
-          // And the data type comes with it, because it decides which column a
-          // predicate reads -- and whether a comparison has to name a unit.
           assertThat(queryable)
               .filteredOn(field -> field.key().equals("power"))
               .singleElement()
@@ -210,7 +200,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
           assertThat(second.published()).isFalse();
           assertThat(second.fields()).extracting(FieldDefinitionView::key).containsExactly("serial");
 
-          // One draft at a time: two would be two answers to what is being edited.
           assertThatThrownBy(() -> types.draftVersion(type.id(), tenant.userId()))
               .isInstanceOf(IllegalStateException.class);
         });
@@ -244,7 +233,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
                       "novel", TypeKind.PHYSICAL, medium.id(), null),
                   tenant.userId());
 
-          // Widening the inherited bound: 2000 pages where the parent allowed 1000.
           types.addField(
               novel.draftVersionId(),
               field(
@@ -256,7 +244,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
           assertThatThrownBy(() -> types.publish(novel.draftVersionId(), tenant.userId()))
               .isInstanceOf(TypeAdministration.ConstraintLoosenedException.class);
 
-          // Tightened instead: 500 pages, inside what the parent allows.
           List<FieldDefinitionView> draftFields = types.version(novel.draftVersionId()).fields();
           UUID pages =
               draftFields.stream()
@@ -276,8 +263,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
           TypeAdministration.VersionView published =
               types.publish(novel.draftVersionId(), tenant.userId());
 
-          // `title` was never declared here and is present anyway: publishing copies
-          // the parent's fields in, which is what makes a version a snapshot.
           assertThat(published.fields())
               .extracting(FieldDefinitionView::key)
               .containsExactlyInAnyOrder("title", "pages");
@@ -307,8 +292,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
                   .findFirst()
                   .orElseThrow();
           assertThat(after.deprecated()).isTrue();
-          // Declared and no longer demanded: the values of a hidden field stay
-          // valid, and a new item is not asked for one.
           assertThat(after.effectivelyRequired()).isFalse();
           assertThat(registry.jsonSchema(type.draftVersionId())).contains("\"size\"");
 
@@ -363,7 +346,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
 
           assertThat(registry.valueListEntries(condition.id())).containsExactly("new", "used");
 
-          // The same list in two types, which is the whole of REQ-CORE-029.
           for (String key : List.of("bike", "camera")) {
             TypeAdministration.ItemTypeView type = newType(tenant, key);
             types.addField(
@@ -390,7 +372,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
             assertThat(registry.jsonSchema(published.id())).contains("\"new\"").contains("\"used\"");
           }
 
-          // An archived entry stays valid where it is stored and is offered no more.
           UUID used =
               types.valueLists(null, 50).data().stream()
                   .filter(list -> list.key().equals("condition"))
@@ -450,9 +431,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
     inTenant(
         tenant,
         () -> {
-          // REQ-CORE-042 asks for the thirteen to be "all present AND editable",
-          // and a shipped category is one this instance seeded rather than one it
-          // owns: a tenant calling its `room` "Zimmer" is naming its own tree.
           TypeAdministration.CategoryView room =
               types.categories(null, 200).data().stream()
                   .filter(view -> "room".equals(view.key()))
@@ -469,15 +447,10 @@ class TypeEditorIT extends AbstractIntegrationTest {
                       Map.of("en", "Room", "de", "Zimmer"), "door-open", false),
                   tenant.userId());
 
-          // The key does not move. It is what a client translates, what an export
-          // writes down, and what makes the rename additive rather than a new
-          // category wearing an old id.
           assertThat(renamed.key()).isEqualTo("room");
           assertThat(renamed.labels()).containsEntry("de", "Zimmer").containsEntry("en", "Room");
           assertThat(renamed.icon()).isEqualTo("door-open");
 
-          // And the picker a client actually reads carries it, which is the half
-          // that makes the edit visible to anybody (REQ-CORE-041).
           LocationCategoryView asOffered =
               categories.list(null, 200).data().stream()
                   .filter(view -> view.id().equals(room.id()))
@@ -487,9 +460,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
           assertThat(asOffered.icon()).isEqualTo("door-open");
           assertThat(asOffered.mobile()).isFalse();
 
-          // Mobility is settable, which is what REQ-CORE-043's "can be marked
-          // mobile" means: every shipped category ships stationary, and marking
-          // one is the tenant's to do.
           assertThat(
                   types
                       .updateCategory(
@@ -500,8 +470,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
                       .mobile())
               .isTrue();
 
-          // Replaced whole, never merged: dropping a language is how a tenant
-          // undoes a translation, and a merge offers no spelling for it.
           TypeAdministration.CategoryView narrowed =
               types.updateCategory(
                   room.id(),
@@ -526,9 +494,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
               types.updateItemType(
                   tool.id(), new TypeAdministration.UpdateItemTypeCommand("drill"), tenant.userId());
           assertThat(withIcon.icon()).isEqualTo("drill");
-          // The three that would reinterpret existing items are not in the
-          // command at all, so there is nothing to assert about them beyond this:
-          // they came back unchanged.
           assertThat(withIcon.key()).isEqualTo("power-tool");
           assertThat(withIcon.kind()).isEqualTo(TypeKind.PHYSICAL);
           assertThat(withIcon.parentId()).isNull();
@@ -610,11 +575,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
         () -> {
           TypeAdministration.ItemTypeView type = newType(tenant, "guarded");
 
-          // The published example of the attack. The pattern is tenant data and
-          // every item of this tenant would then be matched against it, so it is
-          // refused here rather than met later as "saving an item hangs"
-          // (PatternSafety; the time limit in BoundedRegularExpressions is the
-          // other half, for shapes this rule does not know).
           assertThatThrownBy(
                   () ->
                       types.addField(
@@ -624,8 +584,6 @@ class TypeEditorIT extends AbstractIntegrationTest {
               .isInstanceOf(IllegalArgumentException.class)
               .hasMessageContaining("repetition inside a repetition");
 
-          // And an ordinary field rule is unaffected, which is the half that
-          // decides whether a guard survives contact with its users.
           types.addField(
               type.draftVersionId(),
               field("currency", FieldDataType.TEXT, false, constraintsWithPattern("^[A-Z]{3}$")),

@@ -26,9 +26,6 @@ class TrustedProxiesTest {
   @Test
   @DisplayName("an unset list fails startup rather than trusting nobody quietly")
   void unsetListFailsStartup() {
-    // Trusting nobody is the safe direction and still wrong: every request would
-    // appear to come from `web`, the rate limiter would throttle all tenants as
-    // one client, and nothing would say so.
     assertThatThrownBy(() -> new TrustedProxies("", "web.invalid"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_TRUSTED_PROXIES is not set");
@@ -71,8 +68,6 @@ class TrustedProxiesTest {
     assertThat(trusted.trusts("10.1.2.255")).isTrue();
     assertThat(trusted.trusts("10.1.3.1")).isFalse();
 
-    // /22 covers 192.168.4.0 through 192.168.7.255. The boundary is inside a
-    // byte, which is the case a whole-byte comparison gets wrong.
     assertThat(trusted.trusts("192.168.7.255")).isTrue();
     assertThat(trusted.trusts("192.168.8.0")).isFalse();
   }
@@ -82,8 +77,6 @@ class TrustedProxiesTest {
   void familiesDoNotMix() {
     TrustedProxies trusted = new TrustedProxies("10.0.0.0/8", "web.invalid");
 
-    // Comparing four bytes against sixteen by prefix would produce an answer
-    // rather than a mismatch, and the answer would be "trusted".
     assertThat(trusted.trusts("::1")).isFalse();
     assertThat(trusted.trusts("2001:db8::1")).isFalse();
   }
@@ -100,9 +93,6 @@ class TrustedProxiesTest {
   @Test
   @DisplayName("an ingress that resolves outside the list fails startup")
   void ingressOutsideTheListFailsStartup() {
-    // localhost resolves everywhere, and 10.0.0.0/8 does not contain it. This is
-    // the misconfiguration 06 §6.7 says produces no error and only wrong numbers,
-    // so the check has to be the error.
     assertThatThrownBy(() -> new TrustedProxies("10.0.0.0/8", "localhost"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("is not in HOMEINV_TRUSTED_PROXIES");
@@ -118,8 +108,6 @@ class TrustedProxiesTest {
   @Test
   @DisplayName("an ingress that does not resolve is reported, not fatal")
   void unresolvableIngressIsNotFatal() {
-    // A laptop and a CI runner have no `web`. Refusing to start over a name
-    // lookup would be a worse failure than the one the check guards against.
     TrustedProxies trusted = new TrustedProxies("10.0.0.0/8", "web.invalid");
     assertThat(trusted.trusts("10.9.9.9")).isTrue();
   }

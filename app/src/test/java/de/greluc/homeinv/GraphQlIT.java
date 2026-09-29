@@ -59,8 +59,6 @@ class GraphQlIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.data.item.name").value("A drill"))
         .andExpect(jsonPath("$.data.item.kind").value("DIGITAL"))
         .andExpect(jsonPath("$.data.item.type.key").exists())
-        // ADR-0004: the attributes are stored as JSON text and handed out parsed,
-        // so a client receives an object rather than a string containing one.
         .andExpect(jsonPath("$.data.item.attributes").isMap());
   }
 
@@ -84,9 +82,6 @@ class GraphQlIT extends AbstractIntegrationTest {
   void nothingIsWrittenThroughIt() throws Exception {
     MockHttpSession session = anOwner();
 
-    // ADR-0010: read-only is structural. The schema declares no Mutation type, so
-    // this is not "refused" but "unparseable against the schema", which is the
-    // stronger answer.
     query(session, "mutation { deleteItem(id: \"x\") { id } }")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.errors").isArray())
@@ -98,11 +93,6 @@ class GraphQlIT extends AbstractIntegrationTest {
   void theSchemaItselfIsShallow() throws Exception {
     MockHttpSession session = anOwner();
 
-    // The deepest query this schema permits is five levels, and NOTHING in it
-    // recurses: no `Location.children`, no `Item.relatedItem`. So the depth limit
-    // of 10 cannot be reached by a valid query today, and that is worth asserting
-    // rather than leaving to be discovered — it is why `GraphQlGuardIT` lowers the
-    // limit to prove the mechanism instead of building a query nobody can write.
     query(
             session,
             "{ items { nodes { type { fields { key } } history { nodes { revision } } } } }")
@@ -133,9 +123,6 @@ class GraphQlIT extends AbstractIntegrationTest {
   void costIsBounded() throws Exception {
     MockHttpSession session = anOwner();
 
-    // items(first: 200) is 10 x 200 for the list alone, and every nested list
-    // multiplies again. Declared in the schema with @cost, summed before
-    // execution, and refused without touching the database.
     query(
             session,
             "{ items(first: 200) { nodes { history(first: 200) { nodes { revision } }"
@@ -144,8 +131,6 @@ class GraphQlIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.errors").isArray())
         .andExpect(jsonPath("$.data").doesNotExist());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Sends one document, as a client does.
@@ -171,13 +156,6 @@ class GraphQlIT extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
 
-    // The GraphQL endpoint answers ASYNCHRONOUSLY, and MockMvc returns from the
-    // first `perform` with an empty body and a 200 the moment async starts. A
-    // test that asserted on that would pass while asserting nothing -- which is
-    // exactly what this one did until the response was printed and found empty.
-    //
-    // A refusal that happens before execution (the persisted-query guard, the
-    // cost limit) never starts async, so both shapes have to be handled.
     MvcResult result = sent.andReturn();
     return result.getRequest().isAsyncStarted()
         ? mockMvc.perform(

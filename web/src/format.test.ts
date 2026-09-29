@@ -14,9 +14,6 @@ import { formatTimestamp } from "./format";
  * the calendar date, which no amount of rounding can produce by accident.
  */
 describe("a timestamp from the API", () => {
-  // 22:30 UTC, chosen so that the zones do not agree on the date: Berlin and
-  // Tokyo are already on the 12th, New York is still on the 11th. A formatter
-  // that ignored the zone could not produce both.
   const instant = "2026-09-11T22:30:00Z";
 
   it("is shown in the reader's zone, and the zone changes the answer", () => {
@@ -33,15 +30,11 @@ describe("a timestamp from the API", () => {
   });
 
   it("is shown in the reader's language", () => {
-    // The same instant, the same zone, two languages: German writes the month as
-    // a number and the day first, English writes an abbreviated month name.
     expect(formatTimestamp(instant, "de", "UTC")).toContain("11.09.2026");
     expect(formatTimestamp(instant, "en", "UTC")).toContain("Sep 11, 2026");
   });
 
   it("is left alone when it is not a date", () => {
-    // A value this cannot read is a bug somewhere else; "Invalid Date" on screen
-    // is how such a bug stays hidden.
     expect(formatTimestamp("not-a-date", "en", "UTC")).toBe("not-a-date");
   });
 });

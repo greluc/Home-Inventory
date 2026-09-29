@@ -58,10 +58,6 @@ class WebhookTargetIT extends AbstractIntegrationTest {
   @Autowired private TransactionTemplate transactions;
   @Autowired private JdbcClient jdbc;
 
-  // -------------------------------------------------------------------------
-  // Configuring one
-  // -------------------------------------------------------------------------
-
   @Test
   @DisplayName("are created without their secret ever coming back out")
   void theSecretGoesInAndNeverComesOut() throws Exception {
@@ -95,7 +91,6 @@ class WebhookTargetIT extends AbstractIntegrationTest {
             .getContentAsString();
     assertThat(listed).doesNotContain(SECRET);
 
-    // And it is sealed at rest, not merely absent from the responses.
     UUID targetId = UUID.fromString(read(created).get("id").asText());
     String stored =
         TenantContext.callAs(
@@ -119,22 +114,13 @@ class WebhookTargetIT extends AbstractIntegrationTest {
   void whatIsRefusedWhenItIsStillFixable() throws Exception {
     MockHttpSession session = signIn(aTenant().email(), PASSWORD);
 
-    // Each of these is `validation-failed`, which is 422 and not 400: the
-    // request parsed, and what is wrong is what it says (08 §8.2).
-
-    // REQ-SEC-034. The payload and its signature would cross the internet in
-    // clear text, and the plugin refuses it as well -- this is the check that
-    // reaches the person who can still correct it.
     expectRefusal(session, targetBody("http://hooks.example.org/x", "item.created"));
 
-    // A secret somebody typed rather than generated.
     expectRefusal(
         session,
         "{\"url\":\"https://hooks.example.org/short\",\"eventTypes\":[\"item.created\"],"
             + "\"signingSecret\":\"hunter2\"}");
 
-    // A subscription that would never fire, and the message says which name is
-    // wrong rather than that something is.
     mockMvc
         .perform(
             post("/api/v1/webhooks")
@@ -145,8 +131,6 @@ class WebhookTargetIT extends AbstractIntegrationTest {
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("item.exploded")));
 
-    // A subscription to nothing at all. Refused by the bean constraint on the
-    // request, which is a 400: the body is the wrong shape rather than wrong.
     mockMvc
         .perform(
             post("/api/v1/webhooks")
@@ -199,15 +183,10 @@ class WebhookTargetIT extends AbstractIntegrationTest {
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
         .andExpect(status().isNotFound());
 
-    // And it is still there for the tenant it belongs to.
     mockMvc
         .perform(get("/api/v1/webhooks/" + targetId).session(signIn(mine.email(), PASSWORD)))
         .andExpect(status().isOk());
   }
-
-  // -------------------------------------------------------------------------
-  // What a change queues
-  // -------------------------------------------------------------------------
 
   @Test
   @DisplayName("receive the type, the moment and the id of what changed — and nothing else")
@@ -231,8 +210,6 @@ class WebhookTargetIT extends AbstractIntegrationTest {
     assertThat(delivery.body()).contains("\"type\":\"item.created\"");
     assertThat(delivery.body()).contains("\"id\":\"" + itemId + "\"");
     assertThat(delivery.body()).contains("\"at\":\"");
-    // ADR-0078: the id, so a receiver can fetch it -- and not the data, which
-    // would be a copy of the inventory on somebody else's server.
     assertThat(delivery.body()).doesNotContain(itemName);
   }
 
@@ -304,15 +281,11 @@ class WebhookTargetIT extends AbstractIntegrationTest {
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
         .andExpect(status().isNoContent());
 
-    // The cascade of V73: a delivery log about a receiver nobody can name any
-    // more answers no question.
     assertThat(deliveriesOf(tenant.tenantId(), targetId)).isEmpty();
     mockMvc
         .perform(get("/api/v1/webhooks/" + targetId).session(session))
         .andExpect(status().isNotFound());
   }
-
-  // -------------------------------------------------------------------------
 
   private void expectRefusal(MockHttpSession session, String body) throws Exception {
     mockMvc

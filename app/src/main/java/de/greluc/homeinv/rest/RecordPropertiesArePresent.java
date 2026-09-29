@@ -77,26 +77,11 @@ public class RecordPropertiesArePresent {
         return;
       }
 
-      // RFC 9457 lets a problem carry extension members, and Spring's
-      // `ProblemDetail` holds them in a map -- which springdoc publishes as
-      // `additionalProperties: true`. That is true and it is unusable: a schema
-      // with properties AND a free map makes the OpenAPI generator emit a Kotlin
-      // class extending `HashMap<String, Any>()()`, which does not compile
-      // (REQ-API-002). It is dropped here, so the schema describes the six
-      // members every problem carries; the extras are per problem type and are
-      // documented with it under `api/problems/`, which is where a client reads
-      // them anyway -- no generated type could have made them type-safe.
       Schema<?> problem = schemas.get("Problem");
       if (problem != null) {
         problem.setAdditionalProperties(null);
-        // And `status` arrives with a format and no type, because springdoc reads
-        // `ProblemDetail.getStatus()` through a getter it cannot type. A property
-        // with `format: int32` and nothing else is an `Any?` in a generated
-        // client -- and one that kotlinx.serialization then refuses to serialise.
         Object status = problem.getProperties() == null ? null : problem.getProperties().get("status");
         if (status instanceof Schema<?> field && field.getTypes() == null) {
-          // `setTypes` and not `setType`: this document is OpenAPI 3.1, where a
-          // type is a SET, and the 3.0 field is ignored when it is written out.
           field.setTypes(new LinkedHashSet<>(List.of("integer")));
         }
       }

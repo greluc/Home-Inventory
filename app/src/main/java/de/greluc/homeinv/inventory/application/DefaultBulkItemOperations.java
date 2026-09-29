@@ -52,8 +52,6 @@ public class DefaultBulkItemOperations implements BulkItemOperations {
   public BulkOutcome apply(BulkCommand command, UUID actor) {
     UUID tenantId = TenantContext.require();
     usable(command);
-    // Once, before anything: a role that may not delete may not delete the first
-    // item either, and telling it so 500 times in a body is not an answer.
     access.require(BulkEntryRunner.permissionFor(command.operation()));
 
     List<EntryOutcome> outcomes = new ArrayList<>(command.entries().size());
@@ -62,11 +60,6 @@ public class DefaultBulkItemOperations implements BulkItemOperations {
       try {
         runner.apply(command, entry, actor);
       } catch (RuntimeException caught) {
-        // Every entry's failure is that entry's, including one nobody planned
-        // for. An unexpected exception becomes a 500 in this entry's status line
-        // rather than in the whole response -- but it is logged at error, because
-        // a bug that only ever appears as one line among five hundred is a bug
-        // nobody reads.
         failure = caught;
         log.atLevel(expected(caught) ? org.slf4j.event.Level.DEBUG : org.slf4j.event.Level.ERROR)
             .setCause(expected(caught) ? null : caught)
@@ -89,8 +82,6 @@ public class DefaultBulkItemOperations implements BulkItemOperations {
         outcomes.stream().filter(EntryOutcome::applied).count());
     return outcome;
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Refuses a command no amount of per-entry reporting could rescue.
@@ -115,9 +106,6 @@ public class DefaultBulkItemOperations implements BulkItemOperations {
     Set<UUID> seen = new HashSet<>();
     for (Entry entry : command.entries()) {
       if (!seen.add(entry.itemId())) {
-        // Two entries for one item would each get a status line, and the second
-        // would report on a state the first had already changed. There is no
-        // honest answer to give, so the request is refused instead.
         throw new IllegalArgumentException("An item appears twice: " + entry.itemId());
       }
     }
@@ -126,7 +114,6 @@ public class DefaultBulkItemOperations implements BulkItemOperations {
       case TAG -> required(command.tagId(), "tagId", "tag");
       case CHANGE_TYPE -> required(command.itemTypeId(), "itemTypeId", "change of type");
       case DELETE -> {
-        // Takes no target: what is deleted is what the entries name.
       }
     }
   }

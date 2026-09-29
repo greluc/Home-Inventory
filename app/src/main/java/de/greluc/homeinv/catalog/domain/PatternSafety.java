@@ -79,36 +79,6 @@ public final class PatternSafety {
               + ". A field validation pattern is a rule about one value, not a parser.");
     }
     try {
-      // CodeQL flags this as regular expression injection (java/regex-injection),
-      // and it is right about the fact and wrong about the conclusion: the
-      // pattern IS user-provided, and compiling user-provided patterns is what
-      // this class exists to do. A field definition may carry a `pattern`
-      // (REQ-CORE-022), and the only way to find out whether what a tenant wrote
-      // is a regular expression at all is to ask the engine that will run it.
-      // There is no sanitiser: `Pattern.quote` would turn the rule into a
-      // literal and make the feature meaningless.
-      //
-      // What the query is actually about -- a caller spending unbounded time in
-      // a regular expression they chose -- is answered, and answered twice,
-      // which is what REQ-SEC-035 asks for:
-      //
-      //   * the length is bounded above, before this line;
-      //   * the shape is refused above for the forms that backtrack
-      //     catastrophically, and this call's result is discarded rather than
-      //     used, so nothing here runs the pattern against anything;
-      //   * every actual MATCH runs under a 100 ms budget
-      //     (`BoundedRegularExpressions`), which is the line that does not depend
-      //     on having anticipated the pattern.
-      //
-      // Compilation itself is linear in the pattern's length, and that length is
-      // at most 200 characters by the check above.
-      //
-      // There is no marker on this line and there was one until 2026-09-22:
-      // GitHub code scanning does not honour inline suppression comments -- that
-      // is an LGTM legacy the CLI reads and the service ignores -- so the
-      // comment said the alert was handled and it was not. The alert is a false
-      // positive for the reasons above and belongs in the Security tab's
-      // dismissals, which is the only mechanism that exists.
       Pattern.compile(pattern);
     } catch (PatternSyntaxException invalid) {
       return Optional.of("Not a valid regular expression: " + invalid.getDescription());
@@ -124,16 +94,12 @@ public final class PatternSafety {
    */
   private static Optional<String> structure(String pattern) {
     List<Group> open = new ArrayList<>();
-    // The outermost level is a group too, so that a quantifier at the top has
-    // somewhere to record itself; it is never quantified, so it never refuses.
     open.add(new Group(0));
 
     for (int index = 0; index < pattern.length(); index++) {
       char current = pattern.charAt(index);
       switch (current) {
         case '\\' -> {
-          // An escape covers the next character, whatever it is. Skipping it is
-          // what keeps `\*` and `\(` from being read as structure.
           index++;
         }
         case '[' -> {
@@ -142,8 +108,6 @@ public final class PatternSafety {
         case '(' -> open.add(new Group(index));
         case ')' -> {
           if (open.size() == 1) {
-            // Unbalanced, which `Pattern.compile` already refused; reaching here
-            // would mean the two disagree, so stop rather than guess.
             return Optional.empty();
           }
           Group closed = open.removeLast();
@@ -164,7 +128,6 @@ public final class PatternSafety {
           }
         }
         default -> {
-          // A literal. Nothing about it changes the shape of the group.
         }
       }
     }
@@ -253,9 +216,6 @@ public final class PatternSafety {
         return true;
       }
     }
-    // Two classes are compared by their text and not by their contents: `[a-z]`
-    // twice is caught above, `[a-z]` against `[b]` is not. The time limit is
-    // what covers what this does not.
     return false;
   }
 

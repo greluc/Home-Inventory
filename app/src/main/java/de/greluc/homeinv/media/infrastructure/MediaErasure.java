@@ -82,9 +82,6 @@ public class MediaErasure implements TenantErasure {
   public BlockReport erase(UUID tenantId) {
     long removed = 0;
     for (String statement : DELETES) {
-      // No tenant predicate: the context is established and the policy scopes
-      // the delete. A predicate here would be a second place the tenant is
-      // decided, and the one that is wrong is always the second.
       removed += jdbc.sql(statement).update();
     }
     log.info("Erased {} rows of block {} for tenant {}", removed, block(), tenantId);

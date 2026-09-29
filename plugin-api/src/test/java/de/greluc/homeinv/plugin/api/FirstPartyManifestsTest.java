@@ -40,10 +40,6 @@ class FirstPartyManifestsTest {
   void everyShippedManifestIsAcceptable() {
     List<Path> manifests = shipped();
 
-    // Zero is a passing test that examined nothing. The directory exists from
-    // the day ADR-0072 was written, and a run that finds it empty is a run
-    // against a tree where the plugins were moved rather than one where they
-    // are fine.
     assertThat(manifests)
         .as(
             "plugins/*/manifest.yaml is where a first-party plugin's reference manifest lives "

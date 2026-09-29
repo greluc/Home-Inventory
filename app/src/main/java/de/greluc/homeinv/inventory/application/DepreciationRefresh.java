@@ -73,10 +73,6 @@ public class DepreciationRefresh {
     for (DepreciationQueries.Depreciable item : candidates) {
       Integer months = lives.get(item.typeVersionId());
       if (months == null) {
-        // The type has no useful life -- it never had one, or somebody has just
-        // taken it away. A value this run wrote earlier is now a figure nothing
-        // stands behind, so it goes rather than lingering as the last thing a
-        // rule that no longer exists said.
         if (item.hasDepreciatedValue()) {
           items.clear(item.itemId());
           written++;

@@ -72,14 +72,11 @@ class TagsIT extends AbstractIntegrationTest {
               .extracting(TagView::name)
               .containsExactly("Fragile");
 
-          // Assigning twice is not an error: a client retrying a request it never
-          // saw the answer to must not be told it failed.
           tags.assign(fragile.id(), TagService.TagTarget.ITEM, item, tenant.userId());
           assertThat(tagsOn(TagService.TagTarget.ITEM, item)).hasSize(1);
 
           tags.unassign(fragile.id(), TagService.TagTarget.ITEM, item, tenant.userId());
           assertThat(tagsOn(TagService.TagTarget.ITEM, item)).isEmpty();
-          // Taking it off one thing leaves it on the other.
           assertThat(tagsOn(TagService.TagTarget.LOCATION, place)).hasSize(1);
         });
   }
@@ -125,8 +122,6 @@ class TagsIT extends AbstractIntegrationTest {
           tags.assign(fresh.id(), TagService.TagTarget.ITEM, item, tenant.userId());
           tags.assign(used.id(), TagService.TagTarget.ITEM, item, tenant.userId());
 
-          // The second displaces the first: a thing that was both new and used
-          // would be a thing whose condition nobody can read.
           assertThat(tagsOn(TagService.TagTarget.ITEM, item))
               .extracting(TagView::name)
               .containsExactly("Used");
@@ -155,8 +150,6 @@ class TagsIT extends AbstractIntegrationTest {
 
           tags.merge(loose.id(), keep.id(), tenant.userId());
 
-          // The thing that had both keeps one; the thing that had only the source
-          // now carries the target.
           assertThat(tagsOn(TagService.TagTarget.ITEM, both))
               .extracting(TagView::name)
               .containsExactly("Fragile");
@@ -164,11 +157,8 @@ class TagsIT extends AbstractIntegrationTest {
               .extracting(TagView::name)
               .containsExactly("Fragile");
 
-          // The source is a tombstone pointing at what it became, so a client
-          // holding the old id is redirected rather than told it never existed.
           assertThat(tags.tags(null, 50).data()).extracting(TagView::name).containsExactly("Fragile");
 
-          // And the name it freed can be taken again.
           tags.create(new TagService.CreateTagCommand("Breakable", null, null, null), tenant.userId());
         });
   }

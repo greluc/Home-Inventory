@@ -79,12 +79,6 @@ public class OpenSearchClientFactory {
 
     return ApacheHttpClient5TransportBuilder.builder(host)
         .setMapper(new JacksonJsonpMapper())
-        // Off. The transport otherwise asks for gzip and then insists on it,
-        // while OpenSearch only compresses when `http_compression` is on - and
-        // the answer comes back plain, which the client reads as "Not in GZIP
-        // format" and reports as a transport failure. The hop is one container
-        // to another on a private segment, where the compression would buy
-        // latency on a link that has none to spare.
         .setCompressionEnabled(false)
         .setHttpClientConfigCallback(client -> configure(client, credentials, properties))
         .build();
@@ -114,19 +108,8 @@ public class OpenSearchClientFactory {
       BasicCredentialsProvider credentials,
       SearchEngineProperties properties) {
     client.setDefaultCredentialsProvider(credentials);
-    // Two layers would otherwise both try. Apache HttpClient asks for gzip and
-    // decodes what comes back; the OpenSearch transport does its own accounting
-    // of whether compression was negotiated, and with it switched off above the
-    // response is read twice - once by the decoder and once as JSON, which
-    // surfaces as "Not in GZIP format" on a response that never was one. The hop
-    // is container to container on a private segment, where compression buys
-    // nothing worth a second decoder.
     client.disableContentCompression();
     if (!properties.isTls()) {
-      // Plain HTTP is a test container's shape, never a deployment's: every
-      // service on `internal` speaks TLS (ADR-0044). Said out loud so that a
-      // deployment configured this way is noticed in the log rather than in an
-      // audit.
       log.warn(
           "HOMEINV_SEARCH_URL is not https. The deployment's OpenSearch speaks TLS; this is only"
               + " expected in a test.");
@@ -137,9 +120,6 @@ public class OpenSearchClientFactory {
             .setTlsStrategy(
                 ClientTlsStrategyBuilder.create()
                     .setSslContext(pinnedTo(properties.getFingerprint()))
-                    // Pinning has already answered a stricter question than a
-                    // hostname does, and the certificate is issued to a service
-                    // name a client may reach under another.
                     .setHostnameVerifier((hostname, session) -> true)
                     .build())
             .build());

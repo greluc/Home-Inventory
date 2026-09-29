@@ -83,13 +83,8 @@ public final class BoundedRegularExpressions implements RegularExpressionFactory
   private boolean matchesWithinBudget(Pattern compiled, String value, String source) {
     Deadline input = new Deadline(value, System.nanoTime() + budget.toNanos());
     try {
-      // `find` and not `matches`: JSON Schema's `pattern` is an unanchored
-      // search, which is what the library's own implementation does and what
-      // every generated schema here is written against.
       return compiled.matcher(input).find();
     } catch (BudgetExceeded exceeded) {
-      // `LogSafe` because the pattern is a tenant's own text, and a pattern is
-      // the one value here that somebody would write a newline into on purpose.
       log.warn(
           "A field pattern was abandoned after {}: it is either an attack or a definition worth "
               + "rewriting. Pattern: {}",
@@ -103,8 +98,6 @@ public final class BoundedRegularExpressions implements RegularExpressionFactory
   private static final class BudgetExceeded extends RuntimeException {
 
     private BudgetExceeded() {
-      // No message, no stack trace: it is control flow caught two frames up and
-      // never shown to anybody.
       super(null, null, false, false);
     }
   }
@@ -140,8 +133,6 @@ public final class BoundedRegularExpressions implements RegularExpressionFactory
 
     @Override
     public CharSequence subSequence(int start, int end) {
-      // Shares the counter and the deadline: a subsequence the engine takes is
-      // part of the same match and has the same budget.
       Deadline part = new Deadline(delegate.subSequence(start, end), deadlineNanos);
       part.reads = reads;
       return part;

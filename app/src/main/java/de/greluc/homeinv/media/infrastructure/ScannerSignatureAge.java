@@ -100,9 +100,6 @@ public class ScannerSignatureAge {
         when -> {
           Duration age = Duration.between(when, now);
           if (age.compareTo(THRESHOLD) > 0) {
-            // The update goes out through the egress proxy, which carries the
-            // mirror as its one deployment allowlist entry (ADR-0036). Signatures
-            // this old usually mean that path is broken, not that the mirror is.
             log.warn(
                 "The malware scanner's signatures are {} hours old. Updates reach the mirror "
                     + "through the egress proxy; check that it is running and that its allowlist "

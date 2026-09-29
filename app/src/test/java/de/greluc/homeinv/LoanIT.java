@@ -74,8 +74,6 @@ class LoanIT extends AbstractIntegrationTest {
     assertThat(loan.isOpen()).isTrue();
     assertThat(loan.borrowerName()).isEqualTo("The neighbour");
     assertThat(loan.borrowerUserId()).isNull();
-    // "Recognisable as such" is the open row and not a flag on the item: one
-    // answer to the question, so there is no second one to fall out of step.
     assertThat(inOwn(tenant, () -> loans.openLoanOf(itemId))).isPresent();
     assertThat(inOwn(tenant, () -> loans.isLent(itemId))).isTrue();
   }
@@ -91,8 +89,6 @@ class LoanIT extends AbstractIntegrationTest {
 
     assertThat(loan.borrowerUserId()).isEqualTo(tenant.userId());
     assertThat(loan.borrowerName()).isNull();
-    // No due date agreed, which is a lend and not an oversight -- so it is never
-    // overdue, however long it is out.
     assertThat(loan.dueOn()).isNull();
     assertThat(loan.isOverdueOn(LocalDate.parse("2030-01-01"))).isFalse();
   }
@@ -109,7 +105,6 @@ class LoanIT extends AbstractIntegrationTest {
             () -> inOwn(tenant, () -> lend(itemId, null, "Second borrower", "2026-09-02", null)))
         .isInstanceOf(ItemLentException.class);
 
-    // And the first loan is untouched: the refusal changed nothing.
     List<LoanLog.LoanView> history = inOwn(tenant, () -> loans.loansOf(itemId, 50));
     assertThat(history).hasSize(1);
     assertThat(history.get(0).borrowerName()).isEqualTo("First borrower");
@@ -129,7 +124,6 @@ class LoanIT extends AbstractIntegrationTest {
     assertThat(closed.returnedOn()).isEqualTo(LocalDate.parse("2026-08-10"));
     assertThat(inOwn(tenant, () -> loans.isLent(itemId))).isFalse();
 
-    // The partial index only covers the open ones, so the thing can go out again.
     inOwn(tenant, () -> lend(itemId, null, "Somebody else", "2026-09-01", null));
     assertThat(inOwn(tenant, () -> loans.loansOf(itemId, 50))).hasSize(2);
   }
@@ -145,8 +139,6 @@ class LoanIT extends AbstractIntegrationTest {
     LoanLog.LoanView again =
         inOwn(tenant, () -> loans.returnItem(itemId, loanId, LocalDate.parse("2026-08-20"), tenant.userId()));
 
-    // The first return is the true one: the thing was back on the 10th whatever
-    // a second request says. Not an error -- what the caller wants is already so.
     assertThat(again.returnedOn()).isEqualTo(LocalDate.parse("2026-08-10"));
   }
 
@@ -158,7 +150,7 @@ class LoanIT extends AbstractIntegrationTest {
     LoanLog.LoanView loan =
         inOwn(tenant, () -> lend(itemId, null, "A colleague", "2026-08-01", "2026-08-15"));
 
-    assertThat(loan.isOverdueOn(LocalDate.parse("2026-08-15"))).isFalse(); // due today, not late
+    assertThat(loan.isOverdueOn(LocalDate.parse("2026-08-15"))).isFalse();
     assertThat(loan.isOverdueOn(LocalDate.parse("2026-08-16"))).isTrue();
   }
 
@@ -169,7 +161,6 @@ class LoanIT extends AbstractIntegrationTest {
     UUID itemId = anItem(tenant, "A chainsaw");
     UUID loanId = inOwn(tenant, () -> lend(itemId, null, "The neighbour", "2026-09-01", null)).id();
 
-    // REQ-LIFE-005: trashing it would take away the only record of who has it.
     assertThatThrownBy(
             () ->
                 inOwn(
@@ -180,10 +171,8 @@ class LoanIT extends AbstractIntegrationTest {
                     }))
         .isInstanceOf(ItemLentException.class);
 
-    // Still there, and still lent: the refusal changed nothing either way.
     assertThat(inOwn(tenant, () -> loans.isLent(itemId))).isTrue();
 
-    // Once it is back, the same call works.
     inOwn(tenant, () -> loans.returnItem(itemId, loanId, LocalDate.parse("2026-09-05"), tenant.userId()));
     inOwn(
         tenant,
@@ -200,8 +189,6 @@ class LoanIT extends AbstractIntegrationTest {
     Tenant theirs = newTenant("loan-theirs@example.org");
     UUID theirItem = anItem(theirs, "Their drill");
 
-    // Not "forbidden": a foreign item is indistinguishable from one that never
-    // existed (REQ-SEC-025), and the same answer covers both.
     assertThatThrownBy(
             () -> inOwn(mine, () -> lend(theirItem, null, "Me", "2026-09-01", null)))
         .isInstanceOf(NotFoundException.class);
@@ -217,8 +204,6 @@ class LoanIT extends AbstractIntegrationTest {
     UUID saw = anItem(tenant, "A saw");
     UUID drillLoan = inOwn(tenant, () -> lend(drill, null, "A friend", "2026-09-01", null)).id();
 
-    // The path names the saw; the loan is the drill's. Acting on it would close a
-    // loan the request did not name (REQ-SEC-025).
     assertThatThrownBy(
             () ->
                 inOwn(
@@ -250,8 +235,6 @@ class LoanIT extends AbstractIntegrationTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.returnedOn").doesNotExist());
 
-    // A second handover is a 409 with the token a client can branch on, not a
-    // 422 -- nothing about the request is wrong.
     mockMvc
         .perform(
             post("/api/v1/items/" + itemId + "/loans")
@@ -264,9 +247,6 @@ class LoanIT extends AbstractIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.type").value(org.hamcrest.Matchers.endsWith("/item-lent")));
 
-    // And so is trashing it. With `If-Match`, because a write on a single resource
-    // is refused with 428 without one (08 §8.2) -- and a 428 here would have said
-    // nothing about lending.
     mockMvc
         .perform(
             delete("/api/v1/items/" + itemId)
@@ -276,8 +256,6 @@ class LoanIT extends AbstractIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.type").value(org.hamcrest.Matchers.endsWith("/item-lent")));
   }
-
-  // -------------------------------------------------------------------------
 
   private LoanLog.LoanView lend(
       UUID itemId, UUID borrowerUserId, String borrowerName, String handedOutOn, String dueOn) {

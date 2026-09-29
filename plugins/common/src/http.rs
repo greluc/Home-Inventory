@@ -369,19 +369,14 @@ impl Reader {
     /// One chunk of a `chunked` body, size line and all.
     async fn next_chunked(&mut self) -> Result<Option<Vec<u8>>, String> {
         let line = self.line().await?;
-        // The size is hexadecimal and may carry chunk extensions after a `;`,
-        // which nothing here uses and which are skipped rather than refused.
         let size = usize::from_str_radix(line.split(';').next().unwrap_or("").trim(), 16)
             .map_err(|_| format!("'{line}' is not a chunk size"))?;
         if size == 0 {
-            // The trailer, then the end. Read until the blank line rather than
-            // assuming there is none.
             while !self.line().await?.is_empty() {}
             self.done = true;
             return Ok(None);
         }
         let piece = self.take_exactly(size).await?;
-        // The CRLF that follows every chunk.
         let _ = self.take_exactly(2).await?;
         Ok(Some(piece))
     }
@@ -510,8 +505,6 @@ mod tests {
 
     #[tokio::test]
     async fn a_truncated_counted_body_is_an_error_rather_than_a_short_read() {
-        // The case that matters: a file that arrives half-written must not look
-        // like a file.
         let mut answer = answering("HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n", b"short");
         assert!(answer.read_all(1024).await.is_err());
     }

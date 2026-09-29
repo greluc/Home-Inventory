@@ -71,10 +71,6 @@ public class DefaultInsuranceDocuments implements InsuranceDocuments {
 
     InsuranceReport.Report report = reports.of(root, limit);
 
-    // The pictures are fetched here rather than by the report, because the
-    // report is also served as JSON and as CSV -- and neither of those carries
-    // bytes. A report of two hundred items would otherwise read two hundred
-    // blobs to answer a question about numbers.
     Map<UUID, ItemEvidence.Picture> photos = new LinkedHashMap<>();
     for (InsuranceReport.Room room : report.rooms()) {
       for (InsuranceReport.Line line : room.lines()) {

@@ -93,10 +93,6 @@ public class FederatedAuthController {
               + "this instance offers and nothing about who has an account here.")
   public List<FederatedSignIn.Provider> providers(
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
-    // At most one today, and bounded anyway: REQ-NFR-010 is a rule about every
-    // collection this API returns rather than about the ones somebody judged
-    // large, and a second provider is a configuration change rather than a
-    // release.
     return federated.installed().map(List::of).orElseGet(List::<FederatedSignIn.Provider>of).stream()
         .limit(limit)
         .toList();
@@ -212,15 +208,11 @@ public class FederatedAuthController {
     }
 
     if (outcome.result() == FederatedSignIn.Result.LINKED) {
-      // The caller already had a session; the link changed nothing about it.
       return redirectTo(outcome.returnTo());
     }
 
     AuthenticatedUser user = federatedPrincipal(outcome.userId(), httpRequest);
     if (secondFactor.isRequiredFor(user.userId())) {
-      // The provider proved who they are at the provider. It did not prove the
-      // factor this instance holds, so the login stops here exactly as a password
-      // one does and the caller answers at /api/v1/auth/mfa.
       pendingLogin.remember(httpRequest, user);
       throw new SecondFactorRequiredException();
     }
@@ -308,9 +300,6 @@ public class FederatedAuthController {
     if (!acceptsHtml(httpRequest)) {
       throw new FederatedRefusedException(type);
     }
-    // A person is looking at this in a browser. A JSON body would be a dead end,
-    // so the sign-in page is told which refusal it was and says it in their
-    // language — the token is the same one the problem document carries.
     return ResponseEntity.status(HttpStatus.SEE_OTHER)
         .header(HttpHeaders.LOCATION, SIGN_IN_PATH + "?failed=" + type.token())
         .build();

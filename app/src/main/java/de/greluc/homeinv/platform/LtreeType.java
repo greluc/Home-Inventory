@@ -71,15 +71,13 @@ public class LtreeType implements UserType<String> {
     if (value == null) {
       statement.setNull(index, Types.OTHER);
     } else {
-      // setObject with OTHER, not setString: setString would send a varchar and
-      // the server would refuse it for lack of an implicit cast.
       statement.setObject(index, value, Types.OTHER);
     }
   }
 
   @Override
   public String deepCopy(String value) {
-    return value; // Strings are immutable; a copy would be the same object anyway.
+    return value;
   }
 
   @Override

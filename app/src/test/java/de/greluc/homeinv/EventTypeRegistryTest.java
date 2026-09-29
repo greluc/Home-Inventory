@@ -118,9 +118,6 @@ class EventTypeRegistryTest {
                 }
                 String routingKey = externalized.group(1);
                 String type = EventType.valueOf(declared.group(1)).id();
-                // `item.type-changed` has to be findable inside
-                // `homeinv.inventory::item-type-changed.v1`. Two names for one
-                // event is how the two drift.
                 if (!routingKey.contains(type.replace('.', '-'))) {
                   wrong.put(path.getFileName().toString(), routingKey + " vs " + type);
                 }

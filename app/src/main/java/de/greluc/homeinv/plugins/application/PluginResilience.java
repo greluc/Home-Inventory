@@ -133,10 +133,6 @@ public class PluginResilience {
                 .maxWaitDuration(Duration.ofMillis(properties.getBulkheadWaitMillis()))
                 .build());
 
-    // 09 §9.5 asks for duration, result and errors per call as metrics. These
-    // two bind the state and the counts an operator reads in Grafana; without
-    // them a breaker's state would be visible only in a log line, which is not
-    // where anybody looks for it (13 §13.7).
     TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(breakers).bindTo(meters);
     TaggedBulkheadMetrics.ofBulkheadRegistry(pools).bindTo(meters);
   }
@@ -181,9 +177,6 @@ public class PluginResilience {
     boolean isNew = breakers.find(pluginId).isEmpty();
     CircuitBreaker breaker = breakers.circuitBreaker(pluginId);
     if (isNew) {
-      // On the transition and not on every failed call: one event per outage is
-      // what an operator can act on, and a failing plugin must not fill the
-      // event log with the evidence of its own failure.
       breaker
           .getEventPublisher()
           .onStateTransition(
@@ -215,9 +208,6 @@ public class PluginResilience {
         case UNSUPPORTED, NOT_FOUND, INVALID_ARGUMENT, DENIED -> false;
       };
     }
-    // Anything the adapter did not classify. Counted, because an unclassified
-    // failure is one nobody has established the meaning of, and assuming it is
-    // harmless is how a breaker never opens.
     return true;
   }
 
@@ -244,23 +234,12 @@ public class PluginResilience {
       CurrentTrace trace)
       implements InvocationHandler {
 
-    // Deliberately narrower than InvocationHandler's own `throws Throwable`.
-    // Everything a port can raise is unchecked, so a caller that had to catch
-    // Throwable would be catching the reflection machinery rather than the
-    // plugin. What comes out of here is a PluginException or nothing.
     @Override
     public Object invoke(Object proxy, Method method, Object[] arguments) {
-      // equals, hashCode and toString are the proxy's own business. Sending them
-      // through a circuit breaker would make a log line that prints a port open
-      // one.
       if (method.getDeclaringClass() == Object.class) {
         return call(method, arguments);
       }
 
-      // The call's own span, around everything below: the wait for a slot, the
-      // breaker's decision and the call itself. A span that covered only the
-      // last of those would report a plugin as fast while callers queued for it
-      // (REQ-NFR-044).
       Observation observation =
           Observation.createNotStarted(CALL_OBSERVATION, observations)
               .lowCardinalityKeyValue("plugin.id", pluginId)
@@ -290,13 +269,6 @@ public class PluginResilience {
      * @return whatever the plugin returned
      */
     private Object invokeInScope(Method method, Object[] arguments) {
-      // Before the pool and before the breaker, deliberately: reading what the
-      // tenant configured is a query against our own database, and it must
-      // neither occupy one of this plugin's concurrent slots nor count towards
-      // opening its circuit if it fails. Only the call to the plugin does.
-      // A no-argument port method arrives with null arguments, which is the one
-      // case with nothing to fill; it is answered here so the helper can take
-      // and return an array rather than something nullable.
       Object[] prepared = arguments == null ? null : preparedContext(arguments);
 
       try {
@@ -323,9 +295,6 @@ public class PluginResilience {
       } catch (PluginException plugin) {
         throw plugin;
       } catch (Throwable unexpected) {
-        // `decorateCheckedSupplier` declares Throwable, so this is where the
-        // declaration stops. Anything arriving here is unclassified, which
-        // `countsAsBroken` already treats as the plugin's fault.
         throw new PluginException(
             PluginException.Kind.INTERNAL, "The call to plugin " + pluginId + " failed", unexpected);
       }
@@ -400,9 +369,6 @@ public class PluginResilience {
           original.settings().isEmpty()
                   || settings.maySendSettings(pluginId, original.tenantId())
               ? original.settings()
-              // Not consented to. The same answer `effective` gives, for the
-              // same reason: what a tenant has not agreed to send does not
-              // leave the core because a core caller happened to know it.
               : Map.<String, String>of();
       if (configured.isEmpty() && fromCaller.isEmpty()) {
         return prepared;
@@ -432,20 +398,13 @@ public class PluginResilience {
           throw plugin;
         }
         if (cause instanceof Error fatal) {
-          // Not this class's to classify. An adapter that ran out of memory has
-          // not told us anything about the plugin.
           throw fatal;
         }
-        // Everything else becomes a PluginException, so that what comes out of
-        // the envelope is one thing a caller can branch on. Unclassified, which
-        // `countsAsBroken` already treats as the plugin's fault.
         throw new PluginException(
             PluginException.Kind.INTERNAL,
             "Plugin " + pluginId + " failed in a way its adapter did not classify",
             cause == null ? wrapped : cause);
       } catch (IllegalAccessException impossible) {
-        // The port is a public interface and the proxy implements it. If this
-        // happens, the adapter is not what this class was handed.
         throw new IllegalStateException(
             "A port implementation for " + pluginId + " could not be called", impossible);
       }

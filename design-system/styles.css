@@ -1,5 +1,3 @@
-/* Home Inventory Design System — global entry point.
-   Consumers link this one file. Nothing but @import lines belong here. */
 @import url("tokens/fonts.css");
 @import url("tokens/palette.css");
 @import url("tokens/color.css");

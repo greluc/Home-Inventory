@@ -95,8 +95,6 @@ public class ApiExceptionHandler {
    */
   @ExceptionHandler(NotFoundException.class)
   public ProblemDetail handleNotFound(NotFoundException exception, HttpServletRequest request) {
-    // Not logged above DEBUG: a 404 is an ordinary answer, and logging it at WARN
-    // lets anyone fill the log by requesting random ids.
     log.debug("Not found: {}", exception.getMessage());
     return problem(ProblemType.NOT_FOUND, "No such " + exception.getResource() + " is visible to you.",
         request);
@@ -124,8 +122,6 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnknownType(
       de.greluc.homeinv.catalog.api.TypeRegistry.UnknownTypeException exception,
       HttpServletRequest request) {
-    // DEBUG for the same reason a NotFoundException is: an id that resolves to
-    // nothing is an ordinary answer, and anybody could otherwise fill the log.
     log.debug("Unknown catalogue reference: {}", exception.getMessage());
     return problem(ProblemType.NOT_FOUND, exception.getMessage(), request);
   }
@@ -173,8 +169,6 @@ public class ApiExceptionHandler {
   @ExceptionHandler(AccessDeniedException.class)
   public ProblemDetail handleAccessDenied(
       AccessDeniedException exception, HttpServletRequest request) {
-    // At WARN: a denial is either an attack or a misconfigured role, and both are
-    // worth seeing. The caller is already in the MDC of every line (REQ-NFR-041).
     log.warn("Forbidden: {}", exception.getMessage());
     return problem(ProblemType.FORBIDDEN, "Your role does not permit this operation.",
         request);
@@ -308,9 +302,6 @@ public class ApiExceptionHandler {
   @ExceptionHandler(RoleEscalationException.class)
   public ProblemDetail handleRoleEscalation(
       RoleEscalationException exception, HttpServletRequest request) {
-    // REQ-TEN-010 asks for the attempt to be logged as well as rejected. It is
-    // logged in the application layer too; this line is what an operator reading
-    // the access log sees, with the caller already in the MDC.
     log.warn("Refused a role grant: {}", exception.getMessage());
     ProblemDetail problem =
         problem(
@@ -1057,11 +1048,6 @@ public class ApiExceptionHandler {
             ProblemType.VALIDATION_FAILED,
             "One or more attributes do not match the type this was written against.",
             request);
-    // The paths, because REQ-CORE-005's acceptance is "422 with the field path" —
-    // a client told only that something is invalid has to guess which field to
-    // mark. The message travels with each one and the VALUE never does: a
-    // rejected attribute set may hold a licence key, and a problem document is
-    // logged by proxies.
     problem.setProperty(
         "errors",
         exception.getViolations().stream()
@@ -1116,9 +1102,6 @@ public class ApiExceptionHandler {
    */
   @ExceptionHandler(MalwareDetectedException.class)
   public ProblemDetail handleMalware(MalwareDetectedException exception, HttpServletRequest request) {
-    // DEBUG and not WARN. The finding itself was logged at WARN by the worker that
-    // made it, once; this is the caller being told about it, which happens on
-    // every poll and is not a second security event.
     log.debug("Reporting a scanner finding to a caller: {}", exception.getSignature());
     return problem(
         ProblemType.MALWARE_DETECTED,
@@ -1145,9 +1128,6 @@ public class ApiExceptionHandler {
   @ExceptionHandler(ScannerUnavailableException.class)
   public ProblemDetail handleScannerDown(
       ScannerUnavailableException exception, HttpServletRequest request) {
-    // INFO, because on this path it is ordinary: a client polling a file the
-    // worker has not reached yet gets one of these per poll. The scanner actually
-    // being unreachable is logged by the worker, which is the half that knows.
     log.info("A caller asked for a file that has no verdict yet: {}", exception.getMessage());
     return problem(
         ProblemType.SCAN_UNAVAILABLE,
@@ -1298,21 +1278,12 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnreadable(
       HttpMessageNotReadableException exception, HttpServletRequest request) {
 
-    // A body that stopped because it hit the limit is not a parse failure either.
-    // `JsonBodyLimitFilter` refuses a declared Content-Length before anything is
-    // read; a chunked body is only known to be oversized while Jackson is reading
-    // it, and what reaches here is the limit's exception wrapped in a parse one.
     for (Throwable cause = exception.getCause(); cause != null; cause = cause.getCause()) {
       if (cause instanceof PayloadTooLargeException) {
         return handleTooLarge((PayloadTooLargeException) cause, request);
       }
     }
 
-    // An unknown field is not a parse failure and must not be answered as one.
-    // The body was well-formed; it named something this endpoint does not accept,
-    // and REQ-SEC-029 makes that a rejection rather than something to ignore. A
-    // client sending `tenantId` or `version` in a create request needs to be told
-    // which word was refused, or they will believe it was honoured.
     String unknown = unknownFieldOf(exception);
     if (unknown != null) {
       log.debug("Unknown field in request body: {}", unknown);
@@ -1323,8 +1294,6 @@ public class ApiExceptionHandler {
       return problem;
     }
 
-    // The parser's own message can quote the payload. It is not echoed, because a
-    // malformed body may contain whatever the sender put in it.
     log.debug("Unreadable request body", exception);
     return problem(ProblemType.MALFORMED_REQUEST, "The request body could not be parsed.",
         request);
@@ -1389,8 +1358,6 @@ public class ApiExceptionHandler {
       return ResponseEntity.status(refused.getStatus()).body(refused);
     }
 
-    // ERROR, with the stack trace: this is the branch that means the application
-    // met something it has no answer for, and every occurrence is worth a look.
     log.error("Unhandled exception while serving {}", request.getRequestURI(), exception);
     ProblemDetail unexpected = problem(ProblemType.INTERNAL_ERROR, Problems.INTERNAL_DETAIL, request);
     return ResponseEntity.status(unexpected.getStatus()).body(unexpected);

@@ -84,9 +84,6 @@ public class LiveChangeSubscriber {
       try {
         live.deliver(UUID.fromString(body.substring(0, space)), body.substring(space + 1));
       } catch (IllegalArgumentException notATenant) {
-        // Somebody else publishing on this channel, or a version that spells the
-        // message differently. Ignored rather than logged per message: this runs
-        // on every change in the deployment.
         log.debug("A live message named no tenant: {}", body);
       }
     };

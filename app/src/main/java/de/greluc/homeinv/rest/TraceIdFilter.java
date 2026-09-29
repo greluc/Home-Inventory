@@ -48,13 +48,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * gets a newline in it.
  */
 @Component
-// HIGHEST_PRECEDENCE + 2, and the two matter. Spring registers
-// `ServerHttpObservationFilter` at HIGHEST_PRECEDENCE + 1 and opens the
-// observation's scope around the rest of the chain, which is where a tracer puts
-// its ids into the MDC. Sitting before it, this filter would write a random id
-// that the tracer then shadowed for the length of the request and un-shadowed
-// afterwards -- one request, two ids, and the one in the error document would
-// not be the one in the log lines around it.
 @Order(Ordered.HIGHEST_PRECEDENCE + 2)
 public class TraceIdFilter extends OncePerRequestFilter {
 
@@ -78,9 +71,6 @@ public class TraceIdFilter extends OncePerRequestFilter {
 
     String traced = MDC.get(TRACE_ID);
     if (traced != null && !traced.isBlank()) {
-      // A tracer is running and has already said what this request's id is.
-      // Whatever this filter put there instead would be a second answer, and
-      // removing it in the `finally` below would take the tracer's with it.
       chain.doFilter(request, response);
       return;
     }
@@ -89,9 +79,6 @@ public class TraceIdFilter extends OncePerRequestFilter {
     try {
       chain.doFilter(request, response);
     } finally {
-      // The thread goes back to a pool — a virtual one here, but the container
-      // may still reuse the carrier's MDC — and a leftover id would label the
-      // next request with the previous one's, which is worse than none.
       MDC.remove(TRACE_ID);
     }
   }
@@ -105,8 +92,6 @@ public class TraceIdFilter extends OncePerRequestFilter {
   private static String traceIdOf(HttpServletRequest request) {
     String header = request.getHeader("traceparent");
     if (header != null) {
-      // version "-" trace-id "-" parent-id "-" flags. Only the trace-id is used:
-      // the parent-id identifies a span this application does not yet produce.
       String[] fields = header.split("-");
       if (fields.length >= 2
           && TRACE_ID_SHAPE.matcher(fields[1]).matches()

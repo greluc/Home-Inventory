@@ -60,36 +60,20 @@ public final class MediaTypeDetector {
       return new Detected("application/pdf", false);
     }
 
-    // ISO base media file format: bytes 4..8 are 'ftyp', and the brand that
-    // follows says which dialect. AVIF and HEIC share the container, so the
-    // brand is the only thing that tells them apart.
     if (matchesAt(head, 4, 'f', 't', 'y', 'p')) {
       String brand = asciiLowerCase(head, 8, 4);
       return switch (brand) {
         case "avif", "avis" -> new Detected("image/avif", true);
-        // Accepted and transcoded to AVIF on ingest; never stored as it arrived
-        // (REQ-MED-003), because almost nothing outside Apple's ecosystem reads it.
         case "heic", "heix", "hevc", "hevx", "mif1", "msf1" -> new Detected("image/heic", true);
         default -> throw new UnsupportedMediaTypeException("application/octet-stream (ftyp:" + brand + ")");
       };
     }
 
-    // SVG is XML and is rejected before anything else can accept it as text.
-    // Checked explicitly rather than by omission, so the refusal is deliberate
-    // rather than a consequence of the text sniffing below.
-    // Compared as ASCII BYTES rather than as a lowercased string. Case folding is
-    // a transformation on attacker-supplied input immediately before a security
-    // decision, and the whole class of surprise there — one character folding
-    // onto another — is avoided by never folding: the only thing that matches
-    // "<svg" is those four bytes in either case, and nothing else.
     if (startsWithAsciiIgnoringCase(head, "<?xml") || startsWithAsciiIgnoringCase(head, "<svg")) {
       throw new UnsupportedMediaTypeException("image/svg+xml");
     }
 
     if (looksLikeText(head)) {
-      // TXT and CSV are the same bytes; the distinction is a matter of
-      // punctuation and not worth guessing at. Both are served as plain text
-      // with a download disposition, so the difference changes nothing.
       return new Detected("text/plain", false);
     }
 

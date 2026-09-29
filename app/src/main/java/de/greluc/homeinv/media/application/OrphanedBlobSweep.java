@@ -79,9 +79,6 @@ public class OrphanedBlobSweep {
     Instant before = Instant.now(clock).minus(grace);
     int removed = 0;
     for (UUID tenantId : orphans.tenantsWithOrphans(before)) {
-      // The context around the work, so every statement below runs under it:
-      // `SET LOCAL app.tenant_id` is applied when each transaction begins, from
-      // the context current at that moment.
       removed += TenantContext.callAs(tenantId, () -> sweepTenant(tenantId, before));
     }
     if (removed > 0) {
@@ -113,12 +110,8 @@ public class OrphanedBlobSweep {
     int removed = 0;
     for (OrphanQueries.Orphan orphan : due) {
       try {
-        // The bytes first. A row whose blob is gone is a photograph that 404s
-        // for ever; bytes whose row is gone are reclaimed by the next run.
         blobs.delete(tenantId, orphan.sha256());
       } catch (IOException unreachable) {
-        // Logged and skipped, not rethrown: one unreachable blob must not stop
-        // the rest of the sweep, and the row stays so the next run tries again.
         log.warn(
             "An orphaned blob could not be removed from the store; it stays for the next run",
             unreachable);

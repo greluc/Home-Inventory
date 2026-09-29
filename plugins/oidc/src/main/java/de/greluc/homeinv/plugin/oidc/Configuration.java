@@ -89,9 +89,6 @@ public record Configuration(
     if (isBlank(issuer)) {
       missing.add("HOMEINV_OIDC_ISSUER names no provider");
     } else if (!issuer.startsWith("https://")) {
-      // Not a style rule: discovery, the token endpoint and the key set are all
-      // reached from this value, and an `http://` issuer would send a client
-      // secret and an authorization code over a connection nothing protects.
       missing.add("HOMEINV_OIDC_ISSUER is not an https:// URL, and everything else follows it");
     }
     if (isBlank(clientId)) {
@@ -125,9 +122,6 @@ public record Configuration(
   public String scopeParameter() {
     List<String> asked = new ArrayList<>(scopes);
     if (!asked.contains("openid")) {
-      // Without it the provider runs a plain OAuth flow and returns no ID token,
-      // which is the only thing this plugin trusts. Added rather than refused:
-      // an operator who left it out meant to sign somebody in.
       asked.add(0, "openid");
     }
     return String.join(" ", asked);

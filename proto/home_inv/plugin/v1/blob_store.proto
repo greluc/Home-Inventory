@@ -1,19 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// THE BLOB STORE CONTRACT.
-//
-// Four implementations speak it (ADR-0007, ADR-0043):
-//
-//   * `blobstore`, the in-deployment service that holds the `blobdata` volume —
-//     the reference implementation, and the one the others are compared to;
-//   * `plugin-blobstore-s3` and `plugin-blobstore-nextcloud`, stage 1, which are
-//     plugins precisely because they open a connection OUTSIDE the deployment
-//     (ADR-0026);
-//   * and whatever a third party writes against the published SDK in stage 3.
-//
-// Apache-2.0 like everything in `proto/`: a plugin author compiles against this
-// and must stay free to license their own work as they wish (ADR-0018).
 
 syntax = "proto3";
 
@@ -59,22 +45,6 @@ service BlobStore {
   // nothing points at a blob any more, and only then is this called. A store
   // that counted references would need to know what a reference is.
   rpc Delete(DeleteRequest) returns (DeleteResponse);
-
-  // ---------------------------------------------------------------------
-  // STAGING, for an upload that arrives in pieces (REQ-MED-008, ADR-0084).
-  // ---------------------------------------------------------------------
-  //
-  // OPTIONAL, and a plugin may answer all four with UNIMPLEMENTED. The core
-  // calls them on the IN-DEPLOYMENT store and on nothing else: a half-uploaded
-  // file has no content address yet, so it cannot be addressed the way the four
-  // methods above address a blob, and pushing an unfinished object into a
-  // tenant's own bucket would leave litter in somebody else's storage that only
-  // this deployment knows how to clean up. What a tenant's store receives is the
-  // finished blob, through `Put`, exactly as before (ADR-0074).
-  //
-  // A staged object is addressed by an UPLOAD ID rather than by content,
-  // because the content is not yet known -- that is the whole difference
-  // between this and `Put`.
 
   // Appends bytes to a staged upload, creating it on the first call.
   //
@@ -241,10 +211,6 @@ message DeleteResponse {
   // already done would be a retry nobody could make succeed.
   bool removed = 1;
 }
-
-// ---------------------------------------------------------------------------
-// Staging
-// ---------------------------------------------------------------------------
 
 // Where a half-arrived upload lives.
 //

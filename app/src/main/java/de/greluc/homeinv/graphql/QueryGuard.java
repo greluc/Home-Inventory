@@ -168,8 +168,6 @@ public class QueryGuard implements WebGraphQlInterceptor {
           new NodeVisitorStub() {
             @Override
             public TraversalControl visitField(Field node, TraverserContext<Node> context) {
-              // Entering only: a depth-first traversal visits a node twice, and
-              // counting both would halve the effective limit without saying so.
               if (context.isVisited()) {
                 return TraversalControl.CONTINUE;
               }
@@ -201,18 +199,11 @@ public class QueryGuard implements WebGraphQlInterceptor {
       return false;
     }
     try {
-      // The same permission that configures the tenant. Held by ADMIN and OWNER
-      // and -- because it is not whole-tenant -- also by a scoped administrator,
-      // which is right: what they may ask for is still bounded by every other
-      // permission, one field at a time (ADR-0079).
       accessControl.require(Permission.TENANT_UPDATE);
       return true;
     } catch (AccessDeniedException notAnAdministrator) {
       return false;
     } catch (RuntimeException noCaller) {
-      // No session at all. The security chain answers that before this runs, so
-      // reaching here means the surface was opened to anonymous callers by
-      // configuration rather than by design.
       log.debug("A GraphQL request arrived with no caller to ask about", noCaller);
       return false;
     }
@@ -264,9 +255,6 @@ public class QueryGuard implements WebGraphQlInterceptor {
     if (!registry.exists()) {
       return Set.of();
     }
-    // The READER in the resource block, not only the stream it produces: closing a
-    // `Stream` returned by `lines()` does not close the reader it reads from, which
-    // leaves a file handle open for every startup of every context.
     try (java.io.BufferedReader reader =
             new java.io.BufferedReader(
                 new java.io.InputStreamReader(registry.getInputStream(), StandardCharsets.UTF_8));

@@ -108,13 +108,8 @@ async function send(
 ): Promise<Response> {
   return fetch(url, {
     method,
-    // `same-origin` and never `include`: the session cookie is `SameSite=Strict`
-    // and `__Host-`-prefixed, and `include` would be an invitation to send it
-    // somewhere it was never meant to go — the same rule `api.ts` follows.
     credentials: "same-origin",
     headers: { "Tus-Resumable": TUS_VERSION, "X-XSRF-TOKEN": csrfToken(), ...headers },
-    // `null` and not `undefined`: `exactOptionalPropertyTypes` is on, and
-    // `RequestInit.body` admits the first and not the second.
     body: body ?? null,
   });
 }
@@ -161,9 +156,6 @@ async function sendFrom(
   onProgress?: UploadProgress,
 ): Promise<string> {
   if (offset >= file.size) {
-    // Every byte was sent and no response carried a `Location`, which means the
-    // response that completed the upload was the one that went missing. The
-    // server remembers what it became, so one more question answers it.
     const finished = await send(url, "HEAD", {});
     const named = finished.headers.get("Location");
     if (named !== null) {
@@ -173,11 +165,6 @@ async function sendFrom(
   }
 
   const end = Math.min(offset + CHUNK_BYTES, file.size);
-  // `null` for a connection that went away mid-chunk. Not a `Response` with
-  // status 0, which was the first spelling and is not constructible: the
-  // constructor admits 200 to 599 and throws on anything else, so the sentinel
-  // for a failed request would itself have failed — in a browser as well as in
-  // the test that found it.
   let answer: Response | null = null;
   try {
     answer = await send(
@@ -187,8 +174,6 @@ async function sendFrom(
       file.slice(offset, end),
     );
   } catch {
-    // Whether any of the chunk arrived is exactly what nobody here knows, so
-    // the next thing to do is ask.
     answer = null;
   }
 
@@ -199,10 +184,6 @@ async function sendFrom(
     return created ?? sendFrom(url, file, next, 0, onProgress);
   }
 
-  // 409 is the server saying "you are not where you think you are" and it
-  // carries the answer; 423 is another request writing to this upload; `null` is
-  // a connection that vanished and carries nothing. All three are recovered the
-  // same way, which is why none of them is a failure here.
   if (answer === null || answer.status === 409 || answer.status === 423) {
     const status = answer?.status ?? 0;
     if (attempts + 1 >= ATTEMPTS) {

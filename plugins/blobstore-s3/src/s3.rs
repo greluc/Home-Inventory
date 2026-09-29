@@ -57,9 +57,6 @@ pub async fn request(
 
     let path = target.path_for(key);
     let (wire_query, canonical_query) = queries(parameters);
-    // In virtual-hosted style the bucket is part of the hostname, so the tunnel,
-    // the certificate and the `Host` header all name the same thing — and the
-    // operator's allowlist has to carry it.
     let connect_host = target.connect_host();
     let host = target.request_host();
 

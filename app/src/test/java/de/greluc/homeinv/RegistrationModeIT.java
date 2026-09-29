@@ -40,8 +40,6 @@ class RegistrationModeIT {
   void theDefault() {
     RegistrationPolicy policy = new RegistrationPolicy("invite_only");
     assertThat(policy.mode()).isEqualTo(RegistrationMode.INVITE_ONLY);
-    // An invitation for an address nobody has creates the account, which is what
-    // invite-only means.
     policy.requireRegistrationPermitted();
   }
 
@@ -76,9 +74,6 @@ class RegistrationModeIT {
   @Test
   @DisplayName("is read on its own, and whether `open` can be served is asked later")
   void openParsesAndIsCheckedWhereTheRegistryIsReadable() {
-    // It refused `open` in this constructor while the reason held: confirming an
-    // address needs a plugin and there was no plugin runtime. There is one now
-    // (ADR-0028), and the question moved to where it can be answered.
     assertThat(new RegistrationPolicy("open").mode()).isEqualTo(RegistrationMode.OPEN);
   }
 
@@ -93,10 +88,6 @@ class RegistrationModeIT {
   @Test
   @DisplayName("is served by a mail sender, or by an identity provider, or by both")
   void eitherMechanismServesIt() {
-    // The requirement asks for an account created AFTER THE ADDRESS IS CONFIRMED and
-    // not for a particular mechanism. A provider that verifies a token asserting the
-    // address confirms it more strongly than a mailed link, and without this
-    // deployment sending anything (REQ-AUTH-005).
     readiness("open", true, false).check();
     readiness("open", false, true).check();
     readiness("open", true, true).check();
@@ -131,10 +122,6 @@ class RegistrationModeIT {
             boolean installed =
                 (port == NotificationChannel.class && channel)
                     || (port == IdentityProvider.class && provider);
-            // A stand-in rather than a mock: what the check reads is whether
-            // anything is there, and a real plugin would need a socket to
-            // answer a question about its own absence. Its methods are never
-            // called, so a proxy that answers nothing is the whole of it.
             return installed
                 ? Optional.of(
                     port.cast(

@@ -70,7 +70,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     anItem(tenant, "A camera", study, new Money(new BigDecimal("1200.00"), EUR), 1);
     anItem(tenant, "A lens", study, new Money(new BigDecimal("800.00"), EUR), 1);
     anItem(tenant, "A bicycle", garage, new Money(new BigDecimal("450.00"), EUR), 2);
-    // Nobody has said what replacing this would cost.
     anItem(tenant, "A shelf", garage, null, 1);
 
     InsuranceReport.Report report = inOwn(tenant, () -> insurance.of(null, 50));
@@ -88,8 +87,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     assertThat(theStudy.totals()).singleElement()
         .satisfies(total -> assertThat(total.amount()).isEqualByComparingTo("2000.00"));
 
-    // Two of a thing cost twice as much to replace, which a report ignoring the
-    // count would understate.
     InsuranceReport.Room theGarage =
         report.rooms().stream()
             .filter(room -> room.locationId().equals(garage))
@@ -101,8 +98,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     assertThat(report.totals()).singleElement()
         .satisfies(total -> assertThat(total.amount()).isEqualByComparingTo("2900.00"));
 
-    // The shelf is not in the report and the report says so, rather than leaving
-    // somebody to notice after a fire.
     assertThat(report.withoutAReplacementValue()).isEqualTo(1);
   }
 
@@ -119,8 +114,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     assertThat(report.totals()).hasSize(2);
     assertThat(report.totals()).extracting(money -> money.currency().getCurrencyCode())
         .containsExactlyInAnyOrder("EUR", "USD");
-    // Stated rather than implied: a client can render a sentence and cannot
-    // render a missing field.
     assertThat(report.converted()).isFalse();
   }
 
@@ -131,17 +124,11 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     UUID study = aPlace(tenant, "A study", null);
     UUID camera = anItem(tenant, "A camera", study, new Money(new BigDecimal("1200.00"), EUR), 1);
 
-    // Three DIFFERENT pictures. The same bytes would be one media object --
-    // storage is content-addressed (ADR-0032) -- and a second attachment of one
-    // object to one item is refused by `attachment_unique_live`, so all three
-    // would collapse into whichever role the first was given.
     UUID photo = attach(tenant, camera, true, "PHOTO", 1);
     UUID receipt = attach(tenant, camera, false, "RECEIPT", 2);
     attach(tenant, camera, false, "OTHER", 3);
     cleared(tenant);
 
-    // What the rows actually say, before asking the report: a role that did not
-    // survive the write would otherwise look like a report that cannot read one.
     assertThat(
             inOwn(
                 tenant,
@@ -154,10 +141,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     InsuranceReport.Line line =
         inOwn(tenant, () -> insurance.of(null, 50)).rooms().getFirst().lines().getFirst();
 
-    // The role is what makes this possible at all: REQ-LIFE-001 had decided an
-    // invoice was an attachment like any other, and it was amended on
-    // 2026-09-20 so that this report can attach the receipt rather than offering
-    // a list and leaving the reader to find it.
     assertThat(line.photo()).isNotNull();
     assertThat(line.photo().mediaObjectId()).isEqualTo(photo);
     assertThat(line.receipts()).singleElement()
@@ -181,8 +164,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
     assertThat(report.totals()).singleElement()
         .satisfies(total -> assertThat(total.amount()).isEqualByComparingTo("1200.00"));
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Attaches a file to an item.
@@ -232,11 +213,6 @@ class InsuranceReportIT extends AbstractIntegrationTest {
    * @return its bytes
    */
   private static byte[] jpeg(int seed) {
-    // Visibly different rather than a pixel wider: the stand-in for libvips
-    // derives from the source's length and one of its bytes, and three JPEGs
-    // differing only in width can encode to the same length -- which makes one
-    // content address, one media object, and one attachment where the test
-    // meant three.
     java.awt.image.BufferedImage image =
         new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB);
     java.awt.Graphics2D pen = image.createGraphics();

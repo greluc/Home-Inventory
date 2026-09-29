@@ -1,13 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# The gates that look for what is wrong rather than for what is missing.
-#
-# Separate from `ci.yml` for two reasons that are not organisational. They run on
-# a SCHEDULE as well as on a push — a dependency that was clean on Monday has a
-# CVE on Thursday and nothing in the repository changed (REQ-SEC-075) — and they
-# need `security-events: write` to publish findings, which is a permission the
-# rest of CI has no business holding.
 
 name: Security
 
@@ -15,7 +7,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Daily. The repository does not have to change for the answer to.
   schedule:
     - cron: '0 3 * * *'
 
@@ -27,59 +18,20 @@ permissions:
   contents: read
 
 jobs:
-  # -------------------------------------------------------------------------
-  # REQ-SEC-051 — a secret that reaches a commit is a secret that is leaked,
-  # whether or not the commit is ever pushed. This is the second line; the
-  # pre-commit hook in `.pre-commit-config.yaml` is the first.
-  # -------------------------------------------------------------------------
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          # The whole history, not the tip. A secret that was committed and then
-          # removed is still in the history, still fetchable, and still valid.
           fetch-depth: 0
 
       - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Named rather than relied on. gitleaks finds a `.gitleaks.toml` in the
-          # source root on its own, and "on its own" is how a config silently
-          # stops being read. Each entry in it allows one value that is not a
-          # credential and could not become one, with its reason written out and
-          # narrowed to the paths it belongs to — the xkcd passphrase the
-          # integration tests share, the role passwords the test container is
-          # given because production reads its own from mounted secrets, the
-          # illustrative value in a design-system prompt, the broker routing keys
-          # the listeners bind to. *This comment said "exactly three things" and
-          # counted the entries of the day it was written; it is the file that is
-          # the list, not this line.*
-          #
-          # `.gitleaksignore` sits beside it and is a different instrument: it
-          # names findings that were FIXED, pinned to the commit that carried
-          # them, so a range scan does not re-report a value the tree no longer
-          # holds. It is discovered at the source root — the action exposes no
-          # input for it — which is why its own header says what belongs in it.
           GITLEAKS_CONFIG: .gitleaks.toml
-          # Pinned, and not to the action's default. The action installs 8.24.3,
-          # which does not understand the top-level `[[allowlists]]` array this
-          # config is written in: it ignores every one of them, and the ten
-          # deliberate literals — the xkcd passphrase in nine test classes and the
-          # illustrative value in a design-system prompt — come back as findings.
-          #
-          # It surfaced on a SCHEDULED run rather than a push, because a push scans
-          # only the commits it carries and those lines were written months ago.
-          # Reproduced both ways before changing anything: 8.24.3 reports ten,
-          # 8.30.1 reports none, over the same history and the same config.
           GITLEAKS_VERSION: 8.30.1
 
-  # -------------------------------------------------------------------------
-  # REQ-SEC-076 — CodeQL. It is the only one of the SAST tools here that follows
-  # data across method boundaries, which is what finds the class of defect that
-  # is invisible in any single file.
-  # -------------------------------------------------------------------------
   codeql:
     name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
@@ -99,26 +51,12 @@ jobs:
           distribution: zulu
           java-version: '25'
 
-      # The same action `ci.yml`'s build uses, and it is here for the resolving
-      # rather than for the speed. This job ran a bare `./gradlew` and therefore
-      # re-fetched EVERY dependency from Maven Central on every run -- which on
-      # 2026-09-22 came back `403 Forbidden` for the Kotlin Gradle plugin and
-      # failed an analysis that had nothing wrong with it. The same PR had
-      # already lost a job to `429 Too Many Requests` from the same host.
-      #
-      # An upstream rate limit is not something to retry until it passes: the
-      # answer is to stop asking. A warm cache turns hundreds of requests into
-      # a handful, and this was the one Gradle job in the repository without one.
       - uses: gradle/actions/setup-gradle@v6
         if: matrix.language == 'java-kotlin'
 
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          # `security-extended` rather than the default set. The default is tuned
-          # for a low false-positive rate on any repository; this one is a
-          # multi-tenant application reachable from the internet, and a finding
-          # worth reading is worth a finding that is not.
           queries: security-extended
 
       - name: Build
@@ -129,11 +67,6 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
 
-  # -------------------------------------------------------------------------
-  # REQ-SEC-075 — vulnerability scanning. "High" and "critical" fail the build,
-  # and the daily schedule is the half that matters: a dependency that was clean
-  # yesterday is the normal case.
-  # -------------------------------------------------------------------------
   vulnerabilities:
     name: Vulnerability scan
     runs-on: ubuntu-latest
@@ -143,17 +76,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The dependency manifests: Gradle, npm and Cargo, in one pass over the
-      # working tree.
-      # TWO passes, and the reason is a trap this job sat in: with
-      # `format: sarif` trivy writes EVERY severity into the report and the exit
-      # code is then decided by that unfiltered set, not by `severity:`. So a job
-      # asking to fail on HIGH and CRITICAL failed on a LOW "no HEALTHCHECK"
-      # instead, with nothing in its log to say so — the findings were in the
-      # SARIF, which goes to code scanning rather than to the console.
-      #
-      # The report therefore carries everything, and the gate is a second pass
-      # that prints what it refuses.
       - name: Dependencies (report)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -180,8 +102,6 @@ jobs:
           sarif_file: trivy-filesystem.sarif
           category: trivy-filesystem
 
-      # And the images. A base image carries packages no manifest in this
-      # repository mentions, and it is the half a dependency scan cannot see.
       - name: Build the application image
         run: docker build -f app/Dockerfile -t home-inv:scan .
 
@@ -218,8 +138,6 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
 
-      # It runs on a non-internal segment by design (ADR-0042), which makes it one
-      # of exactly two containers an attacker outside the deployment can reach.
       - name: Scan the egress proxy image
         uses: aquasecurity/trivy-action@v0.36.0
         with:

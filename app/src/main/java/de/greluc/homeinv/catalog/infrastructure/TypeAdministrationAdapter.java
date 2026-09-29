@@ -83,15 +83,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private static final String CATEGORY_CURSOR = "catalog-location-categories";
   private static final String VALUE_LIST_CURSOR = "catalog-value-lists";
 
-  // Where the last row of a page sat is carried in a `LastRow` created per call
-  // and handed to the mapper, not in a field: the mappers write it because the
-  // views deliberately carry no timestamps, and a field on a singleton adapter
-  // would be shared by every request in flight.
-
-  // -------------------------------------------------------------------------
-  // Item types
-  // -------------------------------------------------------------------------
-
   @Override
   @Transactional
   public ItemTypeView createItemType(CreateItemTypeCommand command, UUID actor) {
@@ -101,9 +92,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
       throw new TypeKeyTakenException("item type", command.key());
     }
     if (command.parentId() != null) {
-      // Named rather than assumed: a parent from another tenant is invisible here,
-      // and a parent that does not exist would surface as a foreign key violation
-      // three statements later.
       loadItemType(command.parentId())
           .orElseThrow(
               () ->
@@ -184,9 +172,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
           "This build ships no item type template called '" + templateKey + "'.");
     }
 
-    // Through the ordinary editor, deliberately. A template that wrote rows of
-    // its own would be a second way of creating a type, and the second way is the
-    // one that forgets the schema, the event or the key check.
     ItemTypeView type =
         createItemType(
             new CreateItemTypeCommand(template.key(), template.kind(), null, null), actor);
@@ -264,10 +249,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     return loadItemType(typeId).orElseThrow();
   }
 
-  // -------------------------------------------------------------------------
-  // Location categories
-  // -------------------------------------------------------------------------
-
   @Override
   @Transactional
   public CategoryView createCategory(CreateCategoryCommand command, UUID actor) {
@@ -331,11 +312,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
       UUID categoryId, UpdateCategoryCommand command, UUID actor) {
 
     loadCategory(categoryId).orElseThrow(() -> unknown("location category", categoryId));
-    // `builtin` is not consulted. A shipped category is one this instance seeded,
-    // not one it owns: REQ-CORE-042 asks for all thirteen to be present AND
-    // editable, and a tenant that calls its `room` "Zimmer" is naming its own
-    // tree. What stays fixed is the KEY, which is what a client translates and
-    // what an export writes down.
     jdbc.sql(
             """
             update catalog.location_category
@@ -384,23 +360,15 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     UUID tenantId = TenantContext.require();
     loadCategory(categoryId).orElseThrow(() -> unknown("location category", categoryId));
 
-    // Order preserved and duplicates dropped, because the caller sent a set and
-    // wrote it as a list: two of the same id is one rule, and refusing the request
-    // over it would be pedantry about a request whose meaning is not in doubt.
     List<UUID> wanted = new ArrayList<>(new LinkedHashSet<>(permitted));
     if (wanted.size() > MAX_PAGE) {
       throw new IllegalArgumentException(
           "A category takes at most " + MAX_PAGE + " permitted child categories.");
     }
     for (UUID child : wanted) {
-      // Checked one by one rather than left to the foreign key: the constraint
-      // would refuse the whole request without saying which id was wrong, and a
-      // caller reconciling a rule set needs to know that.
       loadCategory(child).orElseThrow(() -> unknown("location category", child));
     }
 
-    // Replaced whole. Working out which rows to add and which to drop would be the
-    // same two statements and a diff that can be wrong; this cannot.
     jdbc.sql(
             """
             delete from catalog.location_category_child
@@ -447,10 +415,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         .list();
   }
 
-  // -------------------------------------------------------------------------
-  // Versions
-  // -------------------------------------------------------------------------
-
   @Override
   @Transactional
   public VersionView draftVersion(UUID ownerId, UUID actor) {
@@ -480,10 +444,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         .params(versionId, tenantId, ownerId, next, emptySchema(versionId), actor)
         .update();
 
-    // The draft starts as a copy of what is published, minus the fields that were
-    // materialised from a parent: those are re-derived at the next publish, from
-    // whatever the parent says then. Copying them too would freeze an ancestor's
-    // old shape into a version that has not been published yet.
     publishedVersion(ownerId, category)
         .ifPresent(
             previous ->
@@ -623,10 +583,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         .params(versionId, actor, actor, TenantContext.require(), source.id())
         .update();
   }
-
-  // -------------------------------------------------------------------------
-  // Fields
-  // -------------------------------------------------------------------------
 
   @Override
   @Transactional
@@ -782,11 +738,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         .params(tenantId, field.key(), array(versions), array(versions))
         .update();
 
-    // Every published version of this owner declared the field, so every one of
-    // their schemas mentions it. They are frozen against edits and not against
-    // this: the tenant asked for the values to be destroyed and was shown how
-    // many there were, and a schema still demanding a key nothing may carry
-    // would refuse every subsequent write.
     for (UUID versionId : versions) {
       Version meta = loadVersion(versionId);
       if (!meta.published()) {
@@ -805,10 +756,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         actor,
         stripped);
   }
-
-  // -------------------------------------------------------------------------
-  // Value lists
-  // -------------------------------------------------------------------------
 
   @Override
   @Transactional
@@ -918,21 +865,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
       throw unknown("value list entry", entryId);
     }
   }
-
-  // -------------------------------------------------------------------------
-  // Reading
-  // -------------------------------------------------------------------------
-
-  // ---------------------------------------------------------------------------
-  // Statements
-  // ---------------------------------------------------------------------------
-  //
-  // Every one of these is a complete literal, and the pairs that differ only by a
-  // table name are written out twice on purpose. A statement assembled from a
-  // variable is a statement a reviewer has to reconstruct before they can read
-  // it, and `ArchitectureRulesTest` refuses the shape outright rather than trying
-  // to tell a safe interpolation from an unsafe one — which is the right rule,
-  // because the difference is one refactor away from disappearing (REQ-SEC-031).
 
   private static final String ITEM_TYPE_PAGE =
       " where t.tenant_id = ? order by t.created_at, t.id limit ?";
@@ -1069,10 +1001,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     if (cursor == null || cursor.isBlank()) {
       return jdbc.sql(first).params(tenantId, size).query(mapper).list();
     }
-    // Throws when the cursor was tampered with or belongs to another listing.
     CursorCodec.Position from = cursors.decode(cursor, fingerprint);
-    // Wrapped, not passed as an Instant: the driver cannot infer a SQL type for
-    // one and answers "bad SQL grammar" for a statement that is perfectly good.
     java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
     return jdbc.sql(after).params(tenantId, at, at, from.id(), size).query(mapper).list();
   }
@@ -1087,8 +1016,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
    * @return the cursor, or {@code null}
    */
   private String nextCursor(int read, int size, String fingerprint, CursorCodec.Position last) {
-    // A cursor only when the page was full: a short page is the last one, and a
-    // cursor for it would cost a client a request to discover that.
     return read == size && last != null ? cursors.encode(last, fingerprint) : null;
   }
 
@@ -1101,7 +1028,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
   private Optional<ItemTypeView> loadItemType(UUID typeId) {
     return jdbc.sql(ITEM_TYPE_SELECT + ITEM_TYPE_BY_ID)
         .params(TenantContext.require(), typeId)
-        // A single row: the holder is a formality, because nothing pages one.
         .query((rs, rowNum) -> itemTypeOf(rs, new LastRow()))
         .optional();
   }
@@ -1139,9 +1065,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
         rs.getTimestamp("archived_at") != null,
         rs.getObject("published_id", UUID.class),
         rs.getObject("draft_id", UUID.class),
-        // `getInt` would turn "this type is not depreciated" into a useful life
-        // of zero months, which the check constraint forbids and the run would
-        // divide by.
         rs.getObject("useful_life_months", Integer.class));
   }
 
@@ -1368,10 +1291,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
     return category;
   }
 
-  // -------------------------------------------------------------------------
-  // Small helpers
-  // -------------------------------------------------------------------------
-
   /**
    * Whether a key is already used in a table of this tenant.
    *
@@ -1404,11 +1323,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
    * @throws IllegalArgumentException when an enumeration names no list, or a non-enumeration does
    */
   private void requireFieldShape(FieldCommand command) {
-    // The pattern is tenant data that every item of this tenant is then matched
-    // against, and Java's regular expressions backtrack. Refused where it is
-    // written rather than met later as "saving an item hangs" (REQ-SEC-035,
-    // PatternSafety); the time limit in `BoundedRegularExpressions` is the other
-    // half, for the shapes this does not know about.
     if (command.constraints() != null) {
       PatternSafety.refuses(command.constraints().pattern())
           .ifPresent(
@@ -1428,17 +1342,7 @@ public class TypeAdministrationAdapter implements TypeAdministration {
               : "Only 'enum' and 'multi-enum' draw on a value list; a list on any other kind would "
                   + "read as meaning something and mean nothing.");
     }
-    // Decided 2026-09-13: refuse the combination rather than accept it and skip
-    // the indexing. A sensitive field is stored sealed (ADR-0019), so the only
-    // thing an index could hold is ciphertext -- a filter over it matches nothing
-    // while appearing to work, and the tenant who set both flags would meet that
-    // as "the search does not find my field" weeks later. The contradiction is
-    // refused where it is made.
     if (command.sensitive() && command.expiry()) {
-      // The same contradiction one field further on: a sensitive value is stored
-      // encrypted and never projected, so an expiry that is also sensitive would
-      // be a date that never reaches the overview it was marked for -- met as
-      // "my licence dates are missing" weeks later.
       throw new IllegalArgumentException(
           "A sensitive field cannot also be an expiry: it is stored encrypted and is never "
               + "mirrored, so it could never appear in the overview of what runs out. Choose one.");
@@ -1449,10 +1353,6 @@ public class TypeAdministrationAdapter implements TypeAdministration {
               + "encrypted, so an index over it would hold ciphertext and match nothing. Choose "
               + "one.");
     }
-    // Only a date can expire. The database refuses it too, but a constraint
-    // violation reaches a client as a 500 while this reaches it as a 422 naming
-    // the field -- the same division of labour `requireInScope` draws in
-    // `inventory` (REQ-CORE-005).
     if (command.expiry()
         && command.dataType() != de.greluc.homeinv.catalog.api.FieldDataType.DATE
         && command.dataType() != de.greluc.homeinv.catalog.api.FieldDataType.DATETIME) {

@@ -105,10 +105,6 @@ public class MediaExport implements ExportSource {
       try (InputStream bytes = blobs.open(tenantId, sha256)) {
         sink.writeFile("media/blobs/" + sha256, bytes);
       } catch (IOException unreadable) {
-        // Logged and skipped rather than failing the export. A blob the store
-        // cannot produce is one the archive is missing, and an archive missing
-        // one photograph is worth more than no archive at all -- the manifest
-        // lists what went in, so the gap is visible rather than assumed away.
         log.warn("A blob could not be read into the export and is missing from it: {}", sha256);
       }
     }

@@ -44,9 +44,6 @@ class PemTest {
 
     assertThat(text(read.key())).contains("the-key");
     assertThat(text(read.chain())).contains("the-plugin").doesNotContain("the-ca");
-    // THE ONE THAT MATTERS. A trust store holding this plugin's own certificate
-    // would accept it as a caller, and a plugin is called by the core and by
-    // nothing else. A trust store holding the private key would be worse.
     assertThat(text(read.authority()))
         .contains("the-ca")
         .doesNotContain("the-plugin")
@@ -56,8 +53,6 @@ class PemTest {
   @Test
   @DisplayName("of one certificate is its own chain and its own authority")
   void aSelfSignedBundle(@TempDir Path directory) throws Exception {
-    // What `setup.sh` writes when the CA and the certificate are the same thing.
-    // The chain may not be empty, so the single certificate serves as both.
     Path bundle = directory.resolve("mtls-plugin-oidc");
     Files.writeString(bundle, KEY + LEAF, StandardCharsets.UTF_8);
 

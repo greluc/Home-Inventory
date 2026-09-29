@@ -1,25 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// CONTRIBUTING LABEL GEOMETRIES.
-//
-// The Avery Zweckform catalogue is in the core image, because it is data rather
-// than behaviour. Herma, continuous rolls and a manufacturer's own catalogue are
-// plugins.
-//
-// `verified` IS THE LOAD-BEARING FIELD OF THIS WHOLE FILE. Size and count do not
-// determine where the leftover space sits: 64 labels of 48.5 mm across 210 mm
-// leave 16 mm that could be side margins, column gaps, or both — and all three
-// look identical on the first label and diverge from the fourth column. A
-// geometry that was calculated rather than measured is `false` here, and the
-// core then makes a person print a calibration sheet before a bulk run
-// (REQ-LBL-004, REQ-LBL-007). ONE UNSOURCED VALUE MAKES THE WHOLE ENTRY
-// UNVERIFIED.
-//
-// EVERY DISTANCE IS IN MICROMETRES. The reference catalogue is written in
-// millimetres to one decimal; micrometres carry that exactly, integers compare
-// and add without surprises, and nothing on a path that ends at a physical
-// object is a floating-point number.
 
 syntax = "proto3";
 

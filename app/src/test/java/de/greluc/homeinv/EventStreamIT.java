@@ -64,9 +64,6 @@ class EventStreamIT extends AbstractIntegrationTest {
             .andExpect(request().asyncStarted())
             .andReturn();
 
-    // Immediately, so a client knows the stream is open rather than merely
-    // accepted -- and so a proxy that buffers is caught here rather than in
-    // somebody's house.
     await()
         .atMost(Duration.ofSeconds(10))
         .untilAsserted(
@@ -74,7 +71,6 @@ class EventStreamIT extends AbstractIntegrationTest {
 
     assertThat(streams.openStreams(tenant.tenantId())).isEqualTo(1);
 
-    // Somebody else in the same tenant adds something.
     MockHttpSession other = signIn(tenant.email(), PASSWORD);
     createAnItem(other, tenant);
 
@@ -85,7 +81,6 @@ class EventStreamIT extends AbstractIntegrationTest {
               String received = stream.getResponse().getContentAsString();
               assertThat(received).contains("event:item");
               assertThat(received).contains("\"kind\":\"item\"");
-              // NOT the id, and not the name. The view re-reads what it shows.
               assertThat(received).doesNotContain(tenant.itemName());
             });
   }
@@ -93,8 +88,6 @@ class EventStreamIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("ends at once for a session that acts for no tenant")
   void nothingToStream() throws Exception {
-    // An instance operator, or somebody between tenants. A state rather than a
-    // failure -- so the stream ends rather than waiting half an hour for nothing.
     String email = "nowhere-" + UUID.randomUUID() + "@example.org";
     UUID userId = anAccount(email);
 
@@ -123,13 +116,9 @@ class EventStreamIT extends AbstractIntegrationTest {
 
     createAnItem(signIn(stranger.email(), PASSWORD), stranger);
 
-    // Nothing arrives, and "nothing" is asserted by waiting long enough for
-    // something to have arrived if it were going to.
     Thread.sleep(2_000);
     assertThat(stream.getResponse().getContentAsString()).doesNotContain("\"kind\":\"item\"");
   }
-
-  // -------------------------------------------------------------------------
 
   private void createAnItem(MockHttpSession session, Tenant tenant) throws Exception {
     mockMvc

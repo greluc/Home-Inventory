@@ -211,7 +211,6 @@ impl Defaults {
 
         let mut missing = Vec::new();
 
-        // Taken together or not at all, for the reason the module doc gives.
         let credentials = match (setting("accessKeyId"), setting("secretAccessKey")) {
             (Some(id), Some(secret)) => Some(Credentials {
                 access_key_id: id,
@@ -299,8 +298,6 @@ impl Defaults {
 /// refusal that follows names the host — which is more useful than a message
 /// about parsing.
 fn split_endpoint(endpoint: &str) -> (String, u16) {
-    // A scheme is stripped if somebody wrote one. There is no plaintext option:
-    // the only thing on the far end of the tunnel is TLS.
     let bare = endpoint
         .trim()
         .trim_start_matches("https://")
@@ -460,8 +457,6 @@ mod tests {
         let target = deployment()
             .resolve(&settings(&[("addressingStyle", "virtual")]))
             .expect("resolves");
-        // Which is also the host the operator has to allow and the certificate
-        // has to cover, and why it is not the default.
         assert_eq!(target.connect_host(), "home-inv.objects.example.org");
         assert_eq!(target.path_for("sha256/t/ab/cd/x"), "/sha256/t/ab/cd/x");
     }

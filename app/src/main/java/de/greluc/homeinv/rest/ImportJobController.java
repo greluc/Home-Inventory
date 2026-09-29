@@ -60,12 +60,6 @@ public class ImportJobController {
    * @return {@code 202} with the queued job and a {@code Location} pointing at it
    * @throws IOException when the upload cannot be stored
    */
-  // No `consumes`, deliberately, and `MediaController` does the same. Declaring
-  // `multipart/form-data` makes Spring answer 415 before the security aspect
-  // runs, so an endpoint that should refuse a caller with `403` refuses the
-  // content type instead -- which `EndpointNegativeCoverageIT` fails, and is
-  // right to: an endpoint that fails before the access decision is made has not
-  // made one.
   @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.TENANT_EXPORT)
   @CanFail({

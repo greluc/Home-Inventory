@@ -45,7 +45,6 @@ class CursorCodecTest {
     UUID id = UUID.randomUUID();
     Instant at = Instant.parse("2026-09-14T10:15:30Z");
 
-    // Every character that means something to the payload, in one value.
     String awkward = "Bosch | GSB 18 | 2.0 Ah";
     String cursor = codec.encode(new CursorCodec.Position(at, id, awkward), QUERY);
 
@@ -77,10 +76,6 @@ class CursorCodecTest {
     String cursor =
         codec.encode(CursorCodec.Position.of(Instant.now(), UUID.randomUUID()), QUERY);
 
-    // A changed payload with the original signature. This is the case the whole
-    // mechanism exists for: an edited cursor does not fail on its own, it
-    // quietly starts at a different row and the client never learns it skipped
-    // some (REQ-SEC-106).
     String payload = cursor.substring(0, cursor.indexOf('.'));
     String signature = cursor.substring(cursor.indexOf('.'));
     String tampered =
@@ -103,9 +98,6 @@ class CursorCodecTest {
     String cursor =
         codec.encode(CursorCodec.Position.of(Instant.now(), UUID.randomUUID()), QUERY);
 
-    // Intact, correctly signed, and for a different search. Paging one search
-    // with another's cursor is meaningless, and answering anyway would be the
-    // same silent wrongness one layer up.
     assertThatThrownBy(() -> codec.decode(cursor, "a-different-query"))
         .isInstanceOf(InvalidCursorException.class);
   }
@@ -121,8 +113,6 @@ class CursorCodecTest {
           .isInstanceOf(InvalidCursorException.class);
     }
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A codec over a throwaway key.

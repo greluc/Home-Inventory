@@ -1,27 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# THE CONTRIBUTOR LICENCE AGREEMENT (REQ-CON-011, ADR-0018).
-#
-# Two jobs, because they answer different questions with different rights.
-#
-# `sign` records a signature. It runs on a COMMENT and on nothing else — a
-# contributor writes the sentence, the action writes their name into
-# `signatures/version1/cla.json` on a branch of this repository, and that file is
-# the durable record: readable by anybody, outliving whatever tooling collected
-# it. It needs write access, which is why it is separated from the check.
-#
-# `check` blocks a pull request that has no signature. It reads that same file
-# and nothing else, so it runs with a read-only token and works on a fork.
-#
-# WHY NOT `pull_request_target`, WHICH IS THE USUAL TRIGGER HERE
-#
-# Because `REQ-SEC-078` forbids it, and a rule that bends for the convenient
-# case is not a rule. `pull_request_target` runs with this repository's secrets
-# against the FORK's code; `issue_comment` runs this repository's workflow file
-# and checks nothing out. The signing flow costs one comment and gives up
-# nothing: the check still runs on every pull request, and it is the check that
-# blocks.
 
 name: CLA
 
@@ -31,7 +9,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# Read by default; each job raises only what it needs.
 permissions:
   contents: read
 
@@ -42,8 +19,6 @@ concurrency:
 jobs:
   sign:
     name: Record a signature
-    # A comment on a pull request, saying the sentence. Not on an issue: there is
-    # nothing to sign for.
     if: >
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request != null &&
@@ -73,9 +48,6 @@ jobs:
             exactly:
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
           custom-allsigned-prcomment: 'Signed, and recorded in `cla-signatures`. Thank you.'
-          # Nobody is exempt by role. The maintainer's own commits carry the DCO
-          # like everybody else's, and a bot that opened a dependency bump is
-          # submitting somebody else's code under its own licence.
           allowlist: dependabot[bot],renovate[bot]
 
   check:
@@ -83,16 +55,6 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      # The branch does not exist until the first signature is recorded, and a
-      # repository whose first contributor has not signed yet is the ordinary
-      # state rather than a broken one — so a checkout that fails is a case this
-      # job handles below, not one that ends it.
-      #
-      # `continue-on-error` is a STEP key and not an input to the action. Written
-      # under `with:` it was handed to `actions/checkout`, which warned about an
-      # input it does not have and then failed the job on the missing ref anyway
-      # (2026-09-16). The warning was the whole diagnosis and is worth reading
-      # when a `with:` key appears not to work.
       - uses: actions/checkout@v7
         continue-on-error: true
         with:
@@ -105,8 +67,6 @@ jobs:
           set -uo pipefail
           signatures="signatures/version1/cla.json"
 
-          # The maintainer is the copyright holder: there is nobody for them to
-          # grant a licence to. Everybody else signs.
           if [ "$AUTHOR" = "greluc" ] || [ "$AUTHOR" = "dependabot[bot]" ] \
              || [ "$AUTHOR" = "renovate[bot]" ]; then
             echo "$AUTHOR does not need a signature."

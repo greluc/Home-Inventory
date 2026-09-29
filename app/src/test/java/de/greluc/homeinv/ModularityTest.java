@@ -71,9 +71,6 @@ class ModularityTest {
   @Test
   @DisplayName("are documented from the code rather than from a drawing")
   void documentationIsGenerated() {
-    // Generated into build/, not committed: a diagram in the repository is a
-    // diagram that disagrees with the code the week after it is drawn. The value
-    // is that it is producible on demand and always current.
     new Documenter(modules).writeModulesAsPlantUml().writeIndividualModulesAsPlantUml();
   }
 }

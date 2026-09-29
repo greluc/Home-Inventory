@@ -37,8 +37,6 @@ class VirusScannerHealthTest {
     Health reported = health.health();
 
     assertThat(reported.getStatus()).isEqualTo(Status.DOWN);
-    // Both halves, because either alone is unhelpful: what is wrong, and what it
-    // means for the person whose upload is not appearing.
     assertThat(reported.getDetails())
         .containsEntry("reason", "The malware scanner did not answer")
         .containsEntry("effect", "Uploads stay unretrievable until it does");
@@ -49,10 +47,6 @@ class VirusScannerHealthTest {
   void reportedAtStartupAndNotFatal() throws IOException {
     VirusScannerHealth health = new VirusScannerHealth(new ClamAvScanner("127.0.0.1", closedPort(), 250));
 
-    // REQ-SEC-091 says startup without a reachable scanner is REPORTED. Aborting
-    // would stop derivative generation, notification delivery and housekeeping
-    // too — turning a degraded worker into a stopped one, while uploads stay
-    // blocked either way.
     health.afterPropertiesSet();
   }
 

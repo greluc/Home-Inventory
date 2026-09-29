@@ -63,9 +63,6 @@ public class BlobStoreChannelFactory {
    * @param authority the name to verify the certificate against, when it differs from the
    *     endpoint's host. Empty in the deployment, where the two are the same word
    */
-  // Annotated because this class has two public constructors and Spring picks
-  // none of them by itself. Constructor injection with one constructor needs no
-  // annotation (CLAUDE.md); with two, saying which is the point.
   @Autowired
   public BlobStoreChannelFactory(
       @Value("${HOMEINV_BLOBSTORE_ENDPOINT:blobstore:8100}") String endpoint,
@@ -128,12 +125,6 @@ public class BlobStoreChannelFactory {
               .build();
       var builder = Grpc.newChannelBuilder(endpoint, credentials);
       if (!authority.isEmpty()) {
-        // gRPC verifies the certificate's subject alternative name against the
-        // authority it is connecting to, and the pin does not replace that check
-        // — the two answer different questions. In the deployment the endpoint IS
-        // `blobstore`, so the names agree and this is empty. It exists for the
-        // case where they cannot: a port-forwarded address, or a test reaching
-        // the container on `localhost`.
         builder = builder.overrideAuthority(authority);
       }
       return builder.build();
@@ -158,8 +149,6 @@ public class BlobStoreChannelFactory {
         certificates.add((X509Certificate) factory.generateCertificate(stream));
       }
     } catch (IOException | RuntimeException end) {
-      // The factory throws when the remaining bytes are not a certificate, which
-      // is how a bundle ending in a key or in whitespace finishes.
     }
     return certificates;
   }

@@ -1,16 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// ESTIMATING WHAT AN ITEM IS WORTH NOW, AND WHAT REPLACING IT WOULD COST.
-//
-// Straight-line depreciation is in the core image — it is arithmetic and opens
-// nothing. Declining balance is the same. Market-price and dealer services are
-// plugins, because they call out.
-//
-// Both numbers are ESTIMATES and the core presents them as estimates. A current
-// value is what the thing is worth today; a replacement value is what buying it
-// again would cost, and an insurance conversation needs the second. `basis` is
-// what makes that visible rather than implied.
 
 syntax = "proto3";
 

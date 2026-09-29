@@ -1,22 +1,7 @@
 #!/bin/sh
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# A time-based one-time password, RFC 6238, in POSIX shell.
-#
-#     . "$(dirname "$0")/totp.sh"
-#     code=$(totp_code "$SECRET_IN_BASE32")
-#
-# Sourced by journey.sh, which needs one because `REQ-AUTH-003` refuses an OWNER
-# with no second factor — and the owner the `bootstrap` one-shot creates has
-# none, by construction: a one-shot has nobody to ask for a code.
-#
-# It uses `openssl` and `awk`, both of which the deployment already requires
-# (setup.sh creates the CA with openssl). `oathtool` would be one line and
-# another thing an operator has to install before they can smoke-test their own
-# instance.
 
-# The shared secret, base32 as RFC 4648 writes it, to hex for openssl's hexkey.
 totp_hexkey() {
     printf '%s' "$1" | awk '
         BEGIN {
@@ -41,13 +26,10 @@ totp_hexkey() {
         }'
 }
 
-# The code for the current thirty-second step.
 totp_code() {
     hexkey=$(totp_hexkey "$1")
     counter=$(( $(date +%s) / 30 ))
 
-    # The counter as eight big-endian bytes, written with octal escapes because
-    # that is what POSIX printf can produce.
     escapes=""
     i=0
     while [ "$i" -lt 8 ]; do
@@ -65,9 +47,6 @@ totp_code() {
         | sed 's/.*= *//')
     rm -f "$counter_file"
 
-    # RFC 4226 §5.4: the low nibble of the last byte says where to read four
-    # bytes from, the top bit of those four is cleared, and the six digits are
-    # what is left modulo a million.
     printf '%s' "$mac" | awk '
         # Written out rather than using strtonum, which is a GNU extension: a
         # runner is as likely to have mawk, and a smoke suite that works on one

@@ -63,7 +63,6 @@ class ItemAttributesIT extends AbstractIntegrationTest {
         () -> {
           UUID type = bookType(tenant);
 
-          // Valid: every declared field, in the shape the schema states.
           ItemView stored =
               items.create(
                       new ItemService.CreateItemCommand(
@@ -84,7 +83,6 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                   .item();
           assertThat(stored.attributes()).contains("9780134757599");
 
-          // A value of the wrong shape is refused, and the violation names it.
           assertThatThrownBy(
                   () ->
                       items.create(
@@ -106,7 +104,6 @@ class ItemAttributesIT extends AbstractIntegrationTest {
                           .anySatisfy(
                               violation -> assertThat(violation.path()).isEqualTo("/published")));
 
-          // A key the type does not declare is refused too (REQ-SEC-029).
           assertThatThrownBy(
                   () ->
                       items.create(
@@ -155,16 +152,11 @@ class ItemAttributesIT extends AbstractIntegrationTest {
 
           Map<String, Projection> rows = projections(item.id());
 
-          // Text, number and money each in their own column.
           assertThat(rows.get("isbn").text()).isEqualTo("9780321125217");
           assertThat(rows.get("published").number()).isEqualByComparingTo("2003");
           assertThat(rows.get("purchasePrice").number()).isEqualByComparingTo("59.95");
-          // The currency travels with the amount, so no total ever adds euros to
-          // dollars (REQ-CORE-032).
           assertThat(rows.get("purchasePrice").unit()).isEqualTo("EUR");
 
-          // A secret is never projected, whatever its flags say: this table answers
-          // filters, and a value gated by a permission must not be filterable.
           assertThat(rows).doesNotContainKey("licenceKey");
         });
   }
@@ -207,9 +199,6 @@ class ItemAttributesIT extends AbstractIntegrationTest {
           assertThat(after.get("published").number()).isEqualByComparingTo("2005");
           assertThat(after).hasSize(2);
 
-          // Trashing takes the projection with it, in the same transaction: a
-          // trashed item that kept answering filters would be findable for the
-          // whole retention period.
           items.delete(item.id(), OptionalLong.empty(), tenant.userId());
           assertThat(projections(item.id())).isEmpty();
         });
@@ -238,12 +227,8 @@ class ItemAttributesIT extends AbstractIntegrationTest {
         type.draftVersionId(),
         field("purchasePrice", FieldDataType.MONEY, true, false),
         tenant.userId());
-    // Every flag set and never projected, because the kind has the veto.
     types.addField(
         type.draftVersionId(),
-        // Sensitive and therefore NOT searchable: the type editor refuses the
-        // combination, because the value is stored sealed and an index over it
-        // would hold ciphertext (ADR-0019).
         field("licenceKey", FieldDataType.SECRET, false, true),
         tenant.userId());
     types.publish(type.draftVersionId(), tenant.userId());
@@ -286,10 +271,6 @@ class ItemAttributesIT extends AbstractIntegrationTest {
    * @return the projected rows
    */
   private Map<String, Projection> projections(UUID itemId) {
-    // In a transaction, because row-level security reads `app.tenant_id` and the
-    // transaction manager is what sets it. Outside one the policy sees an empty
-    // setting and answers nothing — which looks exactly like a projection that was
-    // never written, and cost this test a wrong diagnosis once.
     List<Projection> rows =
         transactions.execute(status -> jdbc.sql(
                 """

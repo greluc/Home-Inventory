@@ -119,9 +119,6 @@ public class ReminderRunner {
     for (ReminderRuleView rule : rules.enabledOf(tenantId)) {
       ReminderSource source = sources.get(rule.trigger());
       if (source == null) {
-        // A rule whose trigger stopped being served -- a plugin or a module gone.
-        // Said once per pass and not silently skipped: a rule that quietly does
-        // nothing is what this whole design is against.
         log.warn(
             "The reminder rule '{}' names {}, which nothing serves here; it raised nothing",
             rule.name(),
@@ -135,10 +132,6 @@ public class ReminderRunner {
 
   private int runOne(
       UUID tenantId, ReminderRuleView rule, ReminderSource source, LocalDate today) {
-    // THE OFFSET IS APPLIED TO THE QUESTION. "Warn me 14 days early" is "what is
-    // due by today + 14", so the source answers about dates and never about
-    // rules. A negative offset asks about the past, which is what an overdue
-    // reminder is (REQ-LIFE-006).
     LocalDate horizon = rule.trigger().isDated() ? today.plusDays(rule.offsetDays()) : today;
     List<ReminderSource.Due> due = source.dueBy(horizon, MAX_PER_RULE);
     if (due.isEmpty()) {
@@ -151,16 +144,10 @@ public class ReminderRunner {
       if (narrowedTo != null && !narrowedTo.contains(thing.itemId())) {
         continue;
       }
-      // Recorded first and sent only if this call is the one that recorded it.
-      // The other order would send and then fail to record, which repeats.
       if (!queries.recordRaised(
           tenantId, rule.id(), rule.trigger().subjectKind(), thing.subjectId(), thing.dueOn())) {
         continue;
       }
-      // One message per person who asked for this kind on this channel. A rule is
-      // the tenant's and has no single recipient, so REQ-NOTI-006 decides who
-      // hears it -- and a rule nobody subscribed to raises nothing rather than
-      // shouting at everybody.
       String kind = kindOf(rule.trigger());
       for (ReminderRuleQueries.Subscriber who :
           queries.subscribersOf(tenantId, kind, rule.channelKey())) {
@@ -174,9 +161,6 @@ public class ReminderRunner {
             bodyOf(rule, thing),
             null,
             who.language(),
-            // One key per rule, thing, date AND person: the same news to two
-            // people is two messages, and a shared key would make the second
-            // look like a repeat of the first.
             rule.id() + ":" + thing.subjectId() + ":" + thing.dueOn() + ":" + who.userId());
         raised++;
       }
@@ -199,9 +183,6 @@ public class ReminderRunner {
       return null;
     }
     if (!scope.exists(rule.savedSearchId())) {
-      // The search was removed and the foreign key set the column to null, but
-      // this view may predate that. Widening is the documented behaviour of that
-      // `ON DELETE SET NULL`.
       return null;
     }
     return scope.idsMatching(rule.savedSearchId(), 200);

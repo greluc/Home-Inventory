@@ -82,10 +82,8 @@ class FederatedSignInIT extends AbstractIntegrationTest {
     var begin = TestIdentityProvider.lastBegin();
     assertThat(begin.getState()).isNotBlank();
     assertThat(begin.getNonce()).isNotBlank();
-    // S256 of a verifier the browser never sees: 43 characters of base64url.
     assertThat(begin.getCodeChallenge()).hasSize(43);
     assertThat(begin.getRedirectUri()).endsWith("/api/v1/auth/federated/callback");
-    // The plugin put them on the URL, which is the only place they may come from.
     assertThat(url).contains(begin.getState()).contains(begin.getCodeChallenge());
   }
 
@@ -113,8 +111,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/auth/federated/callback").param("state", state).param("code", "c"))
         .andExpect(status().isForbidden());
-    // The property REQ-AUTH-005 is verified by: the handle is spent whether or
-    // not the flow succeeded, so a captured callback is worth one attempt.
     mockMvc
         .perform(get("/api/v1/auth/federated/callback").param("state", state).param("code", "c"))
         .andExpect(status().isGone())
@@ -127,8 +123,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
     TestIdentityProvider.willReport(SUBJECT + "-browser", "", false);
     String state = stateOf(beginSignIn(null));
 
-    // A person is looking at this: a JSON body would be a dead end, so the
-    // sign-in page is told which refusal it was.
     mockMvc
         .perform(
             get("/api/v1/auth/federated/callback")
@@ -170,17 +164,12 @@ class FederatedSignInIT extends AbstractIntegrationTest {
                 .param("code", "c"))
         .andExpect(status().isSeeOther());
 
-    // It is on the account page, with the address it was linked as.
     mockMvc
         .perform(get("/api/v1/auth/federated/links").session(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].issuer").value(TestIdentityProvider.ISSUER))
         .andExpect(jsonPath("$[0].email").value(email));
 
-    // And now the identity signs in on its own, with no session to start from --
-    // and stops where a password login stops, because the provider proved who
-    // they are and not that they hold the authenticator this instance knows
-    // about (REQ-AUTH-002).
     TestIdentityProvider.willReport(subject, email, true);
     MockHttpSession fresh = new MockHttpSession();
     String signInState = stateOf(beginSignIn(null));
@@ -194,7 +183,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.type").value(endsWith("second-factor-required")));
 
     answerTheSecondFactor(fresh, userId);
-    // The session is real: an endpoint that needs one answers it.
     mockMvc
         .perform(get("/api/v1/auth/federated/links").session(fresh))
         .andExpect(status().isOk())
@@ -255,8 +243,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/auth/federated/links").session(session)).andReturn();
     String id = json(listed).get(0).get("id").asText();
 
-    // Somebody else's session cannot remove it: the id is looked up in the
-    // caller's own list, so it is not found rather than refused.
     String otherEmail = "other-" + UUID.randomUUID() + "@example.org";
     UUID other = anAccount(otherEmail);
     provisioning.provision("Tenant of " + otherEmail, other);
@@ -304,8 +290,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
     TestIdentityProvider.willReport(subject, email, true);
     MockHttpSession fresh = new MockHttpSession();
     String state = stateOf(beginSignIn("/items/42"));
-    // The second factor first, and the return target survives it: it belongs to
-    // the flow rather than to the redirect that ends it.
     mockMvc
         .perform(
             get("/api/v1/auth/federated/callback")
@@ -314,8 +298,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
                 .param("code", "c"))
         .andExpect(status().isUnauthorized());
   }
-
-  // -------------------------------------------------------------------------
 
   /** Starts a sign-in and returns the authorization URL. */
   private String beginSignIn(String returnTo) throws Exception {
@@ -377,9 +359,6 @@ class FederatedSignInIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // Linking an identity re-confirms the second factor, so an account that takes
-    // part in these flows has one. That is the rule rather than the test's convenience:
-    // attaching a way into an account is what REQ-AUTH-011 asks to be re-confirmed.
     enrolSecondFactor(userId);
     return userId;
   }

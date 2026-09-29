@@ -1,15 +1,9 @@
-# Normalise line endings on commit, check out LF everywhere.
-# The project is developed on Windows and runs on Linux; without this, a shell
-# script or a Dockerfile committed from Windows arrives in the container with
-# CRLF and fails with a message that names the wrong cause.
 * text=auto eol=lf
 
-# Files that must keep CRLF even on Linux
 *.bat       text eol=crlf
 *.cmd       text eol=crlf
 *.ps1       text eol=crlf
 
-# Explicitly text, so nothing is guessed
 *.java      text diff=java
 *.kt        text diff=kotlin
 *.kts       text diff=kotlin
@@ -23,10 +17,6 @@
 *.md        text diff=markdown
 *.asc       text eol=lf
 *.yaml      text
-# A detached signature over a manifest, base64 on one line. Explicit rather than
-# guessed by `text=auto`: the signature is over the manifest's BYTES, and a line
-# ending rewritten on either file is a verification failure whose message would
-# be about cryptography rather than about `git` (ADR-0085).
 *.sig       text eol=lf
 *.yml       text
 *.json      text
@@ -42,7 +32,6 @@
 Dockerfile  text eol=lf
 gradlew     text eol=lf
 
-# Binary — never diffed, never normalised
 *.png       binary
 *.jpg       binary
 *.jpeg      binary
@@ -61,13 +50,10 @@ gradlew     text eol=lf
 *.gz        binary
 *.onnx      binary
 
-# GitHub language statistics: documentation and generated artifacts should not
-# dominate the language bar, and generated clients are not hand-written code.
 docs/**            linguist-documentation
 LICENSES/**        linguist-vendored
 *.md               linguist-detectable=true
 **/generated/**    linguist-generated=true
 api/openapi.yaml   linguist-generated=false
 
-# The Gradle wrapper is committed on purpose and is not "vendored noise"
 gradle/wrapper/gradle-wrapper.jar binary linguist-vendored

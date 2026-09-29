@@ -87,8 +87,6 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
             tenant.id(),
             () -> transactions.execute(status -> notifications.raise(aMessage(tenant.userId()))));
 
-    // REQ-NOTI-006. Not a failure: somebody who asked for nothing gets nothing,
-    // and the caller learns that by getting an empty list.
     assertThat(queued).isEmpty();
   }
 
@@ -120,15 +118,11 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
     Notifications.QueuedNotification queued = raiseOne(tenant);
     dispatcher.deliverDue(databaseNow());
 
-    // Still outstanding, and the attempt is on the record. A mail server that is
-    // down is down for minutes, not forever.
     assertThat(stateOf(tenant, queued.id())).isEqualTo("QUEUED");
     List<Notifications.DeliveryAttempt> attempts = attemptsOf(tenant, queued.id());
     assertThat(attempts).hasSize(1);
     assertThat(attempts.getFirst().outcome()).isEqualTo("FAILED");
 
-    // And the next attempt is in the future rather than immediately, so a broken
-    // channel is not hammered.
     assertThat(dispatcher.deliverDue(databaseNow())).isZero();
   }
 
@@ -142,19 +136,12 @@ class NotificationDeliveryIT extends AbstractIntegrationTest {
     Notifications.QueuedNotification queued = raiseOne(tenant);
     dispatcher.deliverDue(databaseNow());
 
-    // Dead-lettered on the first attempt. Repeating a malformed address a
-    // hundred times does not make it valid, and the difference between this and
-    // the case above is the difference between a retry queue and a loop.
     assertThat(stateOf(tenant, queued.id())).isEqualTo("DEAD_LETTERED");
     List<Notifications.DeliveryAttempt> attempts = attemptsOf(tenant, queued.id());
     assertThat(attempts).hasSize(1);
     assertThat(attempts.getFirst().outcome()).isEqualTo("REFUSED");
-    // The notification stays readable with its history beside it, which is what
-    // makes "what happened to my invitation" answerable (REQ-NOTI-005).
     assertThat(attempts.getFirst().detail()).isNotBlank();
   }
-
-  // -------------------------------------------------------------------------
 
   private Notifications.QueuedNotification raiseOne(Tenant tenant) {
     List<Notifications.QueuedNotification> queued =

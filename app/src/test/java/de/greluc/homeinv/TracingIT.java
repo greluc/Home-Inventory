@@ -105,10 +105,6 @@ class TracingIT extends AbstractIntegrationTest {
     String reported = JsonPath.read(result.getResponse().getContentAsString(), "$.traceId");
     assertThat(reported).as("the W3C shape, unchanged since stage 0").matches("[0-9a-f]{32}");
 
-    // The one assertion that matters: not that BOTH exist, but that they are the
-    // SAME id. Two mechanisms writing `traceId` -- the filter and the tracer --
-    // would each produce a plausible one, and a report quoting the wrong one
-    // finds nothing in the collector, which is worse than finding nothing at all.
     assertThat(recorded.traceIds())
         .as("the id in the document is the trace the request actually produced")
         .contains(reported);
@@ -150,14 +146,7 @@ class TracingIT extends AbstractIntegrationTest {
     Observation.createNotStarted("test.caller", observations)
         .observe(() -> decorated.suffixesFor(CallContext.forInstance("", "en", 0), "ABCDE"));
 
-    // The envelope is the one place every call passes through, so an instance
-    // call -- which has no tenant at all -- is traced exactly like a tenant one.
     String traceParent = received.get().traceId();
-    // version "-" trace-id "-" parent-id "-" trace-flags, and the flags are two
-    // hex digits rather than the "00" or "01" one expects: OpenTelemetry sets
-    // the `random` bit of Trace Context Level 2 beside `sampled`, so a sampled
-    // span reports `03`. A test that pinned `01` would fail on an SDK upgrade
-    // over a field the specification always allowed to carry more.
     assertThat(traceParent)
         .as("a W3C traceparent, which is what the plugin contract says this field is")
         .matches("00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}");

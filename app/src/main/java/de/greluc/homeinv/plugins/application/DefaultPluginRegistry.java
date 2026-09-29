@@ -58,14 +58,6 @@ public class DefaultPluginRegistry implements PluginRegistry {
   public boolean setDisabled(String pluginId, boolean disabled, UUID actor) {
     boolean changed = registry.setDisabled(pluginId, disabled, actor);
     if (changed) {
-      // At WARN and with the actor, because this is an immediate measure and the
-      // question afterwards is always "who, and when" (REQ-SEC-068, REQ-SEC-082).
-      //
-      // Through `LogSafe` because the id came from a caller. It is shape-checked
-      // at the boundary and matched against a stored row before this line is
-      // reached, so it cannot in fact carry a newline -- and a log call that is
-      // safe because of two things somewhere else is one that stops being safe
-      // when either of them moves.
       log.warn(
           "Operator {} {} plugin {}",
           actor,
@@ -88,11 +80,6 @@ public class DefaultPluginRegistry implements PluginRegistry {
     if (installed.isEmpty() || installed.get().disabled()) {
       return false;
     }
-    // In the CURRENT manifest, not merely granted once. A grant that outlived
-    // the capability it was for is a leftover and not a permission: a plugin
-    // that dropped `network:outbound` from its manifest must not keep reaching
-    // the network because somebody agreed to an older version (09 §9.3 —
-    // capabilities are exhaustive).
     if (!installed.get().capabilities().contains(capability)) {
       return false;
     }
@@ -124,11 +111,6 @@ public class DefaultPluginRegistry implements PluginRegistry {
   @Override
   @Transactional
   public void revoke(String pluginId, String capability, UUID actor) {
-    // The plugin has to exist. Withdrawing a capability nobody granted is
-    // harmless and answers as though it worked, because the outcome the caller
-    // wants is already true -- but a plugin nobody installed is a resource that
-    // is not there, and saying 204 to that would be acting on something that
-    // does not exist (REQ-SEC-025).
     registration(pluginId);
     int removed = registry.revoke(pluginId, capability);
     if (removed > 0) {
@@ -153,9 +135,6 @@ public class DefaultPluginRegistry implements PluginRegistry {
     if (installed.isEmpty() || installed.get().disabled()) {
       return false;
     }
-    // The same "in the current manifest" rule the per-tenant path applies, and
-    // for the same reason: a grant that outlived the capability it was for is a
-    // leftover rather than a permission.
     if (!installed.get().capabilities().contains(capability)) {
       return false;
     }
@@ -189,7 +168,6 @@ public class DefaultPluginRegistry implements PluginRegistry {
   @Override
   @Transactional
   public void revokeForInstance(String pluginId, String capability, UUID actor) {
-    // The plugin has to exist, for the reason revoke() gives.
     registration(pluginId);
     int removed = registry.revokeForInstance(pluginId, capability);
     if (removed > 0) {
@@ -290,15 +268,6 @@ public class DefaultPluginRegistry implements PluginRegistry {
             java.time.Instant.now());
 
     registry.register(registration, document, endpoint, fingerprint);
-    // One line per plugin, and it says what was decided rather than that
-    // something was. A registration that disabled a plugin is the line an
-    // operator goes looking for.
-    //
-    // Through `LogSafe`, because part of that sentence can come from a
-    // stranger: an unreadable signature reaches it as the JCA provider's own
-    // message about bytes a publisher chose. That is the shape the log-injection
-    // fix of 2026-09-21 was about, and a value is not safe merely because the
-    // path it took is long.
     log.info(
         "Plugin {} {} registered, declaring {}{}",
         LogSafe.value(registration.pluginId()),

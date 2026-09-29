@@ -67,17 +67,12 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
 
     List<ExpiryOverview.Expiring> due = inOwn(tenant, () -> expiries.due(null, true, 50));
 
-    // Sorted by due date, which is REQ-LIFE-013's own acceptance criterion: the
-    // kettle's warranty in October comes before the licence in November, and the
-    // two sources are one list rather than two.
     assertThat(due).hasSize(2);
     assertThat(due.get(0).itemId()).isEqualTo(kettle);
     assertThat(due.get(0).kind()).isEqualTo("warranty");
     assertThat(due.get(1).itemId()).isEqualTo(licence);
     assertThat(due.get(1).kind()).isEqualTo("validUntil");
 
-    // A TENANT'S OWN NAME for the date, which is the whole reason this is a flag
-    // and not a list of known keys: nothing in the code knows "validUntil".
     assertThat(due.get(1).label()).isEqualTo("Valid until");
   }
 
@@ -89,9 +84,6 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
 
     anItem(tenant, typeId, "A scale", Map.of("lastCalibrated", "2026-10-01"), null);
 
-    // When a thing was last calibrated is a fact about the past. Collecting every
-    // date-typed attribute would put it in a list of what runs out, where it
-    // means nothing -- which is why the field says what it is.
     assertThat(inOwn(tenant, () -> expiries.due(null, true, 50))).isEmpty();
   }
 
@@ -101,9 +93,6 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("expiry-lifetime@example.org");
     UUID item = anItemWithLifetimeWarranty(tenant, "A cast-iron pan");
 
-    // A lifetime warranty has no date, which is exactly why REQ-LIFE-002 made it
-    // a flag rather than a date far in the future -- a date somebody would
-    // eventually have to explain, and which would sit at the bottom of this list.
     assertThat(inOwn(tenant, () -> expiries.due(null, true, 50))).isEmpty();
     assertThat(item).isNotNull();
   }
@@ -114,10 +103,7 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("expiry-past@example.org");
     anItem(tenant, builtinTypeVersion(tenant), "An old kettle", null, LocalDate.parse("2020-01-01"));
 
-    // A warranty that ran out is the one somebody most wants to know about, so it
-    // is in the list by default.
     assertThat(inOwn(tenant, () -> expiries.due(null, true, 50))).hasSize(1);
-    // And can be excluded when a caller wants only what is still to come.
     assertThat(inOwn(tenant, () -> expiries.due(null, false, 50))).isEmpty();
   }
 
@@ -139,8 +125,6 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
   void onlyADateCanExpire() {
     Tenant tenant = newTenant("expiry-nondate@example.org");
 
-    // An overview sorted by due date cannot sort a piece of text, so the refusal
-    // is where the field is defined rather than where the list is read.
     assertThatThrownBy(
             () ->
                 inOwn(
@@ -160,8 +144,6 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Only a date field");
   }
-
-  // -------------------------------------------------------------------------
 
   private static TypeAdministration.FieldCommand field(
       String key, FieldDataType dataType, String label, boolean expiry) {
@@ -195,8 +177,6 @@ class ExpiryOverviewIT extends AbstractIntegrationTest {
         field(key, FieldDataType.DATE, expiry ? "Valid until" : "Last calibrated", expiry),
         tenant.userId());
     types.publish(type.draftVersionId(), tenant.userId());
-    // The TYPE's id and not the version's: `CreateItemCommand` names a type and
-    // the service resolves its published version (ADR-0004).
     return type.id();
   }
 

@@ -44,11 +44,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
-#: Where the public key this project signs its own manifests with lives.
-#:
-#: Committed, because it is public and because the check below and every
-#: deployment need it. ``deploy/setup.sh`` seeds each plugin's ``cosign-plugin-*``
-#: secret from this file.
 PUBLIC_KEY = ROOT / "deploy" / "keys" / "home-inv-plugins.pub.pem"
 
 
@@ -76,8 +71,6 @@ def verify(manifest: Path, signature: Path, public_key: Path) -> tuple[bool, str
     except (ValueError, UnicodeDecodeError) as not_base64:
         return False, f"its signature is not base64 ({not_base64})"
 
-    # openssl wants the signature as a file of raw DER, and the committed form is
-    # base64 -- which is what cosign prints and what a YAML scalar can hold.
     with tempfile.NamedTemporaryFile(suffix=".der", delete=False) as handle:
         handle.write(raw)
         der = Path(handle.name)

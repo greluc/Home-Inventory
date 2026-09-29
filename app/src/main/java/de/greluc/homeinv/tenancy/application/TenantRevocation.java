@@ -48,13 +48,9 @@ class TenantRevocation {
     Tenant tenant = tenants.findById(tenantId).orElseThrow(RevocationUnusableException::new);
 
     if (!tenant.isPendingDeletion()) {
-      // Already withdrawn, or already erased. Answered exactly like a token that
-      // never existed: to whoever holds the link the three are one condition.
       throw new RevocationUnusableException();
     }
     if (tenant.getDeletionRequestedAt().plus(grace).isBefore(Instant.now(clock))) {
-      // The period is over and the erasure is under way or done. Withdrawing now
-      // would restore a tenant whose data is already going.
       throw new RevocationUnusableException();
     }
 

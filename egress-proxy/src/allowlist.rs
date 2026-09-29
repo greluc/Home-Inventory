@@ -82,9 +82,6 @@ impl Entry {
                     host: host.to_string(),
                     port: Some(port),
                 },
-                // Not a port. The whole line is the host, which is what a name
-                // containing a colon would be -- and which nothing resolves, so
-                // it allows nothing rather than allowing something wider.
                 _ => Self {
                     host: line.to_string(),
                     port: None,
@@ -137,8 +134,6 @@ impl Network {
             (IpAddr::V6(base), IpAddr::V6(other)) => {
                 (base.octets().to_vec(), other.octets().to_vec())
             }
-            // An IPv4 address in IPv6 clothing is compared as what it is, so a
-            // segment declared in IPv4 still recognises `::ffff:10.89.31.2`.
             (IpAddr::V4(base), IpAddr::V6(other)) => match other.to_ipv4_mapped() {
                 Some(mapped) => (base.octets().to_vec(), mapped.octets().to_vec()),
                 None => return false,
@@ -200,8 +195,6 @@ impl Allowlist {
                         current = Some(segments.len() - 1);
                     }
                     None => {
-                        // Everything until the next header belongs to a section
-                        // this cannot key, so none of it is allowed to anybody.
                         dropped = true;
                         current = None;
                     }
@@ -300,24 +293,18 @@ pub fn is_forbidden(address: IpAddr) -> bool {
                 || v4.is_broadcast()
                 || v4.is_documentation()
                 || v4.is_unspecified()
-                // 100.64.0.0/10, carrier-grade NAT. Not private by the letter of
-                // `is_private`, and not somewhere a deployment reaches out to.
                 || (v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]))
-                // 0.0.0.0/8 — "this network". Routable nowhere, and on some
-                // stacks a synonym for the local host.
                 || v4.octets()[0] == 0
         }
         IpAddr::V6(v6) => {
             v6.is_loopback()
                 || v6.is_unspecified()
-                // fe80::/10 link-local and fc00::/7 unique-local. `is_unicast_link_local`
-                // and `is_unique_local` are still unstable, so the prefixes are
-                // matched by hand rather than waiting for them.
                 || (v6.segments()[0] & 0xffc0) == 0xfe80
                 || (v6.segments()[0] & 0xfe00) == 0xfc00
-                // An IPv4 address wearing an IPv6 coat. Without this, `::ffff:10.0.0.1`
-                // walks past every rule above it.
-                || v6.to_ipv4_mapped().map(|v4| is_forbidden(IpAddr::V4(v4))).unwrap_or(false)
+                || v6
+                    .to_ipv4_mapped()
+                    .map(|v4| is_forbidden(IpAddr::V4(v4)))
+                    .unwrap_or(false)
         }
     }
 }
@@ -339,7 +326,6 @@ mod tests {
         let list = Allowlist::parse("database.clamav.net\n");
         assert!(list.permits("DATABASE.ClamAV.net", 443, INTERNAL));
         assert!(list.permits("database.clamav.net.", 443, INTERNAL));
-        // No wildcards: a subdomain is a different host, and nobody declared it.
         assert!(!list.permits("evil.database.clamav.net", 443, INTERNAL));
         assert!(!list.permits("clamav.net", 443, INTERNAL));
         assert!(!list.permits("database.clamav.net.evil.example", 443, INTERNAL));
@@ -381,8 +367,6 @@ mod tests {
 
     #[test]
     fn a_plugin_does_not_reach_what_another_plugin_declared() {
-        // The allowance nobody consented to, and the reason one shared list was
-        // not enough (ADR-0037).
         let list = two_plugins();
         assert!(!list.permits("mail.example.org", 443, ON_WEBHOOK_SEGMENT));
         assert!(!list.permits("hooks.example.org", 443, ON_SMTP_SEGMENT));
@@ -413,8 +397,6 @@ mod tests {
 
     #[test]
     fn a_header_that_cannot_be_read_takes_its_hosts_with_it() {
-        // The other direction -- treating an unreadable header as "applies to
-        // everyone" -- is how a typo becomes an allowance.
         let list = Allowlist::parse(
             "[not-a-network de.greluc.homeinv.plugin.webhook]\nhooks.example.org\n",
         );
@@ -439,11 +421,6 @@ mod tests {
 
     #[test]
     fn a_bare_entry_allows_any_port_and_a_qualified_one_allows_only_its_own() {
-        // The asymmetry is deliberate. `freshclam` fetches over port 80 from the
-        // deployment half's one bare entry, so a bare entry implying 443 would
-        // have broken the scanner quietly (ADR-0036); a `tcp:` target names its
-        // port because "the mail server, on any port" is not what a manifest
-        // meant (09 §9.3).
         let list = Allowlist::parse(
             "database.clamav.net
 
@@ -455,16 +432,12 @@ mod tests {
         assert!(list.permits("database.clamav.net", 443, INTERNAL));
 
         assert!(list.permits("mail.example.org", 587, ON_SMTP_SEGMENT));
-        // Not 25, not 465, not 8080: a manifest that named 587 allowed 587.
         assert!(!list.permits("mail.example.org", 25, ON_SMTP_SEGMENT));
         assert!(!list.permits("mail.example.org", 465, ON_SMTP_SEGMENT));
     }
 
     #[test]
     fn a_name_with_something_that_is_not_a_port_after_a_colon_allows_nothing_wider() {
-        // The safe direction: the whole line becomes the host, which nothing
-        // resolves -- rather than the host before the colon, which would be an
-        // allowance nobody wrote.
         let list = Allowlist::parse(
             "[10.89.31.0/24 p]
 hooks.example.org:not-a-port
@@ -475,8 +448,6 @@ hooks.example.org:not-a-port
 
     #[test]
     fn an_ipv4_segment_recognises_an_ipv4_mapped_arrival() {
-        // A dual-stack listener reports `::ffff:10.89.31.1` for a v4 connection,
-        // and a plugin whose segment is declared in v4 is still that plugin.
         let list = two_plugins();
         assert!(list.permits(
             "hooks.example.org",
@@ -492,7 +463,7 @@ hooks.example.org:not-a-port
             "10.1.2.3",
             "172.16.0.1",
             "192.168.1.1",
-            "169.254.169.254", // the cloud metadata endpoint
+            "169.254.169.254",
             "100.64.0.1",
             "0.0.0.0",
         ] {
@@ -504,7 +475,6 @@ hooks.example.org:not-a-port
         assert!(is_forbidden(IpAddr::V6(Ipv6Addr::LOCALHOST)));
         assert!(is_forbidden("fe80::1".parse().unwrap()));
         assert!(is_forbidden("fd00::1".parse().unwrap()));
-        // The trap this rule exists for: an IPv4 private address in IPv6 clothing.
         assert!(is_forbidden("::ffff:10.0.0.1".parse().unwrap()));
     }
 

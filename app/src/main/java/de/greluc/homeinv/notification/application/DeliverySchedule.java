@@ -41,15 +41,9 @@ public class DeliverySchedule {
     try {
       dispatcher.deliverDue(Instant.now());
     } catch (RuntimeException failed) {
-      // Logged and swallowed: a scheduled task that throws stops being scheduled
-      // in some runtimes, and notifications that silently stopped going out is
-      // the failure this whole block is against.
       log.error("The notification delivery run failed; the next one will pick it up", failed);
     }
 
-    // The account queue, in its own try. One queue failing must not stop the
-    // other: a broken tenant channel would otherwise hold up the password reset
-    // somebody is waiting for (REQ-NOTI-004, ADR-0066).
     try {
       securityDispatcher.deliverDue(Instant.now());
     } catch (RuntimeException failed) {

@@ -47,8 +47,6 @@ class ApiUsageMetricIT extends AbstractIntegrationTest {
         .andReturn();
 
     assertThat(counted("/api/v1/version", "v1", "web")).isPositive();
-    // Anything unrecognised is one series and not one per value: the header is
-    // chosen by the caller, so a free tag would let any request invent a series.
     assertThat(counted("/api/v1/version", "v1", "other")).isPositive();
     assertThat(clientTags()).allMatch(tag -> tag.matches("web|android|ios|desktop|cli|plugin|other"));
   }
@@ -58,9 +56,6 @@ class ApiUsageMetricIT extends AbstractIntegrationTest {
   void theVersionIsNotATag() throws Exception {
     mockMvc.perform(get("/api/v1/version").header("X-Home-Inv-Client", "web/9.9.9")).andReturn();
 
-    // The version is what a deprecation notice is addressed to, not what a
-    // shutdown decision needs -- and every release of every client would
-    // otherwise be its own time series.
     assertThat(clientTags()).doesNotContain("web/9.9.9", "9.9.9");
   }
 

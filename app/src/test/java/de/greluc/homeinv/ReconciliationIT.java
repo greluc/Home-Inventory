@@ -67,9 +67,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
 
     inTenant(tenant, () -> assertThat(attributes.deviations()).isZero());
 
-    // The failure this exists for: a projection that is not there. In life it
-    // comes from a code path that forgot to project; here it is a DELETE, which
-    // is the same state.
     inTenant(
         tenant,
         () ->
@@ -83,9 +80,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
 
     inTenant(tenant, () -> assertThat(attributes.deviations()).isEqualTo(1));
 
-    // "The rebuild produces a table identical to the reconciled one"
-    // (REQ-NFR-073), and it goes through the projector rather than an
-    // INSERT … SELECT, so there is no second truth to get right.
     inTenant(tenant, () -> assertThat(attributes.rebuild()).isEqualTo(1));
     inTenant(tenant, () -> assertThat(attributes.deviations()).isZero());
   }
@@ -96,9 +90,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("reconcile-invented@example.org");
     UUID item = anItemWithAttributes(tenant);
 
-    // The other direction, and the one a selective repair would miss: a row for
-    // a field the item does not carry. A filter on it would find this item and
-    // be wrong.
     inTenant(
         tenant,
         () ->
@@ -125,15 +116,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
 
     inTenant(tenant, () -> assertThat(paths.deviations()).isZero());
 
-    // What an incomplete move leaves behind: a child whose path still names the
-    // place it came from. The scope policy of REQ-TEN-007 reads that path, so a
-    // stale one is a person seeing a subtree they were moved out of.
-    //
-    // The same NUMBER of labels, deliberately: `depth_matches_path` already
-    // refuses a path of the wrong length, so a corruption that broke it would be
-    // caught by the database and would prove nothing about this check. What no
-    // constraint can see is that the first label names a place that is not this
-    // row's parent.
     inTenant(
         tenant,
         () ->
@@ -158,9 +140,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("counts nothing in a tenant whose tree and projections are sound")
   void aHealthyTenantReportsZero() {
-    // The half that keeps the other three honest: a check that reported a
-    // deviation on correct data would be worse than none, because every run
-    // after the first would be ignored.
     Tenant tenant = newTenant("reconcile-healthy@example.org");
     UUID house = aPlace(tenant, "A house", null);
     aPlace(tenant, "A cellar", house);
@@ -173,8 +152,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
           assertThat(paths.deviations()).isZero();
         });
   }
-
-  // -------------------------------------------------------------------------
 
   private void inTenant(Tenant tenant, Runnable work) {
     TenantContext.runAs(tenant.tenantId(), () -> transactions.executeWithoutResult(status -> work.run()));
@@ -236,7 +213,6 @@ class ReconciliationIT extends AbstractIntegrationTest {
         null,
         null,
         0,
-        // Searchable, which is what puts it in the side table at all.
         true,
         false,
         false,

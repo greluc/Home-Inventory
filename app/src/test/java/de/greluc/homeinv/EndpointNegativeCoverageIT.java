@@ -208,10 +208,6 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
         answeredNotFound++;
         continue;
       }
-      // Another 4xx means the request could not be formed without knowledge this
-      // check does not have -- a body, a query string -- so it was refused before
-      // anything was looked up, which discloses nothing. 403, 2xx and 5xx are
-      // each a different way of being wrong.
       if (status >= 400 && status < 500 && status != 403) {
         refused.add(endpoint.signature());
         continue;
@@ -238,8 +234,6 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
                 + "which is the regression this count exists to catch")
         .hasSizeLessThanOrEqualTo(MOST_THAT_MAY_REFUSE_INSTEAD);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Every mapping Spring registered under {@code /api/v1}, one per path and method.
@@ -394,9 +388,6 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
         String value = numeric ? "1" : UUID.randomUUID().toString();
         path = path.replace("{" + variable.getKey() + "}", value);
       }
-      // Anything the handler did not declare by name -- a variable bound into
-      // a map, or one this walk could not see -- still has to be filled in, or
-      // the request would go out with a brace in the path.
       return path.replaceAll("\\{[^}]+}", UUID.randomUUID().toString());
     }
 
@@ -429,10 +420,6 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
    */
   private MockHttpSession aMemberOf(UUID tenantId, String email, String role) throws Exception {
     UUID userId = anAccount(email);
-    // Outside the transaction, not inside it: the transaction manager publishes
-    // `app.tenant_id` when the transaction begins, so a context established in
-    // the callback arrives after the connection has been configured and the
-    // insert is refused by the policy this test relies on.
     TenantContext.runAs(
         tenantId,
         () ->
@@ -465,9 +452,6 @@ class EndpointNegativeCoverageIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: a role that requires a second factor is refused every request
-    // until one exists. The enrolment loop is SecondFactorIT's subject; here it is
-    // a precondition.
     enrolSecondFactor(userId);
     return userId;
   }

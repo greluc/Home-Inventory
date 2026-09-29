@@ -98,14 +98,6 @@ class BulkEntryRunner {
     switch (command.operation()) {
       case MOVE ->
           items.move(entry.itemId(), command.locationId(), entry.expectedVersion(), actor);
-      // No version check: assigning a tag writes a row of its own and leaves the
-      // item's own version alone, so there is nothing an If-Match could protect.
-      // The single-item endpoint takes no If-Match either, for the same reason.
-      //
-      // An item that is not there is this entry's 404, raised by `tagging` through
-      // the `TaggableTargets` port that `inventory` implements. This used to read
-      // the item here first, because without that port the assignment reached the
-      // database as a foreign-key violation.
       case TAG -> tags.assign(command.tagId(), TagService.TagTarget.ITEM, entry.itemId(), actor);
       case CHANGE_TYPE ->
           items.changeType(entry.itemId(), command.itemTypeId(), entry.expectedVersion(), actor);

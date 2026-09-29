@@ -32,38 +32,19 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 ADR = ROOT / "docs" / "adr"
 INDEX = ADR / "README.md"
 
-# `**Amends:** [ADR-0015](0015-deployment.md), the *Podman* row — …` and the
-# `**Partially supersedes:**` and `**Supersedes:**` forms, with or without the
-# list marker some records put in front. Only the FIRST line matters: the prose
-# that follows is deliberately outside the declaration (see ADR-0021).
 DECLARATION = re.compile(
     r"^\s*(?:[-*]\s*)?\*\*(Amends|Supersedes|Partially supersedes):\*\*(.*)$",
     re.IGNORECASE,
 )
 
-# The reciprocal note, in whatever words the record uses. Three phrasings are in
-# the corpus already — "Amended by [ADR-0044]", "Superseded in part by [ADR-0026]"
-# and "Part 2 superseded by [ADR-0030]" — and forcing them into one shape would
-# mean editing records that exist to state history. So the rule is structural
-# rather than lexical: a bolded span that names an ADR and says it amended or
-# superseded this one. What it still catches is the defect it is for — no mention
-# of the amending ADR at all.
-#
-# The link must follow the word "by". Without that, ADR-0036's
-# "**[ADR-0027] §2 is amended**" — which declares the opposite direction — reads
-# as ADR-0027 having amended ADR-0036, and the check reports a defect in the index
-# that is not there. Direction is the whole content of this relation.
 BOLD_SPAN = re.compile(r"\*\*([^*]+)\*\*")
 AMENDMENT_WORD = re.compile(r"amend|supersed", re.IGNORECASE)
 BY_LINK = re.compile(r"by\s*\[ADR-(\d{4})\]", re.IGNORECASE)
 
 ADR_LINK = re.compile(r"\[ADR-(\d{4})\]")
 REQ_ID = re.compile(r"REQ-[A-Z]+-\d+")
-# `[07 §7.8](../architecture/07-data-model.md)` — the link target is what is checked;
-# the section number is prose a link cannot verify.
 DOC_LINK = re.compile(r"\[[^\]]+\]\((\.\./[^)]+\.md)\)")
 
-# `| [0024](0024-malware-scan.md) | … | Accepted, amended by 0036, 0037, 0054 |`
 INDEX_ROW = re.compile(r"^\|\s*\[(\d{4})\]\([^)]*\)\s*\|[^|]*\|([^|]*)\|")
 
 
@@ -129,7 +110,6 @@ def main() -> int:
 
     problems: list[str] = []
 
-    # Who declares what about whom, and who admits it.
     declared: dict[str, set[str]] = {n: set() for n in texts}
     for number, text in texts.items():
         for _relation, rest in declarations(text):
@@ -140,7 +120,6 @@ def main() -> int:
 
     admitted: dict[str, set[str]] = {number: backlinks(text) for number, text in texts.items()}
 
-    # 1. Reciprocity.
     for source, targets in declared.items():
         for target in sorted(targets):
             if target not in texts:
@@ -151,7 +130,6 @@ def main() -> int:
                     f"no reciprocal 'Amended by [ADR-{source}]' note"
                 )
 
-    # 2. The targets of an amendment exist.
     for number, text in texts.items():
         for _relation, rest in declarations(text):
             for requirement in REQ_ID.findall(rest):
@@ -164,7 +142,6 @@ def main() -> int:
                 if not (ADR / link).resolve().exists():
                     problems.append(f"ADR-{number} amends {link}, which does not exist")
 
-    # 3. The index names every amendment.
     index_status: dict[str, str] = {}
     for line in INDEX.read_text(encoding="utf-8").splitlines():
         match = INDEX_ROW.match(line)
@@ -177,8 +154,6 @@ def main() -> int:
             continue
         status = index_status[number]
         for amender in sorted(admitted[number]):
-            # The index writes them unpadded — "amended by 0036, 0037" — so both
-            # spellings are accepted rather than one being imposed on the prose.
             if amender not in status and amender.lstrip("0") not in status:
                 problems.append(
                     f"docs/adr/README.md row {number} does not name ADR-{amender}, "

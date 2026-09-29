@@ -136,8 +136,6 @@ class ManifestSignatureIT extends AbstractIntegrationTest {
     registry.register(manifest(BROKE_LATER_PLUGIN, "1.0.0"), "signed:9000", null, VERIFIED, false);
     assertThat(registry.registration(BROKE_LATER_PLUGIN).disabled()).isFalse();
 
-    // The same plugin, a changed document, and the signature that came with the
-    // old one. This is the restart after somebody edited a manifest in place.
     registry.register(manifest(BROKE_LATER_PLUGIN, "1.0.1"), "signed:9000", null, INVALID, false);
 
     PluginRegistry.Registration stored = registry.registration(BROKE_LATER_PLUGIN);
@@ -151,8 +149,6 @@ class ManifestSignatureIT extends AbstractIntegrationTest {
     registry.register(manifest(OPERATOR_OFF_PLUGIN, "1.0.0"), "signed:9000", null, VERIFIED, false);
     registry.setDisabled(OPERATOR_OFF_PLUGIN, true, UUID.randomUUID());
 
-    // A restart. The signature is fine, and that is not a reason to undo what an
-    // operator decided (REQ-SEC-082).
     registry.register(manifest(OPERATOR_OFF_PLUGIN, "1.0.1"), "signed:9000", null, VERIFIED, false);
 
     PluginRegistry.Registration stored = registry.registration(OPERATOR_OFF_PLUGIN);
@@ -167,8 +163,6 @@ class ManifestSignatureIT extends AbstractIntegrationTest {
     registry.register(manifest(REPAIRED_PLUGIN, "1.0.0"), "signed:9000", null, INVALID, false);
     assertThat(registry.registration(REPAIRED_PLUGIN).disabled()).isTrue();
 
-    // The manifest was put back, or re-signed. Nobody should have to remember to
-    // re-enable a plugin that was only ever switched off by a broken signature.
     registry.register(manifest(REPAIRED_PLUGIN, "1.0.0"), "signed:9000", null, VERIFIED, false);
 
     PluginRegistry.Registration stored = registry.registration(REPAIRED_PLUGIN);

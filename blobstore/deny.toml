@@ -1,14 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# `cargo deny` runs in CI. Two of its checks are the point:
-#
-#   * ADVISORIES — a crate with a known vulnerability fails the build, which is
-#     REQ-SEC-075 applied to the dependency tree this service actually links.
-#   * LICENCES — this binary is AGPL-3.0-or-later, and a crate under a licence
-#     that cannot be combined with it would make the licence statement false.
-#     An allowlist rather than a denylist, so a licence nobody has considered is
-#     a failure rather than a silent acceptance.
 
 [advisories]
 version = 2
@@ -16,14 +7,7 @@ yanked = "deny"
 
 [licenses]
 version = 2
-# Every permissive licence that is compatible with AGPL-3.0-or-later when
-# combined into it. GPL-2.0-only is deliberately absent: it is the one common
-# copyleft licence AGPL-3.0 cannot absorb.
 allow = [
-# The crate's OWN licence, and the reason this list failed on its first real run:
-# every dependency was allowed and the thing being built was not. `cargo deny`
-# checks the whole graph including the root, so a project that is AGPL-3.0-or-later
-# has to say so here. ADR-0018 makes the core AGPL and this service is core.
     "AGPL-3.0-or-later",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -39,9 +23,6 @@ allow = [
 confidence-threshold = 0.9
 
 [[licenses.clarify]]
-# `ring` carries its own licence file that names several upstreams. The
-# clarification is the project's own documented answer and is why an explicit
-# entry is better than raising the confidence threshold until it passes.
 crate = "ring"
 expression = "MIT AND ISC AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]

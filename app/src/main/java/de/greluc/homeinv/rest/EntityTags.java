@@ -64,8 +64,6 @@ public final class EntityTags {
       throw new PreconditionRequiredException();
     }
     String value = header.trim();
-    // A weak tag is never issued here, so one arriving back cannot match anything
-    // this API knows; it is refused rather than silently unwrapped.
     if (value.length() < 3 || value.charAt(0) != '"' || value.charAt(value.length() - 1) != '"') {
       throw new PreconditionMalformedException();
     }

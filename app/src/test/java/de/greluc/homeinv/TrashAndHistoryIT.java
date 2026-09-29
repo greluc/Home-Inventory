@@ -54,9 +54,7 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           UUID id = anItem(tenant, "Ladder");
 
           items.delete(id, OptionalLong.empty(), tenant.userId());
-          // Gone from the ordinary reads.
           assertThatThrownBy(() -> items.get(id)).isInstanceOf(NotFoundException.class);
-          // And visible where a person goes looking for it.
           assertThat(items.trashed(null, 50).data()).extracting(ItemView::id).contains(id);
 
           ItemView back = items.restore(id, OptionalLong.empty(), tenant.userId());
@@ -64,8 +62,6 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           assertThat(items.get(id).id()).isEqualTo(id);
           assertThat(items.trashed(null, 50).data()).extracting(ItemView::id).doesNotContain(id);
 
-          // Restoring twice is not an error, for the same reason deleting twice
-          // is not: a client retrying a request it never saw the answer to.
           items.restore(id, OptionalLong.empty(), tenant.userId());
         });
   }
@@ -79,7 +75,6 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
         () -> {
           UUID id = anItem(tenant, "Cardboard box");
 
-          // The second stage is not a shortcut past the first.
           assertThatThrownBy(() -> items.purge(id, OptionalLong.empty(), tenant.userId()))
               .isInstanceOf(IllegalStateException.class);
 
@@ -89,8 +84,6 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           assertThatThrownBy(() -> items.get(id)).isInstanceOf(NotFoundException.class);
           assertThat(items.trashed(null, 50).data()).extracting(ItemView::id).doesNotContain(id);
 
-          // The history outlives the row: a removal that erased its own record
-          // would leave nothing to say the thing ever existed.
           assertThat(historyOf(id))
               .extracting(RevisionLog.RevisionView::kind)
               .contains(RevisionLog.ChangeKind.PURGED);
@@ -121,7 +114,6 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
                   RevisionLog.ChangeKind.UPDATED,
                   RevisionLog.ChangeKind.CREATED);
 
-          // Newest first, and each revision carries the state it produced.
           assertThat(historyOf(id).getLast().snapshot()).contains("Kettle");
         });
   }
@@ -146,8 +138,6 @@ class TrashAndHistoryIT extends AbstractIntegrationTest {
           ItemView back = items.restoreRevision(id, created, OptionalLong.empty(), tenant.userId());
           assertThat(back.name()).isEqualTo("Original name");
 
-          // A new revision rather than a rewind: the history still says what
-          // happened and when, which is what makes it a history.
           assertThat(historyOf(id)).hasSize(3);
           assertThat(historyOf(id).getFirst().kind()).isEqualTo(RevisionLog.ChangeKind.UPDATED);
         });

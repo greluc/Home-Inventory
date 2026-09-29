@@ -56,9 +56,6 @@ public class TestBlobStore {
   @Primary
   public DeploymentBlobStore inMemoryBlobStore() {
     Map<String, byte[]> stored = new ConcurrentHashMap<>();
-    // Uploads still arriving, kept apart from finished blobs exactly as the real
-    // store keeps `staged/` apart from `sha256/`: an unfinished file must never
-    // be reachable at an address a read would answer.
     Map<String, byte[]> staged = new ConcurrentHashMap<>();
     return new DeploymentBlobStore() {
 
@@ -86,15 +83,9 @@ public class TestBlobStore {
         stored.remove(key(tenantId, sha256));
       }
 
-      // -- Staging, for an upload that arrives in pieces (REQ-MED-008) ------
-
       @Override
       public long append(UUID tenantId, UUID uploadId, long offset, InputStream content)
           throws IOException {
-        // The offset check is faithful to the real store's, and it is the one
-        // property of staging worth reproducing here: it is what turns a
-        // client's wrong guess into a refusal rather than into a file of the
-        // right length and the wrong bytes.
         byte[] present = staged.getOrDefault(key(tenantId, uploadId), new byte[0]);
         if (present.length != offset) {
           throw new OffsetMismatchException(present.length);
@@ -127,10 +118,6 @@ public class TestBlobStore {
         staged.remove(key(tenantId, uploadId));
       }
 
-      // The tenant is part of the key, exactly as it is part of the path in the
-      // real store: addressing is per tenant and never across (ADR-0032), and a
-      // fixture that keyed on the digest alone would let a test pass that the
-      // deployment would fail.
       private String key(UUID tenantId, String sha256) {
         return tenantId + "/" + sha256;
       }

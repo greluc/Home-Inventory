@@ -31,10 +31,6 @@ public class DefaultSecurityNotifications implements SecurityNotifications {
   @Transactional
   public Queued raise(NewSecurityNotification message) {
     Queued queued = queries.queue(message);
-    // The address is deliberately absent from the log line. What is useful when
-    // somebody asks "was I told" is which account and which kind, and an address
-    // in a log file is a piece of personal data in a place nobody is guarding
-    // (REQ-PRIV-006).
     log.info(
         "Queued the account notification {} for {} ({})",
         message.kind(),

@@ -125,7 +125,6 @@ impl Target {
         let mut walked = Vec::new();
         let mut so_far = self.files_root();
         for segment in self.blob_path(tenant_id, sha256).split('/') {
-            // Everything but the file itself, which is the last segment.
             if segment == sha256 {
                 break;
             }
@@ -501,7 +500,6 @@ mod tests {
     #[test]
     fn the_authorization_header_is_basic_over_user_and_password() {
         let target = deployment().resolve(&settings(&[])).expect("resolves");
-        // `inventory:app-password`, which is what every WebDAV client sends.
         assert_eq!(
             target.password.basic(&target.username),
             "Basic aW52ZW50b3J5OmFwcC1wYXNzd29yZA=="

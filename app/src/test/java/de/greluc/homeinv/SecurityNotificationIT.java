@@ -36,8 +36,6 @@ class SecurityNotificationIT extends AbstractIntegrationTest {
   void raisedAndReadBack() {
     UUID userId = UUID.randomUUID();
 
-    // No TenantContext is opened anywhere in this test. That is the property:
-    // the account may belong to no tenant, and the queue must not need one.
     SecurityNotifications.Queued queued =
         notifications.raise(
             new SecurityNotifications.NewSecurityNotification(
@@ -95,20 +93,6 @@ class SecurityNotificationIT extends AbstractIntegrationTest {
 
     dispatcher.deliverDue(databaseNow());
 
-    // The return value is deliberately NOT asserted on. `security_notification`
-    // is instance-wide (07 §7.1) and every test shares it, so the count belongs
-    // to whatever was queued at that moment rather than to this test -- and a
-    // delivery run in another test that happens to land between the raise above
-    // and this line attempts the row first, leaving this call nothing to do and
-    // this assertion failing for a reason that is not about the behaviour. That
-    // is what it did on 2026-09-20. What the test is actually about is the state
-    // of ITS OWN notification, which the assertions below read by id: they hold
-    // whichever run attempted it.
-
-    // Not a refusal by the far side — there is no far side. So it is retried:
-    // an operator who grants the capability afterwards should find the queued
-    // messages go out, rather than a pile of dead letters from before
-    // (ADR-0066).
     SecurityNotifications.Queued after =
         notifications.of(userId, 10).stream()
             .filter(candidate -> candidate.id().equals(queued.id()))
@@ -118,8 +102,6 @@ class SecurityNotificationIT extends AbstractIntegrationTest {
     assertThat(after.attempts()).isEqualTo(1);
     assertThat(after.nextAttemptAt()).isNotNull();
 
-    // And the reason is on the record rather than only in a log line: "nothing
-    // was sent" and "nothing was tried" have to be distinguishable.
     List<SecurityNotifications.Attempt> attempts = notifications.attempts(queued.id());
     assertThat(attempts).singleElement().satisfies(attempt -> {
       assertThat(attempt.outcome()).isEqualTo("FAILED");

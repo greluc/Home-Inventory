@@ -1,184 +1,40 @@
-# Home Inventory — the service matrix
-#
-# THIS FILE IS THE SOURCE OF TRUTH FOR THE DEPLOYMENT TOPOLOGY.
-#
-# The Quadlet units under deploy/quadlet/ and compose.yaml under deploy/compose/
-# are GENERATED from it; the Helm chart under deploy/helm/ is VALIDATED against
-# it. Editing a generated artifact by hand fails the drift check in CI
-# ([ADR-0021](../docs/adr/0021-podman-quadlet.md), REQ-NFR-063).
-#
-# Why it exists: two hand-maintained descriptions of the same topology diverge —
-# not if, but when. And the failure shows up at an operator's site, on the
-# runtime we did not test, which is the worst place to find it (risk R13).
-#
-# Status: live. The Quadlet units, `compose.yaml` and the Helm values under
-# deploy/ are generated from this file and checked against it on every run.
-#
-# IMAGES. Every third-party image carries its manifest `digest`, and that is what
-# is pulled — the `tag` beside it is for a reader. The integration tests take
-# their coordinates from this file too (`ProductionImages`), which is what makes
-# `REQ-NFR-027`'s "the same image digests as production" true rather than hoped.
-#
-# The images built FROM THIS REPOSITORY carry no `digest` key at all, because a
-# digest names bytes in a registry and none has been published. That absence is
-# the fact, not a task: `REQ-SEC-077` — distroless base, referenced by digest,
-# trivy-scanned, cosign-signed — is **stage 1**, and it is where their pinning
-# and signing belong. Until then the generator falls back to the tag, which for
-# these is `latest`. No integration test starts one of them.
-#
-# The key was spelled `digest: "TODO"` until 2026-09-12. It read as unfinished
-# stage-0 work, which it never was, and it made a sentinel that three separate
-# files had to know about.
-
 version: 1
 
 defaults:
-  # Applies to every service unless overridden below. The security keys are
-  # requirements, not preferences (REQ-SEC-085) — but "non-root" means "not uid 0",
-  # NOT "uid 10001 everywhere". See the note on `user` below.
-  user: "10001:10001"           # first-party images only — third-party images override it
+  user: "10001:10001"
   readOnlyRootFilesystem: true
   noNewPrivileges: true
   dropCapabilities: [ALL]
-  restart: on-failure           # crash handling
-  startOnBoot: true             # → Quadlet: WantedBy=default.target
-                                # → Compose: restart: unless-stopped
-                                # The two runtimes express "come back after a reboot"
-                                # differently; the generator maps this key, and that is
-                                # exactly the kind of divergence this file exists to absorb.
-                                #
-                                # THE TWO KEYS COLLIDE UNDER COMPOSE, and the generator
-                                # resolves it rather than leaving it to chance: Compose
-                                # has ONE `restart` field, so it cannot express both
-                                # "on-failure" and "come back after a reboot".
-                                # startOnBoot WINS — `restart: unless-stopped`, which
-                                # restarts on failure too and additionally survives a
-                                # reboot. What is lost is the narrower semantics of
-                                # on-failure: under Compose a container stopped by the
-                                # operator stays stopped, but one that exits 0 on its own
-                                # is restarted, where Quadlet's Restart=on-failure would
-                                # leave it. No shipped service exits 0 on its own, so the
-                                # difference is theoretical — but an undocumented
-                                # generator decision is how the two paths drift (risk R13).
-  autoUpdate: disabled          # images are digest-pinned; updates are deliberate
-
-# WHY EVERY THIRD-PARTY SERVICE OVERRIDES `user` AND `tmpfs`
-#
-# REQ-SEC-085 requires a non-root user and a read-only root filesystem. It does
-# not require one specific uid, and applying 10001 to an upstream image breaks it:
-#
-#   postgres     runs as uid 70 (alpine). initdb refuses to start under a uid with
-#                no /etc/passwd entry, and the unix socket needs /var/run/postgresql.
-#   opensearch   runs as uid 1000 and writes to config/, logs/ and /tmp.
-#   rabbitmq     runs as uid 999 and writes to /etc/rabbitmq and /var/log/rabbitmq.
-#   valkey       runs as uid 999.
-#   clamav       runs as uid 100 and writes to /run/clamav and /tmp.
-#
-# 06 §6.5 already records that these images use different inside-UIDs — this file
-# has to say so too, or the generated units describe a stack that cannot start.
-# Each service therefore names its own uid and its own writable paths; the CI check
-# asserts "uid != 0 and readOnlyRootFilesystem: true", not a fixed number.
+  restart: on-failure
+  startOnBoot: true
+  autoUpdate: disabled
 
 networks:
-  # `api` and `worker` get no route out of the deployment (ADR-0026). Exactly two
-  # containers do have one, and both are named below rather than glossed: `web`,
-  # because a published port measurably requires a non-internal segment, and
-  # `egress-proxy`, because that is its function (ADR-0042, REQ-SEC-102).
-  #
-  # MEMBERSHIP IS DECLARED ONCE, in each service's own `networks:` key below.
-  # This block declares only each segment's PROPERTIES. It used to carry a
-  # `members:` list as well — the same fact in two places, populated for three
-  # of the four concrete segments and omitted for `internal`, which has the most
-  # members of all. That is the drift this file exists to prevent, in this file.
-  # The `plugin-<id>` entry keeps its member list because there it is a
-  # GENERATION RULE for segments that do not exist yet, not a second copy of a
-  # fact stated elsewhere.
-  #
-  # ZONE 4 IS NOT ONE ROOM (ADR-0037). There used to be a single `plugins`
-  # segment holding every plugin, clamav, the proxy, api and worker. On it, a
-  # plugin holding NO capability at all could read the core's management port
-  # (per-tenant metrics), stop the fail-closed scanner and thereby block every
-  # upload, and use another plugin's forwarding port on the proxy. One segment
-  # per plugin costs n generated networks and closes all three structurally.
-  # MEASURED 2026-09-11, and it contradicted the design (A5, ADR-0042): under
-  # Docker a container on an `internal: true` network gets NO port mapping at all
-  # — `docker port` is empty and the port is unreachable — while a non-internal
-  # network, the only kind that publishes, ALWAYS grants outbound. "Publishes a
-  # port" and "has no route out" cannot both hold for one container. So exactly
-  # two segments are non-internal, each with exactly one member, and both members
-  # hold no data, no credential and no domain logic.
   edge:
-    internal: false             # web only. Publishes 8080 and proxies to api over
-                                # `internal`. api publishes NOTHING and is not here.
+    internal: false
   egress:
-    internal: false             # egress-proxy only — the route the chokepoint needs.
-                                # It sat on internal segments alone until 2026-09-11,
-                                # which meant the one component whose job is the
-                                # outbound call could not make one.
+    internal: false
   internal:
-    internal: true              # no route out of the deployment, at all.
-                                # The management listener binds HERE and nowhere
-                                # else — see api.ports below.
-                                #
-                                # IT IS NOT A TRUST BOUNDARY, and that correction is
-                                # ADR-0044. Reachability is not authorisation: every
-                                # datastore on this segment authenticates its callers,
-                                # and `web` is no longer a member. Before that, the one
-                                # internet-facing container could open postgres:5432,
-                                # valkey:6379 (sessions), opensearch:9200, rabbitmq:5672,
-                                # blobstore:8100 and :8090 on both core roles — the exact
-                                # "unpublished is not unreachable" mistake ADR-0037 fixed
-                                # for plugins and nobody applied to the ingress.
+    internal: true
   frontend:
-    internal: true              # EXACTLY TWO MEMBERS: web and api (ADR-0044). It carries
-                                # the web → api hop of ADR-0042 and nothing else, so the
-                                # ingress reaches the API and no datastore. api keeps its
-                                # `internal` membership; web has none.
+    internal: true
   scanner:
     internal: true
-    egressVia: egress-proxy     # freshclam only, to the deployment allowlist
-                                # entry below (ADR-0036). `api` is deliberately
-                                # absent: the scan runs in the worker, never in
-                                # the request path (ADR-0024).
-  # One segment per installed plugin, GENERATED from the plugin services below.
-  # Template, not a literal entry — there is no plugin service in this seed yet.
+    egressVia: egress-proxy
   "plugin-<id>":
     generated: perPlugin
-    internal: true              # plugin containers get NO gateway of their own
+    internal: true
     members: ["plugin-<id>", api, worker, egress-proxy]
-    egressVia: egress-proxy     # the single exception, and it is a container,
-                                # not a route: the plugin reaches it by HTTPS_PROXY
-                                # and it applies that plugin's manifest allowlist
-                                # (ADR-0027). A hostname rule is not expressible
-                                # in netavark, Compose or standard NetworkPolicy,
-                                # which is exactly why this is a proxy and not a
-                                # network flag.
-                                # The proxy has one interface per segment and
-                                # identifies the caller by the interface the
-                                # connection arrived on — not by a source address
-                                # it claims, which is what it did while every
-                                # plugin shared one segment.
+    egressVia: egress-proxy
 
 volumes:
   pgdata:   { service: postgres }
-  pgwal:    { service: postgres }    # the WAL ARCHIVE, separate from PGDATA (ADR-0045).
-                                     # 06 §6.13 promised continuous WAL archiving and
-                                     # REQ-NFR-014 turns that into RPO <= 15 min — and
-                                     # there was no volume, no archive_command and no
-                                     # target anywhere. A read-only root filesystem and
-                                     # no bind mounts (ADR-0022) leave exactly one place
-                                     # for it: a second runtime-managed volume, backed up
-                                     # with the dump and restored with it.
+  pgwal:    { service: postgres }
   osdata:   { service: opensearch }
   mqdata:   { service: rabbitmq }
   kvdata:   { service: valkey }
   cvddata:  { service: clamav }
-  blobdata: { service: blobstore }   # the default media store. It had NO volume and
-                                     # no backup row until 2026-09-11 (ADR-0043):
-                                     # `filesystem` is the default BlobStore and the
-                                     # only one `minimal` has, while api and worker
-                                     # were declared stateless with a read-only root
-                                     # filesystem — so the bytes had nowhere to go.
+  blobdata: { service: blobstore }
 
 services:
 
@@ -186,37 +42,9 @@ services:
     role: static
     image: { name: ghcr.io/greluc/home-inv-web }
     networks: [edge, frontend]
-    # THE INGRESS (ADR-0042). It is the only container with a published port, and
-    # it proxies /api, /graphql, /c/, /.well-known and the SSE stream to `api`
-    # over `frontend`. api itself publishes nothing and is not on `edge`, which is
-    # stricter than the previous shape and costs one host port rather than adding
-    # a container.
-    #
-    # It is NOT on `internal` (ADR-0044). It needs `api` and nothing else, and a
-    # member of `internal` can open every datastore port on that segment — which
-    # is a lot of reach for the one container an attacker meets first.
-    #
-    # It also serves the application shell AND every security header — CSP, HSTS,
-    # COOP, CORP, Referrer-Policy, Permissions-Policy (ADR-0038; COEP is
-    # deliberately absent, ADR-0040). Letting the operator's reverse proxy serve
-    # the bundle instead is NOT supported: the header set would live outside this
-    # repository and REQ-SEC-060's CI comparison would have nothing to compare.
-    # The CSP authorises the one inline script — the theme bootstrap that beats
-    # first paint — by HASH, not by a nonce, because nothing that emits a static
-    # document can mint one.
-    #
-    # It has an outbound route, because `edge` must be non-internal for the port
-    # to work at all. That is acceptable for exactly the reason it is acceptable
-    # for egress-proxy: it holds no data, no secret and no domain logic
-    # (REQ-SEC-102).
-    # nginx-unprivileged listens on 8080 inside. ONE published host port for the
-    # whole deployment, and therefore one firewall rule — see 06 §6.3. It used to
-    # be two, 8080 for api and 8081 for web, until api stopped publishing.
     ports: [{ container: 8080, host: 8080 }]
     tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
     dependsOn: [api]
-    # Raised from 32/128Mi: it is on the request path for every API call now, not
-    # only for static files.
     resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
     health: { command: "/healthcheck", interval: 15s }
     profiles: [minimal, standard, ha]
@@ -225,153 +53,36 @@ services:
     role: api
     image: { name: ghcr.io/greluc/home-inv }
     networkAliases:
-      # The name `management.server.address` binds to. A network alias resolves to
-      # the container's address on THAT network, so the management listener is
-      # reachable from `internal` and from nowhere else — which is what
-      # REQ-SEC-099 asks for and what `0.0.0.0` did not give: the connectivity
-      # suite reached :8090 from `web` over `frontend`.
       internal: api-internal
-    networks: [internal, frontend]               # NOT edge: api publishes nothing and
-                                                 # is reached through web over the
-                                                 # two-member `frontend` segment
-                                                 # (ADR-0042, ADR-0044)
-    networksByPlugin: all                        # plus one membership per installed
-                                                 # plugin segment, generated (ADR-0037)
+    networks: [internal, frontend]
+    networksByPlugin: all
     ports:
-      - { container: 8080, host: null }          # reached by web over `frontend` (ADR-0044)
+      - { container: 8080, host: null }
       - { container: 8090, host: null, bindTo: internal }
-                                                 # management: /actuator, /livez, /readyz
-                                                 # NOT published AND bound to the internal
-                                                 # segment only. host: null hides it from
-                                                 # the host; it does NOT hide it from a
-                                                 # container on the same segment, and api
-                                                 # sits on every plugin segment. Without
-                                                 # bindTo, any plugin could read the
-                                                 # per-tenant metrics of 13 §13.3 without
-                                                 # holding a single capability
-                                                 # (ADR-0037, REQ-SEC-099).
-      - { container: 8091, host: null }          # THE HOST CHANNEL (ADR-0071, REQ-PLG-016):
-                                                 # the one listener plugins CALL, rather than
-                                                 # are called on. Deliberately NOT bound to a
-                                                 # segment, because there is no single segment
-                                                 # to bind it to — `api` sits on every plugin
-                                                 # segment and each one is its own network.
-                                                 # What gates it is mTLS against the
-                                                 # fingerprint pinned at registration: a
-                                                 # container that is not a registered plugin
-                                                 # gets a refused handshake, not a refused
-                                                 # call. Reachability is never authorisation
-                                                 # (ADR-0044), and this is the one port where
-                                                 # that sentence has to do the work on its own.
-                                                 # Off unless HOMEINV_PLUGIN_HOST_PORT names
-                                                 # it; `minimal` runs no plugins and opens no
-                                                 # socket here.
+      - { container: 8091, host: null }
     env:
-      SPRING_PROFILES_ACTIVE: "api"             # the ROLE, which is fixed by which
-                                                 # service this is
+      SPRING_PROFILES_ACTIVE: "api"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
-                                                 # the DEPLOYMENT profile, which the
-                                                 # operator chooses. Split from the role
-                                                 # on 2026-09-12: as one value it read
-                                                 # `api,${HOMEINV_PROFILE}`, and while
-                                                 # Compose interpolates that, systemd does
-                                                 # not — a Quadlet unit passed the eight
-                                                 # characters through as a profile name.
-                                                 # Whole-value placeholders come from the
-                                                 # env file on both runtimes; embedded ones
-                                                 # cannot.
-      # The database coordinates. Declared here and nowhere else: the application
-      # has no default for them, which is what makes a missing one abort startup
-      # instead of silently reaching for localhost (REQ-NFR-046).
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
-      HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
-      # Where the generated plugin list is. Written by `setup.sh` as the path
-      # below in `standard` and `ha`, and EMPTY in `minimal` — which is what
-      # "minimal runs no plugin" means, and a complete deployment rather than a
-      # degraded one (REQ-PLG-013).
+      HOMEINV_DB_USER: "homeinv_app"
       HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
       HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
-                                                 # Where the operator's OTLP collector listens, and
-                                                 # the whole of the tracing configuration
-                                                 # (REQ-NFR-044, 13 §13.4). EMPTY is the default and
-                                                 # means no tracing at all -- no tracer, no spans, no
-                                                 # sampler -- which is the requirement's "inactive
-                                                 # when unconfigured". The empty string cannot be
-                                                 # passed as "absent" by either runtime, so
-                                                 # `TracingEnvironment` turns it into one.
-                                                 #
-                                                 # The collector is INSIDE the deployment: this
-                                                 # container has no outbound route (ADR-0026) and
-                                                 # this does not give it one. The operator attaches
-                                                 # their collector to `internal`; where it forwards
-                                                 # to afterwards is theirs.
       MANAGEMENT_SERVER_PORT: "8090"
-      MANAGEMENT_SERVER_ADDRESS: "api-internal"               # the alias below, which resolves to
-                                                              # this container's address on
-                                                              # `internal` and to nothing else
+      MANAGEMENT_SERVER_ADDRESS: "api-internal"
       HOMEINV_PLUGIN_HOST_PORT: "${HOMEINV_PLUGIN_HOST_PORT:-0}"
-                                                              # the host channel above. 0 is off,
-                                                              # and off is what a deployment with
-                                                              # no plugin that asks the core for
-                                                              # anything stays (ADR-0071).
-                                                              # `api` ONLY: `worker` runs no
-                                                              # second copy, because every plugin
-                                                              # segment has `api` on it, so one
-                                                              # listener is reachable from all of
-                                                              # them — and one place where the
-                                                              # direction reverses is easier to
-                                                              # keep narrow than two
-      HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"   # required, REQ-SEC-063
-      # The other two REQUIRED non-secret variables of 06 §6.11. They were listed
-      # as required there and declared nowhere here, so the generated units would
-      # have omitted them — and the first is printed onto physical labels.
-      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"   # required, REQ-IDENT-015.
-                                                             # ⚠ printed onto every label;
-                                                             # changing it later invalidates
-                                                             # every printed one (10 §10.2.1)
-      HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"     # required, REQ-MED-010. Its
-                                                             # same-site relationship to the
-                                                             # application host is checked at
-                                                             # startup (REQ-SEC-061)
-      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # the in-deployment store, ADR-0043
+      HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
+      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
+      HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
+      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"
       HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
-                                                             # pinned, exactly like a plugin's
-                                                             # (REQ-SEC-056). `internal` is not a
-                                                             # trust boundary — ADR-0044
-      # The other two stores' coordinates, for the same reason HOMEINV_DB_URL is
-      # here. They were NOT declared until 2026-09-12, and the application's
-      # fallback for both is `localhost` — so `api` resolved Valkey to its own
-      # loopback, every session write raised RedisConnectionFailureException, and
-      # POST /api/v1/auth/login answered 500. Found by running the journey suite
-      # against the stack (REQ-SEC-030, REQ-MED-005).
       HOMEINV_VALKEY_HOST: "valkey"
       HOMEINV_VALKEY_USER: "homeinv"
       HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
-      # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` by
-      # default, because `api` is in every profile and `opensearch` is in
-      # [standard, ha] only — an operator running one of those sets this, and
-      # `minimal` leaves it alone. Choosing `opensearch` without the URL below
-      # aborts startup rather than quietly answering from the other engine.
       HOMEINV_SEARCH_ENGINE: "${HOMEINV_SEARCH_ENGINE:-postgresql}"
       HOMEINV_SEARCH_URL: "https://opensearch:9200"
       HOMEINV_SEARCH_FINGERPRINT: "${HOMEINV_SEARCH_FINGERPRINT}"
-                                                             # pinned like the blob store's
-                                                             # (REQ-SEC-056). The CA signs every
-                                                             # service and every plugin, so
-                                                             # trusting it alone would let any of
-                                                             # them answer as the index (ADR-0044)
-    # NO db-migration-password. It is mounted into the one-shot `migrate` service
-    # and nowhere else (ADR-0041, REQ-SEC-101): homeinv_migrator owns the tables
-    # and can rewrite an RLS policy, and mounting it into a long-running,
-    # internet-facing process for that process's whole life undoes part of what
-    # ADR-0003 buys. api VALIDATES the schema at startup and refuses to start
-    # against one it does not expect.
-    # Every datastore credential is here because NONE of them existed before ADR-0044:
-    # the matrix authenticated PostgreSQL and nothing else, so Valkey, RabbitMQ and
-    # OpenSearch were reachable-and-open to anything on `internal`, and RabbitMQ could
-    # not have worked at all — its `guest` account is restricted to loopback.
     files:
       - target: /run/secrets/plugins.yaml
         generatedFrom: plugins
@@ -385,102 +96,50 @@ services:
       - db-password
       - data-encryption-master-key
       - jwt-signing-key
-      - url-signing-key          # signs media URLs (REQ-MED-010) and pagination cursors
-                                 # (08 §8.2). Both were specified as signed and neither
-                                 # had a key in this file.
-      - credential-key           # seals the second-factor secrets of REQ-AUTH-002
+      - url-signing-key
+      - credential-key
       - valkey-password
       - mq-password
       - search-password
-      - mtls-core                # client identity towards blobstore and the plugins
+      - mtls-core
     tmpfs: ["/tmp"]
     dependsOn: [postgres, valkey, rabbitmq, migrate, bootstrap, blobstore]
-                                                       # both one-shots
-                                                       # must have exited 0
     resources: { memoryReservation: 768Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
     profiles: [minimal, standard, ha]
 
   worker:
     role: worker
-    image: { name: ghcr.io/greluc/home-inv }   # the SAME image as api
+    image: { name: ghcr.io/greluc/home-inv }
     networkAliases:
-      internal: worker-internal                  # as api, for the same reason
+      internal: worker-internal
     networks: [internal, scanner]
-    networksByPlugin: all                        # plus one membership per installed
-                                                 # plugin segment, generated (ADR-0037)
+    networksByPlugin: all
     ports:
-      - { container: 8090, host: null, bindTo: internal }      # same reasoning as api
+      - { container: 8090, host: null, bindTo: internal }
     env:
-      SPRING_PROFILES_ACTIVE: "worker"             # the ROLE, which is fixed by which
-                                                 # service this is
+      SPRING_PROFILES_ACTIVE: "worker"
       SPRING_PROFILES_INCLUDE: "${HOMEINV_PROFILE}"
-                                                 # the DEPLOYMENT profile, which the
-                                                 # operator chooses. Split from the role
-                                                 # on 2026-09-12: as one value it read
-                                                 # `worker,${HOMEINV_PROFILE}`, and while
-                                                 # Compose interpolates that, systemd does
-                                                 # not — a Quadlet unit passed the eight
-                                                 # characters through as a profile name.
-                                                 # Whole-value placeholders come from the
-                                                 # env file on both runtimes; embedded ones
-                                                 # cannot.
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
       HOMEINV_DB_USER: "homeinv_app"
-      # Where the generated plugin list is. Written by `setup.sh` as the path
-      # below in `standard` and `ha`, and EMPTY in `minimal` — which is what
-      # "minimal runs no plugin" means, and a complete deployment rather than a
-      # degraded one (REQ-PLG-013).
       HOMEINV_PLUGINS_FILE: "${HOMEINV_PLUGINS_FILE:-}"
       HOMEINV_TRACING_ENDPOINT: "${HOMEINV_TRACING_ENDPOINT:-}"
-                                                 # Where the operator's OTLP collector listens, and
-                                                 # the whole of the tracing configuration
-                                                 # (REQ-NFR-044, 13 §13.4). EMPTY is the default and
-                                                 # means no tracing at all -- no tracer, no spans, no
-                                                 # sampler -- which is the requirement's "inactive
-                                                 # when unconfigured". The empty string cannot be
-                                                 # passed as "absent" by either runtime, so
-                                                 # `TracingEnvironment` turns it into one.
-                                                 #
-                                                 # The collector is INSIDE the deployment: this
-                                                 # container has no outbound route (ADR-0026) and
-                                                 # this does not give it one. The operator attaches
-                                                 # their collector to `internal`; where it forwards
-                                                 # to afterwards is theirs.
       MANAGEMENT_SERVER_PORT: "8090"
-      MANAGEMENT_SERVER_ADDRESS: "worker-internal"            # as api, one segment only
+      MANAGEMENT_SERVER_ADDRESS: "worker-internal"
       HOMEINV_TRUSTED_PROXIES: "${HOMEINV_TRUSTED_PROXIES}"
-                                                 # The worker serves no REST surface and keeps the
-                                                 # web context anyway, because the management
-                                                 # listener is a child of it — so the same beans are
-                                                 # created, and one of them refuses to exist without
-                                                 # this. Without it the worker never started at all;
-                                                 # found by starting the stack (REQ-SEC-063).
-      HOMEINV_DB_MIGRATE_ON_START: "false"       # validates the schema, never changes it
-      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"   # the worker RENDERS the labels
-                                                             # (05 §5.4), so it needs the base
-                                                             # that gets printed on them
+      HOMEINV_DB_MIGRATE_ON_START: "false"
+      HOMEINV_PUBLIC_BASE_URL: "${HOMEINV_PUBLIC_BASE_URL}"
       HOMEINV_MEDIA_BASE_URL: "${HOMEINV_MEDIA_BASE_URL}"
-      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"            # ADR-0043
+      HOMEINV_BLOBSTORE_ENDPOINT: "blobstore:8100"
       HOMEINV_BLOBSTORE_FINGERPRINT: "${HOMEINV_BLOBSTORE_FINGERPRINT}"
-      HOMEINV_VALKEY_HOST: "valkey"              # as api: undeclared, these fall back to
-      HOMEINV_VALKEY_USER: "homeinv"             # localhost inside the container
+      HOMEINV_VALKEY_HOST: "valkey"
+      HOMEINV_VALKEY_USER: "homeinv"
       HOMEINV_MQ_HOST: "rabbitmq"
       HOMEINV_MQ_USER: "homeinv"
       HOMEINV_SEARCH_USER: "homeinv"
-      # Which engine answers a search (ADR-0008, REQ-SRCH-005). `postgresql` by
-      # default, because `api` is in every profile and `opensearch` is in
-      # [standard, ha] only — an operator running one of those sets this, and
-      # `minimal` leaves it alone. Choosing `opensearch` without the URL below
-      # aborts startup rather than quietly answering from the other engine.
       HOMEINV_SEARCH_ENGINE: "${HOMEINV_SEARCH_ENGINE:-postgresql}"
       HOMEINV_SEARCH_URL: "https://opensearch:9200"
       HOMEINV_SEARCH_FINGERPRINT: "${HOMEINV_SEARCH_FINGERPRINT}"
-                                                             # pinned like the blob store's
-                                                             # (REQ-SEC-056). The CA signs every
-                                                             # service and every plugin, so
-                                                             # trusting it alone would let any of
-                                                             # them answer as the index (ADR-0044)
     files:
       - target: /run/secrets/plugins.yaml
         generatedFrom: plugins
@@ -493,25 +152,13 @@ services:
     secrets:
       - db-password
       - data-encryption-master-key
-      - url-signing-key          # the worker renders label artifacts and signs their URLs
-      - credential-key           # the same image and the same beans as api (REQ-AUTH-002)
+      - url-signing-key
+      - credential-key
       - valkey-password
       - mq-password
       - search-password
       - mtls-core
     tmpfs: ["/tmp"]
-    # rabbitmq is in every profile since ADR-0051, so it is a flat dependency like
-    # the rest. It used to sit behind a `dependsOnByProfile` key that the generator
-    # never read — the broker was in `standard` and up at the time, and the split
-    # outlived the reason for it.
-    #
-    # `migrate` belongs in that list for the same reason it does in `api`'s: the
-    # worker is the same application under a different profile, and it validates
-    # the JPA schema as it starts. Without the dependency it is a race, and on
-    # 2026-09-12 it lost one — "Schema validation: missing table
-    # [identity.app_user]", with the migration still running in the next unit
-    # along. Nothing had noticed, because until that day the smoke job started
-    # `api` alone and `api` did list it.
     dependsOn: [postgres, valkey, rabbitmq, migrate, clamav, blobstore]
     resources: { memoryReservation: 512Mi, memoryLimit: 1536Mi, cpuQuota: "200%" }
     health: { command: "/usr/bin/healthcheck", interval: 15s, startPeriod: 90s, notify: healthy }
@@ -519,20 +166,14 @@ services:
 
   migrate:
     role: migrate
-    lifecycle: oneShot            # → Quadlet: [Service] Type=oneshot, RemainAfterExit=yes
-                                  # → Compose: restart: "no", and api/worker depend on it
-                                  #            with condition: service_completed_successfully
-                                  # → Helm:    the pre-upgrade Job that already existed
-                                  # Success is exit 0. api and worker do not start otherwise.
-    image: { name: ghcr.io/greluc/home-inv }   # the SAME image again
-    networks: [internal]          # it talks to PostgreSQL and to nothing else
+    lifecycle: oneShot
+    image: { name: ghcr.io/greluc/home-inv }
+    networks: [internal]
     env:
       SPRING_PROFILES_ACTIVE: "migrate"
       HOMEINV_DB_MIGRATE_ON_START: "true"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
-      HOMEINV_DB_MIGRATION_USER: "homeinv_migrator"           # owns the schema, ADR-0041
-    # THE ONLY SERVICE THAT GETS THE MIGRATION CREDENTIAL (ADR-0041, REQ-SEC-101).
-    # No data-encryption-master-key, no jwt-signing-key: Flyway performs DDL and reads no tenant data.
+      HOMEINV_DB_MIGRATION_USER: "homeinv_migrator"
     secrets: [db-migration-password]
     tmpfs: ["/tmp"]
     dependsOn: [postgres]
@@ -550,31 +191,20 @@ services:
 
   bootstrap:
     role: bootstrap
-    lifecycle: oneShot            # → Quadlet: [Service] Type=oneshot, RemainAfterExit=yes
-                                  # → Compose: restart: "no", and api depends on it
-                                  #            with condition: service_completed_successfully
-                                  # Success is exit 0, and exit 0 is also what it returns when
-                                  # the owner already exists — a redeploy must not fail.
-    image: { name: ghcr.io/greluc/home-inv }   # the SAME image again
-    networks: [internal]          # it talks to PostgreSQL and to nothing else
+    lifecycle: oneShot
+    image: { name: ghcr.io/greluc/home-inv }
+    networks: [internal]
     env:
       SPRING_PROFILES_ACTIVE: "bootstrap"
       HOMEINV_DB_URL: "jdbc:postgresql://postgres:5432/homeinv"
-      HOMEINV_DB_USER: "homeinv_app"                          # NOBYPASSRLS, no DDL
-      # Deployment configuration, interpolated from compose/.env exactly like the
-      # base URLs above. The address is the one the first owner signs in with; the
-      # other three have defaults the application supplies, and are named here so
-      # that an operator changing them edits one file.
-      HOMEINV_BOOTSTRAP_EMAIL: "${HOMEINV_BOOTSTRAP_EMAIL}"   # required, no default
+      HOMEINV_DB_USER: "homeinv_app"
+      HOMEINV_BOOTSTRAP_EMAIL: "${HOMEINV_BOOTSTRAP_EMAIL}"
       HOMEINV_BOOTSTRAP_DISPLAY_NAME: "${HOMEINV_BOOTSTRAP_DISPLAY_NAME}"
       HOMEINV_BOOTSTRAP_LOCALE: "${HOMEINV_BOOTSTRAP_LOCALE}"
       HOMEINV_BOOTSTRAP_TENANT_NAME: "${HOMEINV_BOOTSTRAP_TENANT_NAME}"
-    # The application role, not the migrator: this creates rows, it does not
-    # change the schema (REQ-SEC-101). The password is a file like every other
-    # secret — never an environment value holding the value itself (REQ-NFR-054).
     secrets: [db-password, bootstrap-password]
     tmpfs: ["/tmp"]
-    dependsOn: [postgres, migrate]        # the schema has to exist first
+    dependsOn: [postgres, migrate]
     resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
     profiles: [minimal, standard, ha]
     notes: >
@@ -588,45 +218,22 @@ services:
       No health check, because it is not expected to stay alive.
 
   postgres:
-    # Our own image, and only because of the init scripts. They create the five
-    # roles the isolation design rests on, they have to be inside the container
-    # before its first start, and the only two ways in are a bind mount — which
-    # ADR-0022 forbids — or a layer. See deploy/images/postgres/Dockerfile.
     image: { name: ghcr.io/greluc/home-inv-postgres }
-    user: "70:70"                 # the image's own postgres user; 10001 breaks initdb
+    user: "70:70"
     networks: [internal]
     volumes:
-      # `/var/lib/postgresql`, NOT `/var/lib/postgresql/data`. The 18 image places
-        # the cluster in a major-version subdirectory of this path so that
-        # `pg_upgrade --link` does not cross a mount boundary, and it refuses to
-        # start when it finds a volume at the old location — "there appears to be
-        # PostgreSQL data in /var/lib/postgresql/data (unused mount/volume)".
-        # Found by starting it (docker-library/postgres#1259).
       - { name: pgdata, path: /var/lib/postgresql }
-      - { name: pgwal,  path: /var/lib/homeinv/wal-archive }   # ADR-0045
-    tmpfs: ["/tmp", "/var/run/postgresql"]          # the unix socket lives here
+      - { name: pgwal,  path: /var/lib/homeinv/wal-archive }
+    tmpfs: ["/tmp", "/var/run/postgresql"]
     env:
-      POSTGRES_DB: "homeinv"                        # without it the database is `postgres`
-                                                    # and HOMEINV_DB_URL points at nothing
+      POSTGRES_DB: "homeinv"
       POSTGRES_PASSWORD_FILE: "${SECRET_FILE:postgres-superuser-password}"
-      # The superuser password is NOT db-password. That one belongs to homeinv_app,
-      # which is NOBYPASSRLS by design; handing the same string to the superuser
-      # would mean the least privileged role and the most privileged one share a
-      # credential, and a leak of the first would be a leak of the second.
-    settingsDelivery: postgresArgs                  # rendered as `-c key=value`, so the
-                                                    # settings stay visible in the
-                                                    # generated files rather than in a layer
+    settingsDelivery: postgresArgs
     settings:
-      # RPO <= 15 min (REQ-NFR-014) is WAL archiving or it is nothing. The target is a
-      # second runtime-managed volume, because a read-only root filesystem and the
-      # no-bind-mount rule (ADR-0022) leave nowhere else, and because a backup that
-      # cannot be exported through the runtime cannot be restored with correct
-      # ownership (REQ-NFR-066).
       wal_level: replica
       archive_mode: "on"
       archive_command: "test ! -f /var/lib/homeinv/wal-archive/%f && cp %p /var/lib/homeinv/wal-archive/%f"
-      archive_timeout: "900"     # 900 s = the RPO ceiling, so an idle instance still
-                                 # closes a segment inside the window
+      archive_timeout: "900"
     secrets: [postgres-superuser-password, db-password, db-migration-password]
     resources: { memoryReservation: 1Gi, memoryLimit: 2Gi }
     health: { command: "pg_isready", interval: 10s }
@@ -647,19 +254,10 @@ services:
 
   valkey:
     image: { name: docker.io/valkey/valkey, tag: "9-alpine", digest: "sha256:a0dbf4c1d5708782907c10e2c72deff317518518b5288a58416981d9db95d30b" }
-    user: "999:1000"              # the image's own valkey user
+    user: "999:1000"
     networks: [internal]
     volumes: [{ name: kvdata, path: /data }]
     tmpfs: ["/tmp"]
-    # Mounting the ACL is not using it. The image starts `valkey-server` with no
-    # configuration file, so without this the file sat at /etc/valkey/users.acl
-    # and the server ran with `default` enabled and no password — which is the
-    # state ADR-0044 says it fixed. Found by running the connectivity suite
-    # against the stack: an unauthenticated PING was answered (REQ-SEC-104).
-    #
-    # `--appendonly yes` belongs here too: the volume is declared for the AOF,
-    # and without the flag the server keeps an RDB snapshot instead and the
-    # sessions a restart is supposed to preserve are the ones that are lost.
     command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl", "--appendonly", "yes"]
     secrets: [valkey-password]
     files:
@@ -682,31 +280,13 @@ services:
 
   blobstore:
     image: { name: ghcr.io/greluc/home-inv-blobstore }
-    networks: [internal]          # NOT a plugin segment and NOT egress-capable. It is
-                                  # in-deployment infrastructure behind a port, exactly
-                                  # like clamd behind `VirusScanner` — the core's
-                                  # `filesystem` BlobStore adapter stays IN-CORE and
-                                  # talks to this service (ADR-0043). It opens no socket
-                                  # outside the deployment, so ADR-0026 does not make it
-                                  # a plugin.
+    networks: [internal]
     ports:
-      - { container: 8100, host: null }   # gRPC over mTLS, the same BlobStore contract
-                                          # AND the same transport the plugin-blobstore-*
-                                          # plugins use. Never published to the host —
-                                          # and, since ADR-0044, never unauthenticated
-                                          # either: this service holds every tenant's
-                                          # media, and "only reachable from internal"
-                                          # was the whole of its access control.
-    secrets: [mtls-blobstore]             # server identity; api and worker pin its
-                                          # fingerprint through HOMEINV_BLOBSTORE_FINGERPRINT,
-                                          # exactly as a plugin registration does (REQ-SEC-056)
+      - { container: 8100, host: null }
+    secrets: [mtls-blobstore]
     volumes: [{ name: blobdata, path: /var/lib/homeinv/blobs }]
     tmpfs: ["/tmp"]
     resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
-    # The binary answers about itself: the image is `scratch`, so there is no
-    # shell to run a script and no curl to call, and adding either would mean
-    # adding a shell to the container that holds every tenant's media
-    # (ADR-0050).
     health: { command: "/homeinv-blobstore --health", interval: 30s }
     profiles: [minimal, standard, ha]
     notes: >
@@ -729,34 +309,21 @@ services:
 
   clamav:
     image: { name: docker.io/clamav/clamav, tag: "stable", digest: "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422" }
-    user: "100:101"               # the image's own clamav user
-    networks: [scanner]           # NOT a plugin segment: on the old shared one, a
-                                  # plugin could reach clamd and stop it, and with a
-                                  # fail-closed scan that blocks every upload in the
-                                  # instance (ADR-0037, REQ-SEC-098).
+    user: "100:101"
+    networks: [scanner]
     volumes: [{ name: cvddata, path: /var/lib/clamav }]
     tmpfs: ["/tmp", "/run/clamav", "/var/lock", "/var/log/clamav"]
-                                  # `/var/lock` because the image links its lock file
-                                  # there and the root filesystem is read-only: without it
-                                  # clamd never starts, the health check never passes, and
-                                  # every service gated on it waits for ever. Found by
-                                  # starting the stack.
     resources: { memoryReservation: 1Gi, memoryLimit: 1536Mi }
     health: { command: "clamdcheck.sh", interval: 60s, startPeriod: 300s }
     profiles: [minimal, standard, ha]
     egress:
       via: egress-proxy
-      allowlistEntry: clamav-signature-mirror    # the deployment allowlist, ADR-0036
-      configuredBy: freshclam.HTTPProxyServer    # NOT HTTPS_PROXY — freshclam reads
-                                                 # its proxy from its own config file
+      allowlistEntry: clamav-signature-mirror
+      configuredBy: freshclam.HTTPProxyServer
     files:
-      # A6, decided 2026-09-11. Generated from the egress block above and delivered
-      # read-only through each runtime's file-mount mechanism, because a read-only
-      # root filesystem and no bind mounts (ADR-0022) leave no other way in.
-      # It is NOT a secret; only the delivery path is shared with secrets.
       - target: /etc/clamav/freshclam.conf
         generatedFrom: egress
-        expected: expected/clamav-freshclam.conf   # the fixture CI compares against
+        expected: expected/clamav-freshclam.conf
         deliveredBy:
           podman: "secret type=mount"
           docker: "secret"
@@ -777,56 +344,26 @@ services:
 
   egress-proxy:
     image: { name: ghcr.io/greluc/home-inv-egress-proxy }
-    networks: [scanner, egress]   # `egress` is non-internal and is its route out.
-                                  # Without it this container sat only on internal
-                                  # segments and could not make the very call it
-                                  # exists to make (measured 2026-09-11, ADR-0042).
-    networksByPlugin: all         # one interface per plugin segment, generated
+    networks: [scanner, egress]
+    networksByPlugin: all
     ports:
-      - { container: 8118, host: null }   # HTTP/CONNECT, one listener per segment
-                                          # interface. Never published to the host.
+      - { container: 8118, host: null }
     tmpfs: ["/tmp", "/var/run"]
     resources: { memoryReservation: 16Mi, memoryLimit: 32Mi }
     health: { command: "/homeinv-egress-proxy --health", interval: 30s }
-                                  # The binary with a flag, not a script: the image is
-                                  # `scratch` and has no shell to run one (ADR-0054),
-                                  # exactly like blobstore.
     profiles: [minimal, standard, ha]
-                                  # EVERY profile since ADR-0036. `minimal` runs no
-                                  # plugin, but it does run the mandatory scanner,
-                                  # and that scanner's signatures have to come from
-                                  # somewhere. Listing it as [standard, ha] is what
-                                  # left `minimal` with a fail-closed scan and no
-                                  # way to update what it scans against.
     allowlist:
-      # SOURCE 1 — per plugin, from granted manifests. Reloaded on grant/revoke.
       fromGrantedManifests: true
-      # SOURCE 2 — the deployment allowlist (ADR-0036). Fixed, shipped with the
-      # image, consented to by nobody. CLOSED in the same sense as the
-      # instance-wide table list in 07 §7.1: a new entry needs a row here and a
-      # sentence saying why that service cannot be a plugin.
       deployment:
         - id: clamav-signature-mirror
           caller: clamav
           hosts: [database.clamav.net]
-          # The host belongs HERE, because REQ-SEC-097 says the proxy reads this
-          # list from this file, and the generated freshclam fixture
-          # (expected/clamav-freshclam.conf) emits `DatabaseMirror
-          # database.clamav.net` while declaring services.clamav.egress as its
-          # source. The entry carried id, caller and reason and no target, so
-          # neither the proxy nor the generator could have derived it.
           reason: >
             ClamAV is in-deployment infrastructure with no manifest, no capability
             grant and no per-tenant consent, so it cannot use source 1. The mirror
             sits behind a CDN with rotating addresses, which is precisely why
             ADR-0027 chose hostname allowlisting over CIDR.
     files:
-      # The allowlist the proxy reads, generated from the block above. REQ-SEC-097
-      # says "the list is in deploy/services.yaml and the proxy reads it from
-      # there"; generating it is what makes that true rather than aspirational.
-      # Delivered through the same file-mount mechanism as freshclam.conf, for the
-      # same reason: a read-only root filesystem and no bind mounts (ADR-0022)
-      # leave no other way in. It is not a secret and is not treated as one.
       - target: /etc/homeinv/egress-allowlist.conf
         generatedFrom: allowlist
         deliveredBy:
@@ -857,27 +394,16 @@ services:
 
   opensearch:
     image: { name: docker.io/opensearchproject/opensearch, tag: "3", digest: "sha256:bcc1797519726ceb6d651d4a3e60b7c30da91793914a8dfe75fd441d4f641509" }
-    user: "1000:1000"             # the image's own opensearch user
+    user: "1000:1000"
     networks: [internal]
     volumes: [{ name: osdata, path: /usr/share/opensearch/data }]
     tmpfs: ["/tmp", "/usr/share/opensearch/logs", "/usr/share/opensearch/config"]
     secrets: [opensearch-admin-password, search-password, mtls-search]
     env:
-      # THE ONE DOCUMENTED EXCEPTION TO THE *_FILE RULE (ADR-0044, REQ-NFR-054).
-      # This image reads OPENSEARCH_INITIAL_ADMIN_PASSWORD and nothing else; the
-      # *_FILE convention belongs to the Docker Official Images (postgres, mysql),
-      # not to OpenSearch. The variable below held a value the image ignores, so the
-      # security plugin would have come up with no admin password at all — while
-      # DISABLE_INSTALL_DEMO_CONFIG also denied it certificates and the health check
-      # called https://. The generator reads the secret file and injects the value
-      # here; the exception list in REQ-NFR-054 has exactly this one entry.
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: "${SECRET_FILE:opensearch-admin-password}"
       DISABLE_INSTALL_DEMO_CONFIG: "true"
-      bootstrap.memory_lock: "false"     # mlock needs a capability we drop; heap is
-                                         # bounded by the memory limit instead
+      bootstrap.memory_lock: "false"
     files:
-      # DISABLE_INSTALL_DEMO_CONFIG: "true" removes the demo certificates as well as the
-      # demo users, and nothing replaced either. Both are generated now, from this file.
       - target: /usr/share/opensearch/config/opensearch-security/internal_users.yml
         generatedFrom: secrets
         notes: >
@@ -909,21 +435,12 @@ services:
 
   rabbitmq:
     image: { name: docker.io/library/rabbitmq, tag: "4-management-alpine", digest: "sha256:b3b8b7f95f5382a19f9ea33540e604f30aad081d37ad9aba72255135765373a1" }
-    user: "999:999"               # the image's own rabbitmq user
+    user: "999:999"
     networks: [internal]
     volumes: [{ name: mqdata, path: /var/lib/rabbitmq }]
     tmpfs: ["/tmp", "/var/log/rabbitmq"]
-                                  # NOT /etc/rabbitmq any more: the generated
-                                  # rabbitmq.conf is mounted into it, and a tmpfs over
-                                  # the directory would hide the file.
     secrets: [mq-password]
     files:
-      # RabbitMQ 4 REFUSES to start when it finds `RABBITMQ_DEFAULT_USER` or
-      # `RABBITMQ_DEFAULT_PASS_FILE` — "deprecated environment variables detected",
-      # and the container exits. That is what this declared until 2026-09-12, so
-      # the broker never started and nothing that waits for it did either. The
-      # supported way is a configuration file, which is also the way the Valkey
-      # ACL and the OpenSearch users already travel.
       - target: /etc/rabbitmq/rabbitmq.conf
         generatedFrom: secrets
         deliveredBy:
@@ -936,94 +453,33 @@ services:
           valkey-users.acl.
     resources: { memoryReservation: 256Mi, memoryLimit: 512Mi }
     health: { command: "rabbitmq-diagnostics -q ping", interval: 20s, startPeriod: 60s }
-    # In `minimal` since ADR-0051. REQ-MED-005 generates media derivatives
-    # asynchronously in `worker`, and `api` and `worker` are separate processes:
-    # without a broker there is no route from the one that accepts the upload to the
-    # one that is named as doing the work. It was in `standard` and up, which left a
-    # stage-0 requirement with an execution site it could not reach.
     profiles: [minimal, standard, ha]
     notes: >
       This service had no credential until ADR-0044, and the omission was not merely a
       weakness: the built-in `guest` account is restricted to loopback, so api and worker
       could not have connected at all. The generated stack did not start.
 
-  # ---------------------------------------------------------------------------
-  # PLUGINS
-  # ---------------------------------------------------------------------------
-  # A plugin is a container the OPERATOR declares, exactly like every other
-  # service here (REQ-PLG-013). There is no installation from inside the running
-  # system, so this block is the whole of "installing a plugin": the generator
-  # turns one entry into the container, its OWN network segment (ADR-0037), its
-  # entry in the egress allowlist (ADR-0027) and its line in the list the core
-  # reads at start-up — which is what keeps the registration and the container
-  # from disagreeing.
-  #
-  # `role: plugin` is what marks it. Everything below follows from that mark
-  # rather than from a second declaration somewhere else.
-
   plugin-webhook:
     role: plugin
     image: { name: ghcr.io/greluc/home-inv-plugin-webhook }
     plugin:
-      # The id the manifest carries. The core refuses a list and a manifest that
-      # disagree about who a plugin is, because a grant is recorded against the
-      # id and taking the wrong one would attach somebody's consent to the wrong
-      # plugin.
       id: de.greluc.homeinv.plugin.webhook
-      # The manifest this deployment installs, rendered from the plugin's own
-      # with `hosts` below substituted into its `network:outbound` capability.
       manifest: plugins/webhook/manifest.yaml
-      # WHERE THIS DEPLOYMENT ALLOWS IT TO SEND. The operator's decision and
-      # nobody else's: it is compiled into the egress proxy's allowlist, and a
-      # tenant that configures a webhook to a host outside it is refused there,
-      # visibly. The example reaches nothing real on purpose — a deployment that
-      # wants webhooks replaces it.
       hosts: ["hooks.example.org"]
-      # Which secret's certificate the core pins. `setup.sh` computes the
-      # fingerprint when it creates the certificate and substitutes it into the
-      # generated list, because the certificate does not exist until then.
       fingerprintFrom: mtls-plugin-webhook
-      # WHICH PUBLIC KEY MAY VOUCH FOR THIS PLUGIN'S MANIFEST. The core verifies
-      # the manifest's detached signature against this key at every start-up and
-      # records what it found; an entry whose signature does not verify is
-      # registered DISABLED with the reason, and no setting runs it (REQ-PLG-004,
-      # ADR-0085).
-      #
-      # A `signed` boolean stood here until 2026-09-22 and was the OPERATOR's
-      # report of a `cosign` run that nothing could confirm or contradict. A claim
-      # about a check is not a check.
-      #
-      # The key is public and is still a secret ENTRY, because that is how a
-      # deployment already carries per-plugin material and because a third party's
-      # key is theirs to hand over rather than ours to publish. `setup.sh` seeds it
-      # from the repository for a first-party plugin and leaves it empty for
-      # anyone else's -- and an empty key with no signature is simply "unsigned".
       publicKeyFrom: cosign-plugin-webhook
     segment:
-      # Its own network, generated from this entry. The subnet is stated rather
-      # than assigned, because it is the operator's network and because the
-      # egress proxy identifies a caller by the interface a connection arrived on
-      # — which is a subnet comparison (ADR-0037).
       subnet: 10.89.31.0/24
-    networks: [plugin-webhook]    # generated; `api`, `worker` and `egress-proxy`
-                                  # join it through their `networksByPlugin: all`
+    networks: [plugin-webhook]
     ports:
-      - { container: 8200, host: null }   # gRPC over mTLS, reached by api and worker
-                                          # on this segment and by nothing else
+      - { container: 8200, host: null }
     env:
       HOMEINV_PLUGIN_PORT: "8200"
       HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-webhook"
-      # The one route out. A plugin segment is `internal: true`, so without this
-      # there is no way out at all — which is the default and the point.
       HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
       HOMEINV_WEBHOOK_TIMEOUT_SECONDS: "10"
-    secrets: [mtls-plugin-webhook]        # its server identity; the core pins its
-                                          # fingerprint (REQ-SEC-056)
+    secrets: [mtls-plugin-webhook]
     resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
-    # NO container health check, and that is not an omission: the image is
-    # `scratch`, so there is no shell to run one and no curl to call — and the
-    # core asks this plugin about itself over the contract's own `PluginHealth`
-    # service, which is a better question than "is the process up" (09 §9.5).
     profiles: [standard, ha]
     notes: >
       The first first-party plugin (ADR-0072). `minimal` runs no plugin at all,
@@ -1037,11 +493,6 @@ services:
     plugin:
       id: de.greluc.homeinv.plugin.smtp
       manifest: plugins/smtp/manifest.yaml
-      # WHERE THIS DEPLOYMENT SUBMITS. A `tcp:` target and not a host, because
-      # submission is not HTTP: the proxy opens a tunnel to exactly this
-      # host:port and the plugin speaks SMTP inside it (O11, ADR-0027). The port
-      # is part of the allowance — "the mail server, on any port" is not what an
-      # operator meant.
       tcp: ["mail.example.org:587"]
       fingerprintFrom: mtls-plugin-smtp
       publicKeyFrom: cosign-plugin-smtp
@@ -1054,22 +505,15 @@ services:
       HOMEINV_PLUGIN_PORT: "8201"
       HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-smtp"
       HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
-      # The mail server, and it has to agree with the `tcp:` target above: one
-      # says where the plugin submits and the other says where it is ALLOWED to.
       HOMEINV_SMTP_HOST: "${HOMEINV_SMTP_HOST:-mail.example.org}"
       HOMEINV_SMTP_PORT: "${HOMEINV_SMTP_PORT:-587}"
-      # `starttls` for 587, `implicit` for 465. Neither is guessed at: guessing
-      # means guessing whether the credentials travel in the clear, so a value
-      # that names neither leaves the plugin NOT_CONFIGURED.
       HOMEINV_SMTP_SECURITY: "${HOMEINV_SMTP_SECURITY:-starttls}"
       HOMEINV_SMTP_USER: "${HOMEINV_SMTP_USER:-}"
       HOMEINV_SMTP_SENDER: "${HOMEINV_SMTP_SENDER:-}"
       HOMEINV_SMTP_TIMEOUT_SECONDS: "30"
     secrets:
-      - mtls-plugin-smtp          # its server identity, pinned by the core
-      - plugin-smtp-password      # the mail account's password, the OPERATOR's
-                                  # credential — it never passes through the core
-                                  # (ADR-0073)
+      - mtls-plugin-smtp
+      - plugin-smtp-password
     resources: { memoryReservation: 32Mi, memoryLimit: 128Mi }
     profiles: [standard, ha]
     notes: >
@@ -1086,14 +530,6 @@ services:
     plugin:
       id: de.greluc.homeinv.plugin.blobstore.s3
       manifest: plugins/blobstore-s3/manifest.yaml
-      # EVERY OBJECT STORE THIS DEPLOYMENT MAY REACH. A `tcp:` target and not a
-      # host, because what runs inside the tunnel is HTTPS the plugin terminates
-      # itself: the proxy sees a host and a port and never a URL (ADR-0027).
-      #
-      # A TENANT may configure its own endpoint (ADR-0073), and one that is not
-      # on this list gets a refusal from the proxy rather than a connection. That
-      # is the division: the tenant chooses where its data goes, the operator
-      # chooses which places this deployment may reach at all.
       tcp: ["objects.example.org:443"]
       fingerprintFrom: mtls-plugin-blobstore-s3
       publicKeyFrom: cosign-plugin-blobstore-s3
@@ -1106,26 +542,16 @@ services:
       HOMEINV_PLUGIN_PORT: "8202"
       HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-s3"
       HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
-      # The deployment's own bucket, used by every tenant that did not name
-      # its own. Empty is a valid deployment: each tenant then brings its own
-      # endpoint, bucket and keys, and the plugin says so once at start-up.
       HOMEINV_S3_ENDPOINT: "${HOMEINV_S3_ENDPOINT:-}"
       HOMEINV_S3_BUCKET: "${HOMEINV_S3_BUCKET:-}"
       HOMEINV_S3_REGION: "${HOMEINV_S3_REGION:-us-east-1}"
       HOMEINV_S3_PREFIX: "${HOMEINV_S3_PREFIX:-}"
-      # `path` puts the bucket in the path, `virtual` in the hostname. Path by
-      # default: a self-hosted store rarely has a wildcard certificate, and with
-      # `virtual` the operator would have to allow one host per bucket.
       HOMEINV_S3_ADDRESSING: "${HOMEINV_S3_ADDRESSING:-path}"
       HOMEINV_S3_ACCESS_KEY_ID: "${HOMEINV_S3_ACCESS_KEY_ID:-}"
       HOMEINV_S3_TIMEOUT_SECONDS: "60"
     secrets:
-      - mtls-plugin-blobstore-s3        # its server identity, pinned by the core
-      - plugin-blobstore-s3-secret-key  # the deployment's secret access key, the
-                                        # OPERATOR's credential — it never passes
-                                        # through the core (ADR-0073). A TENANT's
-                                        # own key is a different thing and is
-                                        # sealed in the core instead
+      - mtls-plugin-blobstore-s3
+      - plugin-blobstore-s3-secret-key
     resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
     profiles: [standard, ha]
     notes: >
@@ -1143,10 +569,6 @@ services:
     plugin:
       id: de.greluc.homeinv.plugin.blobstore.nextcloud
       manifest: plugins/blobstore-nextcloud/manifest.yaml
-      # EVERY NEXTCLOUD THIS DEPLOYMENT MAY REACH, for the reason the S3
-      # plugin's list gives: a tenant may configure its own instance and one
-      # that is not here gets a refusal from the proxy rather than a
-      # connection (ADR-0027, ADR-0073).
       tcp: ["cloud.example.org:443"]
       fingerprintFrom: mtls-plugin-blobstore-nextcloud
       publicKeyFrom: cosign-plugin-blobstore-nextcloud
@@ -1159,19 +581,13 @@ services:
       HOMEINV_PLUGIN_PORT: "8203"
       HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-blobstore-nextcloud"
       HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
-      # The deployment's own account, used by every tenant that did not name
-      # its own. Empty is a valid deployment: each tenant then brings its own
-      # instance, account and app password.
       HOMEINV_NEXTCLOUD_URL: "${HOMEINV_NEXTCLOUD_URL:-}"
       HOMEINV_NEXTCLOUD_USER: "${HOMEINV_NEXTCLOUD_USER:-}"
       HOMEINV_NEXTCLOUD_FOLDER: "${HOMEINV_NEXTCLOUD_FOLDER:-}"
       HOMEINV_NEXTCLOUD_TIMEOUT_SECONDS: "60"
     secrets:
-      - mtls-plugin-blobstore-nextcloud          # its server identity, pinned by the core
-      - plugin-blobstore-nextcloud-password      # the deployment's APP password, the
-                                                 # OPERATOR's credential — it never passes
-                                                 # through the core (ADR-0073). A TENANT's
-                                                 # own is sealed in the core instead
+      - mtls-plugin-blobstore-nextcloud
+      - plugin-blobstore-nextcloud-password
     resources: { memoryReservation: 64Mi, memoryLimit: 256Mi }
     profiles: [standard, ha]
     notes: >
@@ -1190,10 +606,6 @@ services:
     plugin:
       id: de.greluc.homeinv.plugin.oidc
       manifest: plugins/oidc/manifest.yaml
-      # THE PROVIDER THIS DEPLOYMENT FEDERATES WITH. A `hosts:` target and not
-      # a `tcp:` one: what the plugin speaks is HTTPS, three times -- discovery,
-      # the key set and the token endpoint -- and the proxy sees the host it is
-      # tunnelling to (ADR-0027).
       hosts: ["provider.example"]
       fingerprintFrom: mtls-plugin-oidc
       publicKeyFrom: cosign-plugin-oidc
@@ -1206,8 +618,6 @@ services:
       HOMEINV_PLUGIN_PORT: "8204"
       HOMEINV_MTLS_PLUGIN_FILE: "/run/secrets/mtls-plugin-oidc"
       HOMEINV_EGRESS_PROXY: "egress-proxy:8118"
-      # The provider, and it has to agree with the `hosts:` target above: one
-      # says where the plugin goes and the other says where it is ALLOWED to.
       HOMEINV_OIDC_ISSUER: "${HOMEINV_OIDC_ISSUER:-}"
       HOMEINV_OIDC_CLIENT_ID: "${HOMEINV_OIDC_CLIENT_ID:-}"
       HOMEINV_OIDC_PROVIDER_KEY: "${HOMEINV_OIDC_PROVIDER_KEY:-oidc}"
@@ -1215,12 +625,8 @@ services:
       HOMEINV_OIDC_SCOPES: "${HOMEINV_OIDC_SCOPES:-openid email profile}"
       HOMEINV_OIDC_TIMEOUT_SECONDS: "20"
     secrets:
-      - mtls-plugin-oidc            # its server identity, pinned by the core
-      - plugin-oidc-client-secret   # the client secret the PROVIDER issued, the
-                                    # operator's credential -- it never passes
-                                    # through the core (ADR-0073), and an empty
-                                    # one means a public client authenticating
-                                    # with PKCE alone
+      - mtls-plugin-oidc
+      - plugin-oidc-client-secret
     resources: { memoryReservation: 192Mi, memoryLimit: 512Mi }
     profiles: [standard, ha]
     notes: >
@@ -1234,12 +640,6 @@ services:
       instance operator's grant (ADR-0066).
 
 secrets:
-  # Passed as files, never as environment values holding the secret itself.
-  # A missing secret aborts startup — there is no generated default (REQ-NFR-046).
-  #
-  # Every one of these is also NAMED to the service that needs it, as
-  # HOMEINV_<NAME>_FILE holding the mount path. That derivation is in the
-  # generator, so a secret cannot be mounted and left unreachable.
   postgres-superuser-password:
     required: true
     kind: random
@@ -1307,7 +707,7 @@ secrets:
   mq-password:
     required: true
     kind: random
-    profiles: [minimal, standard, ha]     # follows rabbitmq into `minimal` (ADR-0051)
+    profiles: [minimal, standard, ha]
     services: [rabbitmq, api, worker]
     notes: >
       RabbitMQ had no credential at all, and `guest` is loopback-only — the generated
@@ -1337,12 +737,6 @@ secrets:
   mtls-plugin-webhook:
     required: false
     kind: mtls-server
-    # No `profiles:`. It would change nothing if it were here -- `setup.sh`
-    # creates every secret the catalogue names, in every profile, exactly as it
-    # does for `mtls-search` -- and saying it would imply a filter that does not
-    # exist. The certificate being there in `minimal` is what lets the smoke
-    # suite start this container on the minimal stack to prove its segment
-    # refuses what it must (deploy/smoke/connectivity.sh).
     services: [plugin-webhook]
     notes: >
       Server identity for `plugin-webhook`. The core pins its fingerprint, which
@@ -1412,33 +806,6 @@ secrets:
     notes: >
       Server identity for `plugin-smtp`, pinned by the core exactly as every
       other in-deployment peer is (REQ-SEC-056).
-  # ---------------------------------------------------------------------------
-  # The public keys a plugin manifest is verified against (REQ-PLG-004, ADR-0085)
-  # ---------------------------------------------------------------------------
-  #
-  # A public key is not a secret, and these are secret ENTRIES anyway. Three
-  # reasons, and none of them is confusion about what "public" means:
-  #
-  #   * a deployment already has exactly one mechanism for getting per-plugin
-  #     material onto a host and into a container with a read-only root, and it
-  #     is this one;
-  #   * a THIRD PARTY's key is theirs to hand over, which makes it operator
-  #     input on the same footing as their plugin's password -- the difference
-  #     between first-party and third-party should be which file `setup.sh`
-  #     finds, not which mechanism exists;
-  #   * one entry per plugin is what lets an operator replace one publisher's
-  #     key without touching anybody else's.
-  #
-  # `seedFrom` names a file in THIS repository. When it exists, `setup.sh`
-  # copies it; when it does not, the secret is written empty and the operator is
-  # told -- and an empty key with no signature is simply "unsigned", which is a
-  # state REQ-PLG-004 lets them permit deliberately. An empty key with a
-  # signature is NOT unsigned: it is a signature nobody can check, and the core
-  # refuses it.
-  #
-  # The seed file is the same for all five because this project signs its own
-  # plugins with one key. Five entries rather than one shared entry all the
-  # same: the day a plugin is handed to somebody else, only its own line moves.
   cosign-plugin-webhook:
     required: false
     kind: cosign-public
@@ -1493,28 +860,19 @@ secrets:
       OPENSEARCH_INITIAL_ADMIN_PASSWORD and knows no _FILE variant, so the generator
       injects the file's contents into that variable. Stated here rather than left as a
       variable the image silently ignores.
-  # Credentials for outbound targets (object storage, SMTP, OIDC) are deliberately
-  # absent here: those connections leave the core entirely — see ADR-0026. They
-  # belong to the plugin services that make them, and are added with those
-  # services in the same change.
 
 forbidden:
-  # Checked in CI against every generated artifact and the Helm chart
-  # (REQ-SEC-084). Listed here so the check has one place to read from.
   - privileged
   - cap_add
   - "pid: host"
   - "network_mode: host"
-  - "user: root"                    # uid 0 in any form, not the literal string only
+  - "user: root"
   - "SecurityLabelDisable=true"
   - container socket mounts
   - host ports below 1024
   - bind mounts into host directories
 
 required:
-  # The positive counterpart to `forbidden`, so the CI check reads both from one
-  # place (REQ-SEC-085). Stated as properties, not as values: a fixed uid would be
-  # wrong for every upstream image — see the note at the top of this file.
   - every service runs as a non-root user (uid != 0)
   - every service sets readOnlyRootFilesystem, and declares the paths it needs writable
   - every service drops all capabilities and sets no-new-privileges
@@ -1532,8 +890,6 @@ required:
     "reachable from `internal`" as authorisation (ADR-0044)
   - postgres declares an archive_command and a volume for it; a deployment that promises
     RPO <= 15 min and archives nowhere fails the check (ADR-0045, REQ-NFR-014)
-  # Topology properties, checked by the connectivity test rather than by reading
-  # this file (ADR-0037, REQ-SEC-098/099, ADR-0044)
   - every plugin sits on its own segment, alone among plugins
   - no plugin segment contains clamav
   - no management listener is reachable from a plugin segment
@@ -1542,23 +898,12 @@ required:
     blobstore and :8090 on both core roles all refuse from the `frontend` segment.
     The ingress is the container an attacker meets first, and it used to sit on
     `internal` with all of them"
-  # ADR-0042. Verified by running the stack, not by reading this file.
   - exactly two containers sit on a non-internal segment — `web` and
     `egress-proxy` — and neither holds data, a credential or domain logic
   - api and worker sit on no non-internal segment and reach no external host
   - exactly one host port is published in the whole deployment
 
 budget:
-  # Stated because the sum of limits deliberately exceeds the VM, and a figure
-  # nobody can derive from the table is worse than none (06 §6.7).
-  #
-  # The figures below are the sums of the per-service values in this file, with
-  # NO plugin counted — plugins are added separately by `plusPerPlugin`, for
-  # reservations AND limits. The previous figures mixed the two conventions:
-  # `standard`'s reservation total silently included three first-party plugins
-  # while its limit total did not, and `minimal`'s limit total was 0.25 Gi below
-  # what its own rows add up to. REQ-NFR-009 measures against these numbers, so
-  # they are computed, not estimated. They include `blobstore` (ADR-0043).
   minimal:  { reservations: ~3.5Gi, limits: ~7.2Gi }
   standard: { reservations: ~5.2Gi, limits: ~9.7Gi,
               plusPerPlugin: { reservation: 64Mi, limit: 256Mi } }

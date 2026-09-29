@@ -77,15 +77,8 @@ public class NullablePropertiesSaySo {
         return property;
       }
       if (property.get$ref() != null) {
-        // "This object, or null" is a `oneOf` in JSON Schema, which would replace
-        // the reference and take the description with it. Left as it was.
         return property;
       }
-      // A schema built for a scalar carries `type`, the 3.0 field, and leaves
-      // `types` null; the 3.1 set is filled at write time. Seeding from one and
-      // writing the other is what actually reaches the document -- reading only
-      // `types` finds nothing and silently does nothing, which is where this sat
-      // for a while.
       Set<String> types =
           property.getTypes() != null
               ? new LinkedHashSet<>(property.getTypes())

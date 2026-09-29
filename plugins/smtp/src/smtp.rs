@@ -173,10 +173,6 @@ async fn exchange(
         let reply = command(&mut stream, "STARTTLS").await?;
         expect(&reply, 220, "STARTTLS")?;
 
-        // The socket is consumed by the handshake, so the conversation continues
-        // on the TLS stream -- and EHLO is asked again, because a server's
-        // capabilities before and after TLS are allowed to differ and AUTH
-        // usually appears only after.
         stream = match stream {
             Connection::Plain(socket) => {
                 Connection::Tls(Box::new(client_handshake(socket, &server.host).await?))
@@ -200,7 +196,6 @@ async fn exchange(
     expect(&reply, 250, "MAIL FROM")?;
 
     let reply = command(&mut stream, &format!("RCPT TO:<{recipient}>")).await?;
-    // 251 is "not local, will forward", which is an acceptance.
     if !(reply.starts_with("250") || reply.starts_with("251")) {
         return Err(refusal("RCPT TO", &reply));
     }
@@ -209,9 +204,6 @@ async fn exchange(
     expect(&reply, 354, "DATA")?;
 
     for line in message.split("\r\n") {
-        // Dot-stuffing, RFC 5321 §4.5.2: a line beginning with a full stop would
-        // otherwise end the message here. Base64 bodies never do, and headers
-        // are ours -- this is the belt for the braces.
         if let Some(rest) = line.strip_prefix('.') {
             stream
                 .write_all(format!("..{rest}\r\n").as_bytes())
@@ -227,8 +219,6 @@ async fn exchange(
     let accepted = command(&mut stream, ".").await?;
     expect(&accepted, 250, "the message")?;
 
-    // QUIT is best-effort: the message is accepted by here, and a server that
-    // hangs up first is not a failed delivery.
     let _ = command(&mut stream, "QUIT").await;
 
     Ok(accepted)
@@ -317,8 +307,6 @@ async fn read_reply(stream: &mut Connection) -> Result<String, String> {
         reply.push(byte[0] as char);
         if reply.ends_with("\r\n") {
             let last = reply.lines().next_back().unwrap_or("");
-            // A four-character code followed by a space ends the reply; a hyphen
-            // means another line follows.
             if last.len() >= 4 && last.as_bytes()[3] == b' ' {
                 break;
             }
@@ -341,9 +329,6 @@ fn expect(reply: &str, code: u16, what: &str) -> Result<(), String> {
 
 /// A refusal, as the delivery log should carry it.
 fn refusal(what: &str, reply: &str) -> String {
-    // The server's own line, which is the useful part -- "550 5.1.1 no such
-    // mailbox" tells an operator what to do and "the mail was not sent" does
-    // not. Never the message, and never the password.
     format!(
         "the mail server refused {what}: {}",
         reply.replace(['\r', '\n'], " ")
@@ -360,8 +345,6 @@ mod tests {
         assert_eq!(Security::parse("STARTTLS"), Some(Security::StartTls));
         assert_eq!(Security::parse("implicit"), Some(Security::Implicit));
         assert_eq!(Security::parse("smtps"), Some(Security::Implicit));
-        // Anything else is refused rather than guessed at: guessing here means
-        // guessing whether the credentials travel in the clear.
         assert_eq!(Security::parse("none"), None);
         assert_eq!(Security::parse("plain"), None);
     }
@@ -376,8 +359,6 @@ mod tests {
 
     #[test]
     fn a_refusal_is_one_line_however_many_the_server_sent() {
-        // A multiline refusal in a log record is a record that looks like
-        // several, and the delivery log stores one string per attempt.
         let refused = refusal("DATA", "451-first\r\n451 second");
         assert!(!refused.contains('\n'));
         assert!(refused.contains("451-first"));

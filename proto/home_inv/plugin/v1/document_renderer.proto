@@ -1,29 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// TURNING A DESCRIBED DOCUMENT INTO A RENDERED ONE.
-//
-// General on purpose. The first thing that needs one is the insurance report of
-// REQ-LIFE-016, and this service is deliberately not about insurance reports:
-// anything in this system that has to become a document describes it here and
-// asks whichever renderer the operator installed. A second report, a printed
-// inventory, a handover note for a lent item -- none of them needs a new port, a
-// new plugin or a PDF library in the core.
-//
-// It is available to OTHER PLUGINS as well, through the host channel
-// (host.proto): a plugin that produces documents describes one and asks the core
-// to render it, rather than carrying a PDF library and a font pack of its own.
-//
-// A DOCUMENT IS DESCRIBED, NOT PROGRAMMED. `Block` is a closed set and will stay
-// one: ADR-0020 says the configuration surface must not become a programming
-// language, and a document format with conditionals in it is that language
-// arriving through the back door. A renderer lays out what it is given and
-// evaluates nothing.
-//
-// The consequence is deliberate: THE CORE DECIDES WHAT A DOCUMENT SAYS AND THE
-// PLUGIN DECIDES WHAT IT LOOKS LIKE. A renderer chooses fonts, spacing, how a
-// table breaks across pages and what a heading weighs. It does not decide that a
-// figure is worth showing, because it is not the one that knows.
 
 syntax = "proto3";
 

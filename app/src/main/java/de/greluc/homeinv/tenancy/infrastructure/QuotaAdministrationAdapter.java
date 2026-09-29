@@ -54,8 +54,6 @@ public class QuotaAdministrationAdapter implements QuotaAdministration {
       throw new IllegalArgumentException("A quota is zero or more");
     }
     jdbc.sql(SET).params(tenantId, quota.name(), permitted, actor).query(String.class).optional();
-    // REQ-SEC-068 wants every mutating action attributable. Until the audit log
-    // carries instance-level entries, this line is what says who allocated what.
     log.info(
         "Operator {} set the {} quota of tenant {} to {}", actor, quota, tenantId, permitted);
   }

@@ -125,8 +125,6 @@ public class AttributeProjector {
       case DATE -> date = LocalDate.parse(value.asString()).atStartOfDay(ZoneOffset.UTC).toInstant();
       case DATETIME -> date = Instant.parse(value.asString());
       case REFERENCE -> reference = UUID.fromString(value.asString());
-      // TEXT, MULTILINE, URL, EMAIL and ENUM all project as text; the kinds that
-      // project as nothing were filtered out by `projected()` above.
       default -> text = value.asString();
     }
 
@@ -143,10 +141,6 @@ public class AttributeProjector {
             field.key(),
             number,
             text,
-            // Wrapped, not passed as an Instant: the driver cannot infer a SQL
-            // type for one and refuses the statement. Nothing caught it until a
-            // shipped template brought the first sortable `date` field, because
-            // every earlier test projected text, numbers and money only.
             date == null ? null : java.sql.Timestamp.from(date),
             flag,
             reference,

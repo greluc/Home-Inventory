@@ -185,16 +185,10 @@ impl BlobStore for FilesystemBlobStore {
         let target = reference.path_under(&self.root);
 
         if tokio::fs::try_exists(&target).await.unwrap_or(false) {
-            // Already there. Content-addressed, so identical address means
-            // identical bytes and there is nothing to write: the same photograph
-            // uploaded twice by one tenant costs no second copy (ADR-0032).
             let byte_size = tokio::fs::metadata(&target)
                 .await
                 .map_err(|failure| Status::internal(failure.to_string()))?
                 .len();
-            // The rest of the stream is drained rather than dropped. Dropping it
-            // resets the HTTP/2 stream, which the client sees as a transport
-            // failure rather than as the success this is.
             while frames.next().await.transpose()?.is_some() {}
             return Ok(Response::new(PutResponse {
                 created: false,
@@ -209,18 +203,12 @@ impl BlobStore for FilesystemBlobStore {
             .await
             .map_err(|failure| Status::internal(failure.to_string()))?;
 
-        // Written beside the target and renamed at the end. A reader that finds
-        // the final name finds a complete file — without this, a transfer
-        // interrupted halfway leaves a truncated blob at exactly the address a
-        // later `Head` would report as present.
         let temporary = parent.join(format!(".incoming-{}", uuid::Uuid::now_v7()));
         let mut digest = Sha256::new();
         let mut written: u64 = 0;
 
         let outcome = async {
             let mut file = tokio::fs::File::create(&temporary).await?;
-            // The first frame may carry bytes as well as the reference, and a
-            // client that sends them is not wrong — so they count.
             if !first.chunk.is_empty() {
                 digest.update(&first.chunk);
                 written += first.chunk.len() as u64;
@@ -251,10 +239,6 @@ impl BlobStore for FilesystemBlobStore {
 
         let computed = hex::encode(digest.finalize());
         if computed != reference.sha256() {
-            // The caller's address and the caller's bytes disagree. Believing
-            // the address would make this content-addressed in name only, and
-            // the first corrupted transfer would be indistinguishable from a
-            // different file.
             let _ = tokio::fs::remove_file(&temporary).await;
             warn!("a Put was refused: the content does not hash to the address given");
             return Err(Status::invalid_argument(
@@ -317,8 +301,6 @@ impl BlobStore for FilesystemBlobStore {
                 exists: true,
                 byte_size: metadata.len(),
             })),
-            // Absence is an answer, not an error: `Head` exists to be asked about
-            // blobs that may not be there.
             Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
                 Ok(Response::new(HeadResponse {
                     exists: false,
@@ -349,14 +331,8 @@ impl BlobStore for FilesystemBlobStore {
             .await
             .map_err(|failure| Status::internal(failure.to_string()))?;
 
-        // Held until this call returns, by whichever path it returns on.
         let _appending = self.claim(&target)?;
 
-        // What is already there decides whether this append is the one the
-        // client thinks it is. A mismatch is refused rather than reconciled:
-        // writing at the wrong place would produce a file that is the right
-        // length and the wrong bytes, and the only thing that would notice is
-        // the digest at the very end.
         let present = match tokio::fs::metadata(&target).await {
             Ok(metadata) => metadata.len(),
             Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => 0,
@@ -376,8 +352,6 @@ impl BlobStore for FilesystemBlobStore {
                 .append(true)
                 .open(&target)
                 .await?;
-            // The first frame may carry bytes as well as the address, and a
-            // client that sends them is not wrong -- so they count.
             let mut chunk = first.chunk;
             loop {
                 if !chunk.is_empty() {
@@ -404,20 +378,12 @@ impl BlobStore for FilesystemBlobStore {
                     }
                 }
             }
-            // Durable before the offset is reported. A client that is told "you
-            // are at 5 MB" and then finds 3 MB after a power cut would resume
-            // from a place that does not exist, which is the one failure a
-            // resumable upload exists to prevent (REQ-MED-008).
             file.sync_all().await?;
             Ok::<_, std::io::Error>(())
         }
         .await;
 
         if let Err(failure) = outcome {
-            // The bytes that did arrive stay. The offset is the file's length
-            // either way, so a client that asks what arrived gets a truthful
-            // answer and continues from there -- which is exactly what a broken
-            // connection looks like from here.
             let length = tokio::fs::metadata(&target)
                 .await
                 .map(|metadata| metadata.len())
@@ -450,9 +416,6 @@ impl BlobStore for FilesystemBlobStore {
                 exists: true,
                 byte_size: metadata.len(),
             })),
-            // Absent is an answer rather than an error: an upload that expired
-            // and one that was never begun look the same from here, and the
-            // caller's next move is the same for both.
             Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
                 Ok(Response::new(StagedResponse {
                     exists: false,
@@ -509,10 +472,6 @@ impl BlobStore for FilesystemBlobStore {
 
         match tokio::fs::remove_file(&target).await {
             Ok(()) => Ok(Response::new(DeleteResponse { removed: true })),
-            // Nothing to remove is not a failure, for the reason `Delete` gives:
-            // this is called again after a partial failure, and a retry that
-            // failed because the work was already done is a retry nobody can
-            // make succeed.
             Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
                 Ok(Response::new(DeleteResponse { removed: false }))
             }
@@ -530,9 +489,6 @@ impl BlobStore for FilesystemBlobStore {
 
         match tokio::fs::remove_file(&path).await {
             Ok(()) => Ok(Response::new(DeleteResponse { removed: true })),
-            // Nothing to remove is a success. Deletion is retried after a partial
-            // failure, and a retry that failed because the work was already done
-            // would be a retry nobody could make succeed.
             Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
                 Ok(Response::new(DeleteResponse { removed: false }))
             }
@@ -571,7 +527,6 @@ mod tests {
 
     #[test]
     fn an_envelope_naming_another_tenant_is_refused() {
-        // The one that would write one tenant's bytes under another's address.
         let failure = FilesystemBlobStore::reference(
             Some(&address(TENANT)),
             Some(&envelope("0191e2aa-0000-7000-8000-000000000002")),
@@ -582,8 +537,6 @@ mod tests {
 
     #[test]
     fn no_envelope_at_all_is_still_a_correct_caller() {
-        // The contract had no envelope before 2026-09-21, and the field is
-        // additive: a caller that sends none is old, not wrong.
         assert!(FilesystemBlobStore::reference(Some(&address(TENANT)), None).is_ok());
         assert!(
             FilesystemBlobStore::reference(Some(&address(TENANT)), Some(&envelope(""))).is_ok()

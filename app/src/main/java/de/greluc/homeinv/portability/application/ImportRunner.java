@@ -82,10 +82,6 @@ public class ImportRunner {
     this.json = json;
     this.csv = csv;
     this.profiles = profiles;
-    // Sorted by the order each block declares, not by name: an item written
-    // against a type version that has not arrived is a row that cannot be
-    // inserted, and a place inside a place that has not arrived is the same
-    // problem one level down.
     this.targets = targets.stream().sorted(Comparator.comparingInt(ImportTarget::order)).toList();
     this.transactions = transactions;
   }
@@ -145,8 +141,6 @@ public class ImportRunner {
       Map<String, Object> blocks = new LinkedHashMap<>();
       transactions.executeWithoutResult(
           status -> {
-            // One per import and thrown away with it: what the archive's ids mean
-            // here is derived from the natural keys in the archive, not stored.
             Remapping ids = new Remapping();
             int position = 0;
             for (ImportTarget target : targets) {
@@ -161,11 +155,6 @@ public class ImportRunner {
               jobs.progress(tenantId, job.id(), position * 95 / Math.max(1, targets.size()));
             }
             if (job.dryRun()) {
-              // The whole point: everything above happened, every constraint was
-              // met, and none of it stays. REQ-PORT-001 asks for a preview that
-              // shows errors without writing, and this is the only way to make
-              // one that is a preview OF the import rather than of a second
-              // implementation of it.
               status.setRollbackOnly();
             }
           });
@@ -178,9 +167,6 @@ public class ImportRunner {
           tenantId,
           job.dryRun() ? "dry run, rolled back" : "committed");
     } catch (IOException | RuntimeException failed) {
-      // Recorded rather than rethrown: one tenant's import failing must not stop
-      // the run, and the message is shown to whoever asked -- so it says what
-      // happened and never carries a stack trace.
       log.error("An import failed for tenant {}", tenantId, failed);
       jobs.failed(tenantId, job.id(), reasonOf(failed));
     }
@@ -251,13 +237,6 @@ public class ImportRunner {
    */
   private static String reasonOf(Throwable failure) {
     if (failure instanceof org.springframework.dao.DuplicateKeyException) {
-      // The one collision an import cannot resolve, and it deserves a sentence
-      // rather than a constraint name. An id is unique in the database and not
-      // merely within a tenant -- deliberately, because it is the id printed on
-      // a label (10 §10.2.1) and a label resolving to two things would be worse
-      // than one resolving to none. So an archive lives in one tenant per
-      // instance: importing it into a second one while the first still holds
-      // those rows is asking for the same id twice.
       return "This archive holds rows whose ids already exist on this instance, in another "
           + "tenant. An archive can be imported into one tenant per instance: the tenant it came "
           + "from still has them. Nothing was written.";

@@ -60,8 +60,6 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
             entry("de.greluc.homeinv.plugin.future", future),
             entry("de.greluc.homeinv.plugin.good", good));
 
-    // No exception, and the other one is still registered: one plugin built for
-    // another contract is not a reason to have none (09 §9.11).
     assertThatCode(() -> run(list)).doesNotThrowAnyException();
 
     assertThat(registry.installed(200)).extracting(PluginRegistry.Registration::pluginId)
@@ -75,8 +73,6 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
     Path manifest = directory.resolve("claims.yaml");
     Files.writeString(manifest, manifestOf("de.greluc.homeinv.plugin.actual", ">=1.0.0 <2.0.0"));
 
-    // A grant is recorded against the id, so taking the wrong one would attach
-    // somebody's consent to the wrong plugin.
     Path list = list(directory, entry("de.greluc.homeinv.plugin.claimed", manifest));
     run(list);
 
@@ -98,16 +94,12 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
 
     assertThatCode(() -> run(list)).doesNotThrowAnyException();
     assertThatCode(() -> run(directory.resolve("no-such-list.yaml"))).doesNotThrowAnyException();
-    // And an instance with no list at all, which is what `minimal` is.
     assertThatCode(() -> run(null)).doesNotThrowAnyException();
   }
 
   @Test
   @DisplayName("are registered from a list that carries the manifest itself")
   void registersWhatIsInlined(@TempDir Path directory) throws Exception {
-    // What `deploy/generate.py` writes: one file for the deployment, with each
-    // manifest in it, rather than one file per plugin plus a path in each entry
-    // — a path is a thing that can be right in the list and wrong in the mount.
     Path list =
         list(
             directory,
@@ -125,8 +117,6 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("refuse an entry that carries both a path and a document, or neither")
   void exactlyOneManifest(@TempDir Path directory) throws Exception {
-    // A reader that preferred one would silently ignore the other, and an
-    // operator who changed the file would see nothing change.
     Path both =
         list(
             directory,
@@ -146,8 +136,6 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
         .extracting(PluginRegistry.Registration::pluginId)
         .doesNotContain("de.greluc.homeinv.plugin.neither");
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Points the reader at one list and runs it.

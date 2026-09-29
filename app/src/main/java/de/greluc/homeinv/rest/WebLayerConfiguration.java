@@ -49,39 +49,13 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
    */
   @Override
   public void addInterceptors(@NonNull InterceptorRegistry registry) {
-    // First, so that the origin is established before anything else runs and so
-    // that its `afterCompletion` runs last — Spring calls those in reverse. It
-    // records nothing for a request the interceptors below refuse, because a
-    // refused request changed nothing (REQ-SEC-068).
     registry.addInterceptor(auditTrailInterceptor);
-    // Second, so its `afterCompletion` runs second-to-last and sees the status
-    // every interceptor below it settled on -- including a refusal. A shutdown
-    // decision needs to know that a deprecated endpoint is still being CALLED,
-    // and a caller who is refused is still a caller (REQ-API-009).
     registry.addInterceptor(apiUsageInterceptor);
-    // Before the permission check, which is the OPPOSITE of where the quota
-    // sits and is the opposite reason. A call the caller was never allowed to
-    // make should not come out of their monthly allowance -- but it did cost the
-    // instance a request, and a flood of refused calls is exactly the flood
-    // worth stopping (REQ-SEC-064).
     registry.addInterceptor(rateLimitInterceptor);
     registry.addInterceptor(permissionInterceptor);
-    // Before the quota, and after the permission check. A request to a tenant
-    // that is suspended or waiting to be erased answers 403 and should not come
-    // out of anybody's monthly allowance either (REQ-TEN-011, O26).
     registry.addInterceptor(tenantAccessInterceptor);
-    // And then the roles that may not be used without a second factor
-    // (REQ-AUTH-003). After the tenant's own state, because a tenant waiting to
-    // be erased should say so rather than asking somebody to set up an
-    // authenticator for a tenant that is about to go.
     registry.addInterceptor(secondFactorLockInterceptor);
-    // And then the operations that ask for the factor again (REQ-AUTH-011).
-    // After the lock, so somebody with no authenticator is told to set one up
-    // rather than to enter a code they cannot produce.
     registry.addInterceptor(secondFactorFreshnessInterceptor);
-    // After the permission check, deliberately. A call the caller was never
-    // allowed to make should not come out of their monthly allowance, and the
-    // order here is what decides that (REQ-TEN-009).
     registry.addInterceptor(apiCallQuotaInterceptor);
   }
 
@@ -146,8 +120,6 @@ public class WebLayerConfiguration implements WebMvcConfigurer {
     configuration.setAllowedOrigins(List.of(publicBaseUrl));
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE"));
     configuration.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "If-Match"));
-    // The headers a client is allowed to read back. Without this list a browser
-    // hides every one of them, including the ones 08 §8.2 puts contracts on.
     configuration.setExposedHeaders(
         List.of("ETag", "Link", "Retry-After", "RateLimit-Policy", "RateLimit", "Deprecation", "Sunset"));
     configuration.setAllowCredentials(true);

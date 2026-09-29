@@ -1,14 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// WHAT EVERY PORT SHARES.
-//
-// The messages in here are the ones more than one service needs. Everything
-// else stays in its own port's file, because a shared file that grows with
-// every port becomes a file every plugin author has to read.
-//
-// Apache-2.0 like everything in `proto/`: a plugin author compiles against this
-// and must stay free to license their own work as they wish (ADR-0018).
 
 syntax = "proto3";
 

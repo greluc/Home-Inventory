@@ -42,11 +42,6 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
         )
     })?;
 
-    // The LABEL travels with the bytes. A PKCS#1 key re-emitted under the PKCS#8
-    // label is a file every parser rejects, and the error it produces — "failed
-    // to parse private key" — says nothing about which of the three encodings was
-    // expected. `openssl genpkey` writes PKCS#8 and BouncyCastle writes PKCS#1
-    // for the same RSA key, so both spellings reach this code in practice.
     let certificates: Vec<Vec<u8>> = CertificateDer::pem_slice_iter(&bundle)
         .map(|entry| entry.map(|certificate| certificate.to_vec()))
         .collect::<Result<_, _>>()
@@ -57,19 +52,12 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
             )
         })?;
 
-    // The variant is what carries the label: the same RSA key is PKCS#1 from
-    // BouncyCastle and PKCS#8 from `openssl genpkey`, and re-emitting one under
-    // the other's header produces a file every parser rejects.
     let keys: Vec<(&'static str, Vec<u8>)> = PrivateKeyDer::pem_slice_iter(&bundle)
         .map(|entry| {
             entry.map(|key| match key {
                 PrivateKeyDer::Pkcs8(der) => ("PRIVATE KEY", der.secret_pkcs8_der().to_vec()),
                 PrivateKeyDer::Pkcs1(der) => ("RSA PRIVATE KEY", der.secret_pkcs1_der().to_vec()),
                 PrivateKeyDer::Sec1(der) => ("EC PRIVATE KEY", der.secret_sec1_der().to_vec()),
-                // `PrivateKeyDer` is non-exhaustive. A variant added upstream is
-                // a key encoding this code has never emitted a label for, and
-                // guessing one would produce exactly the unparseable file the
-                // labels above exist to prevent.
                 other => ("PRIVATE KEY", other.secret_der().to_vec()),
             })
         })
@@ -99,10 +87,6 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
         .into());
     }
 
-    // The last certificate in the bundle is the CA. It is what a CLIENT is
-    // verified against, and it is deliberately the same CA that signed this
-    // service — one deployment, one authority, created by `deploy/setup.sh` and
-    // never leaving the host.
     let authority = certificates.last().expect("checked above").clone();
     let chain = pem_block("CERTIFICATE", &certificates[0]);
     let (key_label, key_der) = &keys[0];
@@ -110,8 +94,6 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
 
     Ok(ServerTlsConfig::new()
         .identity(Identity::from_pem(chain, key))
-        // Not optional. `client_auth_optional` would let an unauthenticated
-        // caller through with no indication in the logs that it happened.
         .client_ca_root(Certificate::from_pem(pem_block("CERTIFICATE", &authority))))
 }
 
@@ -172,9 +154,6 @@ mod tests {
 
     #[test]
     fn a_missing_identity_is_a_startup_failure() {
-        // Not a warning and not a fallback. A store that came up without mTLS
-        // would accept anything on the segment, and nothing about its behaviour
-        // would say so.
         let failure = server_config(Path::new("/nonexistent/mtls-blobstore")).unwrap_err();
         assert!(failure.to_string().contains("could not be read"));
     }

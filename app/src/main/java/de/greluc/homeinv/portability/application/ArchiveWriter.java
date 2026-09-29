@@ -97,8 +97,6 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
     long written = 0;
     try {
       zip.putNextEntry(new ZipEntry(name));
-      // One row per line, written as it arrives: the stream is the point, and
-      // collecting it here would undo the reason the port takes one.
       try (Stream<?> open = rows) {
         java.util.Iterator<?> each = open.iterator();
         while (each.hasNext()) {
@@ -118,9 +116,6 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
   public void writeFile(String path, java.io.InputStream bytes) {
     try {
       zip.putNextEntry(new ZipEntry(path));
-      // Copied through rather than read into memory: a photograph is megabytes
-      // and there may be thousands of them, so the archive is the only place the
-      // whole of it ever exists.
       long copied = bytes.transferTo(zip);
       zip.closeEntry();
       files.add(Map.of("block", block, "file", path, "bytes", copied));
@@ -131,8 +126,6 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
 
   @Override
   public void withheld(String what, String why) {
-    // Keyed by block and field, so a source that reports the same omission once
-    // per row -- which is the easy mistake -- still produces one line.
     withheld.put(block + "/" + what, Map.of("block", block, "what", what, "why", why));
   }
 
@@ -174,12 +167,9 @@ public class ArchiveWriter implements ExportSource.Sink, AutoCloseable {
 
   @Override
   public void close() throws IOException {
-    // Idempotent on a stream already closed by `finish`, so a try-with-resources
-    // around a successful build is not an error.
     try {
       zip.close();
     } catch (IOException alreadyClosed) {
-      // The archive was finished; nothing to do and nothing to report.
       return;
     }
   }

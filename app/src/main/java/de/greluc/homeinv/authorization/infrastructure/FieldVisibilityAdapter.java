@@ -82,8 +82,6 @@ public class FieldVisibilityAdapter implements FieldVisibility {
       return false;
     }
     if (Role.named(role.builtIn()).filter(ALWAYS::contains).isPresent()) {
-      // Without a query: these two read every sensitive field by default, whether
-      // or not this tenant has ever made a rule.
       return true;
     }
     return Boolean.TRUE.equals(
@@ -100,9 +98,6 @@ public class FieldVisibilityAdapter implements FieldVisibility {
       return key -> false;
     }
     if (Role.named(role.builtIn()).filter(ALWAYS::contains).isPresent()) {
-      // Everything, and not "every key that has a rule": an owner who has granted
-      // one field to somebody else must not thereby stop seeing the ones they
-      // have not granted to themselves.
       return key -> true;
     }
 
@@ -111,8 +106,6 @@ public class FieldVisibilityAdapter implements FieldVisibility {
         .params(TenantContext.require(), role.builtIn(), role.definitionId())
         .query((rs, rowNum) -> keys.add(rs.getString("field_key")))
         .list();
-    // Read once and answered from memory: a redaction pass asks about every
-    // attribute of every item on a page.
     return keys::contains;
   }
 
@@ -138,11 +131,6 @@ public class FieldVisibilityAdapter implements FieldVisibility {
   public void allow(String fieldKey, RoleRef role, UUID actor) {
     UUID tenantId = TenantContext.require();
 
-    // REQ-AUTH-003's second half, and it is checked here rather than in the
-    // controller because it is part of what granting means: a role that reads a
-    // sensitive field may not be held by somebody who signs in with a password
-    // alone. The rule is enforced where the grant is written, so a second caller
-    // — GraphQL, a future import — cannot reach the write without it.
     requireHoldersEnrolled(role);
 
     jdbc.sql(GRANT)

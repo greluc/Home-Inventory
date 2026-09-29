@@ -44,10 +44,7 @@ class StartupReportTest {
 
     assertThat(printed).doesNotContain("not-a-real-password-1234");
     assertThat(printed).doesNotContain("not-a-real-key-abcdef");
-    // The length is kept deliberately: a secret that is 0 or 1 characters long is
-    // the actual fault often enough to be worth seeing.
     assertThat(printed).contains("homeinv.secret.db-password = (masked, 24 characters)");
-    // And the things that are not secret are shown, or the report is useless.
     assertThat(printed).contains("jdbc:postgresql://postgres:5432/homeinv");
   }
 
@@ -58,16 +55,12 @@ class StartupReportTest {
         reportOver(Map.of("homeinv.security.url-signing-key-file", "/run/secrets/url-signing-key"))
             .lines();
 
-    // "the key file is at the path you expected" is what the question usually
-    // turns out to be, and masking the path answers nothing.
     assertThat(String.join("\n", lines)).contains("/run/secrets/url-signing-key");
   }
 
   @Test
   @DisplayName("masking follows the key name, not the value's shape")
   void maskingIgnoresWhatTheValueLooksLike() {
-    // A password that happens to look like a hostname is still a password. Any
-    // rule that inspected the value would print this one.
     List<String> lines = reportOver(Map.of("homeinv.mq.password", "postgres.internal")).lines();
 
     assertThat(String.join("\n", lines)).doesNotContain("postgres.internal");
@@ -76,8 +69,6 @@ class StartupReportTest {
   @Test
   @DisplayName("keys outside this application's own configuration are not printed at all")
   void unrelatedEnvironmentIsNotPrinted() {
-    // Printing the whole environment would put a secret an operator placed there
-    // by mistake into the log because of ours.
     List<String> lines =
         reportOver(Map.of("AWS_SESSION_TOKEN", "whatever", "PATH", "/usr/bin")).lines();
 

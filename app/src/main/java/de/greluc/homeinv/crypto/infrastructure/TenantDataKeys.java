@@ -185,10 +185,6 @@ public class TenantDataKeys {
     for (Wrapped row : rows) {
       byte[] material = unwrap(tenantId, row.wrapped(), row.kekVersion());
       byte[] rewrapped = wrap(tenantId, material, active);
-      // Not `update`, because the application holds UPDATE on `retired_at` alone
-      // and deliberately: a row here is issued, retired and replaced, never
-      // edited in place. Delete and insert keeps that true while the key's
-      // identity -- the tenant and the version -- stays exactly what it was.
       jdbc.sql("delete from crypto.tenant_data_key where tenant_id = ? and dek_id = ?")
           .params(tenantId, row.dekId())
           .update();
@@ -211,8 +207,6 @@ public class TenantDataKeys {
     }
     return rows.size();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * One row as the re-wrap reads it.

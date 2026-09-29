@@ -149,8 +149,6 @@ def main() -> int:
         for entry in registry.get(state) or []:
             outputs[OUTPUT / f"{entry['token']}.md"] = render(entry, state, namespace)
 
-    # A token removed from the registry leaves a document behind, and a stale one
-    # is worse than none: it still resolves, and it still reads as current.
     OUTPUT.mkdir(parents=True, exist_ok=True)
     orphans = [path for path in OUTPUT.glob("*.md") if path not in outputs]
 

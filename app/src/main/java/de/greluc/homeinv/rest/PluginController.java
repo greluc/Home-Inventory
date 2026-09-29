@@ -96,11 +96,6 @@ public class PluginController {
    * @param capability the capability, spelled as 09 §9.4 spells it
    * @param user the administrator agreeing
    */
-  // `grantCapability` and `withdrawCapability` rather than `grant` and `revoke`:
-  // a method name is an `operationId`, springdoc numbers colliding ones in
-  // registration order, and a second `revoke` renamed three unrelated endpoints
-  // in the generated clients. `revokeInvitation` is spelled out for this reason
-  // too.
   @PutMapping(path = "/{pluginId}/capabilities/{capability}")
   @RequiresPermission(Permission.PLUGIN_CONSENT)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})
@@ -182,10 +177,6 @@ public class PluginController {
    * @param body the value
    * @param user the administrator configuring it
    */
-  // No `consumes`: a media type on the mapping is matched BEFORE the access
-  // decision, so a caller without the permission would be told 415 rather than
-  // 403 -- which leaks that the endpoint exists and fails REQ-SEC-026's check.
-  // `MediaController` and the import upload learned this the same way.
   @PutMapping(path = "/{pluginId}/settings/{key}")
   @RequiresPermission(Permission.PLUGIN_CONFIGURE)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.VALIDATION_FAILED})

@@ -60,10 +60,6 @@ public class CatalogController {
   private final TypeAdministration types;
   private final TypeRegistry registry;
 
-  // -------------------------------------------------------------------------
-  // Item types
-  // -------------------------------------------------------------------------
-
   /**
    * One page of the tenant's item types.
    *
@@ -176,10 +172,6 @@ public class CatalogController {
       @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     return types.archiveItemType(id, user.userId());
   }
-
-  // -------------------------------------------------------------------------
-  // Location categories
-  // -------------------------------------------------------------------------
 
   /**
    * Every location category of the tenant, with its versions.
@@ -305,10 +297,6 @@ public class CatalogController {
         id, request.permitted() == null ? List.of() : request.permitted(), user.userId());
   }
 
-  // -------------------------------------------------------------------------
-  // Versions
-  // -------------------------------------------------------------------------
-
   /**
    * Starts a draft of a type or a category, copying what is published now.
    *
@@ -376,10 +364,6 @@ public class CatalogController {
       @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     return types.publish(id, user.userId());
   }
-
-  // -------------------------------------------------------------------------
-  // Fields
-  // -------------------------------------------------------------------------
 
   /**
    * Adds a field to a draft.
@@ -466,10 +450,6 @@ public class CatalogController {
     types.removeField(id, user.userId());
   }
 
-  // -------------------------------------------------------------------------
-  // Value lists
-  // -------------------------------------------------------------------------
-
   /**
    * One page of the tenant's value lists, each with its entries.
    *
@@ -549,10 +529,6 @@ public class CatalogController {
       @PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
     types.archiveValueListEntry(id, user.userId());
   }
-
-  // -------------------------------------------------------------------------
-  // Request bodies
-  // -------------------------------------------------------------------------
 
   /**
    * What to call a new item type.

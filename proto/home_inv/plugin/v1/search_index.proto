@@ -1,17 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// INDEXING DOCUMENTS AND ANSWERING QUERIES OVER THEM.
-//
-// OpenSearch and PostgreSQL are both in the core image — both are part of the
-// deployment and neither leaves it. Meilisearch and Typesense are the plugins
-// this port exists for.
-//
-// AN INDEX MAY FAIL BUT MUST NEVER LIE. What comes back here is a list of
-// document ids and nothing else: the core re-loads every hit from PostgreSQL
-// under row-level security before showing it, so a stale or poisoned index can
-// cost a result but cannot leak one across a tenant boundary. That is why this
-// contract carries no content, and it is not an oversight to be optimised away.
 
 syntax = "proto3";
 

@@ -219,9 +219,6 @@ public class MediaObject {
    */
   public void addReference(Instant now) {
     this.refCount++;
-    // The grace period ends the moment something points at it again: a blob
-    // being moved from one item to another must not be swept while it is in
-    // flight, and clearing this is what says so.
     this.unreferencedSince = null;
     this.updatedAt = now;
   }
@@ -236,9 +233,6 @@ public class MediaObject {
     if (this.refCount > 0) {
       this.refCount--;
     }
-    // The grace period starts here and not when the sweep next runs, so the week
-    // is a week since the last reference went rather than since somebody
-    // happened to look.
     this.unreferencedSince = this.refCount == 0 ? now : null;
     this.updatedAt = now;
     return this.refCount == 0;

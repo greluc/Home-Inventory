@@ -138,9 +138,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     try (Connection superuser = asSuperuser()) {
       tenantScoped = tenantScopedTables(superuser);
 
-      // If this ever finds nothing, the discovery is broken and every assertion
-      // below would pass over an empty list — the shape of vacuous proof this
-      // test exists to avoid.
       assertThat(tenantScoped)
           .as("tables with row-level security and FORCE, discovered from the catalogue")
           .isNotEmpty();
@@ -160,8 +157,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
               + "'no foreign rows are visible' proves nothing", table)
           .isPositive();
 
-      // The wrong context: every row the other tenant owns is invisible, and the
-      // count is not merely filtered by the query — the query asks for everything.
       assertThat(count(beta, "select count(*) from " + table + " where tenant_id = '" + alpha + "'"))
           .as("%s: tenant beta can see alpha's rows", table)
           .isZero();
@@ -169,8 +164,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
           .as("%s: tenant alpha can see beta's rows", table)
           .isZero();
 
-      // No context at all: zero rows rather than every row. A missing context is
-      // the case that decides whether a bug is a bug or a breach (CLAUDE.md rule 2).
       assertThat(countWithoutContext("select count(*) from " + table))
           .as("%s: rows are visible with no tenant context set", table)
           .isZero();
@@ -190,13 +183,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       }
     }
 
-    // `tenancy.tenant` is the simplest row that needs nothing else to exist, which
-    // makes it the honest one to attempt: a refusal here is the policy's WITH CHECK
-    // clause and not a foreign key getting there first.
-    //
-    // The `id` is what is written, not `tenant_id` — that column is
-    // `GENERATED ALWAYS AS (id)`, so writing it is a grammar error and would prove
-    // nothing about the policy. Giving the row beta's id gives it beta's tenant_id.
     assertThatThrownBy(
             () ->
                 transactions.executeWithoutResult(
@@ -212,14 +198,8 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
                     }))
         .as("the WITH CHECK half of the policy: a row written under alpha's context "
             + "carrying beta's tenant_id")
-        // In the CAUSE, not the message. PostgreSQL answers a policy violation with
-        // SQLState 42501, `insufficient_privilege`, which Spring translates to
-        // `BadSqlGrammarException` — a name that describes the state code's usual
-        // meaning rather than this one. The database's own words are what is asserted.
         .hasStackTraceContaining("violates row-level security policy");
   }
-
-  // -------------------------------------------------------------------------
 
   private Connection asSuperuser() throws SQLException {
     return DriverManager.getConnection(
@@ -299,8 +279,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         }
       }
       if (!progressed) {
-        // A cycle between tables. Nothing in this schema has one, and if one
-        // appears the seeder has to be told how to break it rather than guessing.
         throw new IllegalStateException(
             "A foreign-key cycle among " + dependsOn.keySet() + "; the seeder cannot order them");
       }
@@ -343,27 +321,11 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       columns.add(column.name());
       values.add(valueFor(table, column, tenant, id, checks, foreignTargets, seeded));
     }
-    // Nullable foreign keys are filled too, where their target is already seeded.
-    // Not thoroughness for its own sake: `inventory.item` carries
-    // `CHECK (kind <> 'PHYSICAL' OR location_id IS NOT NULL OR deleted_at IS NOT NULL)`,
-    // so a row whose `kind` came from the first literal of an enum check needs the
-    // nullable `location_id` to satisfy the row-level check. A SELF-reference is
-    // left null on purpose — `locations.location.parent_id` is what makes a row a
-    // root, and `(depth = 0) = (parent_id IS NULL)` says so.
     for (Map.Entry<String, String> reference : foreignTargets.entrySet()) {
       if (columns.contains(reference.getKey()) || reference.getValue().equals(table)) {
         continue;
       }
       Map<UUID, UUID> rows = seeded.getOrDefault(reference.getValue(), Map.of());
-      // THIS TENANT'S ROW, and another tenant's only when the target is
-      // instance-wide and has no tenant to belong to. A reference between two
-      // tenant-scoped tables is tenant-qualified (07 §7.5), so a parent seeded
-      // for a different tenant is not a weaker choice but an impossible one --
-      // the composite foreign key refuses it, and the refusal names a constraint
-      // `relax` cannot do anything about, so the table fails to seed.
-      // `notification.notification.webhook_target_id` is where that first showed,
-      // on 2026-09-21; every earlier nullable reference happened to point at a
-      // table seeded for every tenant before it.
       UUID parent =
           rows.containsKey(tenant) || hasColumn(superuser, reference.getValue(), "tenant_id")
               ? rows.get(tenant)
@@ -376,18 +338,9 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
 
     if (hasColumn(superuser, table, "id") && columns.stream().noneMatch("id"::equals)) {
       columns.add("id");
-      // Where `tenant_id` is generated from `id`, the row belongs to the tenant
-      // whose id it carries — so seeding it for a given tenant means giving it
-      // that tenant's id. Read from the catalogue rather than special-cased by
-      // name: any table built that way is handled.
       values.add("'" + (generatesTenantIdFromId(superuser, table) ? tenant : id) + "'");
     }
 
-    // The nullable columns above are filled optimistically, and some tables say
-    // which combinations are legal: `field_definition` carries exactly one owner,
-    // and its value list belongs to enumerations only. Rather than teaching the
-    // seeder each rule, the row is offered to PostgreSQL and narrowed by whatever
-    // it names — which is the one description of those rules that cannot drift.
     for (int attempt = 0; ; attempt++) {
       String sql =
           "insert into " + table + " (" + String.join(", ", columns) + ") values ("
@@ -396,10 +349,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         statement.executeUpdate(sql);
         break;
       } catch (SQLException refused) {
-        // Read from the message rather than from the driver's own exception type:
-        // `org.postgresql.util` is a runtime dependency here, and a test that
-        // imported it would pull the driver onto the compile classpath to learn
-        // one word PostgreSQL already puts in the text.
         Matcher named = REFUSED_CONSTRAINT.matcher(String.valueOf(refused.getMessage()));
         String constraint = named.find() ? named.group(1) : null;
         if (attempt >= 3
@@ -456,11 +405,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       return false;
     }
 
-    // `source_id <> target_id`: the row wants two DIFFERENT rows of the table those
-    // columns reference, and the seeder keeps exactly one per table and tenant. A
-    // second one is written for the occasion and the later column is pointed at it,
-    // which is what `inventory.item_relation` asks for and what any other table
-    // saying "these two ends are not the same thing" will ask for too.
     Matcher distinct = DISTINCT.matcher(clause);
     while (distinct.find()) {
       String second = distinct.group(2);
@@ -491,16 +435,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         changed = true;
       }
       if (!kept) {
-        // The row carries NONE of them, which `num_nonnulls(...) = 1` refuses as
-        // firmly as it refuses two. It happens when every named column is nullable
-        // and none is a foreign key the optimistic pass could fill —
-        // `inventory.loan` is the first: a borrower is a member of the tenant or a
-        // typed name, and the member column deliberately has no foreign key
-        // (07 §7.8), so nothing upstream had a reason to write either.
-        //
-        // The FIRST of them is added with a value derived from its type, the same
-        // way a required column of that type would have been. Dropping to a list
-        // of tables here would be the exemption this seeder exists to refuse.
         for (String column : named) {
           String type = columnType(superuser, table, column);
           if (type == null) {
@@ -522,15 +456,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
       return changed;
     }
 
-    // A check that says a column must be PRESENT, when the row does not carry it.
-    // `media.media_object` has `(ref_count = 0) = (unreferenced_since IS NOT NULL)`
-    // and `ref_count` defaults to zero, so the left side is true and the right
-    // one has to be filled. The sibling shape on `inventory.item` --
-    // `(lifecycle_state = 'TRASHED') = (deleted_at IS NOT NULL)` -- never bit,
-    // because both halves are false by default and false equals false.
-    //
-    // Tried before the fallback below, which DROPS nullable columns: dropping is
-    // the wrong direction for a constraint complaining that something is absent.
     Matcher present = MUST_BE_PRESENT.matcher(clause);
     while (present.find()) {
       String column = present.group(1);
@@ -662,25 +587,12 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     if ("tenant_id".equals(column.name())) {
       return "'" + tenant + "'";
     }
-    // THE ROW'S OWN ID, and not a fresh one. The caller records `id` as what it
-    // seeded and later rows point their foreign keys at it, so a second random
-    // value here produces a row nothing can reference -- and the failure appears
-    // in a DIFFERENT table, as a foreign key naming an id that was never written.
-    //
-    // It only arises where `id` has no column default and therefore arrives in
-    // the required columns rather than being appended afterwards.
-    // `notification.webhook_target` is the first such table (2026-09-21): its id
-    // is assigned by the application because the signing secret is sealed against
-    // it, so the row has to know its id before it exists.
     if ("id".equals(column.name())) {
       return "'" + id + "'";
     }
     String target = foreignTargets.get(column.name());
     if (target != null) {
       Map<UUID, UUID> rows = seeded.getOrDefault(target, Map.of());
-      // An instance-wide parent has one row under the first tenant seeded; a
-      // tenant-scoped one has a row per tenant, and the composite key means it
-      // must be this tenant's.
       UUID parent = rows.getOrDefault(tenant, rows.values().stream().findFirst().orElse(null));
       if (parent == null) {
         throw new AssertionError(
@@ -693,32 +605,14 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     return switch (column.type().toLowerCase(Locale.ROOT)) {
       case "uuid" -> "'" + UUID.randomUUID() + "'";
       case "timestamp with time zone", "timestamp without time zone" -> "now()";
-      // A date is not a timestamp to PostgreSQL and a text value is not a date:
-      // `inventory.maintenance_entry.performed_on` is the first column of this
-      // type the proof met, and it failed to seed rather than quietly skipping
-      // the table, which is the behaviour this seeder is written for.
       case "date" -> "current_date";
       case "boolean" -> "false";
-      // Zero unless a check demands more. `location.depth` must be 0 for the row to
-      // be a root — `nlevel(path) = depth + 1` with one label, and
-      // `(depth = 0) = (parent_id IS NULL)` with no parent — while `byte_size` and
-      // the pixel dimensions carry `> 0`. Both are read off the constraint rather
-      // than guessed, which is what keeps this generic.
       case "integer", "bigint", "smallint" -> numberValue(check);
       case "numeric", "double precision", "real" -> numberValue(check);
       case "jsonb", "json" -> "'{}'::jsonb";
       case "bytea" -> byteaValue(check);
       case "ltree" -> "text2ltree('n' + '')";
-      // `USER-DEFINED` is what information_schema calls a domain or an extension
-      // type; here that is `ltree`, and the only one is `location.path`, whose
-      // check ties it to `depth`. One label, depth zero, no parent.
       case "user-defined" -> "text2ltree('n" + id.toString().replace("-", "") + "')";
-      // `ARRAY` is what information_schema calls any array column, whatever it
-      // holds -- the element type is in `element_types`, which this proof does
-      // not read because one element of one value is all a seed needs. One
-      // element, not none: `webhook_target.event_types` is the first array here
-      // and it carries `cardinality(...) BETWEEN 1 AND 50`, so an empty array
-      // would be refused for a reason that has nothing to do with isolation.
       case "array" -> "array['isolation-proof-" + id.toString().replace("-", "") + "']";
       default -> textValue(check, id);
     };
@@ -745,16 +639,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
     }
     Matcher regex = REGEX_CHECK.matcher(check);
     if (regex.find()) {
-      // Verified rather than guessed: the candidates are tried against the column's
-      // own expression and the first that matches wins. A shape none of them fits
-      // fails here by name, which is the signal to add a candidate.
-      //
-      // `find` and not `matches`, since 2026-09-21: PostgreSQL's `~` asks whether
-      // the value CONTAINS a match, and `String.matches` asks whether the whole
-      // value is one. Every regex in the schema was fully anchored until
-      // `webhook_target.url ~ '^https://'`, where the two differ -- and there the
-      // stricter reading is unsatisfiable, because no string both starts with
-      // `https://` and is nothing else.
       Pattern expression = Pattern.compile(regex.group(1));
       for (String candidate :
           List.of(
@@ -771,9 +655,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
               + "candidates in textValue rather than relaxing the constraint.");
     }
     if (check.contains("= ANY")) {
-      // An enumerated column takes one of its literals exactly; nothing may be
-      // appended to it, so a table with a unique index over an enum would need a
-      // second value rather than a longer one. None has.
       Matcher literal = ANY_ARRAY.matcher(check);
       if (literal.find()) {
         return "'" + literal.group(1) + "'";
@@ -880,10 +761,6 @@ class TenantIsolationProofIT extends AbstractIntegrationTest {
         "select column_name, data_type from information_schema.columns "
             + "where table_schema = '" + parts[0] + "' and table_name = '" + parts[1] + "' "
             + "and is_nullable = 'NO' and column_default is null "
-            // A generated column is computed, and writing one is an error rather
-            // than a value. `tenancy.tenant.tenant_id` is `GENERATED ALWAYS AS (id)`:
-            // a tenant's identity IS the tenant id, which is why the row's own id is
-            // set to the tenant below.
             + "and is_generated <> 'ALWAYS' order by ordinal_position";
     try (Statement statement = superuser.createStatement();
         ResultSet rows = statement.executeQuery(sql)) {

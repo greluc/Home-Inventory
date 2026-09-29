@@ -131,9 +131,6 @@ public class CsvImportRunner {
     }
 
     if (!errors.isEmpty()) {
-      // One message with the first few, because a job's `failure` column is
-      // read by a person and a thousand lines of it is not read at all. The
-      // count says how many more there were.
       throw new IllegalArgumentException(
           errors.size()
               + " row(s) could not be read, and nothing was written. "
@@ -160,9 +157,6 @@ public class CsvImportRunner {
    */
   private List<Map<String, String>> parse(InputStream bytes) {
     CsvMapper mapper = CsvMapper.builder().build();
-    // The header names the columns, which is the whole premise of a mapping
-    // profile: the file says what its columns are called and the profile says
-    // what they mean.
     CsvSchema schema = CsvSchema.emptySchema().withHeader();
     List<Map<String, String>> rows = new ArrayList<>();
     try (var values =
@@ -300,9 +294,6 @@ public class CsvImportRunner {
       return null;
     }
     try {
-      // A thousands separator is the one thing a spreadsheet adds that a number
-      // parser refuses, and it is not ambiguous here: the decimal point is what
-      // every system this reads exports.
       return new BigDecimal(value.replace(",", "").replace(" ", ""));
     } catch (NumberFormatException notANumber) {
       throw new IllegalArgumentException(column + " is not a number: " + value);

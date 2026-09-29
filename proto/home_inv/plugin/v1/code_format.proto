@@ -1,14 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// GENERATING A CODE, AND CLAIMING A RAW SCAN AS ONE'S OWN.
-//
-// QR is in the core image. DataMatrix, Code128, EAN-13, ITF-14, Aztec, GS1
-// Digital Link and NFC are the plugins this port exists for, and REQ-PLG-010
-// requires a new one of them to run WITHOUT A SINGLE LINE OF CORE CHANGE. That
-// requirement is what `Claim` is shaped by: the core hands a raw string to every
-// registered format in priority order and the first that claims it wins, so the
-// core never learns what a DataMatrix looks like.
 
 syntax = "proto3";
 

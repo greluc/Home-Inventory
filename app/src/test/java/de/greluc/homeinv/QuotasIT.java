@@ -71,8 +71,6 @@ class QuotasIT extends AbstractIntegrationTest {
                   });
         });
 
-    // The refused claim was returned by the rollback: the counter still says two,
-    // not three, so a retry after the limit is raised is not already over.
     asTenant(tenant, () -> assertThat(used(QuotaGuard.Quota.ITEM_COUNT)).isEqualTo(2));
   }
 
@@ -88,8 +86,6 @@ class QuotasIT extends AbstractIntegrationTest {
           assertThat(used(QuotaGuard.Quota.ITEM_COUNT)).isEqualTo(1);
 
           items.delete(id, OptionalLong.empty(), tenant.userId());
-          // Still counted: a trashed item is still a row and still carries its
-          // attachments.
           assertThat(used(QuotaGuard.Quota.ITEM_COUNT)).isEqualTo(1);
 
           items.purge(id, OptionalLong.empty(), tenant.userId());
@@ -107,8 +103,6 @@ class QuotasIT extends AbstractIntegrationTest {
         tenant,
         () ->
             assertThat(permitted(QuotaGuard.Quota.ITEM_COUNT))
-                // The default from HOMEINV_QUOTA_ITEMS, which nothing in the test
-                // profile overrides.
                 .isEqualTo(100_000));
 
     administration.setLimit(tenant.tenantId(), QuotaGuard.Quota.ITEM_COUNT, 7, tenant.userId());
@@ -125,8 +119,6 @@ class QuotasIT extends AbstractIntegrationTest {
     transactions.executeWithoutResult(
         status -> accounts.replaceEntitlements(operator, true, false, null, operator));
 
-    // No tenant context at all, and the operator is a member of nothing: this is
-    // the SECURITY DEFINER path of 07 §7.5 and the only one there is.
     assertThat(TenantContext.current()).isEmpty();
     administration.setLimit(theirs.tenantId(), QuotaGuard.Quota.STORAGE_BYTES, 4096, operator);
 
@@ -138,11 +130,8 @@ class QuotasIT extends AbstractIntegrationTest {
               assertThat(limit.permitted()).isEqualTo(4096);
             });
 
-    // And the tenant sees it as its own limit.
     asTenant(theirs, () -> assertThat(permitted(QuotaGuard.Quota.STORAGE_BYTES)).isEqualTo(4096));
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Runs an action as this tenant's owner, with both contexts established.

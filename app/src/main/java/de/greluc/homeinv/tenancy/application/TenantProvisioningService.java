@@ -51,8 +51,6 @@ public class TenantProvisioningService implements TenantProvisioning {
   @Override
   public UUID provision(String name, UUID ownerUserId) {
     UUID tenantId = UUID.randomUUID();
-    // Established before the transaction opens: the transaction manager publishes
-    // whatever is set at doBegin, and a context set inside would arrive too late.
     TenantContext.runAs(tenantId, () -> bootstrap.write(tenantId, name, ownerUserId));
     return tenantId;
   }

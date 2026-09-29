@@ -104,10 +104,6 @@ public class DefaultMediaService implements MediaService {
     UploadPipeline.Stored stored = pipeline.accept(tenantId, content);
     Instant now = Instant.now(clock);
 
-    // Deduplication within the tenant: the same photo uploaded twice finds the
-    // first record and costs no second copy (ADR-0032). Across tenants it would
-    // make "do you have this file" answerable by timing, which is why the lookup
-    // is scoped.
     MediaObject object =
         objects
             .findByHash(tenantId, stored.sha256())
@@ -124,26 +120,12 @@ public class DefaultMediaService implements MediaService {
                           stored.heightPx(),
                           actor,
                           now);
-                  // NO verdict here. The object is born PENDING_SCAN and stays
-                  // there until the worker has asked the scanner (ADR-0054).
-                  // `MediaObject.pending` sets that state; recording CLEAN here
-                  // was what made the scan look synchronous to everything
-                  // downstream, including the tests.
-                  //
-                  // The quota is claimed here, inside the `orElseGet`, so that it
-                  // is charged for a new object and not for the second upload of
-                  // one the tenant already has. In this transaction, so a failure
-                  // below returns the claim with the rollback.
                   quotas.require(
                       de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.STORAGE_BYTES,
                       stored.byteSize());
                   return objects.save(fresh);
                 });
 
-    // The first image of a thing is its primary one unless the caller says
-    // otherwise: REQ-MED-002 wants the primary selectable AND defaulted, and a
-    // client that uploads one photograph should not have to send a second
-    // request to make it the one lists show.
     boolean primary = primaryImage || !attachments.hasPrimary(tenantId, targetKind, targetId);
 
     attachments
@@ -165,19 +147,6 @@ public class DefaultMediaService implements MediaService {
             });
 
     if (object.getDerivedAt() == null) {
-      // Published inside the transaction, delivered after it commits. Spring
-      // Modulith writes it to `outbox.event_publication` first, so a broker that
-      // is down delays the SCAN and loses nothing — and a transaction that rolls
-      // back publishes nothing, rather than asking a worker to scan an object
-      // that does not exist (REQ-NFR-013).
-      //
-      // This message is now what gets the object judged at all, not merely what
-      // gets its thumbnails made. A broker outage therefore leaves uploads
-      // unretrievable rather than merely thumbnail-less, which is the fail-closed
-      // direction and is why `rabbitmq` is in every profile (ADR-0051).
-      //
-      // Skipped for an object that already has its derivatives: it also already
-      // has a verdict, since nothing is derived before one.
       events.publishEvent(
           new MediaObjectStored(tenantId, object.getId(), object.getSha256()));
     }
@@ -199,15 +168,8 @@ public class DefaultMediaService implements MediaService {
     MediaObject object =
         objects
             .findLive(tenantId, mediaObjectId)
-            // Another tenant's object and one that does not exist are the same
-            // answer. The query is tenant-scoped and RLS scopes it again, so
-            // this is reached for both, and deliberately says nothing about
-            // which (REQ-SEC-025).
             .orElseThrow(() -> new NotFoundException("media", mediaObjectId));
 
-    // The verdict, as the status code. REQ-SEC-092 keeps `422` and `503` after
-    // ADR-0054 moved the scan out of the upload — they moved with it, from the
-    // POST to this GET, because that is where a client now learns the outcome.
     switch (object.getScanState()) {
       case INFECTED ->
           throw new MalwareDetectedException(object.getScanVerdict());
@@ -215,7 +177,6 @@ public class DefaultMediaService implements MediaService {
           throw new ScannerUnavailableException(
               "Media object " + mediaObjectId + " has no verdict yet", null);
       case CLEAN -> {
-        // Falls through to the view below.
       }
     }
 
@@ -228,16 +189,12 @@ public class DefaultMediaService implements MediaService {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
 
-    // The cursor belongs to one target. Without the fingerprint a cursor from an
-    // item's photographs would resume a location's at the same row, which is a
-    // wrong answer rather than an error (REQ-SRCH-009, REQ-SEC-106).
     String fingerprint = fingerprintOf(targetKind, targetId);
 
     List<Attachment> rows;
     if (cursor == null || cursor.isBlank()) {
       rows = attachments.findLiveFor(tenantId, targetKind, targetId, PageRequest.of(0, size));
     } else {
-      // Throws when the cursor was tampered with or belongs to another target.
       CursorCodec.Position after = cursors.decode(cursor, fingerprint);
       rows =
           attachments.findLiveForAfter(
@@ -254,10 +211,6 @@ public class DefaultMediaService implements MediaService {
                             .findLive(tenantId, attachment.getMediaObjectId())
                             .orElseThrow(
                                 () ->
-                                    // An attachment pointing at a missing blob is a
-                                    // broken invariant, not a 404 for the caller: the
-                                    // foreign key makes it impossible, so reaching
-                                    // here means the row was written around it.
                                     new IllegalStateException(
                                         "Attachment "
                                             + attachment.getId()
@@ -266,9 +219,6 @@ public class DefaultMediaService implements MediaService {
                         attachment.getRole()))
             .toList();
 
-    // A cursor only when the page was full. A short page is the last one, and
-    // handing out a cursor for it would make a client fetch an empty page to
-    // find that out.
     String nextCursor = null;
     if (rows.size() == size) {
       Attachment last = rows.get(rows.size() - 1);
@@ -288,8 +238,6 @@ public class DefaultMediaService implements MediaService {
   private static String fingerprintOf(String targetKind, UUID targetId) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      // The separator matters here for the same reason it does in search:
-      // without it two different pairs could hash alike.
       byte[] hash =
           digest.digest(("media " + targetKind + " " + targetId).getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(hash, 0, 16);
@@ -316,20 +264,11 @@ public class DefaultMediaService implements MediaService {
             .orElseThrow(() -> new NotFoundException("media", mediaObjectId));
 
     if (object.removeReference(now)) {
-      // The tenant's last reference. Another tenant holding the same bytes holds
-      // its own copy and is untouched - which is the property per-tenant content
-      // addressing exists to give (ADR-0032).
-      // The bytes are the tenant's again whether or not the blob store agrees
-      // below: the reference is gone, and a blob that outlives it is wasted space
-      // the reconciliation of REQ-NFR-073 finds, not storage the tenant still owes.
       quotas.release(
           de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.STORAGE_BYTES, object.getByteSize());
       try {
         blobs.delete(tenantId, object.getSha256());
       } catch (IOException failed) {
-        // The row is already detached; a blob that outlives its last reference is
-        // wasted space, not a correctness problem, and a failed delete must not
-        // roll back the detach the user asked for.
         log.warn("Could not remove blob {} of tenant {}", object.getSha256(), tenantId, failed);
       }
     }
@@ -337,20 +276,7 @@ public class DefaultMediaService implements MediaService {
 
   @Override
   public InputStream openVerified(UUID tenantId, String sha256) throws IOException {
-    // No tenant context and no permission check here on purpose: the caller is the
-    // media endpoint, which has already verified the signature that carries both
-    // (REQ-MED-010). A second check would need a session, and the whole point of a
-    // signed URL is that an <img src> carries no session.
-    //
-    // The scan state IS checked, and the check is not redundant. A URL is only
-    // minted for a CLEAN object, so in a system that behaves this cannot fire —
-    // which is exactly the reason to have it: after ADR-0054 the bytes are in the
-    // store before any verdict exists, so "no URL was minted" became the only
-    // thing standing between an unjudged blob and a client. This makes it two
-    // things. The lookup is by content address and without a tenant context, so
-    // it goes through the repository's own tenant-scoped query.
     if (objects.findByHash(tenantId, sha256).filter(MediaObject::isRetrievable).isEmpty()) {
-      // The same 404 an invalid signature gets, for the same reason.
       throw new NotFoundException("media", (UUID) null);
     }
     return blobs.open(tenantId, sha256);
@@ -402,12 +328,6 @@ public class DefaultMediaService implements MediaService {
   private MediaView toView(MediaObject object, boolean primaryImage, String role) {
     Map<String, String> urls = new LinkedHashMap<>();
     if (object.isRetrievable()) {
-      // A URL is offered only for a variant that EXISTS. `full` is produced
-      // during the upload - it is the re-encoded, metadata-stripped image that
-      // gets stored - while `thumb` and `preview` are derived afterwards and are
-      // absent until they are. Offering a link to a variant that has not been
-      // produced would be worse than offering none: the client would render a
-      // broken image and blame the upload (REQ-MED-005, ADR-0051).
       UUID viewer = CallerContext.require().userId();
       urls.put("full", url(object, viewer, "full", object.getSha256()));
       if (object.getPreviewSha256() != null) {

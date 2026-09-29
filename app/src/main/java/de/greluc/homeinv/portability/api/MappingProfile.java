@@ -171,8 +171,6 @@ public record MappingProfile(
     for (int at = 0; at < pairs.length; at += 2) {
       map.put(pairs[at], pairs[at + 1]);
     }
-    // `Map.copyOf` would lose the order, which is the thing this method exists
-    // for: the report lists a profile's columns as they were written.
     return java.util.Collections.unmodifiableMap(map);
   }
 }

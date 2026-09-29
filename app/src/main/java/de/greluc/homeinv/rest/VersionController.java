@@ -65,9 +65,6 @@ public class VersionController {
               + "about the data or the people on it.")
   public BuildVersion version() {
     if (build == null) {
-      // A build without `bootBuildInfo`, which is a development one. Saying so
-      // beats inventing a version: "unknown" is checkable and a made-up number
-      // is not.
       return new BuildVersion("unknown", "unknown", null, SOURCE, "AGPL-3.0-or-later");
     }
     return new BuildVersion(

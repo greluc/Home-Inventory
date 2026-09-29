@@ -116,9 +116,6 @@ public class LiveChanges implements LiveStreams {
     try {
       valkey.convertAndSend(CHANNEL, event.tenantId() + " " + kind);
     } catch (RuntimeException unreachable) {
-      // A nudge is not a fact. Valkey being away costs an open view a late
-      // refresh, and taking the write down with it would be the wrong trade by
-      // a wide margin.
       log.debug("A live change could not be published", unreachable);
     }
   }

@@ -101,17 +101,6 @@ static UPLOADS: AtomicU64 = AtomicU64::new(0);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
-    //
-    // A permissive licence asks for its notice in every copy, and a statically
-    // linked binary is a copy. This image is `scratch` — one binary and nothing
-    // else, which CI asserts — so there is no file to put beside it and the
-    // notice is compiled in, exactly as the public roots are in the plugins
-    // that speak TLS.
-    //
-    // First, before the logger: somebody reading a licence should get the
-    // licence and not a JSON log line above it. `tools/notices.py` generates
-    // the file and CI fails when it no longer describes what is linked in.
     if std::env::args().any(|argument| argument == "--licences") {
         print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
         return Ok(());
@@ -141,9 +130,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let unready = unready(&defaults, proxy.as_deref());
     for missing in &unready {
-        // Said once, at startup, and each one names what to set. A plugin that
-        // cannot store is a plugin an operator has to be able to diagnose
-        // without reading its source (REQ-PLG-015).
         warn!("plugin-blobstore-nextcloud is not ready: {missing}");
     }
     if !defaults.touched() {
@@ -309,8 +295,6 @@ impl Store {
             Some(context) => {
                 let envelope = context.tenant_id.trim();
                 if !envelope.is_empty() && envelope != tenant {
-                    // A caller bug, and the one that would put one tenant's
-                    // bytes under another's path.
                     return Err(Status::invalid_argument(format!(
                         "the envelope is for tenant {envelope} and the address is for {tenant}"
                     )));
@@ -395,9 +379,6 @@ impl Store {
         .map_err(Status::unavailable)?;
 
         if answer.status == 409 {
-            // The collections are not there. Nothing creates them implicitly,
-            // so they are created now and the upload is tried once more — once,
-            // because a second 409 after that is not about the parents.
             let _ = answer.read_all(MAX_ERROR_BODY).await;
             self.make_the_way(proxy, where_to).await?;
             answer = dav::request(
@@ -444,9 +425,6 @@ impl BlobStore for Store {
             .ok_or_else(|| Status::invalid_argument("the upload sent no message at all"))?;
         let where_to = self.resolve(&first.blob, &first.context)?;
 
-        // Already there? The address is the content hash, so a path that exists
-        // holds these exact bytes and uploading them again would spend the
-        // tenant's bandwidth to arrive at the same file (ADR-0007).
         if let Some(size) = self.head_path(&proxy, &where_to).await? {
             drain(&mut stream).await?;
             return Ok(Response::new(PutResponse {
@@ -488,10 +466,6 @@ impl BlobStore for Store {
 
         let actual = hex(&running.finish());
         if actual != where_to.sha256 {
-            // Refused, and an upload already begun is abandoned rather than
-            // assembled. A store that kept these bytes under the declared
-            // address would be content-addressed in name only, and the next read
-            // would return a file that is not the one asked for.
             if let Some(started) = upload {
                 started.abandon(self, &proxy, &where_to).await;
             }
@@ -552,9 +526,6 @@ impl BlobStore for Store {
             loop {
                 match answer.next_chunk().await {
                     Ok(Some(chunk)) => {
-                        // A send that fails means the core hung up, which is not
-                        // an error here: it happens whenever a client stops
-                        // reading a download.
                         if sender.send(Ok(GetResponse { chunk })).await.is_err() {
                             break;
                         }
@@ -582,15 +553,6 @@ impl BlobStore for Store {
             byte_size: found.unwrap_or(0),
         }))
     }
-
-    // -- Staging (REQ-MED-008, ADR-0084) -----------------------------------
-    //
-    // Answered UNIMPLEMENTED, which the contract expressly permits. The core
-    // calls these on the IN-DEPLOYMENT store and on nothing else: an upload
-    // that has not finished has no content address, and pushing an unfinished
-    // object into a tenant's own bucket would leave litter there that only the
-    // deployment knows how to clean up. What this plugin receives is the
-    // FINISHED blob, through `Put`, exactly as before (ADR-0074).
 
     async fn append_staged(
         &self,
@@ -643,9 +605,6 @@ impl BlobStore for Store {
         .await
         .map_err(Status::unavailable)?;
 
-        // 404 is `removed: false` rather than an error: deletion is retried
-        // after a partial failure, and a retry that failed because the work was
-        // already done would be a retry nobody could make succeed.
         if answer.status == 404 {
             return Ok(Response::new(DeleteResponse { removed: false }));
         }
@@ -653,11 +612,6 @@ impl BlobStore for Store {
             let body = answer.read_all(MAX_ERROR_BODY).await.unwrap_or_default();
             return Err(Status::unavailable(failure(answer.status, &body)));
         }
-        // What Nextcloud does with it afterwards is the tenant's own setting: a
-        // deleted file lands in that account's trash and is purged on that
-        // account's retention rule. The core's own deletion is two-stage for the
-        // same reason (REQ-PRIV-004 asks that nothing is lost silently, not that
-        // a store forgets instantly).
         Ok(Response::new(DeleteResponse { removed: true }))
     }
 }
@@ -679,10 +633,6 @@ struct Upload {
 impl Upload {
     /// Creates the collection the chunks go into.
     async fn begin(store: &Store, proxy: &str, where_to: &Located) -> Result<Self, Status> {
-        // Unique within the account: the address, the second, and a counter that
-        // separates two uploads of the same bytes in the same second. Two
-        // uploads sharing a collection would interleave their chunks and
-        // assemble a file that is neither.
         let id = format!(
             "homeinv-{}-{}-{}",
             &where_to.sha256[..16],
@@ -690,9 +640,6 @@ impl Upload {
             UPLOADS.fetch_add(1, Ordering::Relaxed)
         );
         let path = where_to.target.upload_path(&id);
-        // `Destination` on the MKCOL is what the Nextcloud clients send: it lets
-        // the instance check free space and quota before the first chunk rather
-        // than after the last.
         let headers = vec![(
             "Destination".to_string(),
             where_to
@@ -726,9 +673,6 @@ impl Upload {
         bytes: &[u8],
     ) -> Result<(), Status> {
         self.chunks += 1;
-        // Zero-padded, so that the order the instance assembles them in is the
-        // order they were written whether it sorts them as numbers or as text.
-        // `10` before `2` is a corrupted file that nothing reports.
         let name = format!("{:05}", self.chunks);
         let path = format!("{}/{name}", where_to.target.upload_path(&self.id));
         let mut answer = dav::request(
@@ -756,8 +700,6 @@ impl Upload {
         proxy: &str,
         where_to: &Located,
     ) -> Result<(), Status> {
-        // The destination's parents first: `MOVE` will not create them either,
-        // and a 409 here would be about a collection rather than about the file.
         store.make_the_way(proxy, where_to).await?;
 
         let source = format!("{}/.file", where_to.target.upload_path(&self.id));
@@ -768,9 +710,6 @@ impl Upload {
                     .target
                     .destination_url(&where_to.tenant, &where_to.sha256),
             ),
-            // The address is the content hash, so anything already there is
-            // these exact bytes. Overwriting it is a no-op with extra steps and
-            // is allowed rather than fought over.
             ("Overwrite".to_string(), "T".to_string()),
         ];
         let mut answer = dav::request(
@@ -854,9 +793,6 @@ impl PluginHealth for Health {
             state: if self.unready.is_empty() {
                 HealthState::Ok as i32
             } else {
-                // NOT_CONFIGURED and not a failure: the difference matters to an
-                // operator, and `plugin-health-states.yaml` names it for this
-                // reason (REQ-PLG-015).
                 HealthState::NotConfigured as i32
             },
             detail: self.unready.join("; "),
@@ -938,7 +874,6 @@ mod tests {
 
     #[test]
     fn an_envelope_for_another_tenant_is_refused() {
-        // The one that would put one tenant's bytes under another's path.
         let failure = store()
             .resolve(&blob("tenant-a", HASH), &envelope("tenant-b", &[]))
             .expect_err("mismatched");
@@ -973,9 +908,6 @@ mod tests {
 
     #[test]
     fn a_call_without_an_envelope_still_works_on_the_deployments_account() {
-        // The in-deployment service was the only implementation when this
-        // contract was written and sent no envelope. A plugin that refused one
-        // would refuse a caller that is still correct.
         let where_to = store()
             .resolve(&blob("tenant-a", HASH), &None)
             .expect("resolves");
@@ -984,8 +916,6 @@ mod tests {
 
     #[test]
     fn a_deployment_that_configures_nothing_is_ready() {
-        // Every tenant brings its own account, which is a supported way to run
-        // this and not a half-configured one.
         assert!(unready(&Defaults::default(), Some("egress-proxy:8118")).is_empty());
     }
 

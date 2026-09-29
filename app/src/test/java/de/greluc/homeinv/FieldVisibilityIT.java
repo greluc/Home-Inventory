@@ -82,7 +82,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
             .getContentAsString();
     UUID itemId = UUID.fromString(json.readTree(created).get("id").asString());
 
-    // The owner reads everything, which is the default when no rule has been made.
     mockMvc
         .perform(get("/api/v1/items/" + itemId).session(owner))
         .andExpect(status().isOk())
@@ -90,7 +89,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
 
     MockHttpSession member = login("fv-member@example.org");
 
-    // A MEMBER does not, and the key is gone rather than starred out.
     mockMvc
         .perform(get("/api/v1/items/" + itemId).session(member))
         .andExpect(status().isOk())
@@ -102,10 +100,8 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
                 .value(
                     org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString("purchasePrice"))))
-        // What is not sensitive is untouched.
         .andExpect(jsonPath("$.attributes").value(org.hamcrest.Matchers.containsString("blue")));
 
-    // The listing is the path that shows the most attributes at once.
     mockMvc
         .perform(get("/api/v1/items").param("q", "").param("language", "en").session(member))
         .andExpect(status().isOk())
@@ -116,7 +112,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
                         org.hamcrest.Matchers.not(
                             org.hamcrest.Matchers.containsString("purchasePrice")))));
 
-    // And the history, whose snapshots are stored whole.
     mockMvc
         .perform(get("/api/v1/items/" + itemId + "/revisions").session(member))
         .andExpect(status().isOk())
@@ -126,8 +121,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
                     org.hamcrest.Matchers.everyItem(
                         org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("249.00")))));
 
-    // The owner's history still has it: what is stored is complete, and a restore
-    // has to be able to put the real value back.
     mockMvc
         .perform(get("/api/v1/items/" + itemId + "/revisions").session(owner))
         .andExpect(
@@ -184,13 +177,9 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/field-visibility").session(owner))
         .andExpect(status().isOk())
-        // A list of entries since 2026-09-21, each carrying its own field key: a
-        // JSON object with dynamic keys is the one shape a code generator cannot
-        // type (REQ-API-002).
         .andExpect(jsonPath("$[0].fieldKey").value("purchasePrice"))
         .andExpect(jsonPath("$[0].roles[0].role").value("MEMBER"));
 
-    // The same session, without signing in again: a rule is read per request.
     mockMvc
         .perform(get("/api/v1/items/" + itemId).session(member))
         .andExpect(jsonPath("$.attributes").value(org.hamcrest.Matchers.containsString("999.00")));
@@ -210,8 +199,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
                 .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("999.00"))));
   }
 
-  // -------------------------------------------------------------------------
-
   /** A provisioned tenant and the user who owns it. */
   private record Tenant(UUID tenantId, UUID ownerId) {}
 
@@ -230,9 +217,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
     UUID member = addMember(tenant, "fv-mfa-member@example.org", "MEMBER");
     removeSecondFactor(member);
 
-    // REQ-AUTH-003: a role that reads a sensitive field may not be held by
-    // somebody with no second factor, so the grant is refused rather than
-    // quietly making a purchase price readable with a password alone.
     mockMvc
         .perform(
             post("/api/v1/field-visibility")
@@ -245,7 +229,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
         .andExpect(status().isForbidden())
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-missing"))
-        // How many, and never who.
         .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("1 member(s)")))
         .andExpect(
             jsonPath("$.detail")
@@ -369,9 +352,6 @@ class FieldVisibilityIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

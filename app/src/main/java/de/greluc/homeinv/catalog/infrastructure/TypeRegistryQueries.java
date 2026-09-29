@@ -71,10 +71,6 @@ public class TypeRegistryQueries implements TypeRegistry {
             join catalog.item_type t
               on t.tenant_id = v.tenant_id and t.id = v.item_type_id
             where v.tenant_id = ?
-              -- `::uuid[]` and a String[], not a UUID[]: the driver has no
-              -- mapping from a Java UUID array to a Postgres one, and binds
-              -- something that compares equal to nothing at all -- no error,
-              -- no rows, and a depreciation that silently does nothing.
               and v.id = any(?::uuid[])
               and t.useful_life_months is not null
             """)
@@ -138,10 +134,6 @@ public class TypeRegistryQueries implements TypeRegistry {
   @Transactional(readOnly = true)
   public boolean permitsChildCategory(UUID parentCategoryId, UUID childCategoryId) {
     UUID tenantId = TenantContext.require();
-    // Two questions in one statement, and the order matters: a category with no
-    // rule at all takes everything (REQ-CORE-047's "optional"), so the absence of
-    // rows is a yes rather than a no. Asked the other way round, adding the
-    // feature would have closed every tree that had not been configured yet.
     Boolean permitted =
         jdbc.sql(
                 """
@@ -266,10 +258,6 @@ public class TypeRegistryQueries implements TypeRegistry {
       return List.of();
     }
     UUID tenantId = TenantContext.require();
-    // Every version of every named type. `published_at` is deliberately not in
-    // the predicate: an item is written against the version that was current
-    // when it was written, so restricting to the newest one would hide most of
-    // a type's items rather than narrow to them.
     return jdbc
         .sql(
             """
@@ -318,15 +306,6 @@ public class TypeRegistryQueries implements TypeRegistry {
   @Transactional(readOnly = true)
   public List<TypeRegistry.ExpiryField> expiryFields() {
     UUID tenantId = TenantContext.require();
-    // The same shape `queryableFields` has: grouped by key across every PUBLISHED
-    // version, because the overview is a question about the tenant rather than
-    // about one type, and two types both calling their date `expiresOn` is one
-    // key here. A draft's fields are not included -- nothing is indexed under an
-    // unpublished version, so there would be no values to find.
-    //
-    // A deprecated field keeps its values (REQ-CORE-026) and stops being offered,
-    // so it stops being collected too: an overview that kept listing a date
-    // nobody can set any more is a list of things nobody can act on.
     return jdbc
         .sql(
             """
@@ -352,14 +331,6 @@ public class TypeRegistryQueries implements TypeRegistry {
   @Transactional(readOnly = true)
   public List<TypeRegistry.QueryableField> queryableFields() {
     UUID tenantId = TenantContext.require();
-    // Grouped by key across every PUBLISHED version, because a query spans types.
-    // `count(distinct data_type) = 1` is the rule that keeps a key out when two
-    // types disagree about what it holds: `item_attr_index` keeps one column per
-    // storage class, so such a key lives in two at once and no single predicate
-    // over it means anything. Rare, and left out rather than guessed at.
-    //
-    // A draft's fields are not queryable: nothing references an unpublished
-    // version, so nothing is indexed under it either.
     return jdbc
         .sql(
             """

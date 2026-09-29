@@ -88,9 +88,6 @@ public class JsonSchemaGenerator {
       }
     }
 
-    // An empty `required` is legal and says nothing; leaving it out says the same
-    // thing in fewer bytes, and every one of these documents is fetched by every
-    // client of every tenant.
     if (!required.isEmpty()) {
       schema.set("required", required);
     }
@@ -173,9 +170,6 @@ public class JsonSchemaGenerator {
       node.put("maxLength", limits.maxLength());
     }
     if (limits.pattern() != null) {
-      // Anchored, because a tenant writing `[0-9]+` means "digits", not "contains
-      // a digit" — and an unanchored pattern accepts everything with one digit in
-      // it, which is a constraint that reads as one and is not.
       node.put("pattern", anchored(limits.pattern()));
     }
   }
@@ -215,9 +209,6 @@ public class JsonSchemaGenerator {
     ObjectNode currency = properties.putObject("currency");
     currency.put("type", "string");
     if (limits.unit() != null) {
-      // A field that declares its currency accepts that one. REQ-CORE-032 forbids
-      // a mixed-currency total, and a field that takes any currency can only be
-      // summed per currency — declaring it is how a tenant gets one number back.
       ArrayNode only = mapper.createArrayNode();
       only.add(limits.unit());
       currency.set("enum", only);

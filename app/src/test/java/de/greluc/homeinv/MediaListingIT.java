@@ -82,8 +82,6 @@ class MediaListingIT extends AbstractIntegrationTest {
     Page<MediaView> third =
         as(context, () -> media.attachmentsOf("ITEM", item, second.nextCursor(), 2));
     assertThat(third.data()).hasSize(1);
-    // A short page is the last one, and says so rather than handing out a cursor
-    // a client would spend a request discovering is empty.
     assertThat(third.nextCursor()).isNull();
 
     List<UUID> paged = new ArrayList<>();
@@ -102,9 +100,6 @@ class MediaListingIT extends AbstractIntegrationTest {
     UUID item = UUID.randomUUID();
     upload(context, item, 3);
 
-    // The service clamps; the endpoint refuses a larger number outright with its
-    // `@Max(200)`, and both matter — a caller reaching the service another way
-    // must not be able to ask for everything either.
     Page<MediaView> page =
         as(context, () -> media.attachmentsOf("ITEM", item, null, Integer.MAX_VALUE));
     assertThat(page.data()).hasSize(3);
@@ -144,8 +139,6 @@ class MediaListingIT extends AbstractIntegrationTest {
         .as("and it is the first one uploaded")
         .isEqualTo(page.data().getFirst().id());
   }
-
-  // -------------------------------------------------------------------------
 
   private record Context(UUID tenantId, UUID userId) {}
 
@@ -200,9 +193,6 @@ class MediaListingIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }
@@ -275,8 +265,6 @@ class MediaListingIT extends AbstractIntegrationTest {
         @Override
         public Dimensions derive(Path source, Path target, int maxEdge, OutputFormat format) {
           try {
-            // The source bytes go into the derivative, so two different uploads
-            // keep two different content addresses after re-encoding.
             byte[] original = Files.readAllBytes(source);
             Files.write(
                 target,

@@ -1,28 +1,10 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# gitleaks runs in CI (.github/workflows/security.yml) and as a pre-commit hook.
-# Nothing secret ever lands in this repository — it is public, and every file in
-# it is world-readable from the moment it is pushed.
-#
-# This file adds allowlists and nothing else: every default rule stays on. Each
-# entry below names a value that is not a credential and could not become one —
-# a deliberately fake test password, an illustrative string in a specification, a
-# broker routing key. It does NOT relax the rules anywhere a real credential
-# could appear, and each entry is scoped to the paths where its value belongs, so
-# the same string somewhere else is still a finding.
-#
-# The bar for adding one: a pattern that is WRONG for this codebase, rather than
-# one that is merely inconvenient today.
 
 [extend]
-# Every default rule stays on. This file adds an allowlist; it replaces nothing.
 useDefault = true
 
 [[rules]]
-# A rule of our own, so the allowlist below has something to hang on that is not
-# one of the defaults. It never matches: the default `generic-api-key` rule is
-# what fires on the test password, and `[[allowlists]]` below applies globally.
 id = "homeinv-placeholder"
 description = "Unused; present so this file is a valid rule set rather than only an allowlist."
 regex = '''homeinv-this-pattern-matches-nothing-[0-9a-f]{64}'''

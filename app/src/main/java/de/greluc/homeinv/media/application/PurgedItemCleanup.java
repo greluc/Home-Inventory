@@ -58,11 +58,6 @@ public class PurgedItemCleanup {
     TenantContext.runAs(
         event.tenantId(),
         () -> {
-          // A page at a time, until none is left. Every read in this application
-          // is bounded, and this one has to reach ALL of them: an attachment the
-          // loop stopped short of would point at an id nothing answers for, which
-          // is the state this listener exists to prevent. Each pass detaches what
-          // it read, so the next page is a different set.
           int detached = 0;
           while (true) {
             var hanging =

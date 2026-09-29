@@ -76,8 +76,6 @@ class FederatedRegistrationIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/auth/federated/callback").param("state", beginAndGetState())
             .param("code", "c"))
-        // A new account has no second factor, so the session is established at
-        // once. One that enrols one later stops where a password login stops.
         .andExpect(status().isSeeOther())
         .andExpect(header().string("Location", "/"));
 
@@ -97,9 +95,6 @@ class FederatedRegistrationIT extends AbstractIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.type").value(org.hamcrest.Matchers.endsWith("federated-address-taken")));
 
-    // REQ-AUTH-006 in one assertion: the account is untouched and nothing was
-    // linked to it. Somebody who controls a provider cannot walk into an account
-    // by asserting its address.
     mockMvc
         .perform(get("/api/v1/auth/federated/links").session(signIn(email, PASSWORD)))
         .andExpect(status().isOk())
@@ -123,8 +118,6 @@ class FederatedRegistrationIT extends AbstractIntegrationTest {
 
     assertThat(users.findByEmail(email)).isEmpty();
   }
-
-  // -------------------------------------------------------------------------
 
   /** Starts a sign-in and returns the handle out of the authorization URL. */
   private String beginAndGetState() throws Exception {

@@ -123,9 +123,6 @@ public class OpenSearchIndex implements SearchIndex {
               request.index(ALIAS).id(document.itemId().toString()).document(bodyOf(document)));
       brokenSince = 0;
     } catch (IOException | RuntimeException unreachable) {
-      // Recorded and swallowed. An index is a derived store: failing the write
-      // that caused this would make the inventory depend on it (CLAUDE.md rule
-      // 10), and the outbox redelivers (04 §4.4).
       trip("indexing item " + document.itemId(), unreachable);
     }
   }
@@ -201,8 +198,6 @@ public class OpenSearchIndex implements SearchIndex {
         return null;
       }
     }
-    // The text is spent: it has become this id list, and asking the database to
-    // match it again would apply the weaker matcher on top of the better one.
     return new Query(
         "",
         query.language(),
@@ -282,9 +277,6 @@ public class OpenSearchIndex implements SearchIndex {
       return found;
     } catch (IOException | RuntimeException unreachable) {
       trip("matching '" + query.text() + "'", unreachable);
-      // Nothing is returned as "no hits" here: the caller asked whether this
-      // engine is available before calling, and an empty answer would be a
-      // silent wrong result. The service catches this and falls back.
       throw new IllegalStateException("OpenSearch did not answer", unreachable);
     }
   }

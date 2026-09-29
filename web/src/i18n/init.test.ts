@@ -17,9 +17,6 @@ describe("i18n initialisation", () => {
   it("resolves synchronously, so the first paint has words rather than keys", () => {
     const i18n = createInstance();
 
-    // Deliberately not awaited. The assertions below run on the next line, which
-    // is the whole point — an implementation that needed the promise would fail
-    // here rather than in a browser.
     void i18n.init({
       resources: { en: { translation: en } },
       lng: "en",
@@ -38,8 +35,6 @@ describe("i18n initialisation", () => {
       resources: { en: { translation: en } },
       lng: "en",
       fallbackLng: "en",
-      // Without this, i18next reads the colon in a key as a namespace separator.
-      // The bundles are one plain nested object and a key is a path into it.
       nsSeparator: false,
       interpolation: { escapeValue: false },
     });

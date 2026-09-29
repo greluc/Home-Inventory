@@ -68,8 +68,6 @@ class GraphQlGuardIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("refuses a query the build did not register, whoever is asking")
   void anUnregisteredQueryIsRefused() throws Exception {
-    // The caller is the tenant's OWNER, which is as far as a role goes here. The
-    // register is the gate, not the role.
     query(anOwner(), "{ items(first: 2) { nodes { id } } }")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.errors[0].message").value(
@@ -89,16 +87,10 @@ class GraphQlGuardIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("refuses a query that nests deeper than the limit")
   void depthIsBounded() throws Exception {
-    // Four levels against a limit of three. Registered queries are the only ones
-    // that run here, so this also shows the ORDER: depth is checked after the
-    // register, by the execution, and a query that passes the register is still
-    // not thereby allowed to be any shape it likes.
     query(anOwner(), "{ items { nodes { type { fields { key } } } } }")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.errors").isArray());
   }
-
-  // -------------------------------------------------------------------------
 
   private org.springframework.test.web.servlet.ResultActions query(
       MockHttpSession session, String document) throws Exception {

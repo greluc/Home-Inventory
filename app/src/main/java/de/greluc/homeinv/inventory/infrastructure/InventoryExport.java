@@ -116,11 +116,6 @@ public class InventoryExport implements ExportSource {
     List<Map<String, Object>> items = jdbc.sql(ITEMS).query(InventoryExport::row).list();
     Set<String> withheld = new TreeSet<>();
     for (Map<String, Object> item : items) {
-      // A sealed value is unreadable anywhere but here (ADR-0019), so carrying
-      // the ciphertext would be carrying data the receiving instance cannot
-      // open -- lost on the way out, with nothing having failed. It is opened
-      // for the person who asked, as far as they may read, and what is left
-      // over is named in the manifest rather than left looking empty.
       if (item.get("item_type_version_id") instanceof UUID typeVersion
           && item.get("id") instanceof UUID id
           && item.get("attributes") instanceof String stored

@@ -60,10 +60,6 @@ impl BlobRef {
     /// Returns [`RefError`] when either component is not of the required shape.
     pub fn parse(tenant_id: &str, sha256: &str) -> Result<Self, RefError> {
         if uuid::Uuid::try_parse(tenant_id).is_err() || tenant_id.len() != 36 {
-            // `try_parse` accepts the braced and urn forms and the unhyphenated
-            // one; the layout in ADR-0032 is the canonical hyphenated form, and
-            // accepting a second spelling would store one tenant's blobs under
-            // two directories.
             return Err(RefError::TenantNotAUuid);
         }
         if sha256.len() != 64
@@ -163,9 +159,6 @@ mod tests {
         let reference = BlobRef::parse(TENANT, DIGEST).expect("valid");
         let path = reference.path_under(Path::new("/var/lib/homeinv/blobs"));
 
-        // Asserted on the components rather than on the rendered string: the
-        // separator differs per platform, and the layout is the property under
-        // test, not how this machine happens to spell a path.
         let components: Vec<String> = path
             .components()
             .map(|component| component.as_os_str().to_string_lossy().into_owned())
@@ -176,8 +169,6 @@ mod tests {
 
     #[test]
     fn refuses_a_traversal_in_either_component() {
-        // The whole reason this module exists. Neither component may contain a
-        // separator, and neither shape admits one.
         assert_eq!(
             BlobRef::parse("../../etc", DIGEST).unwrap_err(),
             RefError::TenantNotAUuid
@@ -190,9 +181,6 @@ mod tests {
 
     #[test]
     fn refuses_an_uppercase_digest() {
-        // Not pedantry: `AB` and `ab` are the same digest and two directories,
-        // so the same blob would be stored twice and deduplication would
-        // silently stop working.
         assert_eq!(
             BlobRef::parse(TENANT, &DIGEST.to_uppercase()).unwrap_err(),
             RefError::DigestNotSha256
@@ -201,9 +189,6 @@ mod tests {
 
     #[test]
     fn refuses_an_unhyphenated_tenant() {
-        // `try_parse` would accept it. The layout would then have two
-        // directories for one tenant, and a blob written under one spelling
-        // would be invisible under the other.
         assert_eq!(
             BlobRef::parse(&TENANT.replace('-', ""), DIGEST).unwrap_err(),
             RefError::TenantNotAUuid
@@ -212,8 +197,6 @@ mod tests {
 
     #[test]
     fn a_staged_upload_lives_beside_the_blobs_and_not_among_them() {
-        // An unfinished file at an address `Head` answers for would be a blob
-        // that is not all there, served as though it were.
         let staged =
             StagedRef::parse(TENANT, "0192f2a0-1b2c-7d3e-8f40-000000000001").expect("valid");
         let path = staged.path_under(Path::new("/var/lib/homeinv/blobs"));

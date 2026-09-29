@@ -76,7 +76,7 @@ public class AppUser {
    * <p>Never logged, never returned by any endpoint, and deliberately not exposed through a getter
    * Lombok would have generated for the whole class: see {@link #passwordHash()}.
    */
-  @Getter(AccessLevel.NONE) // The class-level @Getter would expose it; see passwordHash().
+  @Getter(AccessLevel.NONE)
   @Column(name = "password_hash", nullable = false)
   private String passwordHash;
 
@@ -108,7 +108,7 @@ public class AppUser {
    * <p>Off unless an operator grants it, and deliberately not implied by {@link #instanceOperator}:
    * administering an instance is not the same as accumulating tenants on it.
    */
-  @Getter(AccessLevel.NONE) // The class-level @Getter would name it isMayCreateTenants().
+  @Getter(AccessLevel.NONE)
   @Column(name = "may_create_tenants", nullable = false)
   private boolean mayCreateTenants;
 

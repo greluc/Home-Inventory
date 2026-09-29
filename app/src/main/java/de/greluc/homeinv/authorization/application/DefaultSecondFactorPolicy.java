@@ -49,9 +49,6 @@ public class DefaultSecondFactorPolicy implements SecondFactorPolicy {
   @Override
   public boolean requiresSecondFactor(RoleRef role) {
     if (role == null || role.builtIn() == null) {
-      // No role means no membership in this tenant: an instance operator, or
-      // somebody between tenants. There is nothing here for a factor to protect,
-      // and what such a session can reach is decided elsewhere.
       return false;
     }
     return ALWAYS.contains(role.builtIn()) || fieldVisibility.readsSensitiveFields(role);

@@ -53,14 +53,9 @@ class InputHardeningIT extends AbstractIntegrationTest {
                 .session(session)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                // `tenantId` is the case that matters: a client sending it and
-                // having it silently dropped would believe it was honoured, and
-                // would be wrong in the one direction that matters most.
                 .content(
                     json.writeValueAsString(
                         Map.of("name", "A thing", "kind", "DIGITAL", "tenantId", UUID.randomUUID()))))
-        // 422 and not 400: the body parsed perfectly. It said something this
-        // endpoint does not accept, which is a validation failure.
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("tenantId"))
         .andExpect(jsonPath("$.errors[0].message").value("unknown field"));
@@ -71,10 +66,6 @@ class InputHardeningIT extends AbstractIntegrationTest {
   void namesAreNormalisedToNfc() throws Exception {
     MockHttpSession session = sessionFor("normalising@example.org");
 
-    // "Bohrmaschine" with a DECOMPOSED umlaut: o + U+0308 rather than U+00F6.
-    // The two render identically and are different strings, so without
-    // normalisation a search does not find them and two rows exist that a person
-    // cannot tell apart.
     String decomposed = "L" + "o\u0308" + "tkolben";
     String composed = "L" + "\u00f6" + "tkolben";
 
@@ -100,9 +91,6 @@ class InputHardeningIT extends AbstractIntegrationTest {
   void controlCharactersAreStripped() throws Exception {
     MockHttpSession session = sessionFor("control-chars@example.org");
 
-    // U+202E RIGHT-TO-LEFT OVERRIDE reverses everything after it in most
-    // renderers. In a label, a log line or a file listing it makes text read as
-    // something other than what it is, and nothing reading the source sees it.
     String hostile = "invoice" + "\u202e" + "gpj.exe";
 
     String body =
@@ -128,8 +116,6 @@ class InputHardeningIT extends AbstractIntegrationTest {
   void thePageSizeIsCapped() throws Exception {
     MockHttpSession session = sessionFor("paging@example.org");
 
-    // Refused, not silently reduced: a client asking for 5000 and getting 200
-    // without being told will page wrongly and never notice.
     mockMvc
         .perform(
             get("/api/v1/items")
@@ -190,7 +176,6 @@ class InputHardeningIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.length()").value(1));
 
-    // And the bound applies here too.
     mockMvc
         .perform(
             get("/api/v1/locations/" + locationId + "/items")
@@ -198,8 +183,6 @@ class InputHardeningIT extends AbstractIntegrationTest {
                 .session(session))
         .andExpect(status().isUnprocessableEntity());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The tenant's built-in location category.
@@ -222,21 +205,8 @@ class InputHardeningIT extends AbstractIntegrationTest {
                     "de",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     UUID tenantId = provisioning.provision("Tenant for " + email, userId);
-    // Under the tenant context, because `catalog.location_category` is
-    // tenant-scoped with FORCE row-level security: without it the query is not
-    // refused, it simply returns nothing - which is the whole design working and
-    // reads like a missing row.
-    // Under the tenant context AND inside a transaction. The context is a
-    // ThreadLocal; what the database sees is the `app.tenant_id` the transaction
-    // manager pushes when the transaction begins. Without the transaction the
-    // query runs on a connection that never had it set, and FORCE row-level
-    // security answers with nothing - which is the design working and reads like
-    // a missing row.
     builtInCategory =
         TenantContext.callAs(
             tenantId,

@@ -58,9 +58,6 @@ public enum Role {
       Permission.ITEM_READ,
       Permission.LOCATION_READ,
       Permission.MEDIA_READ,
-      // Even a share link needs these: without the definitions behind an item's
-      // attributes a client shows unlabelled keys, so withholding them hides
-      // nothing and breaks the page.
       Permission.TYPE_READ,
       Permission.VALUE_LIST_READ,
       Permission.TAG_READ)),
@@ -74,9 +71,6 @@ public enum Role {
       Permission.TYPE_READ,
       Permission.VALUE_LIST_READ,
       Permission.TAG_READ,
-      // Which tenant this is. A share link is pointed at one thing and is told
-      // nothing about the tenant around it; anybody who signed in to reach this
-      // one is looking at it in a switcher already.
       Permission.TENANT_READ)),
 
   /** Adds and changes, deletes nothing. */
@@ -93,8 +87,6 @@ public enum Role {
       Permission.TYPE_READ,
       Permission.VALUE_LIST_READ,
       Permission.TAG_READ,
-      // Labelling things is what a contributor does; editing the tag vocabulary
-      // is a different capability and is not granted here.
       Permission.TAG_ASSIGN,
       Permission.TENANT_READ)),
 
@@ -115,23 +107,14 @@ public enum Role {
       Permission.SEARCH_QUERY,
       Permission.TYPE_READ,
       Permission.VALUE_LIST_READ,
-      // The tag vocabulary is content: people write tags, they do not configure
-      // the tenant with them. Merging two is the same capability as renaming one.
       Permission.TAG_READ,
       Permission.TAG_CREATE,
       Permission.TAG_UPDATE,
       Permission.TAG_ASSIGN,
-      // A saved search is the tenant's, so writing one is a change to what
-      // everybody sees; that is a member's to make. Taking one away from
-      // everybody is not, and is ADMIN's (REQ-SRCH-008).
       Permission.SAVED_SEARCH_WRITE,
       Permission.REMINDER_RULE_WRITE,
-      // What foreign code may reach here is something anybody working in the
-      // tenant has an interest in knowing; agreeing to it is ADMIN's.
       Permission.PLUGIN_READ,
       Permission.TENANT_READ,
-      // Who else is here. A person working in a shared inventory can see who
-      // they are sharing it with; changing that list is ADMIN's.
       Permission.MEMBER_READ)),
 
   /** The content band plus configuration: the type system, and the members. */
@@ -174,18 +157,9 @@ public enum Role {
       Permission.MEMBER_UPDATE,
       Permission.MEMBER_REMOVE,
       Permission.SERVICE_ACCOUNT_ADMINISTER,
-      // An export is of the tenant, and configuring the tenant is ADMIN's
-      // band (ADR-0068). A scoped membership still does not hold it: that is
-      // decided by `Permission.wholeTenant`, not by the role.
       Permission.TENANT_EXPORT,
-      // Where every change in this tenant is sent, and the log of what reached
-      // it. An integration with somebody else's system, so ADMIN's band and not
-      // a member's -- and whole-tenant, so a scoped membership holds neither.
       Permission.WEBHOOK_READ,
       Permission.WEBHOOK_WRITE)),
-  // Deliberately NOT Permission.TENANT_DELETE: that is OWNER's, and it is what
-  // makes these two different permission sets rather than only different in what
-  // they may grant (REQ-TEN-011).
 
   /**
    * The person the tenant belongs to.

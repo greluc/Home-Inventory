@@ -60,10 +60,6 @@ export function App(): React.JSX.Element {
       .finally(() => setChecking(false));
   }, [signedIn]);
 
-  // REQ-AUTH-003: an OWNER or ADMIN with no second factor holds the role and may
-  // not use it. Every request answers `second-factor-missing` until they enrol,
-  // so the shell watches for that one type and shows the way out rather than an
-  // error message repeated on every panel.
   const noteLock = useCallback((cause: unknown): boolean => {
     if (cause instanceof ApiError && cause.type.endsWith("/second-factor-missing")) {
       setLocked(true);
@@ -105,8 +101,6 @@ export function App(): React.JSX.Element {
     if (!session) {
       return;
     }
-    // The request is the synchronisation with the outside world; the state is
-    // set when it answers, which is a render later and not a cascading one.
     void reloadPlaces();
   }, [session, reloadPlaces]);
 
@@ -114,22 +108,12 @@ export function App(): React.JSX.Element {
     if (!session) {
       return;
     }
-    // Debounced, and not for the user's benefit. This runs on every keystroke,
-    // and each run is a full-text query against PostgreSQL on a machine that may
-    // be a Raspberry Pi — typing "Bohrmaschine" unthrottled is twelve searches
-    // for one answer. 250 ms is below the point where the list feels delayed and
-    // above the interval between keystrokes.
-    //
-    // The language goes with the query: the item's text is indexed in both, and
-    // which stemmer is used decides whether "drills" finds "drill" (ADR-0047).
     const language = i18n.resolvedLanguage ?? "en";
     const timer = setTimeout(() => void reload(query, language), 250);
     return () => clearTimeout(timer);
   }, [session, query, reload, i18n.resolvedLanguage]);
 
   if (checking) {
-    // Nothing, not a spinner: the answer usually arrives in a few milliseconds,
-    // and a spinner that appears and vanishes is worse than a moment of nothing.
     return <main className="shell" aria-busy="true" />;
   }
 

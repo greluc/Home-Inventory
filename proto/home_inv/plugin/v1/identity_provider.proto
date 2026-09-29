@@ -1,22 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// SIGNING SOMEBODY IN AGAINST A FOREIGN DIRECTORY.
-//
-// OIDC is a first-party plugin; LDAP and SAML are plugins too. There is no
-// in-core implementation, because every one of them talks to a host outside the
-// deployment (ADR-0026).
-//
-// WHAT THIS PORT MUST NEVER DO:
-//
-// It does not link accounts. A verified e-mail address that matches an existing
-// local account is NOT permission to sign in as that account — that is the
-// account takeover this project refuses by design (REQ-AUTH-005, REQ-AUTH-006,
-// REQ-SEC-020). This port reports who the far side says the person is; whether
-// that becomes a session, and against which account, is the core's decision and
-// a person's confirmation.
-//
-// It also issues no session and no token of the core's. It returns claims.
 
 syntax = "proto3";
 

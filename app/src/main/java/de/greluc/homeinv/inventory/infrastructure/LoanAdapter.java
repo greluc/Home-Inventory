@@ -84,10 +84,6 @@ public class LoanAdapter implements LoanLog {
   @Transactional
   public LoanView lend(UUID itemId, NewLoan loan, UUID actor) {
     UUID tenantId = TenantContext.require();
-    // The aggregate decides whether it can go out: it refuses what is already
-    // lent, and what was trashed or sold. Doing it here rather than after the
-    // insert means the state and the row move together in one transaction, so
-    // "is it lent" cannot have two answers (04 §4.4).
     de.greluc.homeinv.inventory.domain.Item item = requireItem(tenantId, itemId);
     item.lend(actor, Instant.now(clock));
     items.flush();
@@ -115,9 +111,6 @@ public class LoanAdapter implements LoanLog {
               .query(UUID.class)
               .single();
     } catch (DuplicateKeyException alreadyOut) {
-      // The partial unique index refusing, rather than a check this method made
-      // and trusted. A caller does the same thing about either cause, so the
-      // ordinary case and the race get the same sentence.
       throw new ItemLentException("This item is already lent out. Record its return first.");
     }
 
@@ -133,9 +126,6 @@ public class LoanAdapter implements LoanLog {
     UUID tenantId = TenantContext.require();
     de.greluc.homeinv.inventory.domain.Item item = requireItem(tenantId, itemId);
 
-    // Scoped by item as well as by id: a loan id belonging to a different item is
-    // not this item's loan, and closing it would act on something the path did
-    // not name (REQ-SEC-025).
     int closed =
         jdbc.sql(
                 """
@@ -158,11 +148,7 @@ public class LoanAdapter implements LoanLog {
             .filter(found -> found.itemId().equals(itemId))
             .orElseThrow(() -> new NotFoundException("loan", loanId));
 
-    // Nothing was closed because it was closed already: the first return is the
-    // true one and stands. Not an error -- what the caller wants is already so.
     if (closed > 0) {
-      // Only when a loan actually closed: a second return should not move a state
-      // that a trashing may have changed since.
       item.returnedFromLoan(actor, Instant.now(clock));
       items.flush();
       events.publishEvent(
@@ -199,9 +185,6 @@ public class LoanAdapter implements LoanLog {
   @Transactional(readOnly = true)
   public boolean isLent(UUID itemId) {
     UUID tenantId = TenantContext.require();
-    // No item check here, on purpose: the caller is `delete`, which has already
-    // read the item and would otherwise read it again to ask a question it holds
-    // the answer to. An item that is not there is not lent.
     return Boolean.TRUE.equals(
         jdbc.sql(
                 """

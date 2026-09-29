@@ -47,9 +47,6 @@ public class ReminderDispatcher {
   public int runAll(LocalDate today) {
     int raised = 0;
     for (UUID tenantId : queries.tenantsWithRules()) {
-      // The context around the transaction and never inside it: `SET LOCAL
-      // app.tenant_id` is applied when the transaction begins, from the context
-      // current at that moment.
       raised += TenantContext.callAs(tenantId, () -> runner.runFor(tenantId, today));
     }
     return raised;

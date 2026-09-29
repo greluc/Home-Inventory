@@ -73,9 +73,6 @@ public class CatalogueQueries {
     int levels = depth == null || depth < 0 ? 3 : Math.min(depth, 12);
 
     if (rootId == null) {
-      // The whole tenant, to the depth asked for. `list` is paged and the cap is
-      // the same 200 every listing here has: a tenant with more places than that
-      // asks for a subtree, which is what the argument is for.
       return locations.list(null, 200).data().stream()
           .filter(place -> place.depth() <= levels)
           .toList();

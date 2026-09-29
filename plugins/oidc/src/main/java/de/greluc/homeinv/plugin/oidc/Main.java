@@ -87,9 +87,6 @@ public final class Main {
 
     List<String> missing = configuration.missing();
     for (String reason : missing) {
-      // Said once, at startup, and each one names what to set. A plugin that
-      // cannot sign anybody in is one an operator has to be able to diagnose
-      // without reading its source (REQ-PLG-015).
       log.warn("plugin-oidc is not ready: {}", reason);
     }
 
@@ -98,9 +95,6 @@ public final class Main {
         TlsServerCredentials.newBuilder()
             .keyManager(bundle.chain(), bundle.key())
             .trustManager(bundle.authority())
-            // A plugin is called by the core and by nothing else. There is no
-            // unauthenticated mode and no flag to enable one: a mode that exists
-            // is a mode somebody runs.
             .clientAuth(TlsServerCredentials.ClientAuth.REQUIRE)
             .build();
 
@@ -158,9 +152,6 @@ public final class Main {
           IdentityProviderDescriptor.newBuilder()
               .setProviderKey(configuration.providerKey())
               .setDisplayName(configuration.displayName())
-              // Always. The core sends a challenge whatever a provider insists
-              // on, and a provider that ignores it is one where an intercepted
-              // code is worth something — which an operator wants to see.
               .setPkceRequired(true)
               .build());
       responses.onCompleted();
@@ -210,9 +201,6 @@ public final class Main {
         responses.onNext(identityOf(claims));
         responses.onCompleted();
       } catch (Provider.VerificationException refused) {
-        // UNAUTHENTICATED and not UNAVAILABLE: a token that does not verify is
-        // something to refuse rather than something to retry, and the core
-        // turns the two into different answers.
         log.info("An ID token was refused: {}", refused.getMessage());
         responses.onError(
             Status.UNAUTHENTICATED.withDescription(refused.getMessage()).asRuntimeException());
@@ -263,10 +251,6 @@ public final class Main {
               .setEmailVerified(verified)
               .setDisplayName(name);
 
-      // Everything else, as text, for an operator to map onto roles. The core
-      // maps nothing by itself, and a claim it cannot read is a claim it cannot
-      // act on — so the ones that are not scalars are left out rather than
-      // serialised into something that looks like a value.
       Map<String, String> rest = new TreeMap<>();
       for (Map.Entry<String, Object> claim : all.entrySet()) {
         if (List.of("sub", "iss", "email", "email_verified", "name", "nonce", "aud", "exp", "iat")
@@ -310,9 +294,6 @@ public final class Main {
               .setState(
                   missing.isEmpty()
                       ? HealthState.HEALTH_STATE_OK
-                      // NOT_CONFIGURED and not a failure: the difference matters
-                      // to an operator, and `plugin-health-states.yaml` names it
-                      // for this reason (REQ-PLG-015).
                       : HealthState.HEALTH_STATE_NOT_CONFIGURED)
               .setDetail(String.join("; ", missing));
       if (missing.isEmpty()) {

@@ -116,10 +116,6 @@ public class DeliveryRunner {
 
     Optional<NotificationChannel> channel = channelFor(tenantId, notification.channelKey());
     if (channel.isEmpty()) {
-      // No plugin serves the channel here. Not a refusal by the far side — there
-      // is no far side — so it is retried: an operator installing `plugin-smtp`
-      // should find the queued invitations go out, not a pile of dead letters
-      // from before it existed (ADR-0028).
       queries.recordAttempt(
           tenantId,
           notification.id(),
@@ -165,7 +161,6 @@ public class DeliveryRunner {
       if (worthRetrying) {
         reschedule(tenantId, notification, attemptNo, now);
       } else {
-        // "That is not an address" does not become one by being repeated.
         deadLetter(tenantId, notification, attemptNo);
       }
     }
@@ -225,9 +220,6 @@ public class DeliveryRunner {
                         notification.webhookTargetId(),
                         DefaultWebhookTargets.SIGNING_SECRET,
                         sealed)))
-        // The target was removed between this delivery being queued and being
-        // attempted. Nothing is sent: the plugin refuses a delivery with no
-        // secret, which is the right answer and is recorded as one.
         .orElseGet(Map::of);
   }
 
@@ -237,8 +229,6 @@ public class DeliveryRunner {
       deadLetter(tenantId, notification, attemptNo);
       return;
     }
-    // Doubling from the first gap: a mail server that is down is usually down for
-    // minutes, and a fixed gap either gives up too early or hammers it.
     Duration wait = Duration.ofSeconds(firstRetrySeconds << (attemptNo - 1));
     queries.reschedule(tenantId, notification.id(), attemptNo, now.plus(wait));
   }

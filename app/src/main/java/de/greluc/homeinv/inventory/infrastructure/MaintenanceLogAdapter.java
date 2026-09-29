@@ -69,9 +69,6 @@ public class MaintenanceLogAdapter implements MaintenanceLog {
   @Transactional
   public MaintenanceEntryView record(UUID itemId, NewMaintenanceEntry entry, UUID actor) {
     UUID tenantId = TenantContext.require();
-    // The item is checked here rather than left to the foreign key, so that an
-    // item of another tenant is a 404 like one that never existed, instead of a
-    // constraint violation that says a row is there (REQ-SEC-025).
     items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
 
     UUID id =
@@ -117,11 +114,6 @@ public class MaintenanceLogAdapter implements MaintenanceLog {
   @Transactional
   public void remove(UUID itemId, UUID entryId, UUID actor) {
     UUID tenantId = TenantContext.require();
-    // The item in the path has to exist. Removing an ENTRY that is not there is
-    // harmless -- what the caller wants is already true -- but answering 204 for
-    // an item this tenant cannot see would be acting on something that is not
-    // there, which REQ-SEC-025 answers with 404. The same distinction
-    // `PluginRegistry.revoke` draws between a grant and a plugin.
     items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
 
     int removed =
@@ -129,9 +121,6 @@ public class MaintenanceLogAdapter implements MaintenanceLog {
             .param(tenantId)
             .param(entryId)
             .update();
-    // Removing what is not there is not an error: what the caller wants is "this
-    // entry is not in the log", and that is already true. Logged only when
-    // something actually went, so a log line means something happened.
     if (removed > 0) {
       log.info("Maintenance entry {} was removed by {}", entryId, actor);
     }
@@ -154,8 +143,6 @@ public class MaintenanceLogAdapter implements MaintenanceLog {
         rs.getObject("item_id", UUID.class),
         rs.getObject("performed_on", java.time.LocalDate.class),
         rs.getString("kind"),
-        // Both or neither: the table's own check says so, so a half-filled row
-        // cannot reach here and this needs no third case.
         amount == null ? null : new Money(amount, Currency.getInstance(currency)),
         rs.getString("note"),
         rs.getTimestamp("created_at").toInstant(),

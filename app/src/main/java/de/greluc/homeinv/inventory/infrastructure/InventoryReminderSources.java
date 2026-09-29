@@ -43,10 +43,6 @@ public class InventoryReminderSources {
    */
   @Bean
   public ReminderSource warrantyExpiryReminders(JdbcClient jdbc) {
-    // A lifetime warranty has no date and is never due, which is exactly the
-    // reason REQ-LIFE-002 made it a flag instead of a date far in the future.
-    // Only things the tenant still holds: nobody wants telling that the warranty
-    // on the bike they sold in March is running out.
     return new Query(
         jdbc,
         ReminderTrigger.WARRANTY_EXPIRY,
@@ -72,11 +68,6 @@ public class InventoryReminderSources {
    */
   @Bean
   public ReminderSource loanDueReminders(JdbcClient jdbc) {
-    // The SUBJECT is the loan and the ITEM is what was lent: a second loan of the
-    // same thing is a new thing to be reminded about, which keying on the item
-    // would swallow. A loan with no agreed date is never due -- there is nothing
-    // for it to be late against, and treating "no date" as "due now" would make a
-    // reminder out of a lend nobody put a date on.
     return new Query(
         jdbc,
         ReminderTrigger.LOAN_DUE,
@@ -101,15 +92,6 @@ public class InventoryReminderSources {
    */
   @Bean
   public ReminderSource maintenanceDueReminders(JdbcClient jdbc) {
-    // MEASURED FROM THE LAST SERVICE, not from a fixed calendar: "every twelve
-    // months" means twelve months since it was last done, so servicing it early
-    // moves the next reminder rather than leaving it where it was.
-    //
-    // WHEN IT HAS NEVER BEEN SERVICED the clock starts at the purchase date, and
-    // at the day the record was created when even that is unknown. Something has
-    // to be the start, and "we have had it since then" is the honest one --
-    // treating a never-serviced thing as never due would silently exclude
-    // exactly the items somebody set an interval for.
     return new Query(
         jdbc,
         ReminderTrigger.MAINTENANCE_DUE,
@@ -145,10 +127,6 @@ public class InventoryReminderSources {
    */
   @Bean
   public ReminderSource minimumStockReminders(JdbcClient jdbc) {
-    // THE ONE TRIGGER WITH NO DATE. The condition is `quantity <= minimum_stock`,
-    // so the horizon the runner passes is ignored by the predicate and used only
-    // as the `due_on` recorded against the reminder -- which is what makes the
-    // reminder repeat if the coffee is still low tomorrow and not twice today.
     return new Query(
         jdbc,
         ReminderTrigger.MINIMUM_STOCK,
@@ -193,16 +171,10 @@ public class InventoryReminderSources {
       return trigger;
     }
 
-    // NO `@Transactional` here, and not by omission. The runner calls this from
-    // inside its own transaction, which is where `SET LOCAL app.tenant_id` was
-    // applied, so a read here is already scoped -- and an annotation on a final
-    // class cannot be proxied at all, which is how this was found.
     @Override
     public List<Due> dueBy(LocalDate by, int limit) {
       UUID tenantId = TenantContext.require();
       JdbcClient.StatementSpec statement = jdbc.sql(sql);
-      // Read under the ordinary row-level security: the run has already entered
-      // the tenant's context, so this sees that tenant's rows and no others.
       statement =
           horizonFirst
               ? statement.param(by).param(tenantId)

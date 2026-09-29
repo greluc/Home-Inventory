@@ -47,10 +47,6 @@ class LogSafeTest {
   @Test
   @DisplayName("cannot rewrite what is already on the screen")
   void noControlSequenceSurvives() {
-    // A backspace walks the cursor back over what was written and an escape
-    // starts a control sequence: both have been used to make a terminal show
-    // something other than what the file holds, which is the same attack
-    // without a newline in it.
     assertThat(LogSafe.value("real\b\b\b\bfake")).isEqualTo("realfake");
     assertThat(LogSafe.value("plain\u001b[2Ktext")).isEqualTo("plain[2Ktext");
   }
@@ -58,8 +54,6 @@ class LogSafeTest {
   @Test
   @DisplayName("is left alone when there is nothing wrong with it")
   void ordinaryValuesPassThrough() {
-    // The point is a readable record of what arrived, not a sanitised version
-    // of it. A guard that mangled ordinary values would be one somebody removes.
     assertThat(LogSafe.value("de.greluc.homeinv.plugin.smtp"))
         .isEqualTo("de.greluc.homeinv.plugin.smtp");
     assertThat(LogSafe.value("^[A-Z]{3}$ — Größe")).isEqualTo("^[A-Z]{3}$ — Größe");
@@ -72,8 +66,6 @@ class LogSafeTest {
 
     String written = LogSafe.value(enormous);
 
-    // A caller who cannot forge a line can still write ten thousand characters
-    // of one, once per request.
     assertThat(written).hasSize(201).endsWith("…");
   }
 

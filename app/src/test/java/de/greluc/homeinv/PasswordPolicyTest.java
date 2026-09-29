@@ -51,18 +51,12 @@ class PasswordPolicyTest {
   @Test
   @DisplayName("counts characters as a person types them, not as Java stores them")
   void codePointsRatherThanUnits() {
-    // Twelve emoji are twelve characters to whoever chose them and twenty-four
-    // to String.length(). A rule that disagreed with its own message about what
-    // "12 characters" means is one people work around rather than meet.
     assertThatCode(() -> policy.check("🔑🔒🗝🛡🔐🧩🪪🔏🧱🪤🕵🦺")).doesNotThrowAnyException();
   }
 
   @Test
   @DisplayName("refuses a long password that is already on the list")
   void breached() {
-    // Twelve characters, no repetition, looks invented — and it is the
-    // keyboard walk `q1w2e3r4t5y6`, which is in the list precisely because so
-    // many people have chosen it.
     assertThatThrownBy(() -> policy.check("q1w2e3r4t5y6"))
         .isInstanceOf(WeakPasswordException.class)
         .hasMessageContaining("already known to attackers");
@@ -71,8 +65,6 @@ class PasswordPolicyTest {
   @Test
   @DisplayName("says length first when a password is both short and breached")
   void lengthBeforeList() {
-    // "password" is on the list and is also eight characters. The person is told
-    // the fixable thing.
     assertThatThrownBy(() -> policy.check("password"))
         .isInstanceOf(WeakPasswordException.class)
         .hasMessageContaining("at least 12");
@@ -81,9 +73,6 @@ class PasswordPolicyTest {
   @Test
   @DisplayName("asks for no digit, no capital and no symbol")
   void noForcedComplexity() {
-    // Twelve lower-case letters and nothing else. REQ-SEC-011 forbids forced
-    // complexity, and this is what forbidding it looks like from the outside:
-    // the rule that would reject this must not exist.
     assertThatCode(() -> policy.check("kitchenwindow")).doesNotThrowAnyException();
     assertThatCode(() -> policy.check("a quiet afternoon by the lake"))
         .doesNotThrowAnyException();
@@ -92,9 +81,6 @@ class PasswordPolicyTest {
   @Test
   @DisplayName("carries the whole list it shipped with")
   void theListIsComplete() {
-    // A truncated or missing resource would make every check pass, quietly. The
-    // count is the cheapest way to notice, and the constructor already refuses
-    // an absent file outright.
     assertThat(list.size()).isEqualTo(100_000);
   }
 
@@ -103,9 +89,6 @@ class PasswordPolicyTest {
   void theServiceSeesOnlyAPrefix() {
     AtomicReference<String> asked = new AtomicReference<>();
     AtomicReference<CallContext> context = new AtomicReference<>();
-    // The real SHA-1 of "kitchenwindowseat". The service claims to know its
-    // suffix, so the password is refused although the shipped list has never
-    // heard of it — which is the only way to see that the plugin was consulted.
     String hash = "6599057EB761E8B185290EE0DE3E61EE77B4DA94";
     PasswordPolicy withPlugin =
         new DefaultPasswordPolicy(
@@ -121,10 +104,7 @@ class PasswordPolicyTest {
         .isInstanceOf(WeakPasswordException.class)
         .hasMessageContaining("already known to attackers");
 
-    // Five characters, and they are the first five of the hash rather than of
-    // anything a person typed.
     assertThat(asked.get()).hasSize(5).isEqualTo(hash.substring(0, 5));
-    // An instance call: a password is chosen where there is often no tenant.
     assertThat(context.get().scope()).isEqualTo(CallContext.Scope.INSTANCE);
     assertThat(context.get().tenantId()).isNull();
   }
@@ -151,10 +131,7 @@ class PasswordPolicyTest {
                       PluginException.Kind.UNAVAILABLE, "the service is not answering");
                 }));
 
-    // An unreachable plugin weakens nothing and blocks nobody: it was never the
-    // floor, and an outage must not stop people changing their password.
     assertThatCode(() -> withPlugin.check("kitchenwindowseat")).doesNotThrowAnyException();
-    // And the list still refuses what it knows.
     assertThatThrownBy(() -> withPlugin.check("q1w2e3r4t5y6"))
         .isInstanceOf(WeakPasswordException.class);
   }

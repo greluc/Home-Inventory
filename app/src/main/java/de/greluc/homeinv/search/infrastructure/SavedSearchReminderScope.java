@@ -40,9 +40,6 @@ public class SavedSearchReminderScope implements ReminderScope {
       searches.get(savedSearchId);
       return true;
     } catch (NotFoundException absent) {
-      // Absent and "another tenant's" are the same answer here, which is what
-      // REQ-SEC-025 asks for -- the caller turns it into the same refusal either
-      // way, and telling them apart is the disclosure the rule forbids.
       return false;
     }
   }

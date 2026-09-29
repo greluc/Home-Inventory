@@ -41,9 +41,6 @@ export function AboutFooter(): React.JSX.Element | null {
         return answer;
       })
       .catch(() => {
-        // Deliberately silent. This is the one part of the page nobody came for,
-        // and an instance whose version endpoint is unreachable has a problem
-        // this footer is not the place to report.
       });
     return () => {
       current = false;

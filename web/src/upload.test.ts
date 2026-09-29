@@ -72,8 +72,6 @@ describe("the resumable upload", () => {
           return CREATED;
         }
         if (init.method === "HEAD") {
-          // What actually arrived before the connection went away. The point of
-          // the whole feature is that this number comes from the server.
           return new Response(null, { status: 200, headers: { "Upload-Offset": "6" } });
         }
         sentAt.push(Number(headers.get("Upload-Offset")));
@@ -94,8 +92,6 @@ describe("the resumable upload", () => {
     });
 
     expect(created).toBe("/api/v1/media/m2");
-    // The second attempt starts at the server's offset and not at zero, which
-    // is the entire requirement.
     expect(sentAt).toEqual([0, 6]);
   });
 
@@ -129,9 +125,6 @@ describe("the resumable upload", () => {
           return CREATED;
         }
         if (init.method === "HEAD") {
-          // The upload is complete and the server remembers what it produced —
-          // which is what stops a lost response costing a second upload of the
-          // whole file.
           return new Response(null, {
             status: 200,
             headers: { "Upload-Offset": "10", Location: "/api/v1/media/m3" },

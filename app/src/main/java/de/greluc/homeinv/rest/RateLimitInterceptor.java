@@ -70,8 +70,6 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     if (!(handler instanceof HandlerMethod method)
         || !method.getBeanType().getPackageName().startsWith(ACCESS_LAYER)) {
-      // The actuator, the error dispatcher, a static resource. None of them is
-      // an API call and none of them is what a flood is made of.
       return true;
     }
 
@@ -80,9 +78,6 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     String address = address(request);
     if (request.getRequestURI().startsWith(AUTH_PREFIX)) {
-      // The stricter bucket, and keyed by address rather than by account: before
-      // a login succeeds there is no account, and an attacker spraying one
-      // password across many accounts would otherwise meet no counter at all.
       decisions.add(counters.count("auth", address, limits.authPerMinute(), now));
     }
     decisions.add(counters.count("ip", address, limits.perAddressPerMinute(), now));
@@ -92,10 +87,6 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         who -> {
           decisions.add(
               counters.count("user", who.userId().toString(), limits.perUserPerMinute(), now));
-          // A caller acting for NO tenant is ordinary rather than exceptional:
-          // managing one's own passkeys, listing one's tenants, opening the
-          // change stream before choosing one. There is no tenant to charge, and
-          // the per-user and per-address limits already bound them.
           if (who.tenantId() != null) {
             decisions.add(
                 counters.count(
@@ -103,9 +94,6 @@ public class RateLimitInterceptor implements HandlerInterceptor {
           }
         });
 
-    // Every scope is counted even when one of them is already over: the numbers
-    // a client reads have to mean what they say on the next request too, and a
-    // scope that stopped counting while another was refusing would drift.
     RequestCounters.Decision tightest =
         decisions.stream().min(Comparator.comparingLong(RequestCounters.Decision::remaining))
             .orElseThrow();

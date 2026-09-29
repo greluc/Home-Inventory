@@ -1,11 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# The gates that need no container runtime beyond Docker.
-#
-# Every job here fails the build rather than warning. A gate that warns is a gate
-# that is ignored within a month, and each of these exists because the rule it
-# checks is one nobody can hold in their head across a year of changes.
 
 name: CI
 
@@ -14,7 +8,6 @@ on:
     branches: [main]
   pull_request:
 
-# A second push to the same branch makes the first one irrelevant.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -31,25 +24,14 @@ jobs:
 
       - uses: actions/setup-java@v6
         with:
-          # The toolchain decides what the code is compiled against; this is only
-          # what Gradle itself runs on. Pinned anyway, so a runner image change
-          # cannot alter the build.
           java-version: '25'
           distribution: temurin
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # The integration tests start PostgreSQL and Valkey through Testcontainers,
-      # against the same images the deployment uses. H2 is forbidden: JSONB,
-      # ltree and row-level security behave differently, which is exactly where
-      # the bugs would be (CLAUDE.md, Build).
       - name: Build, test and verify the architecture
         run: ./gradlew --no-daemon build
 
-      # REQ-SEC-076. `max` effort and a `low` threshold, on a codebase where the
-      # whole analysis costs seconds — a threshold that hides findings is a
-      # threshold that hides the one that mattered. Every suppression in
-      # `config/spotbugs-exclude.xml` carries the reason it does not apply.
       - name: SpotBugs with find-sec-bugs
         run: ./gradlew --no-daemon :app:spotbugsMain
 
@@ -61,23 +43,9 @@ jobs:
           path: app/build/reports/tests/test
           retention-days: 7
 
-      # REQ-CON-013. The licence notice each artifact carries is generated from
-      # what that artifact actually holds — the jars inside the boot jar, here —
-      # and committed, so a dependency arriving with a new licence is visible in
-      # the pull request that brings it rather than in a legal question later.
-      # This is the step that fails when the committed notice no longer
-      # describes the build.
       - name: The licence notices describe what the artifacts carry
         run: python3 tools/notices.py --check app plugin-oidc
 
-      # REQ-CON-010. The SBOM is produced by `build`, so it is never stale
-      # relative to the dependencies beside it, and it is kept here so that a
-      # release can attach the one that belongs to its own commit rather than
-      # one regenerated later against whatever resolved that day.
-      #
-      # Two of them, because there are two Java images: the application and the
-      # OIDC plugin resolve different classpaths, and an advisory is matched
-      # against an image rather than against a repository.
       - name: Publish the SBOMs
         uses: actions/upload-artifact@v7
         with:
@@ -94,10 +62,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # Two commits, because `buf breaking` compares against the one before.
-          # On a pull request `HEAD~1` is the base branch's tip, on a push to
-          # main it is the previous commit, and both are the right thing to ask
-          # "did this change break the contract".
           fetch-depth: 2
 
       - uses: actions/setup-node@v7
@@ -108,55 +72,20 @@ jobs:
         with:
           python-version: '3.14'
 
-      # The document is generated from the implementation and committed
-      # (ADR-0049). `:app:test` is what proves the two agree — it reads the
-      # document from a running context — so this job lints what that produced
-      # rather than regenerating it a second time.
       - name: The document lints against the project ruleset
         run: npx --yes @stoplight/spectral-cli lint api/openapi.yaml --ruleset api/spectral.yaml
 
-      # REQ-API-003. The `type` URIs are the part of an error a client branches
-      # on, and their documents are rendered from the registry rather than
-      # written — so a token added to the registry and not rendered, or rendered
-      # and not registered, fails here.
       - name: The problem documents match the registry
         run: |
           pip install --quiet pyyaml
           python tools/render_problems.py --check
 
-      # REQ-API-006 and ADR-0079. In production the GraphQL surface serves only
-      # the queries the build registered, and the register is generated from the
-      # client's own documents -- so the two cannot drift, and a query the build
-      # never saw is refused here rather than in somebody's browser.
-      #
-      # `web/` speaks REST today, so the list is empty and this checks that it
-      # still is. The moment the client gains a `.graphql` document, this step is
-      # what makes the register move with it.
       - name: The persisted-query register matches the client
         run: python tools/persisted_queries.py --check
 
-      # REQ-API-002. The Kotlin Multiplatform client is generated from the same
-      # document and committed, so this is the other half of the same check the
-      # web client gets: the committed client and the document agree, or the
-      # build says which file drifted.
-      #
-      # Its COMPILATION is the `Build and test` job's -- `./gradlew build` builds
-      # every subproject, and `:api-client-kotlin` is one.
       - name: The Kotlin client matches the API document
         run: python tools/kotlin_client.py --check
 
-      # REQ-PLG-004 and ADR-0085. Each plugin manifest travels with a detached
-      # signature, and the core verifies it at every start-up -- so a manifest
-      # edited without its signature being renewed is a plugin that registers
-      # DISABLED in every deployment, with a message about cryptography.
-      #
-      # It fails HERE instead, where the cause is one commit away. The PUBLIC
-      # key is all this needs; the private half is never in a runner, which is
-      # the whole reason signing is a person's command rather than a build step.
-      #
-      # Unsigned manifests are reported and are not a failure: "nobody signed
-      # it" is a state an operator may permit deliberately, and this repository
-      # publishes nothing yet.
       - name: Every manifest signature is over its manifest
         run: python tools/manifest_signatures.py --check
 
@@ -164,17 +93,9 @@ jobs:
         with:
           github_token: ${{ github.token }}
 
-      # REQ-PLG-001 and ADR-0064. The plugin contract is what a third party
-      # compiles against, and `proto/buf.yaml` says which rules it is held to and
-      # why three of them are excepted.
       - name: The plugin contract lints
         run: buf lint proto
 
-      # ADR-0011: a new major version keeps the previous one served for at least
-      # six months, and a break that reaches an operator's site is a plugin that
-      # stops working there. The contract is exercised by first-party plugins at
-      # stage 1 and published at stage 3 (ADR-0028); until then this gate is what
-      # makes a break deliberate rather than accidental.
       - name: The plugin contract does not break
         run: buf breaking proto --against '.git#ref=HEAD~1,subdir=proto'
 
@@ -190,20 +111,9 @@ jobs:
 
       - run: pip install pyyaml
 
-      # REQ-NFR-063. The generated files are committed so a reader can see them,
-      # which means they can also be edited - and an edit that survives is an
-      # edit that has diverged from the matrix everything else reads.
       - name: The generated files match services.yaml
         run: python deploy/generate.py --check
 
-      # REQ-SEC-085 and the forbidden list in the matrix. Checked over the
-      # rendered text rather than the matrix, because what runs is the rendered
-      # text: a generator bug that dropped `read_only` would leave the matrix
-      # perfectly correct.
-      # REQ-NFR-055 and REQ-SEC-083…090: non-root inside the container, no
-      # capabilities, no host namespace, no privileged port — asserted against
-      # the generated descriptions rather than against the matrix they came
-      # from, because the generated file is what a runtime actually reads.
       - name: No forbidden setting reaches a runtime description
         run: |
           set -euo pipefail
@@ -222,12 +132,7 @@ jobs:
           check "host network"            'network_mode\s*:\s*.?host|Network=host'
           check "running as root"         'user\s*:\s*.?(root|0:0)|User=(root|0:0)'
           check "SELinux label disabled"  'SecurityLabelDisable\s*=\s*true'
-          # REQ-SEC-089: the runtime socket is mounted into NO container. A
-          # container that can reach it is a container that can start a
-          # privileged one, which makes every rule above decorative.
           check "container socket mount"  '(docker|podman)\.sock'
-          # Host ports below 1024 (REQ-NFR-061): TLS terminates at the external
-          # reverse proxy, so nothing here needs a privileged port.
           if grep -hoE '(PublishPort=|- ")([0-9]+):' $files | grep -oE '[0-9]+' \
              | awk '$1 < 1024 { print; found=1 } END { exit !found }'; then
             echo "::error::forbidden: a published host port below 1024"
@@ -253,9 +158,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      # Built but not pushed on a pull request. The point here is that it builds
-      # and that what it produces obeys the rules - publishing is a release
-      # concern.
       - name: Build
         uses: docker/build-push-action@v7
         with:
@@ -264,15 +166,11 @@ jobs:
           push: false
           load: true
           tags: home-inv:ci
-          # The image has no git of its own, so the commit is handed to it
-          # (REQ-CON-009).
           build-args: |
             HOMEINV_BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ADR-0022: non-root inside the container is one of the two independent
-      # levels, and it is the one an image can be held to.
       - name: The image does not run as root
         run: |
           set -euo pipefail
@@ -282,15 +180,6 @@ jobs:
             ""|root|0|0:0) echo "::error::the image runs as root"; exit 1 ;;
           esac
 
-      # O29: the ImageProcessor is libvips, driven as a subprocess. An image
-      # without it starts perfectly and fails on the first photo.
-      #
-      # This step asked `vips --version` until 2026-09-12 and passed while every
-      # image upload answered 500: libvips was present, and the base image had no
-      # AVIF *encoder*, so `heifsave` accepted each request and failed at the last
-      # step. "Present" was never the property worth checking — ADR-0052 says every
-      # stored image is AVIF, so the check is that the image can produce one, using
-      # the same two binaries and the same arguments the adapter uses.
       - name: libvips can write the one format we store (ADR-0052)
         run: |
           docker run --rm --entrypoint sh home-inv:ci -c '
@@ -327,9 +216,6 @@ jobs:
       - name: Test
         run: cargo test --release --locked
 
-      # The same `-D warnings` the blob store gets, and for a sharper reason:
-      # this process parses bytes an unauthenticated caller chose, on the one
-      # path that decides whether a connection leaves the deployment at all.
       - name: Clippy
         run: cargo clippy --release --all-targets --locked -- -D warnings
 
@@ -342,19 +228,11 @@ jobs:
       - name: Advisories and licences
         run: cargo deny check
 
-      # REQ-CON-010 and REQ-CON-013, which for a `scratch` image are answered
-      # differently: the SBOM is published with the release, because there is no
-      # filesystem in the image to put it on, and the licence NOTICE is compiled
-      # INTO the binary — generated ahead of the build, committed, and checked
-      # here (ADR-0083).
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --locked
 
       - name: The SBOM, and the notice the binary carries
         run: |
-          # `--target` and not the host's: this resolves the graph for the
-          # triple the Dockerfile builds, so the notice describes the binary
-          # that ships rather than the machine that generated it (ADR-0083).
           cargo cyclonedx --format json --spec-version 1.5 --no-build-deps --target x86_64-unknown-linux-musl
           python3 ../tools/notices.py --check egress-proxy
 
@@ -367,32 +245,19 @@ jobs:
           if-no-files-found: error
 
       - name: Image
-        # `-f Dockerfile`, not `-f egress-proxy/Dockerfile`: the working directory is
-        # already the crate, and the context is `..` because the Dockerfile COPYs
-        # `egress-proxy/` and `proto/` from the repository root.
         run: docker build -f Dockerfile -t home-inv-egress-proxy:ci ..
         working-directory: egress-proxy
 
 
-      # REQ-CON-013, measured on the image rather than on the crate. The notice is
-      # compiled in, so this is the only place that can say it reached the thing
-      # that ships — and `scratch` has no shell, which is exactly why the flag
-      # exists (ADR-0083).
       - name: The image can say what it is made of
         run: |
           set -euo pipefail
-          # To a file and not through `head`: `head -1` closes the pipe
-          # after one line, the binary writing 1600 of them is killed by
-          # SIGPIPE, and `pipefail` turns that into a failed step. The
-          # error read `write /dev/stdout: broken pipe`, which is the
-          # check working and reporting itself as the thing it checks.
           docker run --rm home-inv-egress-proxy:ci --licences > notice.txt
           first=$(head -1 notice.txt)
           if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
             echo "::error::egress-proxy does not print its licence notice; it read '$first'"
             exit 1
           fi
-          # And that it is the notice rather than a banner over nothing.
           if [ "$(wc -l < notice.txt)" -lt 200 ]; then
             echo "::error::egress-proxy printed a notice of $(wc -l < notice.txt) lines"
             exit 1
@@ -400,8 +265,6 @@ jobs:
           rm notice.txt
           echo "The image prints its third-party notice."
 
-      # `scratch` plus one static binary. An allowlist enforcer with a shell in
-      # the image is an allowlist enforcer with a way around itself.
       - name: The image contains the binary and nothing else
         run: |
           set -euo pipefail
@@ -422,9 +285,6 @@ jobs:
           echo "Runs as 10001:10001."
 
   plugins:
-    # One job per crate under `plugins/`, so a third and a fourth cost a line
-    # each. `common` is the shared library ADR-0072 predicted: it has tests and
-    # no image, which is the one place the steps below branch.
     name: Plugin — ${{ matrix.crate }}
     runs-on: ubuntu-latest
     strategy:
@@ -461,10 +321,6 @@ jobs:
       - name: Test
         run: cargo test --release --locked
 
-      # The same `-D warnings` the two core Rust services get. These compose a
-      # request from a URL a person typed, sign a payload with a tenant's secret
-      # and speak a line protocol to a mail server; a lint about an unchecked
-      # conversion is worth a build here.
       - name: Clippy
         run: cargo clippy --release --all-targets --locked -- -D warnings
 
@@ -474,15 +330,9 @@ jobs:
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
 
-      # A first-party plugin is AGPL like the rest of the first-party code
-      # (ADR-0072), so its dependency tree has the same licence question to
-      # answer as `blobstore/` and `egress-proxy/`.
       - name: Advisories and licences
         run: cargo deny check
 
-      # REQ-CON-010 and REQ-CON-013. Skipped for `common`, which is a library
-      # rather than a distributed artifact: it is linked into the four plugins
-      # below and its dependencies appear in each of their notices.
       - name: Install cargo-cyclonedx
         if: matrix.image
         run: cargo install cargo-cyclonedx --locked
@@ -490,9 +340,6 @@ jobs:
       - name: The SBOM, and the notice the binary carries
         if: matrix.image
         run: |
-          # `--target` and not the host's: this resolves the graph for the
-          # triple the Dockerfile builds, so the notice describes the binary
-          # that ships rather than the machine that generated it (ADR-0083).
           cargo cyclonedx --format json --spec-version 1.5 --no-build-deps --target x86_64-unknown-linux-musl
           python3 ../../tools/notices.py --check plugins-${{ matrix.crate }}
 
@@ -507,31 +354,19 @@ jobs:
 
       - name: Image
         if: matrix.image
-        # `-f Dockerfile` with the repository root as the context, because the
-        # Dockerfile COPYs `proto/`, the shared crate and this one from there.
         run: docker build -f Dockerfile -t home-inv-plugin-${{ matrix.crate }}:ci ../..
 
 
-      # REQ-CON-013, measured on the image rather than on the crate. The notice is
-      # compiled in, so this is the only place that can say it reached the thing
-      # that ships — and `scratch` has no shell, which is exactly why the flag
-      # exists (ADR-0083).
       - name: The image can say what it is made of
         if: matrix.image
         run: |
           set -euo pipefail
-          # To a file and not through `head`: `head -1` closes the pipe
-          # after one line, the binary writing 1600 of them is killed by
-          # SIGPIPE, and `pipefail` turns that into a failed step. The
-          # error read `write /dev/stdout: broken pipe`, which is the
-          # check working and reporting itself as the thing it checks.
           docker run --rm home-inv-plugin-${{ matrix.crate }}:ci --licences > notice.txt
           first=$(head -1 notice.txt)
           if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
             echo "::error::plugin-${{ matrix.crate }} does not print its licence notice; it read '$first'"
             exit 1
           fi
-          # And that it is the notice rather than a banner over nothing.
           if [ "$(wc -l < notice.txt)" -lt 200 ]; then
             echo "::error::plugin-${{ matrix.crate }} printed a notice of $(wc -l < notice.txt) lines"
             exit 1
@@ -539,8 +374,6 @@ jobs:
           rm notice.txt
           echo "The image prints its third-party notice."
 
-      # `scratch` plus one static binary, like the two core Rust services. A
-      # plugin with a shell in its image is a plugin that can be used as one.
       - name: The image contains the binary and nothing else
         if: matrix.image
         run: |
@@ -563,25 +396,15 @@ jobs:
           fi
           echo "Runs as 10001:10001."
 
-  # The fifth plugin is Java and is built by THIS build rather than by cargo
-  # (ADR-0072), so `./gradlew build` in the job above already compiles it, runs
-  # its tests and runs SpotBugs over it. What is left is its image.
   plugin-oidc-image:
     name: Plugin — oidc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      # `-f Dockerfile` with the repository root as the context, because the
-      # Dockerfile COPYs the wrapper, `proto/` and the build files from there.
       - name: Image
         run: docker build -f plugins/oidc/Dockerfile -t home-inv-plugin-oidc:ci .
 
-      # No "the image contains no shell" check here, and the absence is
-      # deliberate: this one is a JRE on a distribution image and has one. The
-      # four Rust plugins are `scratch` plus a static binary and are checked for
-      # it; a JVM cannot be, which is part of what ADR-0072 weighed when it made
-      # this the exception.
       - name: The image does not run as root
         run: |
           set -euo pipefail
@@ -595,9 +418,6 @@ jobs:
       - name: It starts, and says what it is missing rather than crashing
         run: |
           set -euo pipefail
-          # With no identity mounted it must REFUSE TO START (REQ-SEC-056): a
-          # plugin that came up without mTLS would take calls from anything on
-          # its segment and nothing about it would say so.
           if docker run --rm home-inv-plugin-oidc:ci 2>&1 | tee /tmp/oidc.log; then
             echo "::error::plugin-oidc started without an mTLS identity"
             exit 1
@@ -621,69 +441,32 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # `ci`, not `install`: it installs exactly the lockfile and fails if the
-      # two disagree, which is the difference between a reproducible build and
-      # one that happens to work today (REQ-SEC-074).
       - run: npm ci
 
       - name: Types
         run: npm run typecheck
 
-      # REQ-SEC-076, with `oxlint` in place of ESLint: `typescript-eslint` refuses
-      # to load under TypeScript 7 and this client is on it. The requirement
-      # records the substitution and the reason.
       - name: Lint
         run: npm run lint
 
-      # REQ-NFR-032 and REQ-NFR-033: the interface is multilingual, the strings
-      # live in resource bundles, and both languages are complete. i18next
-      # answers a missing key with the key itself, so a typo ships as
-      # `item.quntity` on screen and looks like a styling problem; a key missing
-      # from German falls back to English and looks translated to anybody
-      # testing in English.
       - name: Both languages are complete
         run: npm run i18n:check
 
-      # REQ-NFR-035: times are stored in UTC and displayed in the user's zone.
-      # The gate that requirement names is "a test across several time zones",
-      # and it earns the plural — a formatter that ignored the zone would pass a
-      # test run in one.
       - name: Unit tests
         run: npm test
 
-      # REQ-API-002. The client's types ARE the API document, turned into
-      # TypeScript by `scripts/client.mjs` and committed — so a mistyped path, an
-      # invented parameter and a field the server does not send are compile
-      # errors in the step above rather than a 404 on a screen nobody opened.
-      #
-      # This step checks the other direction: that the committed types still
-      # match the document. It replaced `scripts/contract.mjs`, which compared
-      # the hand-written client's path strings against the document and could
-      # only ever check the paths.
       - name: The generated client matches the API document
         run: npm run client:check
 
       - name: Build
         run: npm run build
 
-      # ADR-0038: the policy names the hash of the inline theme bootstrap, and
-      # the bootstrap is in the shell. A change to either without the other is a
-      # page that fails in the browser with a blocked script - so it fails here
-      # instead.
       - name: The served CSP matches the built bundle
         run: npm run csp:check
 
-      # REQ-CON-013. MIT and ISC ask for their notice in every copy and a
-      # minified bundle is a copy. The list comes from Rollup rather than from
-      # the dependency tree (`vite.config.ts`): a production install resolves
-      # `typescript`, because i18next declares it as a peer dependency, and no
-      # line of it reaches a browser.
       - name: The licence notice describes what the bundle carries
         run: python3 ../tools/notices.py --check web
 
-      # REQ-CON-010. The bundle's own bill of materials, produced by the build
-      # that produced the bundle and shipped inside it — `dist/sbom.json` is
-      # served by the `web` image like any other file in the bundle.
       - name: Publish the SBOM
         uses: actions/upload-artifact@v7
         with:
@@ -692,12 +475,6 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      # `npm run build` REWRITES nginx/default.conf, so the check above compares
-      # the build with itself and cannot fail. What it cannot see is the copy in
-      # the repository going stale — and it had, by the hash of the theme
-      # bootstrap, because that hash was generated on a checkout whose line
-      # endings differed. This is the same gate `deploy/generate.py --check` is:
-      # the generated file in the tree must be the one the generator produces.
       - name: The committed policy is the generated one
         run: git diff --exit-code -- nginx/default.conf
 
@@ -712,10 +489,6 @@ jobs:
               exit 1
             fi
           done
-          # REQ-SEC-061 makes COEP's reappearance a failure (ADR-0040), and
-          # `trusted-types default` must stay beside the requirement: without it,
-          # policy creation is unrestricted and anything achieving script
-          # execution can mint its own (ADR-0038).
           for required in "require-trusted-types-for 'script'" "trusted-types default" "default-src 'none'" "frame-ancestors 'none'"; do
             if ! echo "$policy" | grep -q "$required"; then
               echo "::error::the policy is missing: $required"
@@ -724,21 +497,12 @@ jobs:
           done
           echo "The policy carries everything it must and nothing it must not."
 
-          # Every copy of the policy has to be the same policy. It is emitted once
-          # per location, because nginx inherits `add_header` only where the
-          # current level defines none - so a server-level block would reach
-          # /api/ and /media/, which send their own headers, and the client would
-          # receive two enforced policies fighting each other.
           distinct=$(grep -o 'Content-Security-Policy "[^"]*"' nginx/default.conf | sort -u | wc -l)
           if [ "$distinct" -ne 1 ]; then
             echo "::error::the locations do not all send the same policy"
             exit 1
           fi
 
-      # REQ-NFR-078 and 06 §6.7. Five rules for the hop ADR-0042 created, each
-      # of which is quiet when wrong: the symptom is never an error, it is a
-      # feature that silently stops working or a client that gets markup where
-      # it was promised a problem document.
       - name: The web to api hop keeps its contract
         run: |
           set -euo pipefail
@@ -759,39 +523,22 @@ jobs:
             fi
           }
 
-          # The body limit must be ABOVE the API's, so an oversized upload is
-          # refused by `api` as application/problem+json rather than by nginx as
-          # an HTML error page (REQ-API-003).
           require "no client_max_body_size: the proxy would reject with markup" \
                   '^\s*client_max_body_size\s+[0-9]+m;'
 
-          # The read timeout must exceed the API's own 30 s ceiling (08 §8.2), or
-          # `web` emits its own 504 in place of the handled response.
           require "no proxy_read_timeout above the API ceiling" \
                   'proxy_read_timeout\s+(3[1-9]|[4-9][0-9]|[0-9]{3,})s;'
 
-          # Off, for the SSE stream of REQ-API-011. A buffering proxy holds
-          # events until the buffer fills: the feature appears to work in
-          # development and silently stops working in the deployment.
           require "proxy_buffering is not switched off for the API" \
                   'proxy_buffering\s+off;'
 
-          # APPENDED, never overwritten. Overwriting makes every client appear to
-          # be this container: per-IP rate limiting throttles all tenants as one
-          # and every audit entry records the same source (REQ-SEC-103).
           require "X-Forwarded-For is not appended" \
                   'proxy_set_header\s+X-Forwarded-For\s+\$proxy_add_x_forwarded_for;'
           forbid "X-Forwarded-For is overwritten rather than appended" \
                  'proxy_set_header\s+X-Forwarded-For\s+\$remote_addr;'
 
-          # Nothing the API sets may be dropped: ETag, Retry-After, RateLimit-*,
-          # Deprecation, Sunset, Link and Content-Disposition each carry a
-          # documented contract, and dropping RateLimit-* breaks REQ-SEC-064's
-          # acceptance criterion without breaking anything visible.
           forbid "a response header the API sets is hidden" 'proxy_hide_header'
 
-          # `web` terminates no TLS (REQ-NFR-061): two terminations for one
-          # hostname would mean two certificate lifecycles.
           forbid "web terminates TLS" '^\s*(ssl_certificate|listen[^;]*ssl)'
 
           [ "$fail" -eq 0 ] && echo "The hop keeps all five rules."
@@ -820,9 +567,6 @@ jobs:
       - name: Test
         run: cargo test --release --locked
 
-      # `-D warnings` and not a report. A lint that does not fail is a lint that
-      # accumulates, and this is the one process in the deployment that touches
-      # every byte of every tenant's media.
       - name: Clippy
         run: cargo clippy --release --all-targets --locked -- -D warnings
 
@@ -832,25 +576,14 @@ jobs:
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
 
-      # REQ-SEC-075 for this dependency tree, and the check that keeps the
-      # binary's AGPL-3.0-or-later statement true: a crate under a licence that
-      # cannot be combined with it fails, and so does one nobody has considered.
       - name: Advisories and licences
         run: cargo deny check
 
-      # REQ-CON-010 and REQ-CON-013, which for a `scratch` image are answered
-      # differently: the SBOM is published with the release, because there is no
-      # filesystem in the image to put it on, and the licence NOTICE is compiled
-      # INTO the binary — generated ahead of the build, committed, and checked
-      # here (ADR-0083).
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --locked
 
       - name: The SBOM, and the notice the binary carries
         run: |
-          # `--target` and not the host's: this resolves the graph for the
-          # triple the Dockerfile builds, so the notice describes the binary
-          # that ships rather than the machine that generated it (ADR-0083).
           cargo cyclonedx --format json --spec-version 1.5 --no-build-deps --target x86_64-unknown-linux-musl
           python3 ../tools/notices.py --check blobstore
 
@@ -863,32 +596,19 @@ jobs:
           if-no-files-found: error
 
       - name: Image
-        # `-f Dockerfile`, not `-f blobstore/Dockerfile`: the working directory is
-        # already the crate, and the context is `..` because the Dockerfile COPYs
-        # `blobstore/` and `proto/` from the repository root.
         run: docker build -f Dockerfile -t home-inv-blobstore:ci ..
         working-directory: blobstore
 
 
-      # REQ-CON-013, measured on the image rather than on the crate. The notice is
-      # compiled in, so this is the only place that can say it reached the thing
-      # that ships — and `scratch` has no shell, which is exactly why the flag
-      # exists (ADR-0083).
       - name: The image can say what it is made of
         run: |
           set -euo pipefail
-          # To a file and not through `head`: `head -1` closes the pipe
-          # after one line, the binary writing 1600 of them is killed by
-          # SIGPIPE, and `pipefail` turns that into a failed step. The
-          # error read `write /dev/stdout: broken pipe`, which is the
-          # check working and reporting itself as the thing it checks.
           docker run --rm home-inv-blobstore:ci --licences > notice.txt
           first=$(head -1 notice.txt)
           if [ "$first" != "THIRD-PARTY LICENCE NOTICES" ]; then
             echo "::error::blobstore does not print its licence notice; it read '$first'"
             exit 1
           fi
-          # And that it is the notice rather than a banner over nothing.
           if [ "$(wc -l < notice.txt)" -lt 200 ]; then
             echo "::error::blobstore printed a notice of $(wc -l < notice.txt) lines"
             exit 1
@@ -896,9 +616,6 @@ jobs:
           rm notice.txt
           echo "The image prints its third-party notice."
 
-      # `scratch` plus one binary. Anything else in there is something an
-      # attacker who reaches this process could run, and something to patch on a
-      # CVE announcement for a package this service never used (ADR-0050).
       - name: The image contains the binary and nothing else
         run: |
           set -euo pipefail
@@ -927,19 +644,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # Every commit the pull request adds, not just its tip.
           fetch-depth: 0
 
-      # REQ-CON-003. The DCO trailer is the contributor's statement that they
-      # have the right to submit the work; a missing one is not a formatting
-      # problem, it is a missing statement (CONTRIBUTING.md, ADR-0018).
       - name: Every commit is signed off and conventionally named
         run: |
           set -uo pipefail
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           if [ -z "$base" ]; then
-            # A push to main: check the commits it added.
             base="${{ github.event.before }}"
             head="${{ github.sha }}"
           fi
@@ -951,8 +663,6 @@ jobs:
           fail=0
           for commit in $(git rev-list "$base..$head"); do
             subject=$(git log -1 --format=%s "$commit")
-            # A merge commit has no author statement to make and no subject to
-            # conform to.
             if [ "$(git rev-list --parents -n 1 "$commit" | wc -w)" -gt 2 ]; then
               continue
             fi
@@ -969,9 +679,6 @@ jobs:
           [ "$fail" -eq 0 ] && echo "Every commit is signed off and conventionally named."
           exit $fail
 
-      # REQ-CON-006. The four files a contributor, a reporter and a packager look
-      # for first. Their absence is never noticed by a build, only by the person
-      # who went looking.
       - name: The community files are present
         run: |
           set -uo pipefail
@@ -985,9 +692,6 @@ jobs:
           [ "$fail" -eq 0 ] && echo "Every community file is present."
           exit $fail
 
-      # REQ-CON-005. A changelog with nothing in its Unreleased section during a
-      # run of feature commits is one nobody is keeping, and the first release
-      # would then have to be reconstructed from git log.
       - name: The changelog is being kept
         run: |
           set -uo pipefail
@@ -1002,9 +706,6 @@ jobs:
           fi
           echo "The changelog's Unreleased section names $entries change(s)."
 
-      # REQ-CON-007. Every file says who owns it and under which licence, and
-      # the Apache-2.0 modules carry their own copy of theirs -- a plugin author
-      # who vendors `plugin-api` gets the licence with the code.
       - name: Licences are declared for every file
         run: |
           set -uo pipefail
@@ -1027,17 +728,11 @@ jobs:
           [ "$fail" -eq 0 ] && echo "Every Apache module carries its own licence."
           exit $fail
 
-      # REQ-SEC-078. `pull_request_target` runs with the BASE repository's
-      # secrets against the HEAD repository's code, which is a fork's code with
-      # our tokens. There is no use of it in this repository that would be worth
-      # that.
       - name: CI permissions are minimal and pull_request_target is absent
         run: |
           set -uo pipefail
           fail=0
           for workflow in .github/workflows/*.yml; do
-            # Matched as a TRIGGER rather than as a word: this step names the
-            # string in order to refuse it, and a bare grep finds itself.
             if grep -qE '^[[:space:]]*pull_request_target:' "$workflow"; then
               echo "::error file=$workflow::pull_request_target is forbidden (REQ-SEC-078)"
               fail=1
@@ -1061,23 +756,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # REQ-CON-014: British English, with two carve-outs that would break things
-      # if "corrected" - technical identifiers keep their technology's spelling,
-      # and verbatim third-party text is never edited.
       - name: British English in the prose
         run: |
           set -uo pipefail
-          # American spellings only, and only ones with no technical meaning here.
-          # Three traps are avoided deliberately:
-          #
-          #  - `color`, `catalog` and `labeling` are absent: they are identifiers in
-          #    this codebase - the CSS property, the catalog schema, the labeling
-          #    schema.
-          #  - `licence` and `centred` are **British** and were on this list by
-          #    mistake until the first dry run caught them. `license` is absent too,
-          #    because it is the correct British *verb*: "licensed under Apache-2.0".
-          #  - a line carrying `spelling-exempt` is skipped, for the few places that
-          #    quote the exceptions in order to document them.
           pattern='\b(behaviors?|organiz(e|ed|ing|ation)|analyz(e|ed|ing)|fulfill|defense|centered)\b'
           files=$(git ls-files '*.md' \
             | grep -v '^LICENSE' \
@@ -1091,42 +772,20 @@ jobs:
           fi
           echo "No American spelling found in the prose."
 
-      # REQ-CON-015. A fact stated twice is checked, not trusted: the number of
-      # ADRs, of requirements per area, of design-system modules, the profile
-      # memory sums — each is recorded once with the expression that computes it,
-      # and every restatement is compared against the computed value. Retired
-      # spellings fail wherever they are not explicitly allowed.
       - name: Tracked facts and retired literals
         run: |
           pip install --quiet pyyaml
           python tools/tracked_facts.py
 
-      # A4b in ADR-0000. An ADR is never rewritten when a decision changes: a
-      # later one amends it and the older one carries a note saying so. That
-      # relation is hand-maintained in three places — both records and the index —
-      # and a hand-maintained index is what goes stale while still reading as
-      # authoritative. Run by hand on 2026-09-11 it found nine omissions; written
-      # as a gate on 2026-09-12 it found four more, including two back-links
-      # missing since ADR-0050 and ADR-0052 were written.
       - name: Every ADR amendment is recorded in both directions
         run: python tools/adr_links.py
 
-      # A7 in ADR-0000, and the rule 14 §14.3 states about itself: "a property
-      # with no test is a claim". It ships with a BASELINE and fails only on new
-      # occurrences, because a bare regex over ten thousand lines of deliberately
-      # emphatic prose would be switched off within a week. The list only shrinks.
       - name: No new claim without something that checks it
         run: python tools/unbacked_claims.py
 
-      # REQ-CON-012 and REQ-CON-002. The corpus is English, file names included.
-      # A German-language document is not a translation problem — it is a second
-      # corpus, and the second one is the one that stops being updated.
       - name: No German-language document
         run: |
           set -uo pipefail
-          # Words that are German and are not also English, not identifiers, and
-          # not plausible in an English sentence. Deliberately short: a list that
-          # produces one false positive is a list somebody switches off.
           pattern='\b(und|oder|nicht|werden|wurde|müssen|sollte|kann|dieser|diese|dieses|einen|einem|eine)\b'
           files=$(git ls-files '*.md' | grep -v '^LICENSES/' | grep -v '^design-system/' \
                   | grep -v '^website/' | grep -v '^CODE_OF_CONDUCT.md')
@@ -1136,8 +795,6 @@ jobs:
           fi
           echo "The corpus is English."
 
-      # REQ-CON-002: diagrams are Mermaid in plain text. A binary diagram is one
-      # nobody can review in a pull request and one that needs a tool to open.
       - name: No binary diagram
         run: |
           set -uo pipefail
@@ -1150,10 +807,6 @@ jobs:
           fi
           echo "Every diagram is Mermaid in plain text."
 
-      # Two control characters reached this repository through a shell heredoc: a
-      # NUL where a space belonged in a cursor fingerprint, and a backspace where
-      # a regex needed a word boundary. Both were invisible in a diff and both
-      # changed what the code did.
       - name: No control character in a text file
         run: |
           set -uo pipefail
@@ -1170,25 +823,8 @@ jobs:
           [ "$fail" -eq 0 ] && echo "No stray control characters."
           exit $fail
 
-      # Every relative link in the corpus resolves. A dead link in a document
-      # that calls itself the single source of truth is worse than no document.
-      #
-      # This was four lines of shell until 2026-09-12 and had never passed: under
-      # `pipefail`, a Markdown file with no relative links made `grep` exit 1 and
-      # took the gate with it — which is most of api/problems/ and
-      # CODE_OF_CONDUCT.md — and it reported the dead link from inside a subshell
-      # whose failure could not escape, so the job failed without saying what was
-      # wrong. The script also resolves against what git tracks rather than
-      # against the filesystem, so a wrong-case link fails here and not only on
-      # the runner.
       - name: No dead relative link
         run: python tools/dead_links.py
 
-      # A workflow step is a shell script nothing parses until a runner reaches
-      # it, which makes a syntax error the most expensive typo here: a push, a
-      # queue and several minutes, reported as whatever step was running. Two
-      # went out on 2026-09-12, both a quoted heredoc inside an indented block —
-      # YAML strips the base indentation and the terminator arrives indented.
-      # `bash -n` sees that in a millisecond.
       - name: Every workflow step is valid shell
         run: python tools/workflow_shell.py

@@ -1,37 +1,11 @@
 #!/bin/sh
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# What a running stack proves and a description cannot.
-#
-#     deploy/smoke/connectivity.sh docker|podman
-#
-# Six requirements say, in so many words, that their gate is a refused
-# connection rather than a flag in a file — and until this script existed CI read
-# the deployment descriptions and never opened a socket:
-#
-#   REQ-SEC-099   the management port answers on `internal` and nowhere else
-#   REQ-SEC-102   exactly two containers sit on a non-internal segment
-#   REQ-SEC-104   every store inside the deployment authenticates its callers
-#   REQ-SEC-105   `web` reaches `api` and nothing else
-#   REQ-PRIV-003  `api` and `worker` have no outbound route out of the deployment
-#   REQ-NFR-014   the WAL archive actually receives segments
-#   REQ-NFR-067   every container that declares a health check reports healthy
-#   ADR-0036      the scanner's signature updater actually initialised
-#   ADR-0037      a plugin's segment reaches the core and the proxy, and nothing else
-#   REQ-PLG-013   the generated topology is the one that runs
-#
-# A segment flag is a claim; a refused connection is evidence. That distinction is
-# ADR-0044's, and it is the reason this file exists rather than another grep over
-# `services.yaml`.
 set -eu
 
 RUNTIME="${1:-docker}"
 FAILURES=0
 
-# Timeouts everywhere: a refused connection is instant, and a DROPped one hangs
-# until something gives up. Without a bound, "refused" and "the job ran out of
-# time" look the same from here.
 CONNECT_TIMEOUT=5
 
 pass() { printf '  ok    %s\n' "$1"; }
@@ -39,24 +13,16 @@ fail() { printf '  FAIL  %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
 section() { printf '\n%s\n' "$1"; }
 
-# Runs a command inside a container and reports whether it succeeded.
 inside() {
     container="$1"
     shift
     "$RUNTIME" exec "$container" "$@" >/dev/null 2>&1
 }
 
-# Whether a TCP connection from `container` to `host:port` is established.
-#
-# `nc -w N host port` and not `nc -z`: busybox's netcat, which is the one in the
-# alpine-based `web` image, has no `-z`. Redirecting stdin from /dev/null makes it
-# close the connection immediately instead of waiting for input, so a successful
-# connection exits 0 at once and a refused one exits non-zero.
 connects() {
     "$RUNTIME" exec "$1" nc -w "$CONNECT_TIMEOUT" "$2" "$3" </dev/null >/dev/null 2>&1
 }
 
-# Asserts that a connection from `container` to `host:port` is REFUSED.
 refused() {
     container="$1"
     host="$2"
@@ -69,11 +35,6 @@ refused() {
     fi
 }
 
-# Asserts that a connection from `container` to `host:port` is ACCEPTED.
-#
-# The positive half matters as much as the negative one: a suite in which every
-# connection is refused would pass for the wrong reason — a stack that is not
-# running refuses everything.
 reaches() {
     container="$1"
     host="$2"
@@ -105,9 +66,6 @@ fi
 
 section "REQ-PRIV-003: api and worker have no route out of the deployment"
 for core in homeinv-api homeinv-worker; do
-    # A name and an address, because they fail differently: a name fails at
-    # resolution when there is no resolver, and an address fails at routing.
-    # Only the second proves there is no route.
     if inside "$core" curl --silent --max-time "$CONNECT_TIMEOUT" https://example.com; then
         fail "$core reached example.com"
     else
@@ -122,16 +80,10 @@ done
 
 section "REQ-SEC-104: every store authenticates its callers"
 
-# Every one of these is asked OVER THE NETWORK, from a throwaway container that
-# shares `api`'s network namespace — not from inside the store itself. A database
-# trusts its own loopback by default, so an `exec` into the container proves the
-# opposite of what it looks like: the first version of this check ran `psql` on
-# 127.0.0.1 and reported that postgres accepts any password.
 from_internal() {
     "$RUNTIME" run --rm --network "container:homeinv-api" "$@" 2>&1
 }
 
-# PostgreSQL: the right user, the wrong password.
 if from_internal --entrypoint sh docker.io/library/postgres:18-alpine -c \
         'PGPASSWORD=definitely-not-the-password psql -h postgres -U homeinv_app -d homeinv -c "select 1"' \
         | grep -qi "authentication failed\|password authentication"; then
@@ -140,8 +92,6 @@ else
     fail "postgres accepted a wrong password"
 fi
 
-# Valkey: `default` is disabled and every caller is an ACL user, so an
-# unauthenticated PING is refused rather than answered.
 if from_internal docker.io/valkey/valkey:8-alpine valkey-cli -h valkey ping \
         | grep -qi "NOAUTH\|WRONGPASS\|denied"; then
     pass "valkey refuses an unauthenticated caller"
@@ -149,15 +99,12 @@ else
     fail "valkey answered an unauthenticated PING"
 fi
 
-# RabbitMQ: `guest` is the account every default installation has.
 if "$RUNTIME" exec homeinv-rabbitmq rabbitmqctl authenticate_user guest guest >/dev/null 2>&1; then
     fail "rabbitmq accepted guest/guest"
 else
     pass "rabbitmq refuses guest/guest"
 fi
 
-# The blob store: mTLS with a pinned fingerprint. A caller with no client
-# certificate does not get past the handshake (ADR-0044, REQ-SEC-056).
 if inside homeinv-api curl --silent --insecure --max-time "$CONNECT_TIMEOUT" \
         https://blobstore:8100; then
     fail "the blob store answered a caller with no client certificate"
@@ -166,25 +113,10 @@ else
 fi
 
 section "ADR-0037 and REQ-PLG-013: what a plugin's segment reaches"
-# The plugin runs in `standard` and `ha`; this stack is `minimal`, so it is
-# started here BY NAME. What is proved is the shape of the generated network —
-# which segment reaches what — and that shape is the same in every profile,
-# because it comes from one entry in services.yaml.
-#
-# The protocol on top of it is proved elsewhere, deliberately: `HostChannelIT`
-# drives the host channel over real TLS with real certificates, which a suite
-# that opens TCP sockets with `nc` could never do.
 plugin=homeinv-plugin-webhook
 started_here=0
 
-# Every check FROM the plugin runs in a throwaway container sharing its network
-# namespace, exactly as the datastore checks share `api`'s. It is not a
-# convenience: the plugin's image is `scratch` — no shell, no `nc`, nothing to
-# exec at all — and that is a property worth keeping rather than working around.
 from_plugin() {
-    # `--entrypoint nc`, as the datastore checks above pass `--entrypoint sh`:
-    # this image has an entrypoint of its own, and a command handed to it is
-    # a command that may never run.
     "$RUNTIME" run --rm --network "container:$plugin" \
         --entrypoint nc docker.io/library/postgres:18-alpine \
         -w "$CONNECT_TIMEOUT" "$1" "$2" </dev/null >/dev/null 2>&1
@@ -206,10 +138,6 @@ reaches_from_plugin() {
     fi
 }
 
-# `if cmd; then` rather than `cmd && var=1`: under `set -e` a bare failing
-# command ends the script, and the whole point of these lines is to carry on
-# and say what happened. The first version of this section did it the other
-# way and exited before printing a single result.
 if ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
     case "$RUNTIME" in
         docker)
@@ -225,9 +153,6 @@ if ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
             fi
             ;;
     esac
-    # The moment a container needs to be listed. There is no health check to wait
-    # for: the image is `scratch`, and the core asks this plugin about itself over
-    # the contract's own health service instead (09 §9.5).
     waited=0
     while [ "$waited" -lt 15 ] && ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; do
         waited=$((waited + 1))
@@ -236,15 +161,6 @@ if ! "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
 fi
 
 if "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
-    # THE CORE REACHES IT. Without this the refusals below would all pass on a
-    # plugin that is simply unreachable, which is how a segment test fools itself.
-    # `curl` rather than `nc`, because the api image has one and not the other;
-    # exit 7 is "could not connect" and anything else means the socket opened —
-    # this endpoint speaks gRPC over TLS, so a TLS error IS a successful connection.
-    #
-    # `|| reached=$?` and not a bare call: curl exits non-zero on every one of
-    # these, and under `set -e` that would end the script before the status is
-    # read.
     reached=0
     "$RUNTIME" exec homeinv-api curl --silent --max-time "$CONNECT_TIMEOUT" \
         "http://plugin-webhook:8200" >/dev/null 2>&1 || reached=$?
@@ -254,9 +170,6 @@ if "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
         pass "api reaches the plugin on its own segment"
     fi
 
-    # AND THE PLUGIN REACHES ALMOST NOTHING. The management port first: it is the
-    # one REQ-SEC-099 names, and it was reachable from every plugin until
-    # ADR-0037 gave each one a segment of its own.
     refused_from_plugin api 8090 "the plugin cannot reach api's management port"
     refused_from_plugin worker 8090 "the plugin cannot reach worker's management port"
     refused_from_plugin postgres 5432 "the plugin cannot reach postgres"
@@ -266,13 +179,8 @@ if "$RUNTIME" ps --format '{{.Names}}' | grep -qx "$plugin"; then
     refused_from_plugin clamav 3310 "the plugin cannot reach the scanner"
     refused_from_plugin web 8080 "the plugin cannot reach the ingress"
 
-    # THE ONE ROUTE OUT is the proxy, which sits on this segment for that purpose
-    # and applies this plugin's own allowlist to what it asks for (ADR-0027).
     reaches_from_plugin egress-proxy 8118 "the plugin reaches the egress proxy, which is its one route out"
 
-    # Stopped again, so the stack this suite leaves behind is the one it found
-    # -- and `|| true`, because a stop that fails must not fail the run: what
-    # was being checked has already been checked by here.
     if [ "$started_here" -eq 1 ]; then
         case "$RUNTIME" in
             docker)
@@ -289,9 +197,6 @@ else
 fi
 
 section "REQ-SEC-102: exactly two containers sit on a non-internal segment"
-# Read from the running stack rather than from the file that describes it. The
-# descriptions are checked elsewhere; this is the check that notices a container
-# somebody attached by hand.
 outside=0
 for container in $("$RUNTIME" ps --format '{{.Names}}'); do
     case "$container" in
@@ -306,16 +211,6 @@ else
 fi
 
 section "REQ-NFR-067: every health check the matrix declares actually passes"
-# A check that cannot run looks exactly like one that has not run yet, and under
-# Podman not one of them could: `HealthCmd` was written in Compose's
-# `["CMD", ...]` shape, and Podman answers that by re-splitting the raw text of
-# the array on spaces — so `api` was checked by running the four words `["CMD",`
-# and `"/usr/bin/healthcheck"]`. Ten containers carried a check that could never
-# pass, and the only two that said so were the two whose units wait for one:
-# `api` and `worker` timed out after starting perfectly.
-#
-# `starting` is neither pass nor fail, so a container inside its start period is
-# waited for rather than judged.
 health_of() {
     "$RUNTIME" inspect --format '{{.State.Health.Status}}' "$1" 2>/dev/null | tr -d "\r"
 }
@@ -342,8 +237,6 @@ for container in $containers; do
             pass "$container reports healthy"
             ;;
         "" | "<no value>")
-            # No health check declared for this one; the matrix is the authority
-            # on which services have one, and it is checked elsewhere.
             ;;
         *) fail "$container reports '$status'" ;;
     esac
@@ -353,24 +246,6 @@ if [ "$checked" -eq 0 ]; then
 fi
 
 section "REQ-NFR-014: the WAL archive receives segments"
-# `pg_stat_archiver`, not the presence of a setting. The `archive_command` was
-# right in every description and archived nothing at all, for two reasons at
-# once: systemd read its %f and %p as its own specifiers, and the volume's mount
-# point did not exist in the image, so both runtimes created it root-owned under
-# a server that runs as uid 70. Neither shows anywhere but a log, which is why
-# the RPO the deployment promises is asked of the archiver here (ADR-0045).
-#
-# A switch rather than a wait: `archive_timeout` is 900 s, and a smoke suite that
-# waited that long for its evidence is one nobody runs. The counters are reset
-# first, so what is measured is this run rather than the history of the volume —
-# a single archive failure at any point in the past would otherwise leave
-# `failed_count` above zero for the life of the cluster.
-#
-# The message before the switch is what makes the switch happen at all:
-# PostgreSQL skips it when the current segment holds nothing new, so on a quiet
-# cluster the check would reset the counters, switch nothing, and then report
-# that nothing was archived. `pg_logical_emit_message` writes a WAL record and
-# touches no table, which is what this needs and all of it.
 if ! "$RUNTIME" exec homeinv-postgres psql -U postgres -d homeinv -At \
         -c "SELECT pg_stat_reset_shared('archiver');" \
         -c "SELECT pg_logical_emit_message(true, 'homeinv-smoke', 'wal archive check');" \
@@ -397,19 +272,6 @@ else
 fi
 
 section "ADR-0036: the scanner's signature updater started"
-# A scanner that cannot update is a scanner that quietly falls behind, and it
-# looks exactly like a working one: `clamd` starts on the signatures baked into
-# the image and scans every upload with them.
-#
-# That is what happened until 2026-09-15. The generated `freshclam.conf` named
-# `/dev/stdout` as its log file; under rootless Podman that symlink resolved back
-# on itself, freshclam reported "Symbolic link loop" and "libfreshclam init
-# failed" and exited, and nothing else noticed. Docker was unaffected, which is
-# why only the two-runtime matrix could have found it.
-#
-# This asserts INITIALISATION and not a completed download, on purpose: reaching
-# the mirror depends on a third party that rate-limits, and a security check that
-# flakes is one somebody switches off.
 updater=$("$RUNTIME" logs homeinv-clamav 2>&1 || true)
 if printf '%s' "$updater" | grep -qiE "libfreshclam init failed|Initialization error|Failed to open log file"; then
     fail "freshclam could not initialise — the signatures will never update"

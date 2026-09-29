@@ -131,8 +131,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
         });
 
     assertThat(IN_THE_PLUGIN).containsKey(key(tenant, address));
-    // Which is the point of granting a store at all: the photographs are where
-    // the tenant chose, and this deployment holds no copy of them.
     assertThat(deployment.exists(tenant, address)).isFalse();
   }
 
@@ -149,9 +147,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
     inTenant(
         tenant,
         () -> {
-          // Granting a store is not a migration. Without the fallback this
-          // photograph would be gone and nothing would say so, which is the one
-          // thing this system does not do.
           assertThat(blobs.exists(tenant, address)).isTrue();
           assertThat(read(blobs.open(tenant, address))).isEqualTo("uploaded last year");
         });
@@ -175,8 +170,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
           blobs.delete(tenant, newer);
         });
 
-    // A deletion the tenant asked for leaves nothing behind in the other place
-    // (REQ-PRIV-004). Half a deletion is the failure mode two stores invite.
     assertThat(deployment.exists(tenant, older)).isFalse();
     assertThat(deployment.exists(tenant, newer)).isFalse();
     assertThat(IN_THE_PLUGIN).doesNotContainKey(key(tenant, older));
@@ -190,9 +183,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
     install(tenant);
     String address = "f".repeat(64);
 
-    // What a tenant with its own bucket would set. Without it on the wire a
-    // storage plugin has the address and no way to know WHOSE storage to put
-    // it in (ADR-0073, ADR-0074).
     inTenant(tenant, () -> settings.set(PLUGIN, "bucket", "just-mine", UUID.randomUUID()));
 
     inTenant(tenant, () -> blobs.store(tenant, address, bytes("into the tenant's bucket")));
@@ -202,8 +192,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
     assertThat(envelope.getTenantId()).isEqualTo(tenant.toString());
     assertThat(envelope.getSettingsMap()).containsEntry("bucket", "just-mine");
   }
-
-  // -------------------------------------------------------------------------
 
   /** A body that may throw, run with a tenant in context. */
   @FunctionalInterface
@@ -260,11 +248,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
         tenantId,
         () -> {
           registrations.grant(PLUGIN, "network:outbound", UUID.randomUUID());
-          // Both, because they are separate consents: one lets the plugin
-          // reach outside at all, the other lets it read what this tenant
-          // configured. Without the second the envelope arrives with an EMPTY
-          // settings map, which is what the core did here until the grant was
-          // added to this test.
           registrations.grant(PLUGIN, "core:setting:read", UUID.randomUUID());
         });
   }
@@ -314,7 +297,6 @@ class TenantBlobStoreIT extends AbstractIntegrationTest {
 
         @Override
         public void onError(Throwable error) {
-          // The core hung up; a test store has nothing to undo.
         }
 
         @Override

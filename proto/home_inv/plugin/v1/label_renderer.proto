@@ -1,17 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// TURNING A TEMPLATE AND ITS DATA INTO SOMETHING PRINTABLE.
-//
-// The PDF sheet renderer is in the core image. ZPL, EPL, Brother raster and PNG
-// are plugins, because each of them is a printer language somebody else
-// maintains.
-//
-// A TEMPLATE IS DATA, NOT A PROGRAM (ADR-0020, REQ-CORE-031). An implementation
-// receives the template source and the values to put in it, and must not
-// evaluate anything in the template beyond substituting placeholders. A renderer
-// with a scripting engine in it turns the type system into a programming
-// language through the back door.
 
 syntax = "proto3";
 

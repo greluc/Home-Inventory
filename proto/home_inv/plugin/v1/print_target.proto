@@ -1,12 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// SENDING A RENDERED ARTIFACT TO A PRINTER.
-//
-// Download is in the core image and opens nothing — it writes to the blob store
-// and hands back a link. CUPS/IPP, Brother QL over the network, Zebra over TCP
-// 9100 and Dymo are plugins, because each of them opens a connection to a device
-// the deployment does not contain.
 
 syntax = "proto3";
 

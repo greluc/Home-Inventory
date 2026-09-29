@@ -118,9 +118,6 @@ public class DocumentRendererAdapter implements PortAdapter<DocumentRenderer> {
         }
         requests.onCompleted();
 
-        // The deadline is the stub's; this waits a little longer so that a
-        // renderer which answers just inside it is not cut off by the wait
-        // rather than by the policy.
         if (!finished.await(deadlineMillis + 1_000L, TimeUnit.MILLISECONDS)) {
           throw new PluginException(
               PluginException.Kind.DEADLINE_EXCEEDED,

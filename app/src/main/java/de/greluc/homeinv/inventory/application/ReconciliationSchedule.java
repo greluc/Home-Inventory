@@ -81,9 +81,6 @@ public class ReconciliationSchedule {
       deviations.set(total);
       log.info("The attribute index reconciliation finished with {} deviation(s)", total);
     } catch (RuntimeException failed) {
-      // Logged and swallowed, like every other run here: a task that throws stops
-      // being scheduled in some runtimes, and a reconciliation that silently
-      // stopped running is worse than one that reports a problem.
       log.error("The attribute index reconciliation failed; the next run picks it up", failed);
     }
   }

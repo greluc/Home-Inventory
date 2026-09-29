@@ -75,9 +75,6 @@ public final class PluginManifestReader {
           "network:outbound",
           "ui:panel",
           "print:target",
-          // What a plugin may ask the CORE for, rather than what it may reach
-          // (ADR-0071). The only capability on this list that is about the
-          // host channel, and the only one a plugin uses by calling in.
           "host:render-document");
 
   /**
@@ -114,7 +111,6 @@ public final class PluginManifestReader {
       Set.of("string", "secret", "enum", "integer", "boolean");
 
   private PluginManifestReader() {
-    // A reader with no state.
   }
 
   /**
@@ -135,8 +131,6 @@ public final class PluginManifestReader {
     }
 
     LoaderOptions options = new LoaderOptions();
-    // No aliases: a small document that expands to gigabytes is a denial of
-    // service the parser can refuse rather than survive.
     options.setAllowDuplicateKeys(false);
     options.setProcessComments(false);
     options.setCodePointLimit(MAX_BYTES);

@@ -134,8 +134,6 @@ public class PluginChannels {
     Entry built = new Entry(endpoint, pin, build(pluginId, endpoint, pin));
     Entry previous = channels.put(pluginId, built);
     if (previous != null) {
-      // The registration changed under us. Shut the old one down rather than
-      // leaking it: its pin is no longer the one the operator installed.
       previous.channel().shutdown();
     }
     return built.channel();
@@ -169,12 +167,7 @@ public class PluginChannels {
                       "Plugin " + pluginId, "the plugin's registered fingerprint", pin))
               .build();
       return Grpc.newChannelBuilder(endpoint, credentials)
-          // Both directions. 09 §9.5 names 8 MiB, and gRPC's own 4 MiB default
-          // is passed by a rendered label sheet or a scanned image.
           .maxInboundMessageSize(properties.getMaxMessageBytes())
-          // On the channel rather than per stub: every port, present and
-          // future, propagates the trace without its adapter knowing that
-          // tracing exists (REQ-NFR-044).
           .intercept(new TracePropagation(trace))
           .build();
     } catch (IOException | RuntimeException unusable) {

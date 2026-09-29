@@ -42,9 +42,6 @@ public class ReminderSchedule {
         log.info("The reminder run raised {} notification(s)", raised);
       }
     } catch (RuntimeException failed) {
-      // Logged and swallowed, for `DeliverySchedule`'s reason: a scheduled task
-      // that throws stops being scheduled in some runtimes, and reminders that
-      // silently stopped is the failure this block exists against.
       log.error("The reminder run failed; the next one will pick it up", failed);
     }
   }

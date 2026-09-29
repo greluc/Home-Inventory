@@ -105,9 +105,6 @@ class GraphQlBatchingTest {
     Map<ItemView, LocationView> resolved = queries.location(page);
 
     assertThat(resolved).hasSize(PAGE);
-    // Fifty items, two places, two reads. Without the de-duplication this is
-    // fifty reads of two rows — which is the shape of an N+1 that looks fine in
-    // a household of ten items and does not in one of a thousand.
     verify(locations, times(1)).get(kitchen);
     verify(locations, times(1)).get(shed);
   }
@@ -120,9 +117,6 @@ class GraphQlBatchingTest {
     Map<ItemView, LocationView> resolved =
         queries.location(List.of(anItem(UUID.randomUUID(), null)));
 
-    // A GraphQL batch mapping answers an absent key with null for that field,
-    // which is what the schema says: `location: Location`, nullable, because a
-    // digital item is nowhere.
     assertThat(resolved).isEmpty();
   }
 

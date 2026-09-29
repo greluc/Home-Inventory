@@ -74,7 +74,6 @@ class CapabilityCatalogueTest {
       while (codes.find()) {
         String code = codes.group(1);
         if (code.startsWith(":") && previous != null) {
-          // `:write` after `core:location:read` means core:location:write.
           capabilities.add(previous.substring(0, previous.lastIndexOf(':')) + code);
         } else {
           capabilities.add(code);

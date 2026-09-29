@@ -31,9 +31,6 @@ public class OrphanedBlobSchedule {
     try {
       sweep.sweep();
     } catch (RuntimeException failed) {
-      // Logged and swallowed, for `DeliverySchedule`'s reason: a scheduled task
-      // that throws stops being scheduled in some runtimes, and a sweep that
-      // silently stopped is disk filling up with nobody told.
       log.error("The orphaned blob sweep failed; the next run will pick it up", failed);
     }
   }

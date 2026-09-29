@@ -97,7 +97,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
       try {
         registrations.revokeForInstance(PLUGIN + name, "network:outbound", UUID.randomUUID());
       } catch (RuntimeException neverRegistered) {
-        // This test did not register that one. Nothing to withdraw.
       }
     }
   }
@@ -135,8 +134,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
                 List.of()));
 
     assertThat(delivery.providerMessageId()).isEqualTo("accepted-1");
-    // The tenant reached the plugin as part of the call and not as a header the
-    // plugin had to be trusted to read.
     assertThat(seen.get().getContext().getTenantId()).isEqualTo(tenant.toString());
     assertThat(seen.get().getIdempotencyKey()).isEqualTo("invitation-1");
   }
@@ -144,19 +141,12 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("resolves for the instance, with no tenant anywhere in the call")
   void anInstanceCallCarriesNoTenant() throws Exception {
-    // ADR-0066. The deployment owes an account its security mail whether or not
-    // the account belongs to a tenant (REQ-NOTI-004), so the operator grants at
-    // instance level and the call goes out with no tenant at all. What is
-    // asserted is what the PLUGIN received: an empty tenant and a scope saying
-    // why it is empty, rather than a zero UUID standing in for one.
     AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
     int port = startPlugin(serviceOf(seen, null, false));
     String pluginId = PLUGIN + "instance";
     register(pluginId, port, fingerprint());
     registrations.grantForInstance(pluginId, "network:outbound", UUID.randomUUID());
 
-    // No TenantContext is opened here on purpose: an instance resolution must
-    // work where there is none, which is the situation a password reset is in.
     NotificationChannel channel =
         extensions.lookupForInstance(NotificationChannel.class).orElseThrow();
 
@@ -180,15 +170,7 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("delivers an account notification through the plugin, with no tenant in the call")
   void anAccountNotificationGoesOut() throws Exception {
-    // The whole of REQ-NOTI-004's delivery half, end to end: a security message
-    // is raised for an account that belongs to no tenant, the operator has
-    // granted the plugin at instance level, and the message goes out.
     AtomicReference<NotificationDeliverRequest> seen = new AtomicReference<>();
-    // Every request, not only the last. `security_notification` is instance-wide
-    // (07 §7.1) and this run delivers everything due on it, so the plugin may
-    // also be handed a row an earlier test left queued -- and asserting about
-    // whichever arrived last is how this failed on 2026-09-20, with a
-    // password-reset address from somewhere else entirely.
     java.util.List<NotificationDeliverRequest> all =
         java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     int port = startPlugin(serviceOf(seen, null, false, all::add));
@@ -209,24 +191,13 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
                 "en",
                 "runtime-account-" + account));
 
-    // The database's clock, not the JVM's: `next_attempt_at` was written by
-    // `now()` in PostgreSQL and the run compares against what it is given, so
-    // two clocks in two processes decide whether a just-raised row is due.
     securityDispatcher.deliverDue(databaseNow());
 
-    // `security_notification` is instance-wide (07 §7.1) and this run delivers
-    // everything due on it, so the plugin may also have been handed a row some
-    // earlier test left queued. The assertions are therefore about THIS
-    // message, found among what the plugin saw, rather than about whichever one
-    // happened to arrive last -- which is what failed on 2026-09-20, with a
-    // password-reset address from another test.
     NotificationDeliverRequest mine =
         all.stream()
             .filter(request -> "somebody@example.org".equals(request.getRecipient()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("the plugin was never handed this message"));
-    // No tenant in the call, which is the half REQ-NOTI-004 and ADR-0066 are
-    // about: an account belongs to no tenant, so the call carries none.
     assertThat(mine.getContext().getTenantId()).isEmpty();
     assertThat(
             securityNotifications.of(account, 5).stream()
@@ -243,9 +214,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("is not resolved for the instance when only a tenant granted it")
   void aTenantGrantIsNotAnInstanceGrant() throws Exception {
-    // The two levels are separate in both directions (ADR-0066). A tenant that
-    // consented to everything has said nothing about the deployment's own calls,
-    // and the proof is the resolution rather than the flag.
     int port = startPlugin(serviceOf(null, null, false));
     aTenantThatConsented(port, "tenantonly");
 
@@ -255,9 +223,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("refuses a plugin whose certificate is not the one that was registered")
   void aForeignCertificate() throws Exception {
-    // REQ-SEC-056. The impostor holds a certificate this deployment's CA signed —
-    // it is a valid member of the deployment — and it is not the certificate
-    // recorded for this plugin. Trusting the CA alone would let it answer.
     int port = startPlugin(serviceOf(null, null, false));
     UUID tenant =
         aTenantThatConsented(port, "foreign", PKI.issue("somebody-else").fingerprint());
@@ -278,8 +243,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
     UUID tenant = aTenant("unconsenting");
     register(PLUGIN + "unconsenting", port, fingerprint());
 
-    // REQ-PLG-005: without a grant nothing is possible. Not a refused call — the
-    // plugin is not there at all, so nothing can forget to check.
     Optional<NotificationChannel> resolved =
         TenantContext.callAs(tenant, () -> extensions.lookup(NotificationChannel.class, tenant));
     assertThat(resolved).isEmpty();
@@ -297,17 +260,12 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
             tenant, () -> extensions.lookup(NotificationChannel.class, tenant).orElseThrow());
     CallContext context = new CallContext(tenant, "", "en", 0);
 
-    // The window is what the breaker judges by; every call in it reaches the
-    // plugin and fails.
     int window = properties.getSlidingWindowSize();
     for (int attempt = 0; attempt < window; attempt++) {
       assertThatThrownBy(() -> channel.describe(context)).isInstanceOf(PluginException.class);
     }
     assertThat(calls.get()).isEqualTo(window);
 
-    // And now the circuit is open: the call is not made at all, which is the
-    // property REQ-PLG-007 is about — a broken plugin costs a fast failure
-    // rather than a thread and a timeout.
     assertThatThrownBy(() -> channel.describe(context))
         .isInstanceOf(PluginException.class)
         .hasMessageContaining("circuit")
@@ -321,8 +279,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
     int port = startPlugin(serviceOf(null, null, false));
     UUID tenant = aTenantThatConsented(port, "priority");
 
-    // A second plugin on the same socket, declaring a higher priority. Same
-    // endpoint because what is being tested is the ordering, not the transport.
     String higher = PLUGIN + "priority-higher";
     registrations.register(
         manifest(higher, 200).getBytes(StandardCharsets.UTF_8),
@@ -336,16 +292,11 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
         TenantContext.callAs(tenant, () -> extensions.lookupAll(NotificationChannel.class, tenant));
     assertThat(resolved).hasSize(2);
 
-    // Highest first. Proved through the port rather than by reading the list's
-    // order, because the order is only worth anything if the first element is
-    // what a caller gets from `lookup`.
     NotificationChannel first =
         TenantContext.callAs(
             tenant, () -> extensions.lookup(NotificationChannel.class, tenant).orElseThrow());
     assertThat(first.toString()).isNotNull();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Starts the plugin's gRPC server on a free port, with mutual TLS.
@@ -362,8 +313,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
             .keyManager(
                 new ByteArrayInputStream(Files.readAllBytes(pluginIdentity().bundle())),
                 new ByteArrayInputStream(Files.readAllBytes(pluginIdentity().bundle())))
-            // The core presents a client certificate and the plugin checks it:
-            // `internal` is a network and not a trust boundary (ADR-0044).
             .trustManager(new ByteArrayInputStream(PKI.caPem().getBytes(StandardCharsets.UTF_8)))
             .clientAuth(TlsServerCredentials.ClientAuth.REQUIRE)
             .build();
@@ -376,9 +325,6 @@ class PluginRuntimeIT extends AbstractIntegrationTest {
   /** The plugin's identity, issued once for the class. */
   private static TestPki.Identity pluginIdentity() throws Exception {
     if (PLUGIN_IDENTITY.get() == null) {
-      // "localhost", because that is the authority the channel connects to and
-      // gRPC verifies the subject alternative name against it. The pin answers a
-      // different question and does not replace that check.
       PLUGIN_IDENTITY.compareAndSet(null, PKI.issue("localhost"));
     }
     return PLUGIN_IDENTITY.get();

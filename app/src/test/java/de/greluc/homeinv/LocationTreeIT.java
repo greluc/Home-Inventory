@@ -64,7 +64,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
           LocationView cellar = create(category, house.id(), "Keller", tenant.userId());
           LocationView shelf = create(category, cellar.id(), "Regal 3", tenant.userId());
 
-          // REQ-CORE-044: the names root-first, assembled from the path, no recursion.
           assertThat(locationService.get(shelf.id()).ancestors())
               .containsExactly("Haus", "Keller", "Regal 3");
           assertThat(locationService.get(shelf.id()).depth()).isEqualTo(2);
@@ -85,11 +84,9 @@ class LocationTreeIT extends AbstractIntegrationTest {
           LocationView shelf = create(category, cellar.id(), "Regal", tenant.userId());
           LocationView attic = create(category, house.id(), "Dachboden", tenant.userId());
 
-          // REQ-CORE-049, including the subtree: everything below the house.
           assertThat(locationService.subtreeIds(house.id()))
               .containsExactlyInAnyOrder(house.id(), cellar.id(), shelf.id(), attic.id());
 
-          // And a branch of it, which is the same query one level down.
           assertThat(locationService.subtreeIds(cellar.id()))
               .containsExactlyInAnyOrder(cellar.id(), shelf.id());
         });
@@ -107,7 +104,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
             tenant.tenantId(),
             () -> {
               LocationView current = create(category, null, "Ebene 0", tenant.userId());
-              // MAX_DEPTH is the deepest allowed, so a root plus MAX_DEPTH children is legal.
               for (int depth = 1; depth <= Location.MAX_DEPTH; depth++) {
                 current = create(category, current.id(), "Ebene " + depth, tenant.userId());
               }
@@ -132,37 +128,27 @@ class LocationTreeIT extends AbstractIntegrationTest {
         inOwnTransaction(
             tenant.tenantId(), () -> create(category, null, "Cellar", tenant.userId()).id());
 
-    // REQ-CORE-064. The partial unique index enforced this from the first
-    // migration and nothing answered for it, so this case was a 500 until
-    // 2026-09-12 — found by running the smoke journey twice.
     assertThatThrownBy(
             () ->
                 inOwnTransaction(
                     tenant.tenantId(), () -> create(category, null, "Cellar", tenant.userId())))
         .isInstanceOf(NameTakenException.class);
 
-    // Case-insensitively, because the index compares `lower(name)` and because a
-    // tree with "Cellar" and "cellar" side by side is one nobody can navigate.
     assertThatThrownBy(
             () ->
                 inOwnTransaction(
                     tenant.tenantId(), () -> create(category, null, "CELLAR", tenant.userId())))
         .isInstanceOf(NameTakenException.class);
 
-    // A different parent is a different set of siblings.
     UUID house =
         inOwnTransaction(
             tenant.tenantId(), () -> create(category, null, "House", tenant.userId()).id());
     inOwnTransaction(
         tenant.tenantId(), () -> create(category, house, "Cellar", tenant.userId()));
 
-    // Renaming a location to its own name in a different case is a rename, not a
-    // conflict with the row being renamed.
     inTenantTransaction(
         tenant.tenantId(), () -> locationService.rename(cellar, "cellar", OptionalLong.empty(), tenant.userId()));
 
-    // And a tombstone does not hold the name: the index is partial for exactly
-    // this (07 §7.1, rule 5).
     inTenantTransaction(tenant.tenantId(), () -> locationService.delete(cellar, OptionalLong.empty(), tenant.userId()));
     LocationView reborn =
         inOwnTransaction(
@@ -194,7 +180,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
         .isInstanceOf(LocationNotEmptyException.class)
         .hasMessageContaining("other locations");
 
-    // The leaf goes, and then the parent can follow.
     inOwnTransaction(
         tenant.tenantId(),
         () -> {
@@ -226,8 +211,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
     inOwnTransaction(
         tenant.tenantId(), () -> locationService.rename(roomId, "Küche (oben)", OptionalLong.empty(), tenant.userId()));
 
-    // The name is not in the path, so the path cannot have changed - and a name
-    // with a space and brackets is not even a legal ltree label.
     assertThat(inOwnTransaction(tenant.tenantId(), () -> rawPath(roomId))).isEqualTo(pathBefore);
     assertThat(inOwnTransaction(tenant.tenantId(), () -> locationService.get(roomId).ancestors()))
         .containsExactly("Haus", "Küche (oben)");
@@ -263,9 +246,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
 
     assertThat(page.data()).hasSize(3);
     assertThat(page.nextCursor()).isNull();
-    // Each row carries what a tree is assembled from: the parent, and the
-    // readable path a picker shows so that two shelves called "Shelf" are
-    // distinguishable.
     LocationView shelf = page.data().get(2);
     assertThat(shelf.parentId()).isEqualTo(room.id());
     assertThat(shelf.ancestors()).containsExactly("Building", "Room", "Shelf");
@@ -308,10 +288,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
     Page<LocationCategoryView> page =
         inOwnTransaction(tenant.tenantId(), () -> locationCategories.list(null, 50));
 
-    // The thirteen REQ-CORE-042 lists, by key. No assertion about their order:
-    // they are written in one transaction and share a timestamp, so the keyset
-    // tiebreaker decides, and the client sorts thirteen translated words in the
-    // reader's language anyway.
     assertThat(page.data().stream().map(LocationCategoryView::key))
         .containsExactlyInAnyOrder(
             "building",
@@ -327,13 +303,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
             "warehouse",
             "outdoor-storage",
             "locker");
-    // Every shipped category is stationary, as a default rather than as a claim
-    // about what a vehicle is. The move of REQ-CORE-043 carries a location's
-    // contents whatever its category says, because a tree built wrongly has to be
-    // repairable; what the flag decides is what a client OFFERS. Flipping the
-    // shipped default would divide tenants in two, because a data migration
-    // cannot reach the ones already provisioned -- `homeinv_migrator` is
-    // NOBYPASSRLS and the policies are FORCEd -- so it stays a tenant's to set.
     assertThat(page.data()).noneMatch(LocationCategoryView::mobile);
   }
 
@@ -363,8 +332,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
   @org.junit.jupiter.api.DisplayName("says how many things are in a place it will not delete (REQ-CORE-046)")
   void aFullPlaceSaysHowManyThingsAreInIt() {
     Tenant tenant = newTenant("location-count@example.org");
-    // Both catalogue reads run under row-level security, so they need a tenant
-    // context like every other read in this file.
     UUID category = inOwnTransaction(tenant.tenantId(), () -> anyCategory(tenant.tenantId()));
     UUID type = inOwnTransaction(tenant.tenantId(), () -> builtinType(tenant.tenantId()));
     UUID shed =
@@ -396,9 +363,6 @@ class LocationTreeIT extends AbstractIntegrationTest {
                   .id());
     }
 
-    // THE NUMBER, which is REQ-CORE-046's acceptance criterion: "it still
-    // contains things" sends somebody looking, and three tells them what they
-    // are in for.
     assertThatThrownBy(
             () ->
                 inOwnTransaction(

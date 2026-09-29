@@ -63,8 +63,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
         tenant,
         () -> {
           registry.grant(PLUGIN, "core:setting:read", UUID.randomUUID());
-          // Nothing set: the manifest's own default, and nothing for the two
-          // settings that have none.
           assertThat(settings.effective(PLUGIN, tenant))
               .containsExactly(Map.entry("preferredSource", "openlibrary"));
 
@@ -76,8 +74,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
               .containsOnly(
                   Map.entry("preferredSource", "dnb"),
                   Map.entry("retries", "3"),
-                  // Opened on the way out: a plugin receives the value, not the
-                  // ciphertext.
                   Map.entry("apiToken", "a-token-nobody-else-has"));
         });
   }
@@ -91,11 +87,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
     TenantContext.runAs(
         tenant, () -> settings.set(PLUGIN, "apiToken", "a-token-nobody-else-has", UUID.randomUUID()));
 
-    // Read inside the tenant's context AND inside a transaction, because both are
-    // what makes a row visible here: `SET LOCAL app.tenant_id` is applied when a
-    // transaction begins, so a bare statement sees a session with no tenant and
-    // the policy yields nothing -- which is the right answer and not the one this
-    // test is asking.
     String stored =
         TenantContext.callAs(
             tenant,
@@ -111,8 +102,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
                             .query(String.class)
                             .single()));
 
-    // Not the value, and not a transformation anybody could reverse without the
-    // tenant's data key (ADR-0019).
     assertThat(stored).isNotEqualTo("a-token-nobody-else-has").doesNotContain("token");
 
     TenantContext.runAs(
@@ -123,7 +112,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
                 .singleElement()
                 .satisfies(
                     setting -> {
-                      // A surface learns that one is stored and never what it is.
                       assertThat(setting.value()).isNull();
                       assertThat(setting.set()).isTrue();
                     }));
@@ -171,7 +159,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
 
     assertThat(TenantContext.callAs(mine, () -> settings.effective(PLUGIN, mine)))
         .containsEntry("apiToken", "mine-alone");
-    // The same plugin, installed once, configured by each tenant for itself.
     assertThat(TenantContext.callAs(theirs, () -> settings.effective(PLUGIN, theirs)))
         .doesNotContainKey("apiToken");
   }
@@ -186,8 +173,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
         () -> {
           assertThatThrownBy(() -> settings.configured("de.greluc.homeinv.plugin.test.nothing"))
               .isInstanceOf(NotFoundException.class);
-          // And clearing one, which would otherwise answer "done" about something
-          // that does not exist (REQ-SEC-025).
           assertThatThrownBy(
                   () ->
                       settings.clear(
@@ -210,8 +195,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
           settings.clear(PLUGIN, "preferredSource", UUID.randomUUID());
           assertThat(settings.effective(PLUGIN, tenant))
               .containsEntry("preferredSource", "openlibrary");
-          // Clearing what was never set is not an error: what the caller wants is
-          // already true.
           settings.clear(PLUGIN, "preferredSource", UUID.randomUUID());
         });
   }
@@ -227,10 +210,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
         () -> {
           settings.set(PLUGIN, "apiToken", "configured-and-not-consented-to", UUID.randomUUID());
 
-          // Configured, and the tenant has agreed to nothing. `core:setting:read`
-          // no longer means "the plugin may fetch them" -- nothing fetches -- it
-          // means the core may SEND them, which keeps REQ-PLG-005 true for the
-          // one kind of value a tenant is most likely to mind.
           assertThat(settings.effective(PLUGIN, tenant)).isEmpty();
 
           registry.grant(PLUGIN, "core:setting:read", UUID.randomUUID());
@@ -238,8 +217,6 @@ class PluginSettingsIT extends AbstractIntegrationTest {
               .containsEntry("apiToken", "configured-and-not-consented-to");
         });
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A manifest declaring one of each interesting setting type.

@@ -70,9 +70,6 @@ public class TenantBlobStore implements BlobStore {
           return plugin.get().get(CallContext.of(tenantId), sha256);
         }
       } catch (PluginException unreachable) {
-        // Logged and then tried locally, because the alternative is a photograph
-        // that exists and cannot be shown. A store that is down is a reason to
-        // look in the other place, not a reason to answer "gone".
         log.warn("The storage plugin could not be asked for {}; trying the deployment's store",
             sha256, unreachable);
       }
@@ -99,10 +96,6 @@ public class TenantBlobStore implements BlobStore {
   public void delete(UUID tenantId, String sha256) throws IOException {
     Optional<de.greluc.homeinv.plugin.api.port.BlobStore> plugin = pluginFor(tenantId);
     if (plugin.isPresent()) {
-      // Both, and the plugin first. The blob may predate the plugin, and a
-      // deletion that removed it from one place would leave the other holding
-      // bytes the tenant asked to be rid of — which is the one direction
-      // REQ-PRIV-004 does not allow.
       plugin.get().delete(CallContext.of(tenantId), sha256);
     }
     deployment.delete(tenantId, sha256);

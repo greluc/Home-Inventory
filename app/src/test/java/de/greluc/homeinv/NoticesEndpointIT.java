@@ -37,8 +37,6 @@ class NoticesEndpointIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.components.length()").value(Matchers.greaterThan(100)))
         .andExpect(jsonPath("$.components[0].name").isNotEmpty())
         .andExpect(jsonPath("$.components[0].licences").isArray())
-        // The appendix carries the licences whose wording is the same for every
-        // component under them; Apache-2.0 is the one every build here has.
         .andExpect(jsonPath("$.licences[?(@.id == 'Apache-2.0')].text").isNotEmpty());
   }
 

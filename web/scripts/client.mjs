@@ -78,9 +78,6 @@ const HEADER = `/*
 function generate() {
   const scratch = join(tmpdir(), `home-inv-client-${process.pid}.d.ts`);
   try {
-    // `shell` on Windows, because Node refuses to spawn a `.cmd` without one
-    // (EINVAL since Node 20), and every argument quoted because a shell splits
-    // on spaces and somebody's checkout lives under "My Documents".
     const windows = process.platform === "win32";
     const quote = (argument) => (windows ? `"${argument}"` : argument);
     execFileSync(

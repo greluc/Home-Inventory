@@ -43,9 +43,6 @@ public class AnchorSchedule {
     try {
       anchors.anchorDueWindows(Instant.now());
     } catch (RuntimeException failed) {
-      // Logged and swallowed: a scheduled task that throws stops being scheduled
-      // in some runtimes, and an instance that stopped anchoring silently is the
-      // failure this whole mechanism exists to make visible.
       log.error("The audit anchor run failed; the next window will catch up", failed);
     }
   }

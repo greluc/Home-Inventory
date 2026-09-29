@@ -159,7 +159,7 @@ computed:
 
   - id: architectureChapters
     compute: "count of docs/architecture/*.md"
-    value: 14
+    value: 15
     pattern: '(?:(\d+)|[Ff]ourteen)\s+(?:arc42[- ])?architecture\s+chapters?|(\d+)\s+arc42'
 
   - id: componentModules

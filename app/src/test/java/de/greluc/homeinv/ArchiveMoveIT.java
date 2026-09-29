@@ -84,19 +84,11 @@ class ArchiveMoveIT extends AbstractIntegrationTest {
                     "valuable", null, null, null),
                 from.userId()));
 
-    // Out of one tenant...
     ExportService.ExportJobView export = asOwner(from, () -> exports.request(from.userId()));
     assertThat(exportRunner.runAsTenant(from.tenantId())).isEqualTo(1);
 
-    // The things then LEAVE. A move is not a copy: a row keeps the id it was
-    // printed on a label with (10 §10.2.1), and an id exists once in a database
-    // -- so the old tenant letting go of them is part of what a move is, and
-    // this test would otherwise be proving something an instance cannot do.
     emptied(from);
 
-    // ...and into another, which has its own built-in catalogue under its own
-    // ids. That is the whole difficulty: every item in the archive is written
-    // against a type version this tenant has never heard of.
     Tenant to = newTenant("move-to@example.org");
     assertThat(itemCount(to)).isZero();
 
@@ -117,17 +109,12 @@ class ArchiveMoveIT extends AbstractIntegrationTest {
     assertThat(done.state()).as("the import finished: %s", done.failure()).isEqualTo("DONE");
     assertThat(done.progress()).isEqualTo(100);
 
-    // The things arrived.
     assertThat(itemCount(to)).isEqualTo(2);
     assertThat(names(to)).containsExactlyInAnyOrder("A drill", "A saw");
 
-    // And they point at things that are there. An item whose type version is
-    // missing is the failure REQ-PORT-004 exists to prevent, and a foreign key
-    // is not enough to notice it: the row would simply not have been written.
     assertThat(danglingTypeVersions(to)).isZero();
     assertThat(placeCount(to)).as("the whole tree arrived: %s", done.report()).isEqualTo(2);
 
-    // The report says what it did, and what it deliberately did not.
     JsonNode report = json.readTree(done.report());
     assertThat(report.get("blocks").get("inventory").get("inserted").asInt()).isEqualTo(2);
     assertThat(report.get("notImported").valueStream().map(JsonNode::asString).toList())
@@ -159,19 +146,13 @@ class ArchiveMoveIT extends AbstractIntegrationTest {
     ImportService.ImportJobView done = inOwn(to, () -> imports.job(job.id()));
     assertThat(done.state()).as("the dry run finished: %s", done.failure()).isEqualTo("DONE");
 
-    // It reports what it would have done...
     JsonNode report = json.readTree(done.report());
     assertThat(report.get("dryRun").asBoolean()).isTrue();
     assertThat(report.get("blocks").get("inventory").get("inserted").asInt()).isEqualTo(1);
 
-    // ...and left nothing behind, which is the half REQ-PORT-001 is about. The
-    // job row survives because it is written in its own transaction; everything
-    // the import did was rolled back with the one it ran in.
     assertThat(itemCount(to)).isZero();
     assertThat(placeCount(to)).isZero();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The source tenant letting go of what it exported.

@@ -62,19 +62,14 @@ public class DefaultAttributeSealing implements AttributeSealing {
     for (FieldDefinitionView field : sensitive) {
       String key = field.key();
       if (access.allows(key)) {
-        // The caller saw it and sent one back; theirs wins, whatever it is.
         continue;
       }
-      // Whatever the request says here is ignored: the caller was shown nothing
-      // and therefore has nothing to say about it.
       incoming.remove(key);
       if (stored == null || !stored.has(key)) {
         continue;
       }
       JsonNode value = stored.get(key);
       String text = value.isTextual() ? value.asString() : value.toString();
-      // Opened, because what comes out of here is validated next and a schema
-      // cannot check ciphertext. It is sealed again on the way back in.
       incoming.put(key, crypto.isSealed(text) ? crypto.open(entityId, key, text) : text);
     }
     return json.writeValueAsString(incoming);
@@ -100,9 +95,6 @@ public class DefaultAttributeSealing implements AttributeSealing {
       }
       String text = value.isTextual() ? value.asString() : value.toString();
       if (crypto.isSealed(text)) {
-        // A restored revision carries the sealed value, because a snapshot is
-        // stored whole. Sealing it again would make it unreadable in one step and
-        // unrecoverable in two.
         continue;
       }
       attributes.put(key, crypto.seal(entityId, key, text));
@@ -110,8 +102,6 @@ public class DefaultAttributeSealing implements AttributeSealing {
     }
     return changed ? json.writeValueAsString(attributes) : plaintextJson;
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The sensitive fields of a type version, or nothing when it has none.

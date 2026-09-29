@@ -53,9 +53,6 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
         .collect::<Result<_, _>>()
         .map_err(|failure| format!("the certificates could not be parsed: {failure}"))?;
 
-    // The variant carries the label: the same RSA key is PKCS#1 from
-    // BouncyCastle and PKCS#8 from `openssl genpkey`, and re-emitting one under
-    // the other's header produces a file every parser rejects.
     let keys: Vec<(&'static str, Vec<u8>)> = PrivateKeyDer::pem_slice_iter(&bundle)
         .map(|entry| {
             entry.map(|key| match key {
@@ -92,8 +89,6 @@ pub fn server_config(identity_path: &Path) -> Result<ServerTlsConfig, Box<dyn st
 
     Ok(ServerTlsConfig::new()
         .identity(Identity::from_pem(chain, pem_block(key_label, key_der)))
-        // Not optional. `client_auth_optional` would let an unauthenticated
-        // caller through with no indication in the logs that it happened.
         .client_ca_root(Certificate::from_pem(pem_block("CERTIFICATE", &authority))))
 }
 

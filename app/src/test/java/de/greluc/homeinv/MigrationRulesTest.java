@@ -49,57 +49,17 @@ class MigrationRulesTest {
   private static final List<String> INSTANCE_WIDE =
       List.of(
           "identity.app_user",
-          // What the operator installed. A plugin is installed for the instance
-          // and consented to per tenant (09 §9.4), so the registration describes
-          // the deployment and the GRANT beside it carries the tenant id and the
-          // policy. A tenant-scoped registration would mean installing a plugin
-          // once per tenant, which is the thing REQ-PLG-013 says an operator
-          // does once.
           "plugins.plugin_registration",
-          // What the instance operator permitted a plugin to do for the
-          // deployment itself (ADR-0066). It belongs to no tenant by
-          // construction: it authorises the calls the instance makes on its own
-          // behalf, so that a security notification reaches an account that is a
-          // member of nothing (REQ-NOTI-004). A policy keyed on a context that
-          // does not exist would disable the one path it exists for.
           "plugins.instance_capability_grant",
           "identification.public_code",
           "identification.label_base_url_usage",
           "audit.chain_anchor",
-          // Infrastructure rather than domain data (07 §7.1, rule 4): the relay
-          // reads every tenant's rows by design, and a policy would hide them
-          // from the one process whose job is to publish them.
           "outbox.event_publication",
-          // Evidence of an erasure has to outlive the thing it is about: a
-          // tenant-scoped certificate would be removed by the very run that
-          // writes it (REQ-TEN-011). It holds no content — a tenant id, the name
-          // it had, who asked, when, and counts — and only the instance operator
-          // reads it.
           "tenancy.erasure_certificate",
-          // The second factor is asked for between the password and the session,
-          // when there is no tenant yet to scope a policy with (REQ-AUTH-002).
-          // Reachable only through the caller's own session: no endpoint takes a
-          // user id, and no operator path reaches somebody else's authenticator.
           "identity.credential",
-          // A reset is asked for at the login page — before the password rather
-          // than after it, so one step earlier than `credential` above, and for
-          // an address nobody has an account for there is no tenant even in
-          // principle (REQ-SEC-018). A policy keyed on a context that does not
-          // exist yields zero rows rather than an error, which would make the
-          // request look successful while nothing happened.
           "identity.password_reset",
-          // A sign-in happens before any tenant is known: the person arrives at
-          // a login page, and which tenants they belong to is what the session
-          // goes on to decide (REQ-AUTH-005). Keyed on (issuer, subject) and
-          // never on an address, which is REQ-AUTH-006 in the schema.
           "identity.federated_identity",
-          // The sign-in in progress, for the same reason one step earlier: the
-          // flow begins before there is a session at all. Held server-side
-          // rather than in a cookie (ADR-0029) and spent within ten minutes.
           "identity.federated_login",
-          // What the deployment owes an ACCOUNT rather than a tenant
-          // (REQ-NOTI-004, ADR-0066). The recipient may be a member of nothing,
-          // and a policy would hide the queue from the run that has to empty it.
           "notification.security_notification",
           "notification.security_delivery_attempt");
 
@@ -113,66 +73,33 @@ class MigrationRulesTest {
    */
   private static final List<String> NOT_DOMAIN_TABLES =
       List.of(
-          // Derived.
           "inventory.item_attr_index",
-          // Append-only records of an event.
           "sync.change_log",
           "audit.audit_entry",
           "audit.chain_anchor",
           "audit.chain_truncation",
           "audit.revision_record",
-          // A maintenance entry is a record of what happened to a thing, and
-          // REQ-LIFE-003 says entries are not retroactively editable: no
-          // `version`, no `updated_*`, and no UPDATE granted. A correction is a
-          // second entry.
           "inventory.maintenance_entry",
           "identification.label_base_url_usage",
           "tenancy.erasure_certificate",
-          // Infrastructure.
-          //
-          // A queued notification is a unit of work owned by the delivery
-          // mechanism, like an outbox row: its `state` and `next_attempt_at` are
-          // the mechanism's bookkeeping, and an `updated_by` on it would name the
-          // scheduler rather than a person. Its attempts are an append-only
-          // record of what happened on each try.
           "notification.notification",
           "notification.delivery_attempt",
           "notification.reminder",
           "portability.export_job",
           "portability.import_job",
-          // Append-only: a second import of the same file writes a second row
-          // rather than editing the first, which is what makes the table the
-          // history REQ-PORT-008 asks the provenance to be visible in.
           "portability.import_provenance",
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",
-          // A reset token is issued by the flow and spent once: `used_at` is
-          // that spend, `updated_by` would name whoever presented the token —
-          // who is anonymous at that moment, which is the property REQ-SEC-018
-          // rests on — and the single-use guarantee comes from the column and a
-          // partial unique index rather than from an optimistic lock.
           "identity.password_reset",
-          // A sign-in in flight is the flow's own bookkeeping: `consumed_at`
-          // is the spend, nothing else about the row ever changes, and an
-          // `updated_by` would name whoever presented the handle -- who is
-          // anonymous at that moment, which is what the flow rests on.
           "identity.federated_login",
-          // A link is made once and used afterwards. `last_used_at` is the
-          // use, `linked_at` is the making, and both are facts about the
-          // mechanism rather than an edit somebody made.
           "identity.federated_identity",
-          // The account queue, the same shape as the tenant queue next to it:
-          // its state and next attempt are the delivery mechanism's bookkeeping,
-          // and its attempts are an append-only record of what happened.
           "notification.security_notification",
           "notification.security_delivery_attempt",
-          // Issued, never edited.
           "identification.public_code",
           "identification.code_binding",
           "inventory.item_relation",
           "inventory.item_bundle",
-          // A rule that exists or does not.
           "catalog.location_category_child");
 
   /**
@@ -265,17 +192,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("carry the tenant in every reference between tenant-scoped tables")
   void referencesBetweenTenantTablesAreComposite() throws IOException {
-    // 07 §7.5: a foreign key check bypasses row-level security, always. A
-    // single-column reference therefore succeeds across a tenant boundary, and
-    // the row comes into existence pointing at somebody else's data. Making the
-    // tenant part of the key is what makes that impossible rather than merely
-    // caught by the application.
-    // The exception is a property of the TARGET rather than a file name: a
-    // reference to an instance-wide table is single-column because that table has
-    // no tenant to carry. `tenancy.membership -> identity.app_user` is the entry
-    // 07 §7.9 names, and `identity.credential -> identity.app_user` is the same
-    // case. Keyed on the file name, as this was until 2026-09-13, the rule passed
-    // anything that happened to live in the same migration.
     Pattern singleColumn =
         Pattern.compile(
             "foreign\\s+key\\s*\\(\\s*[a-z_]+\\s*\\)\\s*references\\s+([a-z_]+\\.[a-z_]+)",
@@ -310,11 +226,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("never make tenant_id a foreign key of its own")
   void tenantIdCarriesNoForeignKey() throws IOException {
-    // 07 §7.5: tenant_id is a discriminator, not a reference between aggregates.
-    // Declaring REFERENCES tenancy.tenant(id) on it would put a cross-schema
-    // foreign key in every table of every block - the module rule turned inside
-    // out - and a row whose tenant names no tenant is invisible to every policy
-    // anyway, which is the same outcome the constraint would produce.
     Pattern offending =
         Pattern.compile("tenant_id\\s+uuid[^,]*\\breferences\\b", Pattern.CASE_INSENSITIVE);
 
@@ -330,16 +241,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("give every domain table `version` and the four audit columns (07 §7.1, rule 4)")
   void everyDomainTableIsVersionedAndAudited() throws IOException {
-    // 07 §7.1 rule 4 has said "a migration check enforces it" since the chapter
-    // was written, and until 2026-09-13 nothing did: the rule was a sentence and
-    // the list of tables it exempts was a list nothing read. A rule with no
-    // mechanism is exactly the drift that chapter exists to prevent, and this one
-    // was sitting in the paragraph that describes the mechanism.
-    //
-    // Run for the first time it found five tables. Two of them were right to have
-    // no such columns and joined the list; three were wrong and got the columns,
-    // because a version row records who published it and an assignment records
-    // who merged the tag out from under it.
     Map<String, String> tables = tablesWithTheirScript();
     Map<String, String> added = columnsAddedLater();
     List<String> offenders = new ArrayList<>();
@@ -372,8 +273,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("use version numbers that are unique across every block directory")
   void versionsAreUnique() throws IOException {
-    // Flyway keeps one history table for all locations, so two blocks that both
-    // start at V1 collide - and the failure appears at deployment, not here.
     Map<String, String> byVersion = new LinkedHashMap<>();
     List<String> duplicates = new ArrayList<>();
     for (Path script : scripts()) {
@@ -480,8 +379,6 @@ class MigrationRulesTest {
     List<String> actual = new ArrayList<>();
     for (Path script : scripts()) {
       String sql = Files.readString(script, StandardCharsets.UTF_8);
-      // Split on the function bodies' delimiter so that "is this one a definer"
-      // is asked of the right function when a script creates several.
       Matcher functions = CREATE_FUNCTION.matcher(sql);
       while (functions.find()) {
         int from = functions.end();

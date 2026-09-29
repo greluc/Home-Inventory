@@ -89,10 +89,6 @@ public class GraphQlConfiguration {
                 try {
                   return json.readValue(text, Object.class);
                 } catch (JacksonException notJson) {
-                  // The column holds JSONB and cannot contain anything else, so
-                  // this is a wiring fault rather than bad data. Said plainly,
-                  // because an empty object here would look like an item with no
-                  // attributes.
                   throw new CoercingSerializeException(
                       "A stored attribute document could not be read as JSON", notJson);
                 }
@@ -153,9 +149,6 @@ public class GraphQlConfiguration {
               public Instant parseLiteral(
                   Value<?> input, CoercedVariables variables, GraphQLContext context,
                   Locale locale) {
-                // Bound to a local: two calls to `getValue()` are two values as far
-                // as an analyser is concerned, and the second one is the one that
-                // would be dereferenced.
                 String literal = input instanceof StringValue text ? text.getValue() : null;
                 if (literal != null) {
                   return parseValue(literal, context, locale);

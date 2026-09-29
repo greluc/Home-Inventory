@@ -41,9 +41,6 @@ public class DefaultNotifications implements Notifications {
             .toList();
 
     if (wanted.isEmpty()) {
-      // Not a failure. Somebody who asked for nothing gets nothing, and the
-      // caller finds out by getting an empty list rather than by an exception it
-      // would have to ignore.
       log.debug(
           "Nobody subscribed to {} for user {}; nothing queued",
           notification.kind(),
@@ -53,9 +50,6 @@ public class DefaultNotifications implements Notifications {
 
     List<QueuedNotification> queued = new ArrayList<>(wanted.size());
     for (Subscription subscription : wanted) {
-      // One idempotency key per channel: the same news on two channels is two
-      // messages, and a shared key would make the second one look like a repeat
-      // of the first.
       queued.add(
           queries.queue(
               tenantId,

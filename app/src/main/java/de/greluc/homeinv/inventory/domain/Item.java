@@ -45,7 +45,7 @@ import org.hibernate.annotations.Type;
 @Entity
 @Table(schema = "inventory", name = "item")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA requires it; nothing else should use it.
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Item {
 
   /**
@@ -516,12 +516,6 @@ public class Item {
         values.replacementSource();
     this.replacementSource = replacementSource == null ? null : replacementSource.name();
 
-    // THE SOURCE CHANGES WHEN THE NUMBER DOES, and not before. A client that
-    // reads an item, renames it and writes the whole thing back is sending the
-    // depreciated figure it was just given -- and treating that as somebody
-    // typing it would freeze the value for ever, because the refresh run never
-    // touches what a person owns. A different number is a person's number; the
-    // same number is the same number.
     de.greluc.homeinv.platform.Money currentValue = values.currentValue();
     java.math.BigDecimal incomingAmount = currentValue == null ? null : currentValue.amount();
     String incomingCurrency = currentValue == null ? null : currentValue.currencyCode();
@@ -582,9 +576,6 @@ public class Item {
    * @return the money, or {@code null}
    */
   private static de.greluc.homeinv.platform.Money money(BigDecimal amount, String currency) {
-    // A database CHECK refuses one without the other, so a row with exactly one
-    // of them cannot exist -- and if one ever did, this would be the place that
-    // quietly invented a currency for it.
     return amount == null || currency == null
         ? null
         : new de.greluc.homeinv.platform.Money(amount, java.util.Currency.getInstance(currency));
@@ -631,9 +622,6 @@ public class Item {
       return;
     }
     this.deletedAt = now;
-    // The state a person reads, beside the timestamp the queries filter on. Both
-    // move together, so a listing that shows the state and a query that hides the
-    // row can never disagree (REQ-CORE-009).
     this.lifecycleState = ItemState.TRASHED;
     this.updatedBy = actor;
     this.updatedAt = now;
@@ -654,8 +642,6 @@ public class Item {
    */
   public void lend(UUID actor, Instant now) {
     if (this.lifecycleState == ItemState.LENT) {
-      // The same answer the partial unique index gives, raised here because this
-      // is where the state is known. A caller does one thing about it.
       throw new ItemLentException("This item is already lent out. Record its return first.");
     }
     if (this.lifecycleState != ItemState.ACTIVE) {

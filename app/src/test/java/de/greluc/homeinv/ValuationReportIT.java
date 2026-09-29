@@ -61,13 +61,11 @@ class ValuationReportIT extends AbstractIntegrationTest {
     ValuationReport.ValuationSummary report = inOwn(tenant, () -> reports.byLocation(null, 50));
     ValuationReport.ValuationRow roomRow = rowFor(report, room);
 
-    // Directly in the room: the lamp. In the room including its boxes: both.
     assertThat(only(roomRow.own().purchase())).isEqualTo(Money.of("100.00", "EUR"));
     assertThat(only(roomRow.subtree().purchase())).isEqualTo(Money.of("350.00", "EUR"));
     assertThat(roomRow.ownCount()).isEqualTo(1);
     assertThat(roomRow.subtreeCount()).isEqualTo(2);
 
-    // And the box says only what is in the box.
     ValuationReport.ValuationRow boxRow = rowFor(report, box);
     assertThat(only(boxRow.own().purchase())).isEqualTo(Money.of("250.00", "EUR"));
     assertThat(only(boxRow.subtree().purchase())).isEqualTo(Money.of("250.00", "EUR"));
@@ -84,14 +82,10 @@ class ValuationReportIT extends AbstractIntegrationTest {
     ValuationReport.ValuationSummary report = inOwn(tenant, () -> reports.byLocation(null, 50));
     ValuationReport.ValuationRow row = rowFor(report, room);
 
-    // Two lines, not one number. REQ-LIFE-017 forbids a mixed total "not even as
-    // an approximation", and 500 of anything would be exactly that.
     assertThat(row.own().purchase())
         .containsExactlyInAnyOrder(Money.of("300.00", "EUR"), Money.of("200.00", "USD"));
     assertThat(report.currencies()).containsExactly("EUR", "USD");
 
-    // And the report SAYS no conversion happened, rather than leaving it to be
-    // assumed from the absence of one.
     assertThat(report.converted()).isFalse();
   }
 
@@ -118,8 +112,6 @@ class ValuationReportIT extends AbstractIntegrationTest {
 
     ValuationReport.ValuationRow row = rowFor(inOwn(tenant, () -> reports.byLocation(null, 50)), room);
 
-    // What it cost, what replacing it would cost and what it is worth now are
-    // three answers to three questions (REQ-LIFE-014/015).
     assertThat(only(row.own().purchase())).isEqualTo(Money.of("900.00", "EUR"));
     assertThat(only(row.own().replacement())).isEqualTo(Money.of("1200.00", "EUR"));
     assertThat(only(row.own().current())).isEqualTo(Money.of("400.00", "EUR"));
@@ -147,8 +139,6 @@ class ValuationReportIT extends AbstractIntegrationTest {
                 java.util.OptionalLong.empty(),
                 tenant.userId()));
 
-    // "What is the shed worth" that counted the mower sold in March would be
-    // wrong in a way nobody could see.
     ValuationReport.ValuationRow row = rowFor(inOwn(tenant, () -> reports.byLocation(null, 50)), room);
     assertThat(only(row.own().purchase())).isEqualTo(Money.of("80.00", "EUR"));
     assertThat(row.ownCount()).isEqualTo(1);
@@ -164,15 +154,11 @@ class ValuationReportIT extends AbstractIntegrationTest {
 
     ValuationReport.ValuationSummary byType = inOwn(tenant, () -> reports.byType(50));
     assertThat(byType.dimension()).isEqualTo("type");
-    // Nothing overlaps: an item has exactly one type, so the column adds up.
     assertThat(byType.overlapping()).isFalse();
     assertThat(byType.rows()).isNotEmpty();
     assertThat(byType.rows().get(0).own()).isEqualTo(byType.rows().get(0).subtree());
 
     ValuationReport.ValuationSummary byTag = inOwn(tenant, () -> reports.byTag(50));
-    // A thing can carry several tags, so adding this column up gives a number
-    // that means nothing -- and the report says so rather than letting a reader
-    // find out.
     assertThat(byTag.overlapping()).isTrue();
     assertThat(byTag.converted()).isFalse();
   }
@@ -195,8 +181,6 @@ class ValuationReportIT extends AbstractIntegrationTest {
         .doesNotContain(elsewhere);
     assertThat(only(rowFor(report, house).subtree().purchase())).isEqualTo(Money.of("40.00", "EUR"));
   }
-
-  // -------------------------------------------------------------------------
 
   private static Money only(List<Money> amounts) {
     assertThat(amounts).hasSize(1);

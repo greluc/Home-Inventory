@@ -72,7 +72,6 @@ public class LoginRateLimiter {
   public Duration retryAfter(String email, String clientIp) {
     Duration byAccount = delayFor(accountKey(email));
     Duration byAddress = delayFor(addressKey(clientIp));
-    // The stricter of the two, because an attacker only needs one of them to be lax.
     return byAccount.compareTo(byAddress) >= 0 ? byAccount : byAddress;
   }
 
@@ -159,19 +158,6 @@ public class LoginRateLimiter {
     long seconds = 1L << Math.min(failures - FREE_ATTEMPTS - 1, 20);
     Duration required = Duration.ofSeconds(Math.min(seconds, MAX_DELAY.toSeconds()));
 
-    // MILLISECONDS, and that is not a detail. The counter's remaining time to
-    // live says how long ago the last failure was -- every failure restarts the
-    // window, so elapsed = WINDOW - remaining -- and asking for it in SECONDS
-    // rounds the remainder DOWN, which rounds the elapsed time UP by as much as
-    // a second. Every step of this delay was therefore up to a second shorter
-    // than it says, and the first step, which is exactly one second, could be no
-    // delay at all: a failure at 12:00:00.999 and a retry at 12:00:01.001 read
-    // as a full second elapsed.
-    //
-    // `PTTL` costs the same round trip as `TTL` and is exact. Found by
-    // `PasswordResetIT.theThrottleEngages` failing in CI on 2026-09-21 while
-    // passing on every developer machine -- a ~5 % flake that the extra Valkey
-    // round trip of REQ-SEC-064's rate limiter made likely enough to fire.
     Long remainingMillis = redis.getExpire(key, TimeUnit.MILLISECONDS);
     if (remainingMillis == null || remainingMillis < 0) {
       return Duration.ZERO;
@@ -190,10 +176,6 @@ public class LoginRateLimiter {
     Long count = redis.opsForValue().increment(key);
     redis.expire(key, WINDOW);
     if (count != null && count == FREE_ATTEMPTS + 1L) {
-      // Logged once, when the delay starts applying, rather than on every failure:
-      // an attacker must not be able to fill the log by failing.
-      // The key is built from an e-mail address and a client address, so it
-      // carries text somebody else chose.
       log.info("Login throttling engaged for key {}", LogSafe.value(key));
     }
   }

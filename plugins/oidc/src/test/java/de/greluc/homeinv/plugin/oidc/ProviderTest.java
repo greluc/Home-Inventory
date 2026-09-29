@@ -111,8 +111,6 @@ class ProviderTest {
   @Test
   @DisplayName("is refused when the nonce is not the one this sign-in minted")
   void aTokenForAnotherSignIn() throws Exception {
-    // The replay this check exists for: a token obtained through one flow,
-    // presented to finish another. Everything else about it is valid.
     NEXT_ID_TOKEN.set(signed(claims("somebody-elses-nonce").build(), signingKey));
 
     assertThatThrownBy(
@@ -127,8 +125,6 @@ class ProviderTest {
   @DisplayName("is refused when somebody else signed it")
   void aTokenSignedByAnotherKey() throws Exception {
     RSAKey attacker = new RSAKeyGenerator(2048).keyID("k1").generate();
-    // The same key id as the provider's, so the only thing that can refuse it is
-    // the signature itself.
     NEXT_ID_TOKEN.set(signed(claims("the-nonce").build(), attacker));
 
     assertThatThrownBy(
@@ -180,13 +176,9 @@ class ProviderTest {
     assertThat(url).contains("state=the-state").contains("nonce=the-nonce");
     assertThat(url).contains("code_challenge=the-challenge").contains("code_challenge_method=S256");
     assertThat(url).contains("client_id=home-inventory");
-    // `openid` is always asked for: without it a provider runs a plain OAuth
-    // flow and returns no ID token, which is the only thing this plugin trusts.
     assertThat(url).contains("scope=openid");
     assertThat(url).contains("login_hint=ada%40example.org");
   }
-
-  // -------------------------------------------------------------------------
 
   private static Provider provider() {
     return new Provider(

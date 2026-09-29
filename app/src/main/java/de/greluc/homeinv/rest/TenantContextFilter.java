@@ -53,21 +53,6 @@ public class TenantContextFilter extends OncePerRequestFilter {
           MDC.put("tenantId", user.tenantId().toString());
         }
         MDC.put("actorId", user.userId().toString());
-        // Two contexts, and they answer different questions. TenantContext is the
-        // value the transaction manager pushes into `app.tenant_id` so every RLS
-        // policy has something to compare against; CallerContext is the identity
-        // the application layer asks "may they". Both are set here because both
-        // are facts about this one request, and both are cleared in the same
-        // `finally` because either one left behind would be inherited by whoever
-        // runs on this thread next.
-        //
-        // A session with no tenant publishes a caller and NO tenant context. Both
-        // halves matter. The caller is published because the application layer
-        // still has to answer "may they": with a null role it holds no permission,
-        // so every endpoint that needs one answers 403 rather than failing with a
-        // missing context. The tenant context is not published because there is
-        // none, and a missing one yields zero rows rather than foreign data —
-        // which is exactly the behaviour such a session should have (ADR-0003).
         CallerContext.runAs(
             new CallerContext.Caller(
                 user.userId(),
@@ -75,12 +60,6 @@ public class TenantContextFilter extends OncePerRequestFilter {
                 user.role(),
                 user.roleDefinitionId(),
                 user.scopeLocationId(),
-                // When the second factor was last proved, for the re-confirmation
-                // of REQ-AUTH-011. It travels on the caller rather than being
-                // read from the session where it is needed: the redaction that
-                // reads it runs deep in the application layer, and a servlet
-                // session reaching that far would be the web layer leaking into
-                // it.
                 SessionEstablisher.secondFactorProvedAt(request)),
             () -> {
               if (user.tenantId() == null) {

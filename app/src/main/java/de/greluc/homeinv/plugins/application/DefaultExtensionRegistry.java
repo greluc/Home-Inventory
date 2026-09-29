@@ -79,10 +79,6 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
   @Override
   @Transactional(readOnly = true)
   public <T> Optional<T> lookupForInstance(Class<T> port) {
-    // No ambient tenant is required and none is read: an instance resolution
-    // asks the operator's grants, not a tenant's (ADR-0066). That is also why it
-    // cannot be folded into lookupAll — the difference is which question is
-    // asked, and a boolean parameter would hide it at every call site.
     return resolve(port, this::hasInstanceConsent).stream().findFirst();
   }
 
@@ -105,9 +101,6 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
       Class<T> port, java.util.function.Predicate<PluginRegistry.Registration> consent) {
     PortAdapter<T> adapter = adapterFor(port);
     if (adapter == null) {
-      // Six of the fifteen ports belong to features that ship later and have
-      // no adapter yet (ADR-0064). Answering "nothing implements it" is right
-      // for them, and would also be right for a port whose adapter was removed.
       return List.of();
     }
 
@@ -130,10 +123,6 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
       candidates.add(new Candidate(installed, manifest, binding.get().priority()));
     }
 
-    // Highest priority first; ties by plugin id, which is arbitrary and stable.
-    // Arbitrary because the manifests said the same thing, stable because a
-    // resolution that changed between two calls would be a bug nobody could
-    // reproduce.
     candidates.sort(
         Comparator.comparingInt(Candidate::priority)
             .reversed()
@@ -168,9 +157,6 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
       int deadline = properties.deadlineFor(requestedTimeout(candidate.manifest()));
       return Optional.of(resilience.decorate(port, adapter.adapt(channel, deadline), pluginId));
     } catch (RuntimeException unreachable) {
-      // Skipped rather than raised. Another plugin may implement the same port
-      // and be answering, and a caller asking for a notification channel should
-      // get the one that works rather than the failure of the one that does not.
       log.warn(
           "Plugin {} implements {} and cannot be called: {}",
           pluginId,

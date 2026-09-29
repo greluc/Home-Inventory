@@ -46,9 +46,6 @@ public final class PluginWire {
             forTheInstance
                 ? de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_INSTANCE
                 : de.greluc.homeinv.plugin.v1.CallScope.CALL_SCOPE_TENANT)
-        // What the tenant configured, filled by the envelope and never by an
-        // adapter (ADR-0073). Empty on an instance call, because there is no
-        // tenant whose settings they would be.
         .putAllSettings(forTheInstance ? java.util.Map.of() : context.settings())
         .build();
   }
@@ -80,9 +77,6 @@ public final class PluginWire {
           default -> PluginException.Kind.INTERNAL;
         };
 
-    // The plugin's own description, which 09 §9.5 asks to be logged, and the
-    // code, which is what the mapping above turned on. Not the stack trace: it
-    // is the transport's and says nothing about the plugin.
     String detail = failure.getStatus().getDescription();
     return new PluginException(
         kind,

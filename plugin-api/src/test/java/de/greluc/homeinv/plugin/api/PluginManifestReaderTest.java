@@ -88,8 +88,6 @@ class PluginManifestReaderTest {
 
     assertThat(manifest.spec().capabilities()).extracting(PluginManifest.Capability::id)
         .containsExactly("network:outbound", "core:item:read");
-    // The host list is what the egress proxy's allowlist is compiled from
-    // (ADR-0027), so it survives the parse exactly.
     assertThat(manifest.spec().capabilities().getFirst().hosts())
         .containsExactly("openlibrary.org", "services.dnb.de");
 
@@ -102,8 +100,6 @@ class PluginManifestReaderTest {
   @Test
   @DisplayName("refuses a key nobody defined, rather than ignoring it")
   void aMisspeltKeyIsRefused() {
-    // `capabilites`. Ignored, this is a plugin that asks for nothing, is granted
-    // nothing, and fails at runtime in front of somebody who cannot fix it.
     assertThatThrownBy(() -> read(EXAMPLE.replace("  capabilities:", "  capabilites:")))
         .isInstanceOf(InvalidManifestException.class)
         .hasMessageContaining("capabilites");
@@ -124,7 +120,6 @@ class PluginManifestReaderTest {
         EXAMPLE.replace("      hosts: [\"openlibrary.org\", \"services.dnb.de\"]\n", "");
     assertThatThrownBy(() -> read(noHosts))
         .isInstanceOf(InvalidManifestException.class)
-        // An empty allowlist is a plugin asking for the internet.
         .hasMessageContaining("network:outbound");
   }
 
@@ -139,8 +134,6 @@ class PluginManifestReaderTest {
   @Test
   @DisplayName("refuses an id that is not a reverse-domain name")
   void anIdThatIsNotStable() {
-    // The id is what a tenant's grant is recorded against, so it has to be
-    // unmistakable: "isbn" belongs to whoever claims it first.
     assertThatThrownBy(() -> read(EXAMPLE.replace("id: de.greluc.homeinv.plugin.isbn", "id: isbn")))
         .isInstanceOf(InvalidManifestException.class)
         .hasMessageContaining("reverse-domain");
@@ -174,9 +167,6 @@ class PluginManifestReaderTest {
   @Test
   @DisplayName("names no Java type, whatever the document asks for")
   void itIsNotACodeLoader() {
-    // An unrestricted YAML loader turns this into a constructor call. A manifest
-    // comes from whoever wrote the plugin, so the loader is the safe one and
-    // this is the test that says so.
     String tagged =
         """
         apiVersion: home-inv.plugin/v1

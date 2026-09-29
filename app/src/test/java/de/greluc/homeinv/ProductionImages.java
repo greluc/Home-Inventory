@@ -67,9 +67,6 @@ final class ProductionImages {
     Object tag = image.get("tag");
 
     if (digest != null) {
-      // The digest wins over the tag, because that is what the requirement asks
-      // for: the same bytes, not the same label pointing at whatever was pushed
-      // last.
       return DockerImageName.parse(name + "@" + digest);
     }
     return DockerImageName.parse(tag == null ? name : name + ":" + tag);

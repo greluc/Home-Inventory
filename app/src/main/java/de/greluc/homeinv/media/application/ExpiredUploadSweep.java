@@ -53,9 +53,6 @@ public class ExpiredUploadSweep {
     Instant now = Instant.now(clock);
     int removed = 0;
     for (UUID tenantId : expired.tenantsWithExpiredUploads(now)) {
-      // The context around the work, so every statement below runs under it:
-      // `SET LOCAL app.tenant_id` is applied when each transaction begins, from
-      // the context current at that moment.
       removed += TenantContext.callAs(tenantId, () -> sweepTenant(tenantId, now));
     }
     if (removed > 0) {
@@ -84,8 +81,6 @@ public class ExpiredUploadSweep {
       try {
         staging.deleteStaged(tenantId, session.getId());
       } catch (IOException failed) {
-        // The row stays, so the next run tries again. Removing it here would
-        // leave staged bytes with nothing left that knows their address.
         log.warn("A staged upload could not be removed; the next run will try again", failed);
         continue;
       }

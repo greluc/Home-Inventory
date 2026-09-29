@@ -115,7 +115,6 @@ public class PostgresSearchIndex implements SearchIndex {
    */
   @Override
   public void index(de.greluc.homeinv.search.api.SearchDocument document) {
-    // Intentionally empty; see the Javadoc.
   }
 
   /**
@@ -126,8 +125,6 @@ public class PostgresSearchIndex implements SearchIndex {
    */
   @Override
   public void remove(UUID tenantId, UUID itemId) {
-    // Intentionally empty; trashing an item already clears its projection in the
-    // same transaction (07 §7.3).
   }
 
   @Override
@@ -177,8 +174,6 @@ public class PostgresSearchIndex implements SearchIndex {
           if (identity == null) {
             return;
           }
-          // A type at the root of the tree is in no category, so it contributes
-          // no bucket rather than a bucket called "none" that nothing filters by.
           String key = byParent ? identity.parentKey() : identity.key();
           if (key != null) {
             counts.merge(key, count, Long::sum);
@@ -244,8 +239,6 @@ public class PostgresSearchIndex implements SearchIndex {
         query.typeVersionIds(),
         query.itemIds(),
         query.filters(),
-        // The two halves of REQ-SRCH-011 that live in other blocks. Asked only
-        // when there is text to match, because each is a query of its own.
         matching ? tags.itemsTaggedMatching(query.text(), query.language()) : List.of(),
         matching ? locations.locationsMatching(query.text(), query.language()) : List.of());
   }

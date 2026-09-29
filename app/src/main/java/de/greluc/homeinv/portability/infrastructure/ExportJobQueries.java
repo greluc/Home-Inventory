@@ -283,10 +283,6 @@ public class ExportJobQueries {
   private static ExportJobView toView(ResultSet rs, int rowNum) throws SQLException {
     java.sql.Timestamp finished = rs.getTimestamp("finished_at");
     long size = rs.getLong("byte_size");
-    // Read IMMEDIATELY after the column it is about: `wasNull` reports on the
-    // last value read from the row, and reading `progress` in between made it
-    // answer about that instead -- so an unfinished job reported a size of 0
-    // rather than none.
     Long byteSize = rs.wasNull() ? null : size;
     return new ExportJobView(
         rs.getObject("id", UUID.class),

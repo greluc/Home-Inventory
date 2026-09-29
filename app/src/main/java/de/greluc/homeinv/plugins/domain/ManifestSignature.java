@@ -126,9 +126,6 @@ public final class ManifestSignature {
       return new Result(State.UNSIGNED, "no signature travels with it and no key is installed for it");
     }
     if (!hasSignature) {
-      // A key with no signature is an operator who installed the means to check
-      // and received nothing to check. Refused rather than read as unsigned:
-      // they have already said what they expect to be there.
       return new Result(
           State.INVALID, "a public key is installed for it and its manifest brings no signature");
     }
@@ -168,9 +165,6 @@ public final class ManifestSignature {
           ? new Result(State.VERIFIED, "")
           : new Result(State.INVALID, "its signature is not over this manifest, or not by this key");
     } catch (GeneralSecurityException | RuntimeException refused) {
-      // `Signature.verify` throws on bytes that are not a well-formed structure
-      // for the algorithm. That is a failed verification and not a fault of
-      // ours: a stranger's document is allowed to be nonsense.
       return new Result(
           State.INVALID, "its signature could not be checked: " + refused.getMessage());
     }
@@ -217,7 +211,6 @@ public final class ManifestSignature {
       try {
         return KeyFactory.getInstance(algorithm).generatePublic(spec);
       } catch (GeneralSecurityException | RuntimeException wrongKind) {
-        // Not this one. The next is tried, and exhausting them all is the answer.
       }
     }
     return null;

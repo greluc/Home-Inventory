@@ -91,8 +91,6 @@ public class SavedSearchController {
   @RequiresPermission(Permission.SEARCH_QUERY)
   @CanFail(ProblemType.NOT_FOUND)
   public ResponseEntity<SavedSearchResponse> savedSearch(@PathVariable UUID id) {
-    // The ETag a write has to send back (REQ-API-004): the row's version, not a
-    // hash of the body.
     SavedSearches.SavedSearchView view = searches.get(id);
     return ResponseEntity.ok().eTag(EntityTags.of(view.version())).body(SavedSearchResponse.of(view));
   }

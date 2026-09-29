@@ -89,9 +89,6 @@ class RateLimitIT extends AbstractIntegrationTest {
             .andReturn();
 
     assertThat(allowed.getResponse().getStatus()).isEqualTo(200);
-    // The IETF draft form, which is what the CORS configuration already exposes.
-    // A client that reads these never has to meet a 429 to learn there is a
-    // limit.
     assertThat(allowed.getResponse().getHeader("RateLimit"))
         .isNotNull()
         .matches("\"[a-z]+\";r=\\d+;t=\\d+");
@@ -115,8 +112,6 @@ class RateLimitIT extends AbstractIntegrationTest {
                 .getStatus())
         .isEqualTo(429);
 
-    // The point of keying per address at all. A limiter that counted every
-    // request together would be an outage switch anybody could pull.
     assertThat(
             mockMvc
                 .perform(get("/api/v1/version").with(from("198.51.100.10")))
@@ -131,10 +126,6 @@ class RateLimitIT extends AbstractIntegrationTest {
   void signingInIsHeldToItsOwnLimit() throws Exception {
     String address = "198.51.100.11";
 
-    // Three attempts allowed here against five for everything else, so the
-    // fourth is refused while a fourth request to any other endpoint would not
-    // be. That difference IS the stricter bucket: without it, the endpoint an
-    // attacker actually uses would be as generous as the item list.
     for (int attempt = 0; attempt < 3; attempt++) {
       mockMvc
           .perform(

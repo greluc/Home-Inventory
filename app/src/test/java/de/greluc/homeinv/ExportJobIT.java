@@ -79,9 +79,6 @@ class ExportJobIT extends AbstractIntegrationTest {
 
     ExportService.ExportJobView job = inOwn(tenant, () -> exports.request(tenant.userId()));
 
-    // REQ-PORT-005: the answer is a job, not an archive. A tenant with ten
-    // thousand items is minutes of work, and this is what stops that being a
-    // request that times out.
     assertThat(job.state()).isEqualTo("QUEUED");
     assertThat(job.progress()).isZero();
     assertThat(job.byteSize()).isNull();
@@ -94,9 +91,6 @@ class ExportJobIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("export-early@example.org");
     ExportService.ExportJobView job = inOwn(tenant, () -> exports.request(tenant.userId()));
 
-    // Not a 404: the job is there and the caller is looking at the right thing.
-    // Sending them to a "no such job" would send them looking for something in
-    // their own list.
     assertThatThrownBy(() -> inOwn(tenant, () -> openQuietly(job.id())))
         .isInstanceOf(ExportNotReadyException.class)
         .hasMessageContaining("queued");
@@ -121,22 +115,16 @@ class ExportJobIT extends AbstractIntegrationTest {
 
     Map<String, String> entries = unzip(inOwn(tenant, () -> openQuietly(queued.id())));
 
-    // The manifest says what the archive is and what is in it, so a reader knows
-    // what they have without unpacking all of it.
     assertThat(entries).containsKey("manifest.json");
     JsonNode manifest = json.readTree(entries.get("manifest.json"));
     assertThat(manifest.get("format").asInt()).isEqualTo(1);
     assertThat(manifest.get("tenantId").asString()).isEqualTo(tenant.tenantId().toString());
     assertThat(manifest.get("producedBy").get("commit")).isNotNull();
 
-    // Two items and one place, as JSON Lines -- one object per line, so an
-    // import can report "row 4,812" instead of "the file is wrong".
     assertThat(entries).containsKeys("data/inventory/items.jsonl", "data/locations/locations.jsonl");
     assertThat(entries.get("data/inventory/items.jsonl").strip().lines()).hasSize(2);
     assertThat(entries.get("data/inventory/items.jsonl")).contains("A drill").contains("A saw");
 
-    // And the counts in the manifest agree with the files, which is the property
-    // that makes the manifest worth reading at all.
     long itemRows =
         manifest.get("datasets").valueStream()
             .filter(dataset -> "items".equals(dataset.get("dataset").asString()))
@@ -157,9 +145,6 @@ class ExportJobIT extends AbstractIntegrationTest {
     Map<String, String> entries = unzip(inOwn(tenant, () -> openQuietly(queued.id())));
 
     String items = entries.get("data/inventory/items.jsonl");
-    // `search_vector_*` are generated and `item_attr_index` is derived from the
-    // JSONB that IS carried (ADR-0004). An archive holding both would hold one
-    // fact twice, and the copy that was wrong would be the one somebody trusted.
     assertThat(items).doesNotContain("search_vector_de").doesNotContain("search_vector_en");
     assertThat(entries).doesNotContainKey("data/inventory/item-attr-index.jsonl");
     assertThat(items).contains("attributes");
@@ -187,28 +172,17 @@ class ExportJobIT extends AbstractIntegrationTest {
     runner.runAsTenant(tenant.tenantId());
     Map<String, byte[]> entries = unzipBytes(inOwn(tenant, () -> openQuietly(queued.id())));
 
-    // The bytes, under their content address -- which is how a row finds its file
-    // without a second index that could disagree with the first.
     assertThat(entries).containsKey("media/blobs/" + clean);
     assertThat(entries.get("media/blobs/" + clean)).isEqualTo(photograph);
 
-    // Not the infected one: this deployment refuses to serve it (REQ-MED-013), and
-    // putting it in an archive would hand it over inside a container that hides it
-    // from the scanner on the other side. Its row still travels, so the archive
-    // says the thing existed and what happened to it.
     assertThat(entries).doesNotContainKey("media/blobs/" + infected);
     assertThat(new String(entries.get("data/media/media-objects.jsonl"), StandardCharsets.UTF_8))
         .contains(infected);
 
-    // And not the derivative: a thumbnail is recomputed from the original, so
-    // shipping it doubles the largest part of the archive to save work the
-    // receiving instance does anyway.
     assertThat(entries).doesNotContainKey("media/blobs/" + derivative);
     assertThat(new String(entries.get("data/media/variants.jsonl"), StandardCharsets.UTF_8))
         .contains(derivative);
 
-    // The manifest counts the files as well as the rows, so a reader can tell a
-    // truncated archive from a small one without unpacking all of it.
     JsonNode manifest =
         json.readTree(new String(entries.get("manifest.json"), StandardCharsets.UTF_8));
     JsonNode listed =
@@ -249,8 +223,6 @@ class ExportJobIT extends AbstractIntegrationTest {
                     .item()
                     .id());
 
-    // It is ciphertext in the column: that is ADR-0019, and it is why an archive
-    // that copied the column would be an archive of something unreadable.
     String stored =
         inOwn(
             tenant,
@@ -262,19 +234,12 @@ class ExportJobIT extends AbstractIntegrationTest {
                     .single());
     assertThat(stored).doesNotContain("not a real key");
 
-    // Asked for by the owner, with a second factor proved just now: the value is
-    // opened into the archive, because it is theirs and an archive they cannot
-    // read is not portability (REQ-PORT-003).
     ExportService.ExportJobView mine =
         asOwner(tenant, () -> exports.request(tenant.userId()));
     runner.runAsTenant(tenant.tenantId());
     Map<String, String> opened = unzip(inOwn(tenant, () -> openQuietly(mine.id())));
     assertThat(opened.get("data/inventory/items.jsonl")).contains("not a real key");
 
-    // Asked for with no second factor proved, which is REQ-AUTH-011's other
-    // side. The field is withheld -- and the manifest says so by name, because
-    // an archive silent about it is one whose reader believes the field was
-    // empty.
     ExportService.ExportJobView withoutProof = inOwn(tenant, () -> exports.request(tenant.userId()));
     runner.runAsTenant(tenant.tenantId());
     Map<String, String> withheld = unzip(inOwn(tenant, () -> openQuietly(withoutProof.id())));
@@ -307,8 +272,6 @@ class ExportJobIT extends AbstractIntegrationTest {
         .contains("Zzz mine")
         .doesNotContain("Zzz theirs");
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A type with a carrier and a sealed licence key — REQ-CORE-004's shape.

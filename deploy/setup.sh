@@ -1,33 +1,6 @@
 #!/bin/sh
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# One command, from a fresh checkout to a running stack (REQ-NFR-028, REQ-NFR-051).
-#
-#     ./deploy/setup.sh docker      # rootless Docker with Compose v2
-#     ./deploy/setup.sh podman      # rootless Podman with Quadlet
-#     ./deploy/setup.sh check       # prerequisites only, change nothing
-#
-# A second argument selects the profile (default `minimal`); it decides which
-# host prerequisites apply, because vm.max_map_count is OpenSearch's and
-# OpenSearch does not run in `minimal`.
-#
-# It does three things and refuses to do any of them badly:
-#
-#   1. CHECKS THE HOST. subuid/subgid, lingering, cgroup v2 delegation and the
-#      sysctls the matrix declares. Each missing one aborts with the command that
-#      fixes it — because the failure without this check is not a clear error, it
-#      is a container that starts and then behaves strangely (REQ-NFR-060).
-#   2. GENERATES THE SECRETS it does not already find, with the system random
-#      source, into deploy/secrets/ — a 0700 directory holding 0444 files, for
-#      the reason given at generate_secret(). It never overwrites: a
-#      regenerated key means every session invalid and every signed URL broken,
-#      and a setup script is not where that decision should be made.
-#   3. RENDERS THE TEMPLATES from deploy/generated/ into deploy/secrets/,
-#      substituting those values.
-#
-# It is POSIX sh on purpose. It runs before anything else is installed, which is
-# the one moment it cannot assume bash.
 set -eu
 
 HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -47,9 +20,6 @@ say()  { printf '%s\n' "$*"; }
 step() { printf '%s==>%s %s\n' "$BOLD" "$PLAIN" "$*"; }
 die()  { printf '%sFATAL:%s %s\n' "$RED" "$PLAIN" "$*" >&2; exit 1; }
 
-# ---------------------------------------------------------------------------
-# 1. The host
-# ---------------------------------------------------------------------------
 # shellcheck source=generated/host-prerequisites.sh
 . "$GENERATED/host-prerequisites.sh"
 
@@ -57,15 +27,11 @@ check_rootless() {
     missing=0
 
     if [ "$(id -u)" = "0" ]; then
-        # Not a warning. ADR-0022 has no supported path with a root daemon or a
-        # root container, and running this as root would set up exactly that.
         die "Run this as your own user, not as root. Rootless is the only supported way (ADR-0022)."
     fi
 
     user=$(id -un)
 
-    # subuid/subgid: without a range, a rootless container has one uid to map
-    # into and every service that does not run as uid 0 inside fails to start.
     for file in /etc/subuid /etc/subgid; do
         if ! grep -q "^${user}:" "$file" 2>/dev/null; then
             say "MISSING: $user has no range in $file."
@@ -77,8 +43,6 @@ check_rootless() {
         fi
     done
 
-    # Lingering: without it systemd tears the user's services down at logout,
-    # which for a server is "the stack stops when you close the terminal".
     if command -v loginctl >/dev/null 2>&1; then
         if [ "$(loginctl show-user "$user" --property=Linger --value 2>/dev/null || echo no)" != "yes" ]; then
             say "MISSING: lingering is off for $user."
@@ -88,9 +52,6 @@ check_rootless() {
         fi
     fi
 
-    # cgroup v2 with delegated controllers: without memory delegation every
-    # memory limit in the generated descriptions is accepted and ignored, which
-    # is worse than rejecting them - the stack runs unbounded and looks fine.
     if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
         say "MISSING: cgroup v2 is not mounted (no /sys/fs/cgroup/cgroup.controllers)."
         say "         Fix: boot with systemd.unified_cgroup_hierarchy=1"
@@ -111,31 +72,15 @@ check_rootless() {
     return $missing
 }
 
-# ---------------------------------------------------------------------------
-# 2. Secrets
-# ---------------------------------------------------------------------------
-# The names AND their kinds come from deploy/generated/secret-kinds.sh, which is
-# rendered from services.yaml. "Generate a secret" means three different things
-# here, and a wrong guess produces a file the service accepts and cannot use:
-# RabbitMQ with a PEM file as its password starts and refuses every connection.
 # shellcheck source=generated/secret-kinds.sh
 . "$GENERATED/secret-kinds.sh"
 
 CA_KEY="$SECRETS/deployment-ca.key"
 CA_CERT="$SECRETS/deployment-ca.crt"
 
-# One CA for the deployment, created once. Every mTLS identity below is signed by
-# it, and `HOMEINV_BLOBSTORE_FINGERPRINT` pins the certificate that matters
-# (REQ-SEC-056) — `internal` is not a trust boundary, so reachability is not
-# authorisation (ADR-0044).
 ensure_ca() {
     [ -f "$CA_CERT" ] && return 0
     command -v openssl >/dev/null 2>&1 || die "openssl is needed to create the deployment CA."
-    # P-256 and not Ed25519. The mTLS material has to be readable by everything
-    # that presents or verifies it, and grpc-java's key manager parses RSA, DSA
-    # and EC only — an Ed25519 key reaches it as "Neither RSA, DSA nor EC worked"
-    # and `api` refuses to start. Found by starting the stack; the JWT signing key
-    # stays Ed25519, because that one is read by our own code.
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 3650 \
         -keyout "$CA_KEY" -out "$CA_CERT" \
         -subj "/CN=Home Inventory deployment CA" >/dev/null 2>&1
@@ -143,10 +88,6 @@ ensure_ca() {
     say "  deployment-ca — created (valid ten years, local to this deployment)"
 }
 
-# A certificate and its key, concatenated with the CA so the peer can verify
-# without a second mount. `service` is the name the other side connects to, and
-# it has to be in the SAN or every TLS handshake in the deployment fails on
-# hostname verification.
 generate_mtls() {
     name=$1
     service=$2
@@ -154,7 +95,6 @@ generate_mtls() {
     key="$SECRETS/$name.key"
     csr="$SECRETS/$name.csr"
     crt="$SECRETS/$name.crt"
-    # P-256, for the reason `ensure_ca` gives.
     openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$key" -out "$csr" \
         -subj "/CN=$service" >/dev/null 2>&1
     openssl x509 -req -in "$csr" -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
@@ -165,39 +105,21 @@ extendedKeyUsage = serverAuth, clientAuth
 EXT
     cat "$key" "$crt" "$CA_CERT" > "$SECRETS/$name"
     rm -f "$csr"
-    # The combined file is a mounted secret and its caller sets its mode; the
-    # two halves it was built from are read by nobody and stay unreadable.
     chmod 0600 "$key" "$crt"
 }
 
 generate_secret() {
     name=$1
     kind=$2
-    # Optional third field of `secret-kinds.sh`: a file in this repository the
-    # secret is seeded from. Only `cosign-public` uses one today (ADR-0085).
     seed=$3
     target="$SECRETS/$name"
-    # `-s` and not `-f`: a file that is there and EMPTY is not a provisioned
-    # secret. It is what the `external` and `cosign-public` kinds deliberately
-    # leave behind for the operator to fill, and treating it as done would mean
-    # a key added to the repository after the first run never reached a
-    # deployment -- the operator would run setup again, be told the secret was
-    # "kept", and watch their plugins stay unsigned with nothing saying why.
     if [ -s "$target" ]; then
-        # Never overwritten. A regenerated key means every session invalid and
-        # every signed URL broken, and a setup script is not where that decision
-        # belongs.
         say "  $name — kept (it already exists)"
-        # Re-applied even when kept: a deployment set up before the modes were
-        # corrected holds files its own containers cannot read.
         chmod 0444 "$target"
         return 0
     fi
     case "$kind" in
         random)
-            # 32 bytes of the system random source. Never a passphrase, never a
-            # date, never a hostname: these are read by machines only, and a
-            # memorable secret is a guessable one.
             head -c 32 /dev/urandom | base64 | tr -d '\n' > "$target"
             ;;
         ed25519)
@@ -207,18 +129,6 @@ generate_secret() {
         mtls-client) generate_mtls "$name" "api" ;;
         mtls-server) generate_mtls "$name" "$(echo "$name" | sed 's/^mtls-//')" ;;
         cosign-public)
-            # THE PUBLIC half of a plugin publisher's signing key, which the core
-            # verifies that plugin's manifest against (REQ-PLG-004, ADR-0085).
-            #
-            # Seeded from the repository when `services.yaml` named a file and the
-            # file is there -- which is the case for the plugins this project
-            # signs itself. For anybody else's plugin the operator puts their
-            # publisher's key here, exactly as they would a credential, and until
-            # they do the manifest simply verifies as UNSIGNED.
-            #
-            # Never generated. A key pair invented here would verify nothing,
-            # because no publisher would ever have signed with its other half --
-            # and it would look like a check while being one.
             if [ -n "$seed" ] && [ -f "$HERE/$seed" ]; then
                 cat "$HERE/$seed" > "$target"
                 say "  $name — seeded from $seed"
@@ -229,44 +139,15 @@ generate_secret() {
             fi
             ;;
         external)
-            # A credential for somebody ELSE's system -- a mail account,
-            # an object store's keys. Generating one would produce a value
-            # that server has never heard of, and the failure would look
-            # like a broken plugin rather than a password nobody set. So an
-            # empty file is created and the operator is told to fill it;
-            # the plugin that reads it reports NOT_CONFIGURED until they do
-            # (REQ-PLG-015).
             : > "$target"
             say "  $name — EMPTY. Write the credential into $target before starting."
             ;;
         *) die "Unknown secret kind '$kind' for $name. services.yaml and this script disagree." ;;
     esac
-    # 0444 in a 0700 directory, and the directory is the protection. Compose
-    # mounts a secret by bind-mounting this very file, so the mode here is the
-    # mode the container sees — and under ROOTLESS Docker the host user maps to
-    # uid 0 inside the container while the service runs as 10001, which makes a
-    # 0600 file unreadable. postgres, valkey, clamav, blobstore and the egress
-    # proxy each died on "Permission denied" for a file that was plainly there.
-    # Compose will not fix it per mount either: it answers uid/gid/mode with
-    # "not supported, they will be ignored". Nothing on the host gains access,
-    # because a file inside a 0700 directory cannot be reached to be read.
-    # Podman copies these into its own secret store, which mounts them 0444 too.
     chmod 0444 "$target"
     say "  $name — generated ($kind)"
 }
 
-# Installs one secret into Podman's store, if there is one to install.
-#
-# `podman secret create` refuses an EMPTY file -- "secret data must be larger
-# than 0 and less than 512000 bytes" -- and the `external` kind deliberately
-# writes an empty one: a credential this deployment does not own is not a
-# credential this script may invent. The two met on 2026-09-20 and ended the
-# run at exit 125, with the units copied and nothing started.
-#
-# So an empty file is reported and skipped rather than fatal. The unit that
-# mounts it refuses to start until the operator writes the credential and runs
-# this script again -- which is what a missing secret is supposed to do: stop,
-# and say which file it is waiting for.
 install_secret() {
     if [ ! -s "$SECRETS/$1" ]; then
         say "  $1 — NOT installed: it is empty. Write the credential into $SECRETS/$1 and run this script again."
@@ -276,42 +157,23 @@ install_secret() {
         || podman secret create "$1" "$SECRETS/$1" >/dev/null
 }
 
-# ---------------------------------------------------------------------------
-# 2b. The deployment's own variables
-# ---------------------------------------------------------------------------
-# compose.yaml interpolates a handful of values that are deployment configuration
-# rather than secrets. Without a .env file Compose substitutes empty strings and
-# the stack starts misconfigured rather than failing (06 §6.11).
 write_environment() {
     env_file="$HERE/compose/.env"
     if [ -f "$env_file" ]; then
         say "  compose/.env — kept (it already exists)"
         return 0
     fi
-    # A placeholder rather than a guess. The bootstrap service refuses to invent an
-    # account, so an address that is not this one's is a deployment with no owner
-    # and a clear message saying so — which is better than an account at an address
-    # nobody reads.
     bootstrap_email="${HOMEINV_BOOTSTRAP_EMAIL:-owner@example.invalid}"
-    # The certificate has to exist by now — it is generated a step earlier. If
-    # it does not, the fingerprint below is empty, Compose interpolates an empty
-    # string, and `api` fails to start much later with a message about a pin
-    # rather than about a missing file. `compose/.env` is never overwritten, so a
-    # wrong value written here is a wrong value for ever.
     [ -f "$SECRETS/mtls-blobstore.crt" ] \
         || die "$SECRETS/mtls-blobstore.crt is missing; the secrets step did not finish."
     fingerprint=$(openssl x509 -in "$SECRETS/mtls-blobstore.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
     [ -n "$fingerprint" ] || die "the blob store certificate produced no fingerprint."
-    # The same for OpenSearch, for the same reason: the CA signs every service
-    # here, so the certificate that may answer as the index is named rather than
-    # accepted merely because something signed it (REQ-SEC-056, ADR-0044).
     [ -f "$SECRETS/mtls-search.crt" ] \
         || die "$SECRETS/mtls-search.crt is missing; the secrets step did not finish."
     search_fingerprint=$(openssl x509 -in "$SECRETS/mtls-search.crt" -noout -fingerprint -sha256 \
                   | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')
     [ -n "$search_fingerprint" ] || die "the OpenSearch certificate produced no fingerprint."
-    # Empty in `minimal`, for the reason the variable's own comment gives.
     plugins_file="/run/secrets/plugins.yaml"
     [ "$profile" = "minimal" ] && plugins_file=""
     cat > "$env_file" <<ENV
@@ -386,15 +248,6 @@ ENV
     say "  compose/.env — written"
 }
 
-# ---------------------------------------------------------------------------
-# 3. Templates
-# ---------------------------------------------------------------------------
-# Each file in deploy/generated/ that carries an @SECRET:name@ placeholder is
-# rendered into deploy/secrets/ with the value substituted. The rest are already
-# complete and are copied.
-# OpenSearch stores a bcrypt hash, not the password. There is no bcrypt in POSIX
-# shell, and the tool that produces the right one ships inside the image — so it
-# is computed there, by the same image the deployment runs.
 opensearch_hash() {
     runtime=$1
     password=$2
@@ -409,20 +262,10 @@ render_templates() {
     for source in "$GENERATED"/*; do
         name=$(basename "$source")
         case "$name" in
-            # Not deliverables: one is prose, the other two are sourced by this
-            # script itself.
             README.md|host-prerequisites.sh|secret-kinds.sh) continue ;;
-            # OpenSearch runs in `standard` and `ha` only. Rendering its accounts
-            # in `minimal` would need a hash from an image that is not pulled.
             opensearch-*) [ "$profile" = "minimal" ] && continue ;;
         esac
         target="$SECRETS/$name"
-        # `minimal` runs no plugin, and the generated list names a certificate
-        # that is not created in that profile. The mount still has to exist --
-        # api and worker declare it in every profile -- so it is rendered EMPTY
-        # rather than skipped: an empty list is what "no plugins" looks like,
-        # and a missing file would stop the stack for a reason nobody could
-        # read.
         case "$name" in
             *-plugins.yaml)
                 if [ "$profile" = "minimal" ]; then
@@ -442,18 +285,10 @@ render_templates() {
             case "$name" in
                 opensearch-internal_users.yml) value=$(opensearch_hash "$container_runtime" "$value") ;;
             esac
-            # awk rather than sed: a base64 value contains / and + and would end
-            # a sed expression, and gsub takes the replacement literally enough
-            # for an alphabet with no `&` in it.
             awk -v needle="@SECRET:$secret@" -v value="$value" \
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done
-        # A FINGERPRINT is not a secret: it is the public half, and pinning is
-        # what it is for (REQ-SEC-056). It cannot be generated with the file
-        # either, because the certificate does not exist until this script
-        # makes one -- which is why the generated list carries a placeholder
-        # and this is where it is filled in.
         for pin in $(grep -o '@FINGERPRINT:[a-z0-9-]*@' "$source" \
                      | sed 's/@FINGERPRINT://; s/@//' | sort -u); do
             certificate="$SECRETS/$pin.crt"
@@ -466,42 +301,25 @@ render_templates() {
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done
-        # A PUBLIC KEY is not a secret either, and it reaches the core the same
-        # way a fingerprint does: substituted into the generated plugin list
-        # rather than mounted separately. One mount carries the whole list, and
-        # a key the core cannot find is a check the core cannot make.
-        #
-        # `awk` and not `sed`, for the reason the secret loop gives: base64
-        # contains / and +. The value is flattened to ONE LINE first, because a
-        # PEM is several and a YAML scalar is one -- the verifier strips the
-        # armour and the whitespace either way, and a generated file should not
-        # depend on that.
         for key in $(grep -o '@PUBKEY:[a-z0-9-]*@' "$source" \
                      | sed 's/@PUBKEY://; s/@//' | sort -u); do
             key_file="$SECRETS/$key"
             if [ -s "$key_file" ]; then
                 value=$(tr -d '\r\n' < "$key_file")
             else
-                # No key installed. The entry keeps an empty value, and a manifest
-                # with no signature beside it is then simply unsigned.
                 value=""
             fi
             awk -v needle="@PUBKEY:$key@" -v value="$value" \
                 '{ gsub(needle, value); print }' "$target" > "$target.tmp"
             mv "$target.tmp" "$target"
         done
-        # 0444 for the same reason as a generated secret; see generate_secret().
         chmod 0444 "$target"
         say "  $name — rendered"
     done
 }
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 mode=${1:-check}
 profile=${2:-minimal}
-# `check` needs no runtime; the two real modes name their own.
 container_runtime=$mode
 
 step "Checking the host for the $profile profile"
@@ -516,9 +334,6 @@ say "  rootless prerequisites: present"
 step "Creating secrets in deploy/secrets/"
 mkdir -p "$SECRETS"
 chmod 0700 "$SECRETS"
-# Three fields since 2026-09-22: `<name> <kind> [<seedFrom>]`. The third is a
-# file in the repository a secret is seeded from, which today is the public key
-# this project signs its own plugin manifests with (ADR-0085).
 echo "$SECRET_KINDS" | while read -r name kind seed; do
     [ -n "$name" ] && generate_secret "$name" "$kind" "$seed"
 done
@@ -544,12 +359,6 @@ case "$mode" in
         units="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
         targets="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
         mkdir -p "$units" "$targets"
-        # Two destinations, because these are two kinds of file. The `.container`,
-        # `.volume` and `.network` files are Quadlet's, and it reads only its own
-        # directory; the profile targets are ordinary systemd units, and systemd
-        # never reads Quadlet's directory. A target copied to the wrong one of the
-        # two is a file that nothing at all looks at. The README travelled with
-        # them until now and belongs in neither.
         for unit in "$HERE"/quadlet/*; do
             case "$unit" in
                 *.target) cp "$unit" "$targets/" ;;
@@ -561,31 +370,14 @@ case "$mode" in
             [ -z "$name" ] && continue
             install_secret "$name"
         done
-        # The generated files travel the same way: a secret mount is the one
-        # mechanism every runtime has for getting a file into a container with a
-        # read-only root filesystem and no bind mounts (ADR-0022).
-        #
-        # Driven by what `generate.py` WROTE rather than by a list of
-        # extensions. It was `*.conf *.acl *.yml` until 2026-09-20, and the
-        # plugin list arrived as `*.yaml`: every unit mounting it failed with
-        # `no secret with name or id "worker-plugins.yaml"`, on Podman only,
-        # because Compose mounts a file and Podman needs the secret to exist
-        # first. An extension list is a list somebody has to remember; this
-        # cannot fall behind.
         for source in "$GENERATED"/*; do
             secret_name=$(basename "$source")
             case "$secret_name" in
                 README.md|host-prerequisites.sh|secret-kinds.sh) continue ;;
             esac
-            # Not rendered in this profile -- `opensearch-*` in `minimal` --
-            # is not an error: the service is not running either.
             [ -f "$SECRETS/$secret_name" ] || continue
             install_secret "$secret_name"
         done
-        # The same variables Compose reads from compose/.env, in the place the
-        # units name. systemd does not interpolate `${VAR}` in `Environment=`, so
-        # the units carry `EnvironmentFile=` and this is that file: one place to
-        # edit after installation, exactly as on the Compose side.
         env_dir="${XDG_CONFIG_HOME:-$HOME/.config}/homeinv"
         mkdir -p "$env_dir"
         cp "$HERE/compose/.env" "$env_dir/homeinv.env"
@@ -596,12 +388,6 @@ case "$mode" in
         say "  profile targets installed into $targets"
         say "  variables installed into $env_dir/homeinv.env"
 
-        # The same promise the Compose branch keeps: one command, and the stack
-        # is running (REQ-NFR-028). This branch used to install the units and
-        # print "start with: systemctl --user start homeinv-api", which starts
-        # `api` and the six things `api` requires — leaving `web` down, and `web`
-        # holds the only published port in the deployment. The one command
-        # produced a stack with nothing to connect to.
         step "Starting the $profile profile"
         say "  systemctl --user start homeinv-$profile.target"
         systemctl --user start "homeinv-$profile.target" \

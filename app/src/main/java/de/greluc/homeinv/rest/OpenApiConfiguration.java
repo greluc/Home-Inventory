@@ -46,16 +46,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 public class OpenApiConfiguration {
 
   static {
-    // What springdoc would infer from `Money` is the record's shape: an amount as
-    // a JSON number and a currency as an object with six properties. What the
-    // application actually writes is `{"amount":"49.90","currency":"EUR"}`,
-    // because `MoneyModule` says so and REQ-NFR-070 requires the string. A
-    // document that described the inferred shape would be a contract that lies
-    // about every price in the system.
-    //
-    // Replaced here rather than annotated on `Money` itself: the value type lives
-    // in the shared kernel, and a swagger annotation there would put an HTTP
-    // concern into the one package that depends on no framework of any kind.
     org.springdoc.core.utils.SpringDocUtils.getConfig()
         .replaceWithClass(de.greluc.homeinv.platform.Money.class, MoneyJson.class);
   }
@@ -340,8 +330,6 @@ public class OpenApiConfiguration {
             .replace("&quot;", "\"")
             .replace("&amp;", "&");
 
-    // Javadoc indents its continuation lines by one space, which CommonMark keeps
-    // and which turns a wrapped sentence into a differently indented one.
     text = text.lines().map(String::strip).collect(java.util.stream.Collectors.joining("\n"));
     return text.replaceAll("\n{3,}", "\n\n").strip();
   }
@@ -395,8 +383,6 @@ public class OpenApiConfiguration {
                 "The identifier of this request in the server log. Quoting it in a report leads "
                     + "straight to the operation (REQ-NFR-042)."));
     schema.setRequired(List.of("type", "title", "status"));
-    // Some conditions carry more: the field paths of a validation failure, the id
-    // of a conflict, the limit that was exceeded. Each is documented with its type.
     schema.setAdditionalProperties(true);
     return schema;
   }

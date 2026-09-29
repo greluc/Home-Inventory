@@ -72,8 +72,6 @@ public record QueryFilter(
       throw new IllegalArgumentException(dimension.token() + " carries no unit");
     }
     if (operator == Operator.SUBTREE && dimension != Dimension.LOCATION) {
-      // The one operator that is not a comparison but a walk, and only the
-      // location tree has anything to walk.
       throw new IllegalArgumentException("Only a location filter can ask for a subtree");
     }
     if (dimension != Dimension.ATTRIBUTE

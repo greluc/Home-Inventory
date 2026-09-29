@@ -74,9 +74,6 @@ public final class Provider {
     HttpClient.Builder builder =
         HttpClient.newBuilder()
             .connectTimeout(configuration.timeout())
-            // NEVER. A redirect is a target the far side chose, and following one
-            // would send a client secret or an authorization code somewhere the
-            // operator's allowlist never approved.
             .followRedirects(HttpClient.Redirect.NEVER);
     if (configuration.proxy() != null && !configuration.proxy().isBlank()) {
       builder.proxy(java.net.ProxySelector.of(address(configuration.proxy())));
@@ -146,8 +143,6 @@ public final class Provider {
             .header("Accept", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(encode(form), StandardCharsets.UTF_8));
     if (configuration.isConfidential()) {
-      // `client_secret_basic`, which every provider supports and which keeps the
-      // secret out of a body that ends up in somebody's access log.
       String credentials =
           configuration.clientId() + ":" + configuration.clientSecret();
       request.header(
@@ -159,8 +154,6 @@ public final class Provider {
 
     HttpResponse<String> response = send(request.build());
     if (response.statusCode() != 200) {
-      // The provider's own error, passed through without the body: a token
-      // endpoint's error document carries the code that was presented.
       throw new IOException(
           "the token endpoint answered " + response.statusCode() + " to the exchange");
     }
@@ -175,9 +168,6 @@ public final class Provider {
     JWTClaimsSet claims = verify(token, found);
     String returned = claims.getClaims().get("nonce") instanceof String value ? value : null;
     if (!nonce.equals(returned)) {
-      // The one check a library cannot make for us, because the expected value
-      // is the core's. Without it an ID token obtained for another sign-in
-      // completes this one.
       throw new VerificationException("the ID token's nonce is not the one this sign-in minted");
     }
     return claims;
@@ -196,21 +186,11 @@ public final class Provider {
       DefaultJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
       processor.setJWSKeySelector(
           new JWSVerificationKeySelector<>(
-              // The two a self-hosted provider ships with. `none` and the HMAC
-              // family are absent deliberately: an ID token signed with a shared
-              // secret is one anybody holding that secret can mint.
               Set.of(JWSAlgorithm.RS256, JWSAlgorithm.ES256), keySource(found)));
       processor.setJWTClaimsSetVerifier(
           new DefaultJWTClaimsVerifier<>(
-              // The ACCEPTED AUDIENCE first and the exact-match claims second, which is
-              // the order that cost a test run: the two were the other way round, and
-              // every valid token was refused for the one reason a verifier should never
-              // give -- `aud` rejected on a token whose audience was right.
               configuration.clientId(),
               new JWTClaimsSet.Builder().issuer(found.issuer()).build(),
-              // Present or the token is refused. `sub` is the identity itself,
-              // and the other three are what make it a token rather than a
-              // sentence somebody wrote down.
               Set.of("sub", "iss", "aud", "exp")));
       return processor.process(token, null);
     } catch (ParseException
@@ -245,10 +225,6 @@ public final class Provider {
     }
     JWKSource<SecurityContext> source =
         JWKSourceBuilder.create(uri(found.jwksUri()).toURL(), retriever)
-            // A key set rotates, and a plugin that cached one for ever would
-            // refuse every token signed with the new one. Nimbus refreshes on an
-            // unknown key id and rate-limits that, which is the behaviour this
-            // needs and the reason it is not a map in a field.
             .retrying(true)
             .build();
     keys.set(source);
@@ -286,9 +262,6 @@ public final class Provider {
             string(parsed, "token_endpoint"),
             string(parsed, "jwks_uri"));
     if (!configuration.issuer().replaceAll("/+$", "").equals(found.issuer().replaceAll("/+$", ""))) {
-      // OIDC Discovery §4.3 asks for exactly this comparison. A document that
-      // names another issuer is a document that was not written for this issuer,
-      // and following its endpoints would be following somebody else's.
       throw new IOException(
           "the discovery document at " + document + " names issuer " + found.issuer());
     }

@@ -91,9 +91,6 @@ public class AttributeIndexReconciliation {
         Set<String> expected = expectedKeys(item);
         Set<String> actual = held.getOrDefault(item.id(), Set.of());
         if (!expected.equals(actual)) {
-          // The item, not the rows: an item whose projection is wrong is one
-          // thing wrong, and counting rows would make one bad item look like
-          // eight.
           deviating++;
           log.warn(
               "The attribute index of item {} holds {} and should hold {}",
@@ -128,8 +125,6 @@ public class AttributeIndexReconciliation {
         break;
       }
       for (AttributeIndexQueries.Projectable item : page) {
-        // The same call an ordinary write makes, in a transaction, which is what
-        // `Propagation.MANDATORY` on the projector insists on.
         projector.project(item.id(), item.typeVersionId(), item.attributes());
         written++;
       }

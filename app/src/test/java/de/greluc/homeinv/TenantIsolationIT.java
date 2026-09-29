@@ -54,14 +54,11 @@ class TenantIsolationIT extends AbstractIntegrationTest {
     MockHttpSession aliceSession = login(alice.email());
     String itemId = createItem(aliceSession, "Bohrmaschine");
 
-    // Alice sees her own item.
     mockMvc
         .perform(get("/api/v1/items/" + itemId).session(aliceSession))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("Bohrmaschine"));
 
-    // Bob does not. A 404 rather than a 403: telling him it exists but is not his
-    // would confirm the id, which is what REQ-SEC-025 closes.
     MockHttpSession bobSession = login(bob.email());
     mockMvc
         .perform(get("/api/v1/items/" + itemId).session(bobSession))
@@ -83,8 +80,6 @@ class TenantIsolationIT extends AbstractIntegrationTest {
     String wrongPassword = loginRaw(carol.email(), "not the password");
     String unknownAddress = loginRaw("nobody@example.org", PASSWORD);
 
-    // Same status, same problem type, same detail. A difference in any of the
-    // three would answer "does this address have an account here".
     assertThat(wrongPassword).isEqualTo(unknownAddress);
   }
 
@@ -106,7 +101,6 @@ class TenantIsolationIT extends AbstractIntegrationTest {
             .contentType(MediaType.APPLICATION_JSON).content(body))
         .andExpect(status().isCreated());
 
-    // The retry a client makes when it never saw the first answer.
     mockMvc
         .perform(post("/api/v1/items").session(session).with(csrf())
             .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -168,9 +162,6 @@ class TenantIsolationIT extends AbstractIntegrationTest {
                     "de",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     UUID tenantId = provisioning.provision(tenantName, userId);
     return new Fixture(userId, tenantId, email);
@@ -209,7 +200,6 @@ class TenantIsolationIT extends AbstractIntegrationTest {
             .getResponse()
             .getContentAsString();
 
-    // traceId differs per request by design and says nothing about the account.
     JsonNode node = json.readTree(body);
     ((ObjectNode) node).remove("traceId");
     return node.toString();

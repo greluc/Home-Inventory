@@ -83,13 +83,9 @@ class SessionOverviewIT extends AbstractIntegrationTest {
             .getResponse()
             .getContentAsString();
 
-    // The list carries no session id. One that did would be a list of working
-    // cookies, and this is the assertion that keeps it that way.
     assertThat(body).doesNotContain(sessionIdIn(phone)).doesNotContain(sessionIdIn(laptop));
     assertThat(body).contains("A phone").contains("A laptop");
 
-    // The caller's own session is marked, so a client does not offer to end it by
-    // accident.
     mockMvc
         .perform(get("/api/v1/me/sessions").cookie(laptop))
         .andExpect(jsonPath("$[?(@.current == true)].device").value("A laptop"));
@@ -106,10 +102,8 @@ class SessionOverviewIT extends AbstractIntegrationTest {
         .perform(delete("/api/v1/me/sessions/" + phoneHandle).cookie(laptop).with(csrf()))
         .andExpect(status().isNoContent());
 
-    // The phone's next request has no session at all.
     mockMvc.perform(get("/api/v1/me/sessions").cookie(phone)).andExpect(status().isUnauthorized());
 
-    // And the laptop sees itself alone.
     mockMvc
         .perform(get("/api/v1/me/sessions").cookie(laptop))
         .andExpect(jsonPath("$.length()").value(1))
@@ -128,17 +122,12 @@ class SessionOverviewIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/me/sessions").cookie(mine))
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].device").value("Mine"))
-        // REQ-PRIV-006: the host part is gone. MockMvc signs in from 127.0.0.1.
         .andExpect(jsonPath("$[0].origin").value("127.0.0.0/24"));
 
-    // A handle that names nothing in this account's own list is not found rather
-    // than refused: outside it there is nothing to refuse.
     mockMvc
         .perform(delete("/api/v1/me/sessions/AAAAAAAAAAAAAAAAAAAAAA").cookie(mine).with(csrf()))
         .andExpect(status().isNotFound());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Signs in the way a device with its own name would, and keeps its cookies.
@@ -185,9 +174,6 @@ class SessionOverviewIT extends AbstractIntegrationTest {
                 AppUser.create(
                     userId, email, "Test", "en", passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // No second factor: the login is then one call, and `/api/v1/me/**` answers
-    // for an owner who has not enrolled — which is what REQ-AUTH-003's lock
-    // leaves reachable, and what this test needs.
     provisioning.provision("Tenant of " + email, userId);
     return userId;
   }

@@ -79,10 +79,6 @@ public class LocationExport implements ExportSource {
     List<Map<String, Object>> places = jdbc.sql(LOCATIONS).query(LocationExport::row).list();
     Set<String> withheld = new TreeSet<>();
     for (Map<String, Object> place : places) {
-      // A place has attributes too, written against its category's version, and
-      // one of its fields can be marked sensitive just as an item's can. Sealed
-      // values are opened as far as the person who asked may read them; the rest
-      // are named in the manifest rather than left looking like empty fields.
       if (place.get("category_version_id") instanceof UUID categoryVersion
           && place.get("id") instanceof UUID id
           && place.get("attributes") instanceof String stored

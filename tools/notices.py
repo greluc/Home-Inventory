@@ -70,13 +70,6 @@ from typing import Iterable
 REPOSITORY = pathlib.Path(__file__).resolve().parent.parent
 STORE = REPOSITORY / "tools" / "notices"
 
-# Licences whose text is a document rather than a template around a copyright
-# line. One copy of each, in an appendix, is what they ask for — the Apache
-# licence is the same 11 kB in all 130 jars that carry it.
-#
-# Everything NOT on this list is treated as a template, including any licence
-# named rather than identified, because that is the safe direction: a template
-# carried once too often is noise, a copyright line omitted is a licence breach.
 STANDALONE = frozenset(
     {
         "Apache-2.0",
@@ -102,46 +95,14 @@ STANDALONE = frozenset(
     }
 )
 
-# What a licence or notice file is called, in the three ecosystems together.
-# Matched case-insensitively against the file name, and deliberately loosely:
-# the first run found `asm.license`, `FastDoubleParser-LICENSE` and
-# `license/minimal-json-LICENSE.txt` in jars that a stricter pattern skipped,
-# and a skipped notice is the one defect this file exists to prevent.
-#
-# The extension is what keeps it from matching source code — a file is a notice
-# when it carries one of these words and is either extensionless or text. The
-# rest is caught by `readable`, which refuses anything that is not UTF-8: Bouncy
-# Castle ships a `LICENSE.class`, and a class file is not a notice.
 NOTICE_NAME = re.compile(r"notice", re.IGNORECASE)
 LICENCE_NAME = re.compile(r"(licen[sc]e|copying|copyright)", re.IGNORECASE)
 TEXT_SUFFIX = frozenset({"", ".txt", ".md", ".markdown", ".html", ".license", ".licence"})
-# How far into a file the licence may start and still count as its opening.
-# Long enough for a title line and a blank line, short enough that a paragraph
-# about something else does not fit in front of it: `byte-buddy` puts 162
-# characters about bundled ASM ahead of the Apache licence, and that file is
-# its own notice rather than a copy of the licence.
 OPENING = 120
-# Anything a jar carries under this name is a bundled third-party notice rather
-# than the component's own licence, and it travels whatever the component is
-# licensed under.
 BUNDLED = re.compile(r"(third[-_]?party|thirdparty|licen[sc]es/)", re.IGNORECASE)
 
-# Nothing in the artifact that is ours needs a third-party notice: the
-# repository's own LICENSE covers it, and listing ourselves as a third party
-# would be a false statement about who owes what.
 FIRST_PARTY = ("de.greluc.homeinv", "homeinv-", "home-inv-")
 
-# How a standalone licence's text is recognised in a file that claims to be it.
-#
-# The appendix takes its texts FROM THE ARTIFACT — one component that carries
-# Apache-2.0 supplies the copy for all 130 that are under it — and a phrase is
-# what makes that safe: `logback` ships a LICENSE.txt naming EPL-2.0 and
-# LGPL-2.1 in two sentences rather than reproducing either, and a copy of that
-# under the heading "EPL-2.0" would be a notice that is not the licence.
-#
-# Missing a marker costs nothing but a stored file; a wrong one would put the
-# wrong licence in front of a reader, so each is a phrase from the licence's
-# own opening rather than a word that appears near it.
 MARKERS: dict[str, tuple[str, ...]] = {
     "Apache-2.0": ("Apache License", "Version 2.0", "TERMS AND CONDITIONS"),
     "EPL-1.0": ("Eclipse Public License", "v 1.0"),
@@ -242,25 +203,11 @@ ARTIFACTS: tuple[Artifact, ...] = (
     ),
 )
 
-# How a Rust artifact's bill of materials is produced.
-#
-# `--target` is not optional and is not a detail. `cargo cyclonedx` resolves the
-# dependency graph FOR THE HOST unless told otherwise, so a notice generated on
-# Windows named `windows-sys` and `windows-link` and left out `libc`, `errno` and
-# `signal-hook-registry` -- five components wrong in a document whose whole job is
-# to say what the artifact contains. The triple is the one every Dockerfile here
-# builds, so the notice describes the binary that ships whatever machine wrote it.
 CARGO_SBOM = (
     "cargo cyclonedx --format json --spec-version 1.5 --no-build-deps"
     " --target x86_64-unknown-linux-musl"
 )
 
-# The six Rust services, which are `scratch` images: one binary and nothing
-# else, by design and by a CI assertion (`blobstore/Dockerfile`). There is no
-# filesystem in them to put a notice file on, so the notice is compiled INTO
-# the binary and printed by `--licences` — the same shape the public roots take
-# in the three plugins that speak TLS, and the reason these are generated ahead
-# of the build rather than by it.
 for _crate, _package, _title in (
     ("blobstore", "homeinv-blobstore", "Home Inventory — blob store"),
     ("egress-proxy", "homeinv-egress-proxy", "Home Inventory — egress proxy"),
@@ -295,12 +242,6 @@ class Missing(Exception):
     Raised rather than printed so that the message reaches the caller whole:
     a partial notice written to disk would look finished.
     """
-
-
-# --------------------------------------------------------------------------
-# The SBOM: licence identifiers, which no artifact carries in machine-readable
-# form.
-# --------------------------------------------------------------------------
 
 
 def declared_licences(document: dict) -> dict[str, tuple[str, ...]]:
@@ -339,11 +280,6 @@ def declared_licences(document: dict) -> dict[str, tuple[str, ...]]:
     return found
 
 
-# --------------------------------------------------------------------------
-# The overrides: what an artifact does not carry and could not be found.
-# --------------------------------------------------------------------------
-
-
 def override_for(ecosystem: str, name: str) -> tuple[str, ...] | None:
     """Reads the hand-recorded notice for a component that ships none.
 
@@ -360,7 +296,6 @@ def override_for(ecosystem: str, name: str) -> tuple[str, ...] | None:
     if not path.is_file():
         return None
     text = path.read_text(encoding="utf-8")
-    # The header names where the text came from and is not part of the notice.
     body = text.split("---8<---\n", 1)
     return (body[1] if len(body) == 2 else text,)
 
@@ -395,9 +330,6 @@ def first_party(document: dict) -> frozenset[str]:
     """
     ours = set()
     root = (document.get("metadata") or {}).get("component") or {}
-    # The artifact's own component sits in `metadata`, not in `components` — so
-    # a build whose own jar lands beside its dependencies (`installDist`) would
-    # otherwise ask for a third-party notice for itself.
     if root.get("name"):
         ours.add(root["name"])
     for component in document.get("components", []):
@@ -488,11 +420,6 @@ def readable(raw: bytes) -> str | None:
     if "\x00" in text:
         return None
     return text.replace("\r\n", "\n").rstrip() + "\n"
-
-
-# --------------------------------------------------------------------------
-# Reading the artifacts
-# --------------------------------------------------------------------------
 
 
 def from_jar(path: pathlib.Path) -> tuple[tuple[str, str], ...]:
@@ -588,10 +515,6 @@ def maven_components(
             or ()
         )
         if isinstance(where, tuple):
-            # A jar inside a jar. `zipfile` cannot read a nested archive from a
-            # stream, so it is unpacked to a temporary file and read from there
-            # — outside the repository, which is where a build artifact of a
-            # tool that only reads should stay.
             outer, entry = where
             with tempfile.TemporaryDirectory(prefix="homeinv-notices-") as scratch:
                 inner = pathlib.Path(scratch) / entry.rsplit("/", 1)[-1]
@@ -620,11 +543,6 @@ def from_tree(root: pathlib.Path) -> tuple[tuple[str, str], ...]:
         if not candidate.is_file():
             continue
         relative = candidate.relative_to(root).as_posix()
-        # A package that vendors another one nests it, and the nested one is a
-        # component in its own right rather than part of this one. Tested
-        # against the path INSIDE the package: every npm package on disk lives
-        # under a `node_modules`, so testing the whole path found nothing at
-        # all — seven packages, every one of them carrying a LICENSE.
         if "node_modules" in relative.split("/"):
             continue
         if not licence_ish(relative):
@@ -771,11 +689,6 @@ def cargo_components(
         components.append(assemble("cargo", name, version, licences, found, unattributed))
     refuse(unattributed, artifact)
     return sorted(components, key=lambda component: (component.name, component.version))
-
-
-# --------------------------------------------------------------------------
-# Rendering
-# --------------------------------------------------------------------------
 
 
 def looks_like(text: str, identifier: str) -> bool:

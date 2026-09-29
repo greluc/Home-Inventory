@@ -110,8 +110,6 @@ public class MediaImport implements ImportTarget {
       String path = "media/blobs/" + sha256;
 
       if (!infected && !archive.hasFile(path) && !blobs.exists(tenantId, sha256)) {
-        // No bytes here and none in the archive. A row would be a picture that
-        // cannot be shown, for ever, and nothing would ever say why.
         log.warn("An archive holds a media row with no file and none stored: {}", sha256);
         skipped++;
         continue;

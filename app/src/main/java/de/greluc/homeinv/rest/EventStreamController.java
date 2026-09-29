@@ -91,9 +91,6 @@ public class EventStreamController {
     SseEmitter emitter = new SseEmitter(LIFETIME.toMillis());
 
     if (tenantId == null) {
-      // A session that acts for no tenant is a state rather than a failure
-      // (somebody between tenants, or an instance operator). There is nothing to
-      // stream, so the stream ends at once rather than waiting thirty minutes.
       emitter.complete();
       return emitter;
     }
@@ -108,17 +105,11 @@ public class EventStreamController {
                         "{\"kind\":\"" + kind + "\",\"at\":\"" + at + "\"}",
                         MediaType.APPLICATION_JSON));
           } catch (IOException | IllegalStateException gone) {
-            // The browser closed the tab. Completing here is what removes it from
-            // the list; an exception on a send is the only notice a server gets.
             emitter.complete();
           }
         };
 
     if (!live.register(tenantId, stream)) {
-      // As many as this replica will hold for one tenant. Answered by ending the
-      // stream rather than by refusing the request: a client that reconnects is
-      // doing the right thing, and an error page in a browser's EventSource is
-      // a retry loop nobody sees.
       log.info("Refused a live stream for tenant {}: this replica holds as many as it will", tenantId);
       emitter.complete();
       return emitter;
@@ -133,9 +124,6 @@ public class EventStreamController {
     emitter.onError(failure -> live.forget(tenantId, stream));
 
     try {
-      // Immediately, so a client knows the stream is open rather than merely
-      // accepted — and so a proxy that buffers is caught in development instead
-      // of in somebody's house.
       emitter.send(SseEmitter.event().name("open").data("{\"kind\":\"open\"}", MediaType.APPLICATION_JSON));
     } catch (IOException gone) {
       emitter.complete();

@@ -69,9 +69,6 @@ public class DefaultTenantService implements TenantService {
       AccountEntitlements entitlements,
       @Value("${HOMEINV_TENANTS_PER_USER:10}") int defaultLimit) {
     if (defaultLimit < 0 || defaultLimit > MAX_LIMIT) {
-      // Refused at startup rather than quietly clamped. A clamp would mean an
-      // operator sets 500, reads back nothing to the contrary, and finds out
-      // which number actually applied only when somebody hits it.
       throw new IllegalArgumentException(
           "HOMEINV_TENANTS_PER_USER is between 0 and "
               + MAX_LIMIT
@@ -90,9 +87,6 @@ public class DefaultTenantService implements TenantService {
     long current = memberships.membershipsOf(ownerUserId).size();
 
     if (current >= permitted) {
-      // Logged as well as refused: a person repeatedly hitting a quota is either
-      // somebody who needs it raised or somebody the operator wants to know about,
-      // and the two look the same from one line.
       log.info(
           "Refused a tenant for account {}: {} of {} in use.", ownerUserId, current, permitted);
       throw new TenantLimitReachedException(current, permitted);

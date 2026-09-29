@@ -1,13 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// MAKING THE DERIVATIVES OF AN UPLOADED IMAGE.
-//
-// libvips is in the core image; ImageMagick and anything else is a plugin.
-//
-// BYTES RATHER THAN FILE PATHS. A plugin is a separate container and shares no
-// filesystem with the core, so a path would name a file that is not there. The
-// in-core implementation keeps its path form because it has the file.
 
 syntax = "proto3";
 

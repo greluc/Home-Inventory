@@ -68,9 +68,6 @@ class InvitationRedemption {
         invitations
             .findById(invitationId)
             .filter(row -> row.isUsable(now))
-            // Unknown, used, withdrawn and expired are one answer. Telling them
-            // apart would say "somebody was invited here", which is the fact that
-            // single use is meant to end rather than advertise.
             .orElseThrow(InvitationUnusableException::new);
 
     Optional<AccountRegistry.Account> existing = accounts.byEmail(invitation.getEmail());
@@ -87,18 +84,10 @@ class InvitationRedemption {
     } else {
       userId = existing.get().id();
       if (!userId.equals(signedInAs)) {
-        // Holding the token proves the mailbox, which is enough to CREATE the
-        // account it names — nobody else exists to be harmed. It is not enough to
-        // put a membership on an account that already belongs to somebody: a
-        // forwarded or intercepted link would otherwise put a stranger in a
-        // tenant they never joined.
         throw new InvitationNotYoursException();
       }
     }
 
-    // Already a member — the invitation was issued before they joined some other
-    // way. The invitation is still spent, because it was used; the membership is
-    // left as it is rather than being silently changed to the invited role.
     if (memberships.findLiveInTenant(userId).isEmpty()) {
       memberships.save(
           Membership.create(

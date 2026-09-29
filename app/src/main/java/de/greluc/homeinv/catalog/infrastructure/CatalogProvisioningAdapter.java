@@ -82,10 +82,6 @@ public class CatalogProvisioningAdapter implements CatalogProvisioning {
         .params(typeId, tenantId, BUILTIN_TYPE_KEY, actor, actor)
         .update();
 
-    // A schema that accepts an attribute set with nothing in it, because the
-    // built-in type declares no fields. Generated rather than written as `{}`:
-    // `{}` accepts anything at all, including keys no field declares, and this
-    // document is what the validator uses (ADR-0056).
     jdbc.sql(
             """
             insert into catalog.item_type_version
@@ -106,9 +102,6 @@ public class CatalogProvisioningAdapter implements CatalogProvisioning {
           .params(categoryId, tenantId, key, actor, actor)
           .update();
 
-      // Published straight away, and with an empty schema: a category declares no
-      // fields until a tenant adds one, and a location references a VERSION
-      // (V14), so a category whose only version were a draft could hold nothing.
       UUID categoryVersionId = UUID.randomUUID();
       jdbc.sql(
               """

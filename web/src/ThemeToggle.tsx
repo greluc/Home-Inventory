@@ -30,9 +30,6 @@ export function ThemeToggle(): React.JSX.Element {
     try {
       localStorage.setItem("homeinv.theme", next);
     } catch {
-      // A private window may refuse storage. The theme still applies for this
-      // page; only the memory of it is lost, which is a smaller problem than
-      // failing the click.
     }
     setTheme(next);
   }

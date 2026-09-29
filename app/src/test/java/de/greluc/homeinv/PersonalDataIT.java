@@ -80,10 +80,6 @@ class PersonalDataIT extends AbstractIntegrationTest {
             .query(String.class)
             .list();
 
-    // A fourth mandatory column is how "the only mandatory data is e-mail, a
-    // name and a language" stops being true — one feature wants a phone number
-    // and everybody has to supply one from then on. Adding one deliberately
-    // means amending REQ-PRIV-001 first, which is the friction this test is.
     assertThat(mandatory)
         .as("mandatory columns on identity.app_user (REQ-PRIV-001)")
         .containsExactlyInAnyOrderElementsOf(MAY_BE_MANDATORY);
@@ -92,11 +88,6 @@ class PersonalDataIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("carries no analytics library that could report anywhere")
   void noTelemetry() {
-    // REQ-PRIV-002: no telemetry and no analytics service, neither built in nor
-    // optional. The network half — that api and worker reach nothing outside the
-    // deployment — is REQ-PRIV-003 and is proved by the connectivity suite
-    // against a running stack. This is the other half, and it is the one a
-    // transitive dependency can break without anybody making a decision.
     List<String> classpath =
         List.of(System.getProperty("java.class.path", "").split(java.io.File.pathSeparator));
     List<String> present =

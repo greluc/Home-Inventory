@@ -78,8 +78,6 @@ class ServiceAccountIT extends AbstractIntegrationTest {
     String token = json.readTree(created).get("token").asString();
     String accountId = json.readTree(created).get("account").get("id").asString();
 
-    // The prefix is what makes a secret scanner recognise it in a configuration
-    // file, and the listing never shows the token again.
     assertThat(token).startsWith("homeinv_sa_");
     mockMvc
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/service-accounts").session(owner))
@@ -88,13 +86,11 @@ class ServiceAccountIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$[0].name").value("The stocktake scanner"))
         .andExpect(jsonPath("$[0].token").doesNotExist());
 
-    // The machine reads with its own token and no session at all.
     mockMvc
         .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer " + token))
         .andExpect(status().isOk());
 
-    // And is held to its role: a VIEWER creates nothing.
     mockMvc
         .perform(
             post("/api/v1/locations")
@@ -112,9 +108,6 @@ class ServiceAccountIT extends AbstractIntegrationTest {
                 .with(csrf()))
         .andExpect(status().isNoContent());
 
-    // The next request the machine makes has no credential, and the refusal is
-    // the same document a token nobody ever issued gets (REQ-SEC-110): telling
-    // the two apart would say which tokens this instance once had.
     org.assertj.core.api.Assertions.assertThat(refusal(token))
         .as("a revoked token and one nobody issued are one answer")
         .isEqualTo(refusal("homeinv_sa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
@@ -150,9 +143,6 @@ class ServiceAccountIT extends AbstractIntegrationTest {
             "Authorization", "Bearer " + token))
         .andExpect(status().isOk());
 
-    // The date passes. Backdated rather than waited out, for the reason the
-    // erasure test backdates a request: the period is the thing under test and a
-    // shorter one from a setting would not be it.
     expire(tenant.tenantId());
 
     mockMvc
@@ -160,8 +150,6 @@ class ServiceAccountIT extends AbstractIntegrationTest {
             "Authorization", "Bearer " + token))
         .andExpect(status().isUnauthorized());
 
-    // A token nobody issued is answered the same way, and one that is not even
-    // shaped like one never reaches a lookup.
     mockMvc
         .perform(get("/api/v1/items").param("q", "").param("language", "en").header(
             "Authorization", "Bearer homeinv_sa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
@@ -171,9 +159,6 @@ class ServiceAccountIT extends AbstractIntegrationTest {
             "Authorization", "Bearer not-one-of-ours"))
         .andExpect(status().isUnauthorized());
 
-    // The same status is not the same answer. REQ-SEC-110 is about the content:
-    // a token that has expired and one that was never issued must produce the
-    // same document, or the difference says which tokens this instance once had.
     org.assertj.core.api.Assertions.assertThat(refusal(token))
         .as("an expired token and one nobody issued are one answer")
         .isEqualTo(
@@ -233,13 +218,10 @@ class ServiceAccountIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-stale"));
 
-    // Reading the list does not: it hands out nothing.
     mockMvc
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/service-accounts").session(owner))
         .andExpect(status().isOk());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Moves every token of a tenant past its expiry.
@@ -269,8 +251,6 @@ class ServiceAccountIT extends AbstractIntegrationTest {
                 AppUser.create(
                     userId, email, "Test", "en", passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER with no second factor is refused every request in
-    // the tenant, and issuing a token is one.
     enrolSecondFactor(userId);
     UUID tenantId = provisioning.provision("Tenant of " + email, userId);
     UUID categoryId =

@@ -85,18 +85,11 @@ public class AttachedEvidence implements ItemEvidence {
     }
     try (java.io.InputStream bytes =
         blobs.open(TenantContext.require(), addresses.get()[0])) {
-      // A preview is re-encoded to the one format this deployment stores
-      // (ADR-0052), so its media type is that rather than the original's. Read
-      // in full because a document carries its pictures and the renderer needs
-      // the whole of one before it can draw it.
       return java.util.Optional.of(
           new Picture(
               bytes.readAllBytes(),
               addresses.get()[0].equals(addresses.get()[1]) ? addresses.get()[1] : "image/webp"));
     } catch (java.io.IOException unreadable) {
-      // A picture that cannot be read is a picture the document does without.
-      // Failing the whole report over one missing thumbnail would be worse than
-      // a report with a gap in it, and the gap is visible.
       return java.util.Optional.empty();
     }
   }
@@ -109,9 +102,6 @@ public class AttachedEvidence implements ItemEvidence {
     }
     Map<UUID, List<Attached>> byItem = new LinkedHashMap<>();
     jdbc.sql(EVIDENCE)
-        // As text with a cast, not as a UUID array: the driver has no mapping
-        // from a Java UUID array to a Postgres one and binds something that
-        // matches nothing at all -- no error, no rows.
         .param(itemIds.stream().map(UUID::toString).toArray(String[]::new))
         .query(
             (rs, rowNum) ->

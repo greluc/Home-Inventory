@@ -77,9 +77,6 @@ public class ExportRunner {
     this.blobs = blobs;
     this.json = json;
     this.clock = clock;
-    // Sorted once here rather than per run: the order is part of what the archive
-    // is, and an order that came from a classpath scan would change under a
-    // rebuild for no reason anybody could see.
     this.sources = sources.stream().sorted(Comparator.comparing(ExportSource::block)).toList();
     this.version = version;
     this.commit = commit;
@@ -121,12 +118,6 @@ public class ExportRunner {
         writer.manifest("exportedAt", Instant.now(clock).toString());
         writer.manifest("producedBy", java.util.Map.of("version", version, "commit", commit));
 
-        // Built as the person who asked for it. Not to authorise the export --
-        // that was decided when they asked -- but because opening a sealed field
-        // depends on which role they hold and on how recently they proved a
-        // second factor (REQ-AUTH-011), and the worker has no caller of its own.
-        // Reconstructed from what was recorded then, so a role granted since does
-        // not widen an archive somebody asked for before they had it.
         CallerContext.runAs(
             callerOf(tenantId, jobId), () -> writeEveryBlock(tenantId, jobId, writer));
         archive = writer.finish();
@@ -138,9 +129,6 @@ public class ExportRunner {
       jobs.ready(tenantId, jobId, archive.sha256(), archive.byteSize());
       log.info("An export archive of {} byte(s) was built for tenant {}", archive.byteSize(), tenantId);
     } catch (IOException | RuntimeException failed) {
-      // Recorded rather than rethrown: one tenant's export failing must not stop
-      // the run, and the message is shown to whoever asked -- so it says what
-      // happened and never carries a stack trace.
       log.error("An export failed for tenant {}", tenantId, failed);
       jobs.failed(tenantId, jobId, reasonOf(failed));
     } finally {
@@ -161,9 +149,6 @@ public class ExportRunner {
       writer.beginBlock(source.block());
       source.exportTo(writer);
       done++;
-      // Coarse and honest: a percentage of the blocks finished. It is read by
-      // somebody deciding whether to keep waiting, and "5 of 9 blocks" is
-      // what they actually want to know.
       jobs.progress(tenantId, jobId, done * 95 / Math.max(1, sources.size()));
     }
   }
@@ -212,9 +197,6 @@ public class ExportRunner {
     try {
       Files.deleteIfExists(file);
     } catch (IOException leftBehind) {
-      // A temporary file that outlives its build is untidy and harmless; the
-      // operating system reclaims the directory. Not worth failing a finished
-      // export over.
       log.debug("A temporary export file could not be removed: {}", file, leftBehind);
     }
   }

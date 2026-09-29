@@ -111,12 +111,8 @@ class DocumentRenderIT extends AbstractIntegrationTest {
     assertThat(rendered.mediaType()).isEqualTo("application/pdf");
     assertThat(new String(rendered.content(), StandardCharsets.UTF_8)).startsWith("%PDF-");
 
-    // The header travelled, and the title is the core's.
     assertThat(title.get()).startsWith("Insurance report");
 
-    // The blocks are the core's decisions: a heading, the totals as facts, the
-    // room, the item, and the figure with the day it was true. Nothing here is
-    // about fonts or spacing, which is the division ADR-0070 draws.
     assertThat(received).isNotEmpty();
     assertThat(received.stream().filter(Block::hasHeading).map(b -> b.getHeading().getText()))
         .contains("Insurance report", "Total", "A camera");
@@ -128,8 +124,6 @@ class DocumentRenderIT extends AbstractIntegrationTest {
         .contains("Figure=Replacement value", "Currency conversion=none")
         .anyMatch(fact -> fact.startsWith("Replacement value=1200.00 EUR"));
 
-    // A room starts on its own page. A statement about the report rather than
-    // about typography, which is why the core says it and not the renderer.
     assertThat(received.stream().filter(Block::hasPageBreak).count()).isEqualTo(1);
   }
 
@@ -146,12 +140,8 @@ class DocumentRenderIT extends AbstractIntegrationTest {
                     tenant.tenantId(),
                     () -> documents.render(null, 50, "application/pdf", "en")))
         .isInstanceOf(InsuranceDocuments.NoRendererException.class)
-        // The figures are there; what is missing is a plugin. A caller told that
-        // goes to the other two endpoints rather than reporting a fault.
         .hasMessageContaining("available as data and as a table");
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Starts a renderer that records what it was asked to draw.
@@ -219,7 +209,6 @@ class DocumentRenderIT extends AbstractIntegrationTest {
 
           @Override
           public void onError(Throwable error) {
-            // The core hung up. Nothing to clean up in a test renderer.
           }
 
           @Override

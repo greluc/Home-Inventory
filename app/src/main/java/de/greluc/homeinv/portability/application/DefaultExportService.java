@@ -43,17 +43,6 @@ public class DefaultExportService implements ExportService {
   @Transactional
   public ExportJobView request(UUID actor) {
     UUID tenantId = TenantContext.require();
-    // Asking twice makes two archives, and that is the honest behaviour: the
-    // second is of a later moment, and handing back the first would hand back an
-    // archive missing whatever changed since.
-    //
-    // The caller's authority is copied onto the job here, while they are still
-    // present: what an archive may open out of a sealed field depends on the
-    // role they hold and on how recently they proved a second factor
-    // (REQ-AUTH-011), and by the time the worker builds the archive there is no
-    // caller to ask. With no caller at all -- a scheduled export, a test that
-    // established none -- the three stay null and nothing sensitive is opened,
-    // which is the direction this has to fail in.
     Optional<CallerContext.Caller> caller = CallerContext.current();
     UUID id =
         jobs.queue(
@@ -87,8 +76,6 @@ public class DefaultExportService implements ExportService {
     ExportJobView view =
         jobs.byId(tenantId, id).orElseThrow(() -> new NotFoundException("export job", id));
     if (!view.isReady()) {
-      // Not a 404: the caller is looking at the right thing and it is simply not
-      // finished, which is a different next move from "there is no such job".
       throw new ExportNotReadyException(view.state().toLowerCase(java.util.Locale.ROOT));
     }
     String sha256 =

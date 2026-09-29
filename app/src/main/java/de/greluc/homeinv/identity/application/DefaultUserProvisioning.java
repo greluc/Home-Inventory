@@ -42,8 +42,6 @@ public class DefaultUserProvisioning implements UserProvisioning {
 
     String address = email.trim().toLowerCase(Locale.ROOT);
     if (users.findByEmail(address).isPresent()) {
-      // Not an error and not a warning: running this twice is the expected way to
-      // deploy a stack a second time.
       log.info("An account for this address already exists; nothing to create.");
       return Optional.empty();
     }

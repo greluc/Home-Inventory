@@ -69,15 +69,12 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.role").value("MEMBER"))
         .andExpect(jsonPath("$.accountCreated").value(true));
 
-    // The account the acceptance created can sign in, and lands in the tenant.
     mockMvc
         .perform(get("/api/v1/auth/me").session(login("inv-newcomer@example.org")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.tenantId").value(tenant.tenantId().toString()))
         .andExpect(jsonPath("$.role").value("MEMBER"));
 
-    // Single use. The second attempt is answered identically to a token that
-    // never existed, so the difference cannot be read off the response.
     mockMvc
         .perform(
             post("/api/v1/invitations/" + token + "/accept")
@@ -103,8 +100,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
     Tenant tenant = tenantWithOwner("inv-expiry@example.org", "Expiring");
     String token = invite(tenant, login("inv-expiry@example.org"), "inv-late@example.org", "VIEWER");
 
-    // Moved into the past directly: the alternative is a clock the whole context
-    // shares, and a test that changes time for every other test in the suite.
     TenantContext.runAs(
         tenant.tenantId(),
         () ->
@@ -136,8 +131,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
             .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/invitations").session(owner))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].state").value("OPEN"))
-            // The token is never in a listing: it exists once, in the answer that
-            // created it, and afterwards only as a hash.
             .andExpect(jsonPath("$.data[0].token").doesNotExist())
             .andReturn()
             .getResponse()
@@ -167,8 +160,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
 
     String token = invite(tenant, login("inv-host@example.org"), "inv-existing@example.org", "VIEWER");
 
-    // Nobody signed in: the token proves the mailbox, which is not enough to put
-    // a membership on an account that already belongs to somebody.
     mockMvc
         .perform(
             post("/api/v1/invitations/" + token + "/accept")
@@ -178,7 +169,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/invitation-not-yours"));
 
-    // Signed in as somebody else: the same answer.
     mockMvc
         .perform(
             post("/api/v1/invitations/" + token + "/accept")
@@ -198,8 +188,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
 
     MockHttpSession adminSession = login("esc-admin@example.org");
 
-    // ADMIN and OWNER hold the same permissions today, so the permission test
-    // alone would let this through. Ownership is a relationship, not a set.
     mockMvc
         .perform(
             put("/api/v1/tenants/" + tenant.tenantId() + "/members/" + member)
@@ -212,7 +200,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.actorRole").value("ADMIN"))
         .andExpect(jsonPath("$.targetRole").value("OWNER"));
 
-    // Nor may an admin remove the owner, which is the same escalation backwards.
     mockMvc
         .perform(
             delete("/api/v1/tenants/" + tenant.tenantId() + "/members/" + tenant.ownerId())
@@ -221,8 +208,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/role-escalation"));
 
-    // A MEMBER may not administer members at all — that is a permission, and it
-    // is refused before any of the above is reached.
     mockMvc
         .perform(
             put("/api/v1/tenants/" + tenant.tenantId() + "/members/" + admin)
@@ -233,7 +218,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/forbidden"));
 
-    // What an admin may do: anything up to their own rung.
     mockMvc
         .perform(
             put("/api/v1/tenants/" + tenant.tenantId() + "/members/" + member)
@@ -263,7 +247,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/last-owner"));
 
-    // With a second owner in place, stepping down is allowed.
     mockMvc
         .perform(
             put("/api/v1/tenants/" + tenant.tenantId() + "/members/" + second)
@@ -307,7 +290,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/members").session(owner))
         .andExpect(jsonPath("$.data.length()").value(1));
 
-    // Removing twice is not an error, for the reason deleting twice is not.
     mockMvc
         .perform(
             delete("/api/v1/tenants/" + tenant.tenantId() + "/members/" + member)
@@ -315,7 +297,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
                 .with(csrf()))
         .andExpect(status().isNoContent());
 
-    // The tombstone does not block a second invitation to the same person.
     String token = invite(tenant, owner, "rm-member@example.org", "VIEWER");
     mockMvc
         .perform(
@@ -341,8 +322,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
     mockMvc.perform(get("/api/v1/tenants/" + mine.tenantId() + "/members").session(login("path-mine@example.org")))
         .andExpect(status().isOk());
   }
-
-  // -------------------------------------------------------------------------
 
   /** A provisioned tenant and the user who owns it. */
   private record Tenant(UUID tenantId, UUID ownerId) {}
@@ -415,9 +394,6 @@ class MembersAndInvitationsIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

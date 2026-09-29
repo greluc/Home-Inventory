@@ -53,25 +53,11 @@ const DEFAULT_IDENTITY: &str = "/run/secrets/mtls-blobstore";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
-    //
-    // A permissive licence asks for its notice in every copy, and a statically
-    // linked binary is a copy. This image is `scratch` — one binary and nothing
-    // else, which CI asserts — so there is no file to put beside it and the
-    // notice is compiled in, exactly as the public roots are in the plugins
-    // that speak TLS.
-    //
-    // First, before the logger: somebody reading a licence should get the
-    // licence and not a JSON log line above it. `tools/notices.py` generates
-    // the file and CI fails when it no longer describes what is linked in.
     if std::env::args().any(|argument| argument == "--licences") {
         print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
         return Ok(());
     }
 
-    // JSON lines, like every other service in the deployment (REQ-NFR-041). An
-    // operator reading one log format is an operator who can grep across
-    // services.
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -83,14 +69,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity_path = PathBuf::from(env_or(DEFAULT_IDENTITY, "HOMEINV_MTLS_BLOBSTORE_FILE"));
 
     if std::env::args().any(|argument| argument == "--health") {
-        // The health command the service matrix names. The image is `scratch`:
-        // there is no shell to run a script and no curl to call, so the binary
-        // answers the question about itself.
-        //
-        // It asks whether the volume is writable, which is the failure this
-        // service actually has: a read-only mount, a full disk, or a UID mapping
-        // that changed under it. "The process is running" is not worth reporting
-        // — the runtime already knows that.
         return match health(&root).await {
             Ok(()) => Ok(()),
             Err(failure) => {
@@ -114,9 +92,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Server::builder()
         .tls_config(identity)?
         .add_service(BlobStoreServer::new(FilesystemBlobStore::new(root)))
-        // The runtime stops a container with SIGTERM. Without this the process
-        // is killed after the grace period instead of finishing the transfer it
-        // is in the middle of.
         .serve_with_shutdown(address, async {
             let _ = tokio::signal::ctrl_c().await;
         })

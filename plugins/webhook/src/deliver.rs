@@ -89,9 +89,6 @@ pub async fn post(
     )
     .await?;
 
-    // Read and discard, bounded: the status is all this acts on, and reading
-    // some of the body is what lets the far side see a complete exchange rather
-    // than a reset.
     let _ = answer.read_all(MAX_RESPONSE).await;
 
     Ok(Delivered {

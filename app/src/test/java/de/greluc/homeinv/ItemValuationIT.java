@@ -59,9 +59,6 @@ class ItemValuationIT extends AbstractIntegrationTest {
             "A camera shop in Freiburg",
             LocalDate.of(2026, 4, 1),
             false,
-            // A thing worth 200 second-hand can cost 1100 to buy new, and an
-            // insurer asks for the second number. Nothing derives one from the
-            // other, which is what makes both worth storing.
             Money.of("1100.00", "EUR"),
             LocalDate.of(2026, 9, 1),
             Valuation.Provenance.MANUAL,
@@ -98,8 +95,6 @@ class ItemValuationIT extends AbstractIntegrationTest {
     assertThat(read.replacement()).isNull();
     assertThat(read.currentValue()).isNull();
 
-    // And an edit replaces the set whole: a figure left out is one cleared, which
-    // is the only rule under which "remove the purchase price" is sayable.
     inTenant(
         tenant,
         () ->
@@ -143,8 +138,6 @@ class ItemValuationIT extends AbstractIntegrationTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("two answers to one question");
 
-    // A lifetime warranty carries no date, which is the point of the flag: a date
-    // far in the future is a date somebody would eventually have to explain.
     Valuation lifetime =
         new Valuation(null, null, null, null, true, null, null, null, null, null);
     UUID id = inTenant(tenant, () -> create(tenant, "Cast iron pan", lifetime).id());
@@ -168,13 +161,9 @@ class ItemValuationIT extends AbstractIntegrationTest {
     assertThat(read.purchase().currencyCode()).isEqualTo("USD");
     assertThat(read.replacement().currencyCode()).isEqualTo("EUR");
 
-    // The two cannot be added, and that is the whole of ADR-0025: there is no
-    // rate here, and inventing one would be a total wrong in a way nobody sees.
     assertThatThrownBy(() -> read.purchase().plus(read.replacement()))
         .isInstanceOf(IllegalArgumentException.class);
   }
-
-  // -------------------------------------------------------------------------
 
   private ItemView create(Tenant tenant, String name, Valuation valuation) {
     return items

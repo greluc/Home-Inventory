@@ -66,8 +66,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("maintenance-order@example.org");
     UUID itemId = anItem(tenant, "A bicycle");
 
-    // Recorded out of order on purpose: somebody entering last year's invoice
-    // today has not just serviced the bicycle.
     inOwn(tenant, () -> record(itemId, "2026-03-04", "Service", Money.of("89.90", "EUR"), null));
     inOwn(tenant, () -> record(itemId, "2026-09-01", "New tyres", Money.of("64.00", "EUR"), null));
     inOwn(tenant, () -> record(itemId, "2026-06-11", "Chain", null, "Replaced after 4000 km"));
@@ -91,9 +89,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
 
     MaintenanceLog.MaintenanceEntryView entry =
         inOwn(tenant, () -> maintenance.entriesOf(itemId, 50)).get(0);
-    // Absent rather than 0.00: "nothing was paid" and "it cost zero" are
-    // different claims, and a report summing the second would be wrong in a way
-    // nobody could see.
     assertThat(entry.cost()).isNull();
     assertThat(entry.note()).isEqualTo("Pump replaced");
   }
@@ -127,8 +122,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
         });
     assertThat(inOwn(tenant, () -> maintenance.entriesOf(itemId, 50))).isEmpty();
 
-    // Removing what is not there is not an error: what the caller wants is
-    // already true.
     inOwn(
         tenant,
         () -> {
@@ -144,8 +137,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
     Tenant theirs = newTenant("maintenance-theirs@example.org");
     UUID theirItem = anItem(theirs, "Their bicycle");
 
-    // Not "forbidden": a foreign item is indistinguishable from one that never
-    // existed (REQ-SEC-025), and the same answer covers both.
     assertThatThrownBy(
             () -> inOwn(mine, () -> record(theirItem, "2026-01-01", "Anything", null, null)))
         .isInstanceOf(NotFoundException.class);
@@ -162,9 +153,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
         inOwn(tenant, () -> record(itemId, "2026-04-02", "Blade sharpened", null, null)).id();
     MockHttpSession session = signIn("maintenance-http@example.org", PASSWORD);
 
-    // The path is an entry that exists; what is refused is the method. A 405 and
-    // not a 404 is the difference between "no such thing" and "not a thing you
-    // do to this".
     mockMvc
         .perform(
             put("/api/v1/items/" + itemId + "/maintenance/" + entryId)
@@ -174,13 +162,10 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
                 .content("{\"kind\":\"Something else\"}"))
         .andExpect(status().isMethodNotAllowed());
 
-    // And the list is readable where it is written.
     mockMvc
         .perform(get("/api/v1/items/" + itemId + "/maintenance").session(session))
         .andExpect(status().isOk());
 
-    // The HTTP path records one too, with the money shape REQ-NFR-070 asks for:
-    // the amount as a string, never without its currency.
     mockMvc
         .perform(
             post("/api/v1/items/" + itemId + "/maintenance")
@@ -198,8 +183,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
                             Map.of("amount", "12.50", "currency", "EUR")))))
         .andExpect(status().isCreated());
   }
-
-  // -------------------------------------------------------------------------
 
   private MaintenanceLog.MaintenanceEntryView record(
       UUID itemId, String performedOn, String kind, Money cost, String note) {
@@ -221,8 +204,6 @@ class MaintenanceLogIT extends AbstractIntegrationTest {
                         name,
                         null,
                         ItemKind.PHYSICAL,
-                        // A physical item resides in exactly one place, which the
-                        // aggregate enforces rather than the database.
                         aPlace(tenant),
                         java.math.BigDecimal.ONE,
                         null,

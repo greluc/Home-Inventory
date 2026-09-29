@@ -9,10 +9,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 import { ThirdPartyNotices } from "./ThirdPartyNotices";
 
-// `openapi-fetch` captures `globalThis.fetch` when the client is created, which
-// happens while `./api` is imported — so stubbing the global afterwards reaches
-// the bundle's own `fetch` call and not the typed client's. Mocking the module
-// is what makes the two halves separable, which is what this test is about.
 vi.mock("./api", () => ({ api: { notices: vi.fn() } }));
 
 /** One artifact's notice, as small as it can be and still be one. */
@@ -50,11 +46,6 @@ function close(this: HTMLDialogElement): void {
  */
 describe("the third-party notices view", () => {
   beforeAll(() => {
-    // jsdom implements `<dialog>` as an element and not as a dialog: it has no
-    // `showModal`, so calling one throws. Supplying the two methods is the
-    // narrowest way past that — the alternative is a component that checks
-    // whether its own browser API exists, which is a test environment leaking
-    // into the thing being tested.
     HTMLDialogElement.prototype.showModal ??= showModal;
     HTMLDialogElement.prototype.close ??= close;
   });
@@ -65,9 +56,6 @@ describe("the third-party notices view", () => {
   });
 
   it("shows the server's components and the bundle's, each under its own heading", async () => {
-    // Two different sources answering two different documents, which is the
-    // whole point: `api.notices()` goes through the typed client to the server,
-    // and the bundle's own notice is a file beside the page.
     vi.mocked(api.notices).mockResolvedValue(notice("app", "logback-classic"));
     vi.stubGlobal(
       "fetch",
@@ -83,8 +71,6 @@ describe("the third-party notices view", () => {
 
     await waitFor(() => expect(screen.getByText("logback-classic")).toBeDefined());
     expect(screen.getByText("react")).toBeDefined();
-    // The licence text is reproduced rather than named: a list of identifiers
-    // discharges nothing, because what MIT asks for is the permission notice.
     expect(screen.getAllByText(/Permission is hereby granted/)).toHaveLength(2);
   });
 

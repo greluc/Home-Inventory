@@ -5,8 +5,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-// Before the first render: i18next has to be initialised when a component asks
-// for a string, and every component does.
 import "./i18n";
 import "./styles.css";
 
@@ -25,7 +23,7 @@ function installTrustedTypes(): void {
   const tt = (window as unknown as { trustedTypes?: { createPolicy: (n: string, r: object) => void } })
     .trustedTypes;
   if (!tt) {
-    return; // Not every browser has it; the CSP is then one defence short, not broken.
+    return;
   }
   try {
     tt.createPolicy("default", {
@@ -42,7 +40,6 @@ function installTrustedTypes(): void {
       },
     });
   } catch {
-    // A second call throws; a hot reload in development is the usual cause.
   }
 }
 

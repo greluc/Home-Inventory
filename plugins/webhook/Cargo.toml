@@ -12,14 +12,7 @@ repository = "https://github.com/greluc/Home-Inventory"
 publish = false
 
 [dependencies]
-# What every first-party Rust plugin needs identically: the mTLS identity it
-# presents to the core, the CONNECT tunnel that is its one route out, base64
-# and hex, and the bounded set of keys it has already delivered. It moved to a
-# crate when `plugins/smtp/` needed the same eighty lines, which is the moment
-# ADR-0072 named for it.
 homeinv-plugin-common = { path = "../common" }
-# gRPC towards the core. `tls-ring` rather than the aws-lc backend, as in
-# `blobstore/`: ring builds without a C toolchain and keeps the image smaller.
 tonic = { version = "0.14", features = ["tls-ring"] }
 tonic-prost = "0.14"
 prost = "0.14"
@@ -30,13 +23,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [build-dependencies]
 tonic-prost-build = "0.14"
-# The protobuf compiler as a library, so no `protoc` binary has to be installed
-# anywhere. The same reasoning as `blobstore/build.rs`.
 protox = "0.9"
 
 [profile.release]
-# One socket in, one socket out. Both settings cost build time and buy a smaller
-# image, which is what ADR-0072 budgets this container around.
 lto = true
 codegen-units = 1
 strip = true

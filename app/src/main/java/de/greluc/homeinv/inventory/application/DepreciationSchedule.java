@@ -54,9 +54,6 @@ public class DepreciationSchedule {
         log.info("The depreciation run wrote {} current value(s)", written);
       }
     } catch (RuntimeException failed) {
-      // Logged and swallowed, for the reason every other schedule gives: a task
-      // that throws stops being scheduled in some runtimes, and a valuation that
-      // silently stopped ageing is a report that is quietly wrong.
       log.error("The depreciation run failed; the next one will pick it up", failed);
     }
   }

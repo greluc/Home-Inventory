@@ -117,9 +117,6 @@ public class Attachment {
     }
     Attachment attachment =
         new Attachment(id, tenantId, mediaObjectId, targetKind, targetId, primaryImage, actor, now);
-    // Null is `PHOTO`, which is what every attachment written before the column
-    // existed was. A role the database does not allow is refused here rather
-    // than by a constraint three layers down, so the message names the field.
     String chosen = role == null || role.isBlank() ? "PHOTO" : role;
     if (!ROLES.contains(chosen)) {
       throw new IllegalArgumentException("An attachment's role is one of " + ROLES);
@@ -143,9 +140,6 @@ public class Attachment {
       return;
     }
     this.deletedAt = now;
-    // Cleared on the way out: the partial unique index only covers live rows, so
-    // a tombstone that still claims to be primary would be harmless in the
-    // database and confusing in a query that forgets the predicate.
     this.primaryImage = false;
     this.updatedBy = actor;
     this.updatedAt = now;

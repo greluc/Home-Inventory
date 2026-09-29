@@ -1,12 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// Compiles the NotificationChannel contract from `proto/`.
-//
-// `protox` parses the `.proto` files in pure Rust, so no `protoc` binary has to
-// exist on the machine doing the build — the same reasoning as
-// `blobstore/build.rs`, and the same consequence: one fewer version-pinned
-// native dependency in every CI image and on every contributor's machine.
 
 use std::path::PathBuf;
 

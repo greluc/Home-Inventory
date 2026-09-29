@@ -35,9 +35,6 @@ public class ImportSchedule {
         runner.runAsTenant(tenantId);
       }
     } catch (RuntimeException failed) {
-      // Logged and swallowed, for `ExportSchedule`'s reason: a scheduled task
-      // that throws stops being scheduled in some runtimes, and an import queue
-      // that silently stopped is somebody watching a job that never moves.
       log.error("The import run failed; the next one will pick it up", failed);
     }
   }

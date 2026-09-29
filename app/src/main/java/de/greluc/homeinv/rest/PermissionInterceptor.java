@@ -52,20 +52,10 @@ public class PermissionInterceptor implements HandlerInterceptor {
       @NonNull Object handler) {
 
     if (!(handler instanceof HandlerMethod method)) {
-      // Static resources and the error dispatcher. Neither is a controller.
       return true;
     }
 
     if (!method.getBeanType().getPackageName().startsWith(ACCESS_LAYER)) {
-      // A handler the framework contributed: the actuator's endpoints, springdoc's
-      // document resource, the error controller. REQ-SEC-023 is about the
-      // endpoints THIS application defines, and the filter chain is what decides
-      // for the rest — the actuator listens on a port bound to `internal`
-      // (REQ-SEC-099) and the document resource does not exist outside the build.
-      //
-      // The narrowing is safe because of the companion rule: ArchUnit refuses a
-      // `@RestController` anywhere but `de.greluc.homeinv.rest`, so an endpoint of
-      // ours cannot end up on the other side of this check.
       return true;
     }
 
@@ -77,9 +67,6 @@ public class PermissionInterceptor implements HandlerInterceptor {
     RequiresPermission required = method.getMethodAnnotation(RequiresPermission.class);
 
     if (entitled != null && required != null) {
-      // Two declarations are two answers to "what does this need", and the one a
-      // reader trusts is whichever they read first. Refused rather than resolved
-      // by precedence, because a precedence rule is the thing nobody remembers.
       throw new IllegalStateException(
           ("%s carries both @RequiresEntitlement and @RequiresPermission. An endpoint declares one "
                   + "or the other (ADR-0057).")
@@ -92,10 +79,6 @@ public class PermissionInterceptor implements HandlerInterceptor {
     }
 
     if (required == null) {
-      // Not an exception a client should be able to distinguish from a genuine
-      // denial, and not something the application should serve around. It throws
-      // rather than returning false so that the failure reaches the log with the
-      // method name in it.
       throw new IllegalStateException(
           ("%s carries none of @RequiresPermission, @RequiresEntitlement and @PublicEndpoint. "
                   + "The default is deny (REQ-SEC-023).")

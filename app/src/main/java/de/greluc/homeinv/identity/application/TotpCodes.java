@@ -128,7 +128,6 @@ public final class TotpCodes {
       mac.init(new SecretKeySpec(secret, "HmacSHA1"));
       byte[] hash = mac.doFinal(ByteBuffer.allocate(Long.BYTES).putLong(step).array());
 
-      // RFC 4226 §5.4: the low nibble of the last byte picks where to read from.
       int offset = hash[hash.length - 1] & 0x0f;
       int binary =
           ((hash[offset] & 0x7f) << 24)
@@ -137,8 +136,6 @@ public final class TotpCodes {
               | (hash[offset + 3] & 0xff);
       return ("%0" + DIGITS + "d").formatted(binary % MODULUS);
     } catch (java.security.GeneralSecurityException impossible) {
-      // HmacSHA1 is required of every JVM; if it is absent the process cannot
-      // authenticate anybody and should say so rather than carry on.
       throw new IllegalStateException("HMAC-SHA-1 is unavailable in this runtime.", impossible);
     }
   }

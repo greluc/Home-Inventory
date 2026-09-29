@@ -83,23 +83,11 @@ const REMEMBERED_KEYS: usize = 10_000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
-    //
-    // A permissive licence asks for its notice in every copy, and a statically
-    // linked binary is a copy. This image is `scratch` — one binary and nothing
-    // else, which CI asserts — so there is no file to put beside it and the
-    // notice is compiled in, exactly as the public roots are in the plugins
-    // that speak TLS.
-    //
-    // First, before the logger: somebody reading a licence should get the
-    // licence and not a JSON log line above it. `tools/notices.py` generates
-    // the file and CI fails when it no longer describes what is linked in.
     if std::env::args().any(|argument| argument == "--licences") {
         print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
         return Ok(());
     }
 
-    // JSON lines, like every other service in the deployment (REQ-NFR-041).
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -132,8 +120,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "plugin-webhook is listening"
     );
     if proxy.is_none() {
-        // Said once, at startup, because it is the difference between "nothing
-        // is delivered" and "nothing is delivered and here is why".
         warn!(
             "HOMEINV_EGRESS_PROXY is not set. A plugin segment has no route out of the deployment \
              on its own (ADR-0026), so every delivery will fail to connect."
@@ -187,11 +173,7 @@ impl NotificationChannel for Webhook {
         Ok(Response::new(NotificationChannelDescriptor {
             channel_key: "webhook".into(),
             name: "Webhook".into(),
-            // The core validates a subscription's address against this, which is
-            // why `http` is absent rather than merely discouraged.
             address_schemes: vec!["https".into()],
-            // A receiver gets both bodies in the payload and decides for itself;
-            // there is no rendering here, so there is nothing to support.
             supports_html: true,
         }))
     }
@@ -218,9 +200,6 @@ impl NotificationChannel for Webhook {
         let target = target::parse(&message.recipient).map_err(Status::invalid_argument)?;
 
         if self.delivered.already(&message.idempotency_key) {
-            // Recognised and not sent again. The core counts these separately,
-            // because a delivery log where every retry looks like a send cannot
-            // answer "did this person get two messages".
             return Ok(Response::new(NotificationDeliverResponse {
                 provider_message_id: String::new(),
                 detail: "already delivered".into(),
@@ -248,10 +227,6 @@ impl NotificationChannel for Webhook {
             &attachments,
         );
 
-        // Seconds since the epoch, signed WITH the body (REQ-API-010): a captured
-        // request is otherwise a valid request for ever, and a timestamp sent
-        // beside the signature rather than inside it is one an attacker simply
-        // changes.
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|since| since.as_secs())
@@ -294,15 +269,9 @@ impl NotificationChannel for Webhook {
                     deduplicated: false,
                 }))
             }
-            Ok(answer) if (400..500).contains(&answer.status) => {
-                // The receiver understood and refused. Permanent: a retry sends
-                // the same thing to the same place and is refused the same way,
-                // so the core dead-letters it on the first attempt.
-                Err(Status::invalid_argument(format!(
-                    "the target refused the delivery: {}",
-                    answer.detail
-                )))
-            }
+            Ok(answer) if (400..500).contains(&answer.status) => Err(Status::invalid_argument(
+                format!("the target refused the delivery: {}", answer.detail),
+            )),
             Ok(answer) => Err(Status::unavailable(format!(
                 "the target could not take the delivery: {}",
                 answer.detail
@@ -325,8 +294,6 @@ impl NotificationChannel for Webhook {
 fn extra_headers(supplied: &std::collections::HashMap<String, String>) -> Vec<(String, String)> {
     const RESERVED: [&str; 7] = [
         "x-homeinv-signature",
-        // Reserved as hard as the signature is: a caller that could set the
-        // timestamp could make a replay look fresh to a receiver that trusts it.
         "x-homeinv-timestamp",
         "x-homeinv-idempotency-key",
         "host",
@@ -350,8 +317,6 @@ fn extra_headers(supplied: &std::collections::HashMap<String, String>) -> Vec<(S
         })
         .map(|(name, value)| (name.clone(), value.clone()))
         .collect();
-    // A map has no order and a request does. Sorted, so that the same call
-    // produces the same request every time.
     extra.sort();
     extra
 }
@@ -368,10 +333,6 @@ impl PluginHealth for Health {
         &self,
         _request: Request<HealthRequest>,
     ) -> Result<Response<HealthResponse>, Status> {
-        // REQ-PLG-015: an outbound plugin verifies its target completely and
-        // refuses service on a partial state. Here that means the two things
-        // without which no delivery can succeed, reported as what they are
-        // rather than as "unhealthy".
         let checks = vec![
             Check {
                 name: "egress-proxy-configured".into(),
@@ -425,9 +386,6 @@ mod tests {
 
     #[test]
     fn a_repeat_is_recognised_rather_than_sent_again() {
-        // The behaviour of the set itself is `homeinv_plugin_common::keys`'
-        // business and tested there; what this asserts is that this plugin is
-        // wired to it at all.
         let webhook = plugin();
         assert!(!webhook.delivered.already("key-1"));
         assert!(webhook.delivered.already("key-1"));
@@ -440,8 +398,6 @@ mod tests {
             "X-HomeInv-Signature".to_string(),
             "sha256=forged".to_string(),
         );
-        // As hard as the signature: a caller that could set the timestamp could
-        // make a replay look fresh to a receiver that trusts it.
         supplied.insert("X-HomeInv-Timestamp".to_string(), "0".to_string());
         supplied.insert("Host".to_string(), "somewhere.else".to_string());
         supplied.insert("X-Team".to_string(), "kitchen".to_string());
@@ -451,8 +407,6 @@ mod tests {
 
     #[test]
     fn a_header_with_a_newline_is_dropped() {
-        // Otherwise a value is two headers, and the second one is whatever the
-        // caller wanted it to be.
         let mut supplied = HashMap::new();
         supplied.insert("X-Team".to_string(), "kitchen\r\nX-Admin: true".to_string());
         assert!(extra_headers(&supplied).is_empty());

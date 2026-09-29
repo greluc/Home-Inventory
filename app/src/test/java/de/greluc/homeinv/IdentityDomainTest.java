@@ -68,7 +68,6 @@ class IdentityDomainTest {
             () -> user.replaceEntitlements(false, true, Integer.MAX_VALUE, UUID.randomUUID(), NOW))
         .isInstanceOf(IllegalArgumentException.class);
 
-    // Null is "no limit of their own" and is not a value out of range.
     user.replaceEntitlements(false, true, null, UUID.randomUUID(), NOW);
     assertThat(user.getTenantLimit()).isNull();
   }
@@ -78,10 +77,6 @@ class IdentityDomainTest {
   void ensuringAnOperatorIsIdempotentAndSaysSo() {
     AppUser user = user();
 
-    // ADR-0057: `bootstrap` runs on every start and must be able to put the
-    // instance back in an administrable state. It has to be able to say "I
-    // changed something" rather than log either way, which is what the boolean
-    // is for -- and the second run must change nothing.
     assertThat(user.ensureInstanceOperator(NOW)).isTrue();
     assertThat(user.isInstanceOperator()).isTrue();
     assertThat(user.ensureInstanceOperator(NOW.plusSeconds(60))).isFalse();
@@ -105,8 +100,6 @@ class IdentityDomainTest {
     ServiceAccount account = serviceAccount(NOW.plus(30, ChronoUnit.DAYS));
     assertThat(account.isUsable(NOW)).isTrue();
 
-    // Expiry and revocation are separate reasons and neither is the other: an
-    // unrevoked token past its date is as dead as a revoked one inside it.
     assertThat(account.isUsable(NOW.plus(31, ChronoUnit.DAYS))).isFalse();
 
     account.revoke(UUID.randomUUID(), NOW.plusSeconds(1));

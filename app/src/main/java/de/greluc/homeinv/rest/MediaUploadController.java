@@ -169,16 +169,10 @@ public class MediaUploadController {
     UploadSessionView upload = uploads.status(uploadId);
     ResponseEntity.BodyBuilder answer =
         offsetResponse(upload, HttpStatus.OK)
-            // A cached offset is a client resuming from a place that has moved.
-            // tus names this header for exactly this response.
             .header("Cache-Control", "no-store")
             .header("Upload-Length", Long.toString(upload.declaredLength()))
             .header("Upload-Expires", httpDate(upload));
     if (upload.isComplete()) {
-      // The upload finished and the client is asking because it never saw the
-      // response that said so — the last failure a resumable upload can have.
-      // Naming the file here is what makes that recoverable instead of a file
-      // stored twice.
       answer.location(URI.create("/api/v1/media/" + upload.mediaObjectId()));
     }
     return answer.build();
@@ -201,13 +195,6 @@ public class MediaUploadController {
    * @return {@code 204} with the new offset
    * @throws IOException when the bytes cannot be read or staged
    */
-  // NOT `consumes`, and that was the first spelling. Content negotiation happens
-  // while the handler is being chosen, which is BEFORE the interceptor that
-  // checks the permission — so a caller who may not upload at all was told 415
-  // about their content type rather than 403 about their role, and
-  // `EndpointNegativeCoverageIT` refused it. Authorisation goes first
-  // (REQ-SEC-026); the type is checked in the method, where it answers the same
-  // 415 the protocol asks for.
   @PatchMapping("/{uploadId}")
   @RequiresPermission(Permission.MEDIA_CREATE)
   @CanFail({
@@ -229,9 +216,6 @@ public class MediaUploadController {
 
     requireProtocol(resumable);
     if (contentType == null || !contentType.startsWith("application/offset+octet-stream")) {
-      // tus names this content type. It is not pedantry: a PATCH with any other
-      // one is a client that thinks it is doing something else, and appending
-      // its body would be the wrong bytes at the right offset.
       throw new TusRequestException(
           ProblemType.UNSUPPORTED_MEDIA_TYPE,
           "A PATCH to an upload carries application/offset+octet-stream");

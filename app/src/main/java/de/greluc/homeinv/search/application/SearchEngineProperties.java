@@ -154,8 +154,6 @@ public final class SearchEngineProperties {
 
     require(url, "HOMEINV_SEARCH_URL");
     require(username, "HOMEINV_SEARCH_USER");
-    // Named by its variable and not by its value, which never appears in a log
-    // line, a message or a crash dump (REQ-SEC-050).
     require(password, "HOMEINV_SEARCH_PASSWORD_FILE");
     try {
       this.url = new URI(url.trim());
@@ -166,9 +164,6 @@ public final class SearchEngineProperties {
     this.username = username.trim();
     this.password = password;
     this.fingerprint = de.greluc.homeinv.platform.PinnedCertificate.normalise(fingerprint);
-    // Anything that is not plainly `http` is TLS. Stated that way round on
-    // purpose: a scheme this does not recognise becomes a pinned connection that
-    // refuses to be made, rather than a plaintext one that is quietly made.
     this.tls =
         !"http".equals(
             this.url.getScheme() == null

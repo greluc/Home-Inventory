@@ -100,7 +100,6 @@ class EventSchemaVersionTest {
                 String source = read(path);
                 Matcher events = EXTERNALIZED.matcher(source);
                 while (events.find()) {
-                  // The key half of `target::key`, which is what a binding binds.
                   String key = events.group(1);
                   published.add(key.substring(key.indexOf("::") + 2));
                 }
@@ -111,12 +110,6 @@ class EventSchemaVersionTest {
               });
     }
 
-    // The failure this catches is silent in production and loud here: renaming a
-    // published event without its consumers leaves a queue bound to a key
-    // nothing publishes any more, so derivatives stop being generated and the
-    // search index stops being updated while everything reports success. Adding
-    // `.v1` to ten events did exactly that on 2026-09-16, and this is what says
-    // so next time.
     assertThat(bound)
         .as("every @RabbitListener binds a key some event is actually published under")
         .isSubsetOf(published);

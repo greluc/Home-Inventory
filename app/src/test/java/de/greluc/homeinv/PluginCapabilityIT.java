@@ -55,8 +55,6 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
     TenantContext.runAs(
         tenant,
         () -> {
-          // Installed, and permitted nothing. There is no base entitlement and no
-          // "read access, which is harmless anyway" (09 §9.4).
           assertThat(registry.installed(200)).extracting(PluginRegistry.Registration::pluginId)
               .contains(PLUGIN);
           assertThat(registry.permits(PLUGIN, "core:item:read")).isFalse();
@@ -77,8 +75,6 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
 
     assertThat(TenantContext.callAs(mine, () -> registry.permits(PLUGIN, "core:item:read")))
         .isTrue();
-    // The same plugin, installed once, and invisible to the other tenant until
-    // its own administrator says yes.
     assertThat(TenantContext.callAs(theirs, () -> registry.permits(PLUGIN, "core:item:read")))
         .isFalse();
   }
@@ -90,17 +86,12 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
     registry.register(manifest("1.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
     TenantContext.runAs(tenant, () -> registry.grant(PLUGIN, "core:item:read", UUID.randomUUID()));
 
-    // Version 2 wants the network as well.
     registry.register(manifest("2.0.0", "core:item:read", "core:item:write"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
     TenantContext.runAs(
         tenant,
         () -> {
-          // What was granted is still granted: the plugin carries on with what it
-          // has rather than being disabled by an update nobody asked about.
           assertThat(registry.permits(PLUGIN, "core:item:read")).isTrue();
-          // And what is new is not: nothing escalates without somebody saying yes
-          // (REQ-PLG-006).
           assertThat(registry.permits(PLUGIN, "core:item:write")).isFalse();
         });
   }
@@ -112,12 +103,8 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
     registry.register(manifest("1.0.0", "core:item:read", "core:item:write"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
     TenantContext.runAs(tenant, () -> registry.grant(PLUGIN, "core:item:write", UUID.randomUUID()));
 
-    // Version 2 no longer asks to write.
     registry.register(manifest("2.0.0", "core:item:read"), "isbn:9000", null, UNSIGNED_FIXTURE, true);
 
-    // The grant is still in the table, and it is not a permission: capabilities
-    // are exhaustive, so what the manifest does not name cannot happen even with
-    // consent granted (09 §9.3).
     assertThat(TenantContext.callAs(tenant, () -> registry.permits(PLUGIN, "core:item:write")))
         .isFalse();
   }
@@ -148,13 +135,9 @@ class PluginCapabilityIT extends AbstractIntegrationTest {
           registry.grant(PLUGIN, "core:item:read", UUID.randomUUID());
           registry.revoke(PLUGIN, "core:item:read", UUID.randomUUID());
           assertThat(registry.permits(PLUGIN, "core:item:read")).isFalse();
-          // The outcome a caller wants is "this plugin may not do this here", and
-          // that is already true.
           registry.revoke(PLUGIN, "core:item:read", UUID.randomUUID());
         });
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A manifest for the test plugin, declaring exactly these capabilities.

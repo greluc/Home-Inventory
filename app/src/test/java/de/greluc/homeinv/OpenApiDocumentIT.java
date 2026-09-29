@@ -60,8 +60,6 @@ class OpenApiDocumentIT extends AbstractIntegrationTest {
     if (REGENERATE) {
       Files.createDirectories(COMMITTED.getParent());
       Files.writeString(COMMITTED, generated, StandardCharsets.UTF_8);
-      // Not an assertion. This branch exists to write the file, and a test that
-      // asserted after writing would assert that writing works.
       return;
     }
 
@@ -87,10 +85,6 @@ class OpenApiDocumentIT extends AbstractIntegrationTest {
 
     assertThat(paths).isNotEmpty();
 
-    // The media path is the one endpoint outside /api/v1: it answers on the media
-    // hostname and is authorised by a signature rather than by a session
-    // (REQ-MED-010). Everything else is versioned, because an unversioned path
-    // is one that cannot be changed without breaking a client.
     Set<String> unversioned = new TreeSet<>();
     for (String path : paths.keySet()) {
       if (!path.startsWith("/api/v1/") && !path.startsWith("/media/")) {
@@ -105,16 +99,8 @@ class OpenApiDocumentIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("names the problem types it can return, and only registered ones (REQ-API-003)")
   void problemTypesComeFromTheRegistry() throws Exception {
-    // The registry is the source: `docs/reference/problem-types.yaml` lists every
-    // `type` URI a client may branch on. A response shape that invented one would
-    // be a contract nobody could write a client against.
     Map<String, Object> registry = parse(Files.readString(
         Path.of("..", "docs", "reference", "problem-types.yaml"), StandardCharsets.UTF_8));
-    // Three lists, and the distinction is the registry's own: `registered` are
-    // the tokens published at an IANA-style URI, `assigned` are ours and in use,
-    // `pending` are proposed and not yet emitted. A response may carry any of the
-    // first two; a `pending` one would be a client branching on a token that may
-    // still change.
     Set<String> registered = new TreeSet<>();
     for (String list : List.of("registered", "assigned")) {
       @SuppressWarnings("unchecked")
@@ -146,10 +132,6 @@ class OpenApiDocumentIT extends AbstractIntegrationTest {
   @DisplayName("bounds every collection it returns, at 200 a page (REQ-NFR-010)")
   @SuppressWarnings("unchecked")
   void everyCollectionIsBounded() throws Exception {
-    // "Verified across all endpoints" is the requirement's own gate, and the
-    // document is where every endpoint is visible at once. An endpoint that grows
-    // a collection response later fails here rather than in production, which is
-    // what an unbounded query does: nothing, until the row count changes.
     Map<String, Object> document = parse(fetch());
     Map<String, Object> paths = (Map<String, Object>) document.get("paths");
     Map<String, Object> schemas =
@@ -275,8 +257,6 @@ class OpenApiDocumentIT extends AbstractIntegrationTest {
     }
     return false;
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The document as the running application serves it.

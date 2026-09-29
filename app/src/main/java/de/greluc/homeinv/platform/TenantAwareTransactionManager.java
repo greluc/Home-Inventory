@@ -119,9 +119,6 @@ public class TenantAwareTransactionManager extends JpaTransactionManager {
     EntityManagerHolder holder =
         (EntityManagerHolder) TransactionSynchronizationManager.getResource(obtainEntityManagerFactory());
     if (holder == null) {
-      // Cannot happen after a successful doBegin; if it ever does, failing here
-      // is the only safe outcome. Continuing would run the transaction with no
-      // tenant setting at all.
       throw new IllegalStateException(
           "No EntityManager bound after beginning the transaction — the tenant context "
               + "cannot be published and the transaction must not proceed.");
@@ -136,10 +133,6 @@ public class TenantAwareTransactionManager extends JpaTransactionManager {
                 statement.setString(1, tenant);
                 statement.execute();
               }
-              // Written on every transaction, scope or none. Skipping it would
-              // leave whatever the previous transaction on this pooled connection
-              // set, and the next query would run under a stale scope — the same
-              // failure the tenant setting is written unconditionally to avoid.
               try (PreparedStatement statement = connection.prepareStatement(SET_SCOPE)) {
                 statement.setString(1, tenant.isEmpty() ? null : tenant);
                 statement.setString(2, scope == null ? null : scope.toString());

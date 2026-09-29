@@ -1,6 +1,3 @@
-# ---------------------------------------------------------------------------
-# Secrets — the most important block. Nothing here may ever reach the remote.
-# ---------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
@@ -13,13 +10,8 @@
 keystore.properties
 secrets/
 *.secret
-# Secrets are passed to containers as files. Whatever an operator mounts
-# into /run/secrets stays out of here.
 run/secrets/
 
-# ---------------------------------------------------------------------------
-# Gradle / Java
-# ---------------------------------------------------------------------------
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
@@ -35,9 +27,6 @@ bin/
 hs_err_pid*
 replay_pid*
 
-# ---------------------------------------------------------------------------
-# Node / web
-# ---------------------------------------------------------------------------
 node_modules/
 dist/
 .vite/
@@ -50,9 +39,6 @@ coverage/
 !.yarn/releases
 !.yarn/plugins
 
-# ---------------------------------------------------------------------------
-# Python (the plugin SDK and tooling)
-# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 .venv/
@@ -62,18 +48,12 @@ venv/
 .pytest_cache/
 *.egg-info/
 
-# ---------------------------------------------------------------------------
-# Kotlin Multiplatform / Android / iOS (from stage 3 onwards)
-# ---------------------------------------------------------------------------
 local.properties
 .kotlin/
 *.xcuserdatad/
 xcuserdata/
 Pods/
 
-# ---------------------------------------------------------------------------
-# Container and deployment artifacts
-# ---------------------------------------------------------------------------
 *.tar
 *.tar.gz
 !docs/**/*.tar.gz
@@ -81,9 +61,6 @@ Pods/
 compose.override.yaml
 compose.override.yml
 
-# ---------------------------------------------------------------------------
-# IDE
-# ---------------------------------------------------------------------------
 .idea/
 !.idea/icon.svg
 *.iml
@@ -97,42 +74,22 @@ compose.override.yml
 .project
 .classpath
 
-# ---------------------------------------------------------------------------
-# Operating system
-# ---------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 desktop.ini
 *~
 *.swp
 
-# ---------------------------------------------------------------------------
-# Local scratch space — never committed
-# ---------------------------------------------------------------------------
 /tmp/
 /scratch/
 *.local
 *.log
 logs/
 
-# The built web bundle. nginx/default.conf is NOT ignored: it is generated but
-# committed, because CI compares it against a fresh build and a reader should be
-# able to see the policy that is actually served.
 web/dist/
 
-# Rendered deployment secrets: the operator's real values, substituted into the
-# templates in deploy/generated/. Never committed — the templates are.
 deploy/secrets/
 
-# Written by @openapitools/openapi-generator-cli the first time it runs, to pin
-# the generator version it downloads. `tools/kotlin_client.py` pins that version
-# itself, through OPENAPI_GENERATOR_VERSION, so this file records a fact the tool
-# already carries -- and it would otherwise appear in every working tree and in CI
-# as an untracked change nobody made.
 openapitools.json
 
-# The per-crate SBOMs (REQ-CON-010). A build output: produced by
-# `cargo cyclonedx` in the job that builds the crate, published with the
-# release, and read by `tools/notices.py`. Not committed, because it carries a
-# timestamp and a fresh serial number on every run.
 *.cdx.json

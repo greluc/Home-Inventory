@@ -140,10 +140,6 @@ public class InstalledPlugins {
   private boolean register(Entry entry) {
     byte[] manifest;
     if (entry.manifestInline() != null) {
-      // What the generator writes: the document itself, in the one file the
-      // deployment mounts. One file rather than one per plugin plus a path in
-      // each entry, and a path is a thing that can be right in the list and
-      // wrong in the mount.
       manifest = entry.manifestInline().getBytes(StandardCharsets.UTF_8);
     } else {
       try {
@@ -166,9 +162,6 @@ public class InstalledPlugins {
     }
 
     if (!parsed.metadata().id().equals(entry.id())) {
-      // The list and the manifest disagree about which plugin this is. Refused
-      // rather than reconciled: a grant is recorded against the id, so taking
-      // the wrong one would attach somebody's consent to the wrong plugin.
       log.warn(
           "The list calls this plugin {} and its manifest calls it {}; it is not registered",
           entry.id(),
@@ -178,7 +171,6 @@ public class InstalledPlugins {
 
     try {
       if (!ContractVersion.covers(parsed.spec().contract())) {
-        // Disabled and reported, and the core carries on (09 §9.11).
         log.warn(
             "Plugin {} supports contract {} and this core serves {}; it is not registered",
             entry.id(),
@@ -191,14 +183,9 @@ public class InstalledPlugins {
       return false;
     }
 
-    // The bytes that were read, never a re-serialised copy: the signature is over
-    // the document as its publisher wrote it, and a round trip through a YAML
-    // writer would change whitespace the signature covers.
     ManifestSignature.Result signature =
         ManifestSignature.verify(manifest, entry.signature(), entry.publicKey());
     if (signature.state() == ManifestSignature.State.UNSIGNED && allowUnsigned) {
-      // The permanent warning of 09 §9.3, on every start rather than once: an
-      // operator who turned this on a year ago should keep being told.
       log.warn(
           "Plugin {} is UNSIGNED and this deployment permits unsigned plugins ({}).",
           entry.id(),
@@ -259,9 +246,6 @@ public class InstalledPlugins {
       String path = optional(entry, "manifest");
       String inline = optional(entry, "manifestInline");
       if ((path == null) == (inline == null)) {
-        // Exactly one, because the two are different things and a reader that
-        // preferred one would silently ignore the other: an operator who changed
-        // the file would see nothing change.
         throw new IllegalArgumentException(
             "A plugin entry carries either `manifest` (a path) or `manifestInline` (the document"
                 + " itself), and exactly one of them");

@@ -60,12 +60,6 @@ public class WebhookFanOut {
   public void onChanging(TenantScopedEvent event) {
     UUID ambient = TenantContext.current().orElse(null);
     if (!event.tenantId().equals(ambient)) {
-      // The row would be refused by the policy anyway -- `SET LOCAL
-      // app.tenant_id` was applied when this transaction began -- and being
-      // refused here would roll back somebody's write over a bookkeeping
-      // mismatch. Logged loudly instead: it means an event was raised for a
-      // tenant other than the one whose transaction it is, which is a defect
-      // rather than a state.
       log.error(
           "An event of type {} was raised for a tenant that is not the current one."
               + " No webhook delivery was queued for it.",

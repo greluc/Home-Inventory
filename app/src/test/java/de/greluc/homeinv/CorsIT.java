@@ -40,8 +40,6 @@ class CorsIT extends AbstractIntegrationTest {
 
     assertThat(response.getStatus()).isEqualTo(200);
     assertThat(response.getHeader("Access-Control-Allow-Origin")).isEqualTo(origin);
-    // Credentials and a reflected origin are only dangerous together, and this is
-    // the half that must stay a literal.
     assertThat(response.getHeader("Access-Control-Allow-Credentials")).isEqualTo("true");
   }
 
@@ -57,8 +55,6 @@ class CorsIT extends AbstractIntegrationTest {
             .andReturn()
             .getResponse();
 
-    // A reflecting configuration answers 200 with the caller's own origin, which
-    // together with allowCredentials lets any site read a logged-in user's data.
     assertThat(response.getHeader("Access-Control-Allow-Origin")).isNull();
     assertThat(response.getStatus()).isEqualTo(403);
   }
@@ -96,9 +92,6 @@ class CorsIT extends AbstractIntegrationTest {
             .andReturn()
             .getResponse();
 
-    // Without this list a browser hides every response header, including the ones
-    // 08 §8.2 puts contracts on - and a client that cannot read `RateLimit` cannot
-    // honour it.
     String exposed = response.getHeader("Access-Control-Expose-Headers");
     assertThat(exposed).contains("ETag").contains("RateLimit").contains("Retry-After");
   }

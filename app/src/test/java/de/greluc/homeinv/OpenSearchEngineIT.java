@@ -83,8 +83,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
   void findsTheWholeDocument() throws Exception {
     Tenant tenant = aTenant("fields");
 
-    // Each word appears in exactly one field, so a hit proves which field was
-    // searched. Nonsense words, because a real one might stem into another.
     UUID hammer =
         anItem(
             tenant,
@@ -106,9 +104,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     Tenant tenant = aTenant("stemming");
     anItem(tenant, "Bohrmaschine", null, null, null);
 
-    // The German analyser, because the session's language is `de`. The same
-    // property REQ-SRCH-001 asks of the PostgreSQL vectors (ADR-0047), so a
-    // search does not change meaning when the fallback answers.
     awaitFound(tenant, "Bohrmaschinen", "Bohrmaschine");
   }
 
@@ -121,9 +116,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     anItem(theirs, "Zarquonhammer", null, null, null);
     awaitFound(theirs, "Zarquonhammer", "Zarquonhammer");
 
-    // The document is in the same index, under the same word, and is not mine.
-    // One index for every tenant is ADR-0008's decision; this filter is what
-    // makes it a boundary rather than a shared bucket.
     assertThat(namesFound(mine, "Zarquonhammer")).isEmpty();
   }
 
@@ -134,8 +126,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     UUID id = anItem(tenant, "Blorptidhammer", null, null, null);
     awaitFound(tenant, "Blorptidhammer", "Blorptidhammer");
 
-    // The current version, read rather than assumed: every write on a single
-    // resource requires `If-Match`, and a guessed one is a 412 (08 §8.2).
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
@@ -145,13 +135,8 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
                 .header("If-Match", eTagOf(tenant.session(), ITEMS + "/" + id)))
         .andExpect(status().isNoContent());
 
-    // A trashed item must stop being findable at once, for the whole retention
-    // period (REQ-CORE-013) - a deletion that leaves the thing searchable did
-    // not happen as far as anybody can tell.
     await().atMost(INDEXED).untilAsserted(() -> assertThat(namesFound(tenant, "Blorptidhammer")).isEmpty());
   }
-
-  // -------------------------------------------------------------------------
 
   @Test
   @DisplayName("is unchanged by a second delivery of the same event (REQ-NFR-016)")
@@ -160,10 +145,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     UUID hammer = anItem(tenant, "Zarquonhammer", null, null, null);
     awaitFound(tenant, "Zarquonhammer", "Zarquonhammer");
 
-    // Delivery is at-least-once, so the broker WILL hand the same event over
-    // twice -- after a redelivery, after a consumer restart, after a network
-    // blip that lost the acknowledgement. REQ-NFR-016 says the second time must
-    // produce no second effect, and nothing held it to that before 2026-09-20.
     List<String> afterOne = namesFound(tenant, "Zarquonhammer");
     indexer.reindex(tenant.tenantId(), hammer);
     indexer.reindex(tenant.tenantId(), hammer);
@@ -172,14 +153,8 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
         .atMost(INDEXED)
         .untilAsserted(
             () ->
-                // ONE document and not three: the write is an upsert keyed by the
-                // item's id, so a redelivery overwrites rather than appends. A
-                // list that grew would be the same thing found twice, which is
-                // what a reader notices long before an operator does.
                 assertThat(namesFound(tenant, "Zarquonhammer")).isEqualTo(afterOne));
 
-    // And taking it out twice is not an error either: the second removal has
-    // nothing to remove, which is the outcome the caller wanted anyway.
     indexer.forget(tenant.tenantId(), hammer);
     indexer.forget(tenant.tenantId(), hammer);
     await()
@@ -194,8 +169,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
         .untilAsserted(
             () ->
                 assertThat(namesFound(tenant, text))
-                    // Named, so a failure says which field went missing rather
-                    // than which line it was asserted on.
                     .as("searching for '%s'", text)
                     .contains(expected));
   }

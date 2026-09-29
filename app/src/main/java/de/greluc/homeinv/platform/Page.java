@@ -68,9 +68,6 @@ public record Page<T>(
     data = List.copyOf(Objects.requireNonNull(data, "A page has rows, possibly none"));
     Objects.requireNonNull(page, "A page says where the next one is");
     Objects.requireNonNull(meta, "A page says what was true of the answer");
-    // Null and empty are different here, and the difference is visible to a
-    // client: null is "nobody asked for counts" and is omitted from the JSON,
-    // while an empty list is "counted, and there is nothing to count".
     facets = facets == null ? null : List.copyOf(facets);
   }
 

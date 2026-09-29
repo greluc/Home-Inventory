@@ -30,7 +30,6 @@ import sys
 LINK = re.compile(r"\]\(([^)]+)\)")
 EXTERNAL = ("http://", "https://", "#", "mailto:")
 
-# Rendered by other tooling and not part of the corpus these rules govern.
 SKIPPED_PREFIXES = ("design-system/", "website/")
 
 
@@ -39,11 +38,6 @@ def tracked_paths() -> tuple[set[str], set[str]]:
 
     :return: the file paths and the directory paths, both as git spells them
     """
-    # Tracked, staged AND untracked-but-present. A link to a file that exists and
-    # has not been `git add`ed yet is not a dead link, and reporting it as one makes
-    # the gate fire on the one occasion somebody runs it before committing — which is
-    # exactly when it is most useful. `--exclude-standard` keeps ignored files out, so
-    # a link into a build directory still fails, here and on the runner alike.
     listing = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
         capture_output=True,
@@ -87,8 +81,6 @@ def main() -> int:
                 continue
             target = raw.split("#", 1)[0]
             if not target:
-                # A link to an anchor in the same document. Whether the anchor
-                # exists is a different question, and not one a path can answer.
                 continue
             checked += 1
             resolved = posixpath.normpath(posixpath.join(directory, target))

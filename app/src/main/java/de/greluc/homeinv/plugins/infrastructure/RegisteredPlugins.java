@@ -75,9 +75,6 @@ public class RegisteredPlugins implements X509TrustManager {
       throw new CertificateException("A caller on the host channel presented no certificate");
     }
     if (identify(chain[0]).isEmpty()) {
-      // Refused before a method is dispatched, which is where it belongs: an
-      // unknown certificate is not a call that fails, it is a connection that
-      // does not happen.
       throw new CertificateException(
           "The certificate presented on the host channel is not the registered certificate of any "
               + "installed plugin");
@@ -87,16 +84,12 @@ public class RegisteredPlugins implements X509TrustManager {
   @Override
   public void checkServerTrusted(X509Certificate[] chain, String authType)
       throws CertificateException {
-    // This manager is only ever a server's view of its clients. A core that used
-    // it to check a server would be trusting whatever answered, so it says no.
     throw new CertificateException(
         "This trust manager recognises plugins calling in, and never a server answering");
   }
 
   @Override
   public X509Certificate[] getAcceptedIssuers() {
-    // Deliberately empty. The chain is not what decides here -- the fingerprint
-    // is -- and returning issuers would invite a caller to think otherwise.
     return new X509Certificate[0];
   }
 

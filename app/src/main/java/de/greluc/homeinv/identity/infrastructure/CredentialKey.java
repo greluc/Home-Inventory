@@ -80,9 +80,6 @@ public class CredentialKey {
           "The credential key at " + keyFile + " could not be read", unreadable);
     }
 
-    // A key handed over as text is what a secret manager usually produces, and
-    // sealing under the literal characters of a base64 string would work and be
-    // wrong — the same accommodation UrlSigningKey makes.
     byte[] decoded = tryDecodeBase64(read);
     byte[] material = decoded != null ? decoded : read;
 

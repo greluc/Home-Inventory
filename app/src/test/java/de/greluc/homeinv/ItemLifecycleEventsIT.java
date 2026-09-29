@@ -85,9 +85,7 @@ class ItemLifecycleEventsIT extends AbstractIntegrationTest {
     UUID type = inTenant(tenant, () -> aTypeWithANote(tenant));
     UUID id = inTenant(tenant, () -> anItem(tenant, type, "Hammer").id());
 
-    // A rename, with the attributes left exactly as they were.
     inTenant(tenant, () -> items.update(id, edit("Sledgehammer", null), OptionalLong.empty(), tenant.userId()));
-    // And a change of attributes.
     inTenant(
         tenant,
         () -> items.update(id, edit("Sledgehammer", "{\"note\":\"heavy\"}"), OptionalLong.empty(), tenant.userId()));
@@ -95,8 +93,6 @@ class ItemLifecycleEventsIT extends AbstractIntegrationTest {
     List<ItemUpdated> published = events.stream(ItemUpdated.class).toList();
     assertThat(published).hasSize(2);
     assertThat(published.get(0).name()).isEqualTo("Sledgehammer");
-    // The flag is what lets a consumer that only mirrors attributes skip a
-    // rename. Getting it the wrong way round would make it skip the wrong half.
     assertThat(published.get(0).attributesChanged()).isFalse();
     assertThat(published.get(1).attributesChanged()).isTrue();
   }
@@ -115,11 +111,8 @@ class ItemLifecycleEventsIT extends AbstractIntegrationTest {
     List<ItemMoved> published = events.stream(ItemMoved.class).toList();
     assertThat(published).hasSize(1);
     assertThat(published.getFirst().itemId()).isEqualTo(id);
-    // Where it came from, which nothing can recover afterwards: a consumer that
-    // keeps a count per place has to decrement the shed.
     assertThat(published.getFirst().fromLocationId()).isEqualTo(shed);
     assertThat(published.getFirst().toLocationId()).isEqualTo(attic);
-    // A move is not an edit, and says so by not being one.
     assertThat(events.stream(ItemUpdated.class)).isEmpty();
   }
 
@@ -138,7 +131,6 @@ class ItemLifecycleEventsIT extends AbstractIntegrationTest {
     assertThat(published.getFirst().fromItemTypeVersionId())
         .isNotEqualTo(published.getFirst().toItemTypeVersionId());
 
-    // Asking for the type it already has changes nothing, so it says nothing.
     inTenant(tenant, () -> items.changeType(created.id(), book, OptionalLong.empty(), tenant.userId()));
     assertThat(events.stream(ItemTypeChanged.class)).hasSize(1);
   }
@@ -156,14 +148,9 @@ class ItemLifecycleEventsIT extends AbstractIntegrationTest {
     inTenant(tenant, () -> items.restore(id, OptionalLong.empty(), tenant.userId()));
     assertThat(events.stream(ItemRestored.class)).hasSize(1);
 
-    // Restoring something that is not in the trash is a no-op, and says so by
-    // saying nothing: a consumer rebuilding a document on every restore would
-    // otherwise rebuild on every idle click.
     inTenant(tenant, () -> items.restore(id, OptionalLong.empty(), tenant.userId()));
     assertThat(events.stream(ItemRestored.class)).hasSize(1);
   }
-
-  // -------------------------------------------------------------------------
 
   private ItemService.UpdateItemCommand edit(String name, String attributes) {
     return new ItemService.UpdateItemCommand(

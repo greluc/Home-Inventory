@@ -140,8 +140,6 @@ const CLIENT = `web/${APP_VERSION}`;
  */
 const transport: Middleware = {
   onRequest({ request }) {
-    // On every request, including the reads: an API version is retired when
-    // nobody is calling it, and "nobody" has to include the people only reading.
     request.headers.set("X-Home-Inv-Client", CLIENT);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -178,8 +176,6 @@ function unwrap<T>(result: {
       typeof problem.traceId === "string" ? problem.traceId : undefined,
     );
   }
-  // A 204 carries no body, and the generated types say so: the call sites that
-  // reach this expect `void`, and `undefined` is what they get.
   return result.data as T;
 }
 
@@ -311,9 +307,6 @@ export const api = {
   search: async (query: string, language: string, cursor?: string): Promise<ItemPage> =>
     unwrap(
       await client.GET("/api/v1/items", {
-        // The cursor is spread in rather than set to `undefined`: the document
-        // says the parameter may be ABSENT, and `exactOptionalPropertyTypes`
-        // holds the client to the difference between absent and empty.
         params: { query: { q: query, language, limit: 50, ...(cursor ? { cursor } : {}) } },
       }),
     ),
@@ -337,12 +330,6 @@ export const api = {
   }): Promise<Item> =>
     unwrap(
       await client.POST("/api/v1/items", {
-        // `quantity` arrives from a form as text and the document says the field
-        // is a NUMBER. This client sent the text until 2026-09-21 and nothing
-        // complained, because Jackson parses a JSON string into a BigDecimal --
-        // so the request worked while disagreeing with the contract every other
-        // consumer generates from. The conversion is here, at the edge, where the
-        // form's shape meets the document's.
         body: {
           name: item.name,
           kind: item.kind,

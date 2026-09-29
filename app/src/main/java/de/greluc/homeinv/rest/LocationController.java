@@ -69,9 +69,6 @@ public class LocationController {
   @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.LOCATION_CREATE)
   @CanFail({ProblemType.NOT_FOUND, ProblemType.NAME_TAKEN})
-  // Redundant at run time — `ResponseEntity.created` sets the same status — and
-  // not in the document, which would otherwise describe the 200 springdoc infers
-  // from the return type for an endpoint that never answers one.
   @ResponseStatus(HttpStatus.CREATED)
   public ResponseEntity<LocationView> createLocation(
       @Valid @RequestBody CreateLocationRequest request,
@@ -250,18 +247,8 @@ public class LocationController {
       @RequestParam(required = false) @Size(max = 500) String cursor,
       @RequestParam(required = false, defaultValue = "50") @Positive @Max(200) int limit) {
 
-    // Asked first, and for its answer rather than its value: a place this
-    // tenant cannot see is a 404, which this endpoint has declared since it was
-    // written and could not produce until 2026-09-14. Without it the search ran
-    // over a scope of one id that matches nothing and answered an empty page,
-    // which reads as "this place is empty" rather than "there is no such place".
     locations.get(id);
 
-    // The subtree is resolved HERE and not inside `inventory`, which must not
-    // read the `locations` schema to work out which locations are below which
-    // (REQ-NFR-021). `locations` answers the tree question; `inventory` answers
-    // the item question; the adapter puts the two together, which is the one
-    // thing an access adapter is for.
     List<UUID> scope = includeSubtree ? locations.subtreeIds(id) : List.of(id);
 
     return search.query(

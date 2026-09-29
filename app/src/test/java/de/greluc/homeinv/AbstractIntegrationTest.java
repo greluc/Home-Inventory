@@ -47,10 +47,6 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @ActiveProfiles("test")
-// On the base class, so every integration test gets it without repeating the
-// import. A nested @TestConfiguration would not do: Spring Boot discovers those
-// on the test class itself, not on its superclass, which is a difference that
-// shows up only in the one test that actually stores a blob.
 @Import(TestBlobStore.class)
 public abstract class AbstractIntegrationTest {
 
@@ -65,7 +61,7 @@ public abstract class AbstractIntegrationTest {
    * {@code ci.yml} pinned anything — which is a claim with no mechanism, sitting in the file that
    * would have implemented it.
    */
-  @SuppressWarnings("resource") // Testcontainers closes it with the JVM via Ryuk.
+  @SuppressWarnings("resource")
   /**
    * What a test fixture's manifest verifies as: nothing signed it.
    *
@@ -86,25 +82,12 @@ public abstract class AbstractIntegrationTest {
           .withDatabaseName("homeinv")
           .withUsername("postgres")
           .withPassword("test-superuser")
-          // The production role script, then the passwords a container needs.
-          // Running the real script is what keeps NOBYPASSRLS in the test path.
           .withCopyFileToContainer(
               MountableFile.forClasspathResource("db/00-roles.sql"),
               "/docker-entrypoint-initdb.d/00-roles.sql")
           .withCopyFileToContainer(
               MountableFile.forClasspathResource("db/test-roles.sql"),
               "/docker-entrypoint-initdb.d/01-test-roles.sql")
-          // One container serves the whole suite, and every test class that
-          // needs its own application context -- a different property, an extra
-          // bean -- brings a pool of ten connections with it. PostgreSQL's
-          // default ceiling is 100 with a handful held back for the superuser,
-          // so the suite grew into `FATAL: remaining connection slots are
-          // reserved` on adding the twelfth context, as a context that failed to
-          // start rather than as anything resembling its cause.
-          //
-          // Raised here rather than by shrinking the pools: the pool size is the
-          // production one and a test that runs against a smaller one is testing
-          // something else.
           .withCommand("postgres", "-c", "max_connections=300");
 
   /** Valkey, where sessions and the login throttle live. */
@@ -168,16 +151,6 @@ public abstract class AbstractIntegrationTest {
   /** Builds MockMvc with the real security filter chain in place. */
   @BeforeEach
   void buildMockMvc() {
-    // apply(springSecurity()) is what puts the actual filter chain in the path.
-    // Without it the tests would exercise the controllers directly and every
-    // authentication and CSRF assertion below would pass vacuously.
-    //
-    // The two filters are added by hand because `webAppContextSetup` registers
-    // none of the application's own: they are servlet filters registered with the
-    // container, not beans the DispatcherServlet consults. Leaving them out cost
-    // nothing visible and hid two properties completely — a request had no
-    // `traceId` (REQ-NFR-042) and a body of any size was accepted (REQ-SEC-065) —
-    // in exactly the tests written to check them.
     mockMvc =
         MockMvcBuilders.webAppContextSetup(webApplicationContext)
             .addFilters(
@@ -430,10 +403,6 @@ public abstract class AbstractIntegrationTest {
     registry.add("spring.data.redis.port", () -> VALKEY.getMappedPort(6379));
     registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
     registry.add("spring.rabbitmq.port", () -> RABBITMQ.getMappedPort(5672));
-    // The gRPC client is still CONSTRUCTED — the pin and the identity have no
-    // default and its constructor refuses without them, which is the behaviour
-    // under test elsewhere. It never connects: a gRPC channel is lazy, and the
-    // in-memory store above is what actually gets injected.
     registry.add("HOMEINV_BLOBSTORE_ENDPOINT", () -> "blobstore.invalid:8100");
     registry.add("HOMEINV_BLOBSTORE_FINGERPRINT", BLOBSTORE_IDENTITY::fingerprint);
     registry.add("HOMEINV_MTLS_CORE_FILE", () -> CORE_IDENTITY.bundle().toString());

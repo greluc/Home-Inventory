@@ -39,13 +39,9 @@ class ImportSqlTest {
     assertThat(sql).contains("jsonb_populate_record(null::inventory.item, ?::jsonb)");
     assertThat(sql).contains("on conflict (tenant_id, id) do update set");
 
-    // Every column is assigned except `id`, which is what the row is matched on:
-    // assigning it would be writing the value it was found by.
     assertThat(sql).contains("name = excluded.name").contains("created_at = excluded.created_at");
     assertThat(sql).doesNotContain("id = excluded.id");
 
-    // And it says which branch fired, which is how the report tells an insert
-    // from an overwrite without a second query per row.
     assertThat(sql).contains("returning (xmax = 0) as inserted");
   }
 
@@ -91,9 +87,6 @@ class ImportSqlTest {
     Map<String, Object> row =
         Map.of("id", "0198c0de-0000-7000-8000-000000000000", "labels", "{\"en\":\"Box\"}");
 
-    // Without unwrapping, the archive's string would be stored as a JSON string
-    // -- itself a valid `jsonb` value, so nothing would fail and the labels
-    // would be a quoted blob for ever.
     assertThat(ImportSql.asJson(json, row, Set.of("labels")))
         .contains("\"labels\":{\"en\":\"Box\"}");
     assertThat(ImportSql.asJson(json, row, Set.of()))

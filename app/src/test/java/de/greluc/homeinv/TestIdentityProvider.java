@@ -97,8 +97,6 @@ final class TestIdentityProvider {
         "localhost:" + port,
         IDENTITY.get().fingerprint(),
         AbstractIntegrationTest.UNSIGNED_FIXTURE, true);
-    // For the INSTANCE and not for a tenant: a sign-in happens before any tenant
-    // is known, so a per-tenant grant would have nothing to key on.
     registry.grantForInstance(PLUGIN_ID, "network:outbound", UUID.randomUUID());
   }
 
@@ -160,8 +158,6 @@ final class TestIdentityProvider {
         IdentityProviderBeginRequest request,
         StreamObserver<IdentityProviderBeginResponse> responses) {
       LAST_BEGIN.set(request);
-      // The parameters go on the URL the way a provider would expect them, so a
-      // test can assert that the core minted them rather than the plugin.
       responses.onNext(
           IdentityProviderBeginResponse.newBuilder()
               .setAuthorizationUrl(

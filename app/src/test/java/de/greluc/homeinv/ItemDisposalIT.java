@@ -69,8 +69,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
                         new LoanLog.NewLoan(null, "A neighbour", LocalDate.parse("2026-09-01"), null, null),
                         tenant.userId()))
             .id();
-    // The state and the loan row move in one transaction, so "is it lent" has one
-    // answer however it is asked.
     assertThat(stateOf(tenant, itemId)).isEqualTo(ItemState.LENT.name());
 
     inOwn(tenant, () -> loans.returnItem(itemId, loanId, LocalDate.parse("2026-09-05"), tenant.userId()));
@@ -100,9 +98,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
 
     assertThat(sold.lifecycleState()).isEqualTo(ItemState.SOLD.name());
 
-    // STILL THERE. This is the property worth the test: a disposal is not a
-    // deletion, and the record of what became of a thing is the point of keeping
-    // it (REQ-LIFE-007).
     ItemView readBack = inOwn(tenant, () -> items.get(itemId));
     assertThat(readBack.lifecycleState()).isEqualTo(ItemState.SOLD.name());
     assertThat(readBack.name()).isEqualTo("A road bike");
@@ -125,8 +120,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
                 tenant.userId()));
 
     assertThat(stateOf(tenant, itemId)).isEqualTo(ItemState.DISPOSED.name());
-    // Absent, not 0.00: "nothing was paid" and "it fetched zero" are different
-    // claims, and a report summing the second would be wrong invisibly.
     assertThat(priceOf(tenant, itemId)).isNull();
   }
 
@@ -172,8 +165,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
                 OptionalLong.empty(),
                 tenant.userId()));
 
-    // Unlike a trashing there is no way back: what is gone is the thing, not the
-    // record of it.
     assertThatThrownBy(
             () ->
                 inOwn(
@@ -204,7 +195,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
                 OptionalLong.empty(),
                 tenant.userId()));
 
-    // Not `item-lent`: nobody has it, and "ask for it back" is not the way out.
     assertThatThrownBy(
             () ->
                 inOwn(
@@ -231,8 +221,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
           return null;
         });
 
-    // The database refuses a row where the two disagree (`item_trashed_iff_deleted`),
-    // so this holds that the application writes both rather than relying on one.
     assertThat(stateOf(tenant, itemId)).isEqualTo(ItemState.TRASHED.name());
     assertThat(deletedAtOf(tenant, itemId)).isNotNull();
 
@@ -240,8 +228,6 @@ class ItemDisposalIT extends AbstractIntegrationTest {
     assertThat(stateOf(tenant, itemId)).isEqualTo(ItemState.ACTIVE.name());
     assertThat(deletedAtOf(tenant, itemId)).isNull();
   }
-
-  // -------------------------------------------------------------------------
 
   private String stateOf(Tenant tenant, UUID itemId) {
     return inOwn(

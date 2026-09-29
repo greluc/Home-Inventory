@@ -94,10 +94,6 @@ public class UploadCompletion {
     session.completed(stored.id(), actor, Instant.now(clock));
     sessions.save(session);
 
-    // After the row and not before: staged bytes whose session was never
-    // completed are removed by the sweep, while a session pointing at bytes that
-    // are already gone could never be finished at all. A failure here therefore
-    // costs disk space until the sweep runs, which is the recoverable half.
     try {
       staging.deleteStaged(tenantId, uploadId);
     } catch (IOException failed) {

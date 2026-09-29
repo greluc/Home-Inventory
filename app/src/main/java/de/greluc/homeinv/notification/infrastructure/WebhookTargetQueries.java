@@ -179,8 +179,6 @@ public class WebhookTargetQueries {
             """
             update notification.webhook_target
             set url = ?, description = ?, event_types = ?,
-                -- The cast is not decoration: a bare parameter inside coalesce
-                -- can leave the driver with no type to send a null as.
                 signing_secret = coalesce(?::text, signing_secret),
                 enabled = ?, version = version + 1, updated_at = now(), updated_by = ?
             where tenant_id = ? and id = ?

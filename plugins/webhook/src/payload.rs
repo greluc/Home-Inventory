@@ -145,7 +145,6 @@ mod tests {
         let text = String::from_utf8(body).unwrap();
         assert!(text.contains("\"fileName\":\"receipt.pdf\""));
         assert!(text.contains("\"bytes\":4096"));
-        // The bytes themselves are not in it, in any encoding.
         assert!(!text.contains("base64"));
         assert!(!text.contains("content"));
     }
@@ -156,7 +155,6 @@ mod tests {
         let text = String::from_utf8(body).unwrap();
         assert!(text.contains("a \\\"quote\\\""));
         assert!(text.contains("line\\nbreak"));
-        // And what was built is still one JSON object: the braces are balanced.
         assert_eq!(text.matches('{').count(), text.matches('}').count());
     }
 

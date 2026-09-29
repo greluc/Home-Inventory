@@ -69,15 +69,11 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
     MockHttpSession operator = anOperator("cycle");
     register();
 
-    // Nothing is granted to begin with. There is no base entitlement on this
-    // level either (09 §9.4).
     assertThat(grantedForInstance(operator)).isFalse();
 
     grant(operator).andExpect(status().isNoContent());
     assertThat(registry.permitsForInstance(PLUGIN, "network:outbound")).isTrue();
 
-    // Twice is once, as on the tenant path: the second says so by succeeding and
-    // changing nothing.
     grant(operator).andExpect(status().isNoContent());
     assertThat(registry.instanceGrants(PLUGIN)).hasSize(1);
 
@@ -86,8 +82,6 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
     withdraw(operator).andExpect(status().isNoContent());
     assertThat(registry.permitsForInstance(PLUGIN, "network:outbound")).isFalse();
 
-    // Withdrawing what is not there is not an error: what the caller wants is
-    // "this plugin may not do this for the instance", and that is already true.
     withdraw(operator).andExpect(status().isNoContent());
   }
 
@@ -97,14 +91,10 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
     MockHttpSession operator = anOperator("separate");
     register();
 
-    // A tenant grants everything it can. That says nothing about the instance:
-    // the deployment's own obligations are not a tenant's to permit.
     TenantContext.runAs(
         operatorTenant, () -> registry.grant(PLUGIN, "network:outbound", operatorId));
     assertThat(registry.permitsForInstance(PLUGIN, "network:outbound")).isFalse();
 
-    // And the reverse. The instance grants it, the tenant withdraws its own, and
-    // the two answers are about the same plugin at the same moment.
     grant(operator).andExpect(status().isNoContent());
     TenantContext.runAs(
         operatorTenant, () -> registry.revoke(PLUGIN, "network:outbound", operatorId));
@@ -120,9 +110,6 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
     MockHttpSession operator = anOperator("unasked");
     register();
 
-    // It would be waiting as a permission if the plugin asked for it later,
-    // which is the silent escalation REQ-PLG-006 exists to prevent — and the
-    // reasoning does not change because the grantor is the operator.
     mockMvc
         .perform(
             put(INSTANCE_PLUGINS + "/" + PLUGIN + "/capabilities/core:item:write")
@@ -146,8 +133,6 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
                 .with(csrf()))
         .andExpect(status().isForbidden());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * What the operator's listing says about the one capability this plugin asks for.
@@ -236,9 +221,6 @@ class InstanceCapabilityIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN without a second factor is refused every
-    // request in the tenant. Proved in SecondFactorIT; here it is a
-    // precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

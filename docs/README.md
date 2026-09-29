@@ -22,6 +22,7 @@ contradicts the implementation is a defect and gets corrected immediately.
 | the **security concept** | [12 Security](architecture/12-security.md) |
 | **operations, backup, monitoring** | [13 Operations](architecture/13-operations-and-observability.md) |
 | **quality goals, risks, terms** | [14 Quality, Risks, Glossary](architecture/14-quality-risks-glossary.md) |
+| the **rules the code follows** that no single class states — tenant context, JDBC, paging, runtime quirks, testing | [15 Implementation Rules](architecture/15-implementation-rules.md) |
 | **implementable requirements** | [Requirements catalogue](requirements/) |
 | the **design system** | [Design system brief](design/design-system-brief.md) — the system itself is in [`design-system/`](../design-system/) |
 | why the system is **not** Kubernetes-only and **not** microservices | [Kubernetes and microservices assessment](design/kubernetes-and-microservices-assessment.md) — assessed and closed on 2026-09-15 with the plan unchanged; no ADR is superseded |

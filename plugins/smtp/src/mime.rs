@@ -89,10 +89,6 @@ pub fn render(message: &Message<'_>) -> String {
     if !message.language.is_empty() {
         out.push_str(&header("Content-Language", message.language));
     }
-    // What it is not: a reply, a list post, or anything a filter should treat as
-    // bulk. `Auto-Submitted` is RFC 3834's way of saying "a machine sent this and
-    // nothing should answer it", which is what stops a vacation responder from
-    // writing back to a notification address.
     out.push_str(&header("Auto-Submitted", "auto-generated"));
     out.push_str(&header("MIME-Version", "1.0"));
 
@@ -150,8 +146,6 @@ fn mixed(message: &Message<'_>, boundary: &str) -> String {
     out.push_str("\r\n");
 
     out.push_str(&format!("--{boundary}\r\n"));
-    // The message itself, as one part of the mixture -- which is why its own
-    // headers are written here rather than at the top.
     let text = alternative_or_plain(message, &inner);
     out.push_str(&text);
 
@@ -173,8 +167,6 @@ fn part(boundary: &str, media_type: &str, content: &[u8], file_name: Option<&str
     out.push_str(&header("Content-Type", media_type));
     out.push_str(&header("Content-Transfer-Encoding", "base64"));
     if let Some(name) = file_name {
-        // The name is encoded the same way a subject is: a receipt called
-        // `Beleg Küche.pdf` is an ordinary name and must survive the journey.
         out.push_str(&header(
             "Content-Disposition",
             &format!("attachment; filename=\"{}\"", encoded_words(name)),
@@ -267,7 +259,6 @@ pub fn rfc5322_date(seconds: u64) -> String {
     let days = (seconds / DAY) as i64;
     let time = seconds % DAY;
     let (year, month, day) = civil_from_days(days);
-    // 1970-01-01 was a Thursday, which is why the table starts there.
     let weekday = DAYS[(days.rem_euclid(7)) as usize];
 
     format!(
@@ -307,8 +298,6 @@ mod tests {
         assert!(rendered.contains("Content-Type: text/plain; charset=utf-8\r\n"));
         assert!(rendered.contains("Content-Transfer-Encoding: base64\r\n"));
         assert!(!rendered.contains("multipart"));
-        // The body travels encoded, so no line of it can begin with a full stop
-        // and end the DATA command.
         assert!(!rendered.contains("The warranty ends on Friday."));
     }
 
@@ -349,29 +338,22 @@ mod tests {
 
     #[test]
     fn the_message_id_follows_the_idempotency_key() {
-        // A retry carries the same id, so a receiver that deduplicates on it
-        // sees one message.
         let rendered = render(&message("text", "", &[]));
         assert!(rendered.contains("Message-ID: <key-1@example.org>"));
     }
 
     #[test]
     fn it_says_a_machine_sent_it() {
-        // RFC 3834. Without it a vacation responder writes back to the
-        // notification address, and every reply is a new notification.
         assert!(render(&message("text", "", &[])).contains("Auto-Submitted: auto-generated"));
     }
 
     #[test]
     fn the_date_is_rfc_5322_in_utc() {
-        // 1700000000 is 2023-11-14T22:13:20Z, a Tuesday.
         assert_eq!(
             rfc5322_date(1_700_000_000),
             "Tue, 14 Nov 2023 22:13:20 +0000"
         );
-        // The epoch itself, which was a Thursday.
         assert_eq!(rfc5322_date(0), "Thu, 1 Jan 1970 00:00:00 +0000");
-        // A leap day, because February is where a hand-written calendar breaks.
         assert_eq!(
             rfc5322_date(1_709_164_800),
             "Thu, 29 Feb 2024 00:00:00 +0000"
@@ -380,8 +362,6 @@ mod tests {
 
     #[test]
     fn every_header_line_ends_with_crlf() {
-        // A bare LF in a header is a message some servers reject and others
-        // silently truncate at that point.
         let rendered = render(&message("text", "", &[]));
         for line in rendered.split("\r\n") {
             assert!(!line.contains('\n'), "a bare newline survived: {line:?}");

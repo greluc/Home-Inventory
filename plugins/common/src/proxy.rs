@@ -115,10 +115,6 @@ mod tests {
         let failure = connect("127.0.0.1:1", "example.org", 443, Duration::from_secs(1))
             .await
             .unwrap_err();
-        // Which failure it is depends on the platform -- a refused connection on
-        // Linux, a timeout on Windows -- and the property under test is neither.
-        // It is that a plugin gets a sentence naming the proxy rather than a
-        // panic, because that sentence is what an operator reads.
         assert!(
             failure.contains("egress proxy"),
             "the failure should name the proxy: {failure}"

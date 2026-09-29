@@ -89,11 +89,6 @@ public class GraphQlSafeguards {
                   .orElse(1);
           Object first = environment.getArguments().get("first");
           int rows = first instanceof Integer asked && asked > 0 ? asked : 1;
-          // The field's own weight once, and its children once per row it
-          // returns. `weight * rows + child * rows` would charge the weight per
-          // row as well, which made an ordinary two-level query cost 13 100
-          // against a budget of 5 000 -- a limit that refuses the normal case is
-          // a limit somebody raises until it refuses nothing.
           return weight + childComplexity * rows;
         });
   }

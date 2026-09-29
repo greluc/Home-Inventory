@@ -150,9 +150,6 @@ public class DefaultQuotaGuard implements QuotaGuard {
             .single();
 
     if (used > permitted) {
-      // Thrown after the increment, so the transaction's rollback is what returns
-      // the claim. Checking first and writing second would be a race: two
-      // requests both find room, both take it, and the tenant is over.
       log.info("Refused a {} claim of {} for tenant {}: {} of {}.",
           quota, amount, tenantId, used, permitted);
       throw new QuotaExceededException(quota, used, permitted);
@@ -163,7 +160,6 @@ public class DefaultQuotaGuard implements QuotaGuard {
   @Transactional(propagation = Propagation.SUPPORTS)
   public void release(Quota quota, long amount) {
     if (amount <= 0 || quota == Quota.API_CALLS) {
-      // A month's calls are not given back. They were made.
       return;
     }
     jdbc.sql(RELEASE).params(amount, TenantContext.require(), quota.name()).update();
@@ -200,13 +196,9 @@ public class DefaultQuotaGuard implements QuotaGuard {
     try {
       used = redis.opsForValue().increment(key, amount);
       if (used != null && used <= amount) {
-        // First write of the month: give the key an expiry, so nothing has to
-        // sweep last month's counters.
         redis.expire(key, COUNTER_TTL);
       }
     } catch (RedisConnectionFailureException unreachable) {
-      // Degrade rather than refuse (REQ-NFR-012). A cache outage that stopped
-      // every request would be an outage; an over-generous month is recoverable.
       log.warn("The API-call quota is not being counted: Valkey is unreachable.", unreachable);
       return;
     }

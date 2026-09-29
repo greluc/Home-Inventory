@@ -21,9 +21,6 @@ import document from "../public/third-party-notices.json";
  * bundle report rather than a tree-shaken package, and that is the failure this catches.
  */
 describe("the third-party notice of this bundle", () => {
-  // Imported rather than read with `node:fs`: the type checker covers the test
-  // files too, and a `node:` import would mean `@types/node` in a project whose
-  // only runtime is a browser.
   const notice: {
     artifact: string;
     components: { name: string; version: string; licences: string[]; notices: { text: string }[] }[];

@@ -76,28 +76,20 @@ class ResumableUploadIT extends AbstractIntegrationTest {
   void theInterruptedUploadContinues() {
     Context context = tenant("continue");
     UUID item = UUID.randomUUID();
-    // Text rather than an image, because a document is stored AS IT ARRIVED
-    // while every image is re-encoded (ADR-0052) — and what this test is about
-    // is whether the two pieces became the original file, which only the
-    // unmodified path can say with a byte count.
     byte[] file = text(4096);
 
     UploadSessionView begun =
         as(context, () -> uploads.begin("ITEM", item, false, "PHOTO", file.length, context.userId()));
     assertThat(begun.offset()).isZero();
 
-    // The first half arrives, and then the connection drops: nothing tells the
-    // server, and the client does not know how much got through.
     as(context, () -> append(begun.id(), 0, Arrays.copyOfRange(file, 0, 1500), context));
 
-    // So it asks. This is the request the whole feature exists for.
     UploadSessionView afterTheDrop = as(context, () -> uploads.status(begun.id()));
     assertThat(afterTheDrop.offset())
         .as("the offset comes from the store that holds the bytes, not from either side's belief")
         .isEqualTo(1500);
     assertThat(afterTheDrop.isComplete()).isFalse();
 
-    // And continues from there rather than from zero.
     UploadSessionView done =
         as(
             context,
@@ -108,9 +100,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
     assertThat(done.isComplete()).isTrue();
     assertThat(done.offset()).isEqualTo(file.length);
 
-    // Read from the repository rather than through `findOne`, which answers a
-    // PENDING_SCAN object with an exception by design (REQ-MED-013): the scan
-    // runs in the worker and there is no worker here.
     long storedSize =
         as(
             context,
@@ -146,8 +135,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
                         append(
                             begun.id(), 900, Arrays.copyOfRange(file, 900, 1900), context)))
         .isInstanceOf(OffsetMismatchException.class)
-        // The refusal carries the answer, so a client's next request is the
-        // right one rather than another guess.
         .extracting(thrown -> ((OffsetMismatchException) thrown).actual())
         .isEqualTo(1000L);
 
@@ -186,8 +173,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
             mine,
             () -> uploads.begin("ITEM", UUID.randomUUID(), false, "PHOTO", 512, mine.userId()));
 
-    // 404 and not 403: an upload of another tenant is one this caller cannot be
-    // told exists, which is the rule the whole API follows (REQ-SEC-025).
     assertThatThrownBy(() -> as(theirs, () -> uploads.status(begun.id())))
         .isInstanceOf(NotFoundException.class);
   }
@@ -211,8 +196,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
               }
             });
 
-    // The same bytes, in three pieces, to a second item so the attachment is a
-    // second one rather than a duplicate.
     UUID other = UUID.randomUUID();
     UploadSessionView begun =
         as(context, () -> uploads.begin("ITEM", other, false, "PHOTO", file.length, context.userId()));
@@ -221,9 +204,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
     UploadSessionView done =
         as(context, () -> append(begun.id(), 800, Arrays.copyOfRange(file, 800, 1024), context));
 
-    // Content addressing is what proves it: the same bytes through two
-    // entrances are ONE stored object, which can only be true if both ran the
-    // same detection, the same transcoding and the same hashing (ADR-0032).
     assertThat(done.mediaObjectId())
         .as("the same file through either entrance is the same stored object")
         .isEqualTo(atOnce.id());
@@ -242,9 +222,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
                     "ITEM", UUID.randomUUID(), false, "PHOTO", file.length, context.userId()));
     UploadSessionView done = as(context, () -> append(begun.id(), 0, file, context));
 
-    // The client never saw that answer and asks again. It is told the same
-    // media id rather than being sent back to the beginning of a file that is
-    // already stored.
     UploadSessionView again = as(context, () -> uploads.status(begun.id()));
     assertThat(again.mediaObjectId()).isEqualTo(done.mediaObjectId());
     assertThat(again.offset()).isEqualTo(file.length);
@@ -263,9 +240,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
                     "ITEM", UUID.randomUUID(), false, "PHOTO", file.length, context.userId()));
     as(context, () -> append(begun.id(), 0, Arrays.copyOfRange(file, 0, 200), context));
 
-    // Backdated rather than waited for, which is what `OrphanedBlobSweepIT`
-    // does with its grace period and for the same reason: the property under
-    // test is what the sweep removes, not how long it takes to become due.
     as(
         context,
         () ->
@@ -281,8 +255,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
         .as("an upload nobody came back for is gone, and so are its bytes")
         .isInstanceOf(NotFoundException.class);
   }
-
-  // ---------------------------------------------------------------------------
 
   private UploadSessionView append(UUID uploadId, long offset, byte[] chunk, Context context) {
     try {
@@ -335,9 +307,6 @@ class ResumableUploadIT extends AbstractIntegrationTest {
   private static byte[] text(int size) {
     byte[] file = new byte[size];
     for (int index = 0; index < size; index++) {
-      // Printable ASCII and a newline every eighty characters: the detector
-      // decides text by what the bytes are, and a run of identical characters
-      // is as valid a text file as any but harder to read in a failure message.
       file[index] = (byte) (index % 80 == 79 ? 10 : 'a' + (index % 26));
     }
     return file;

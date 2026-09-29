@@ -82,17 +82,6 @@ const REMEMBERED_KEYS: usize = 10_000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // THE LICENCE NOTICE THIS BINARY CARRIES (REQ-CON-013).
-    //
-    // A permissive licence asks for its notice in every copy, and a statically
-    // linked binary is a copy. This image is `scratch` — one binary and nothing
-    // else, which CI asserts — so there is no file to put beside it and the
-    // notice is compiled in, exactly as the public roots are in the plugins
-    // that speak TLS.
-    //
-    // First, before the logger: somebody reading a licence should get the
-    // licence and not a JSON log line above it. `tools/notices.py` generates
-    // the file and CI fails when it no longer describes what is linked in.
     if std::env::args().any(|argument| argument == "--licences") {
         print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
         return Ok(());
@@ -122,9 +111,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "plugin-smtp is listening"
     );
     for missing in configuration.missing(proxy.as_deref()) {
-        // Said once, at startup, and each one names what to set. A plugin that
-        // cannot deliver is a plugin an operator has to be able to diagnose
-        // without reading its source (REQ-PLG-015).
         warn!("plugin-smtp is not ready: {missing}");
     }
 
@@ -196,8 +182,6 @@ impl Configuration {
                 &env("HOMEINV_SMTP_PASSWORD_FILE").unwrap_or(DEFAULT_PASSWORD_FILE.into()),
             ),
             sender: env("HOMEINV_SMTP_SENDER"),
-            // The name in EHLO. A server may check that it resolves, and the
-            // default says what this is rather than pretending to be a host.
             ehlo_name: env("HOMEINV_SMTP_EHLO_NAME").unwrap_or_else(|| "home-inventory".into()),
             timeout: Duration::from_secs(
                 env("HOMEINV_SMTP_TIMEOUT_SECONDS")
@@ -286,8 +270,6 @@ impl NotificationChannel for Smtp {
         Ok(Response::new(NotificationChannelDescriptor {
             channel_key: "email".into(),
             name: "E-mail".into(),
-            // Both spellings a subscription holds in practice, and they mean the
-            // same thing.
             address_schemes: vec!["mailto".into(), "email".into()],
             supports_html: true,
         }))
@@ -317,9 +299,6 @@ impl NotificationChannel for Smtp {
             .clone()
             .ok_or_else(|| Status::failed_precondition("no envelope sender is configured"))?;
 
-        // INVALID_ARGUMENT and not UNAVAILABLE: "that is not an address" does not
-        // become one by being repeated, so the core dead-letters it on the first
-        // attempt rather than retrying for a day.
         let recipient = address::normalise(&message.recipient).map_err(Status::invalid_argument)?;
 
         if self.delivered.already(&message.idempotency_key) {
@@ -364,9 +343,6 @@ impl NotificationChannel for Smtp {
 
         match smtp::send(proxy, &server, &sender, &recipient, &rendered).await {
             Ok(accepted) => {
-                // The host, never the recipient: a delivery log line is read by
-                // an operator, and who was written to is the tenant's business
-                // (REQ-SEC-066).
                 info!(host = %server.host, "a message was accepted for delivery");
                 Ok(Response::new(NotificationDeliverResponse {
                     provider_message_id: queue_id(&accepted),
@@ -376,9 +352,6 @@ impl NotificationChannel for Smtp {
             }
             Err(reason) => {
                 warn!(host = %server.host, reason = %reason, "a message could not be delivered");
-                // A 5xx from the server is permanent and a 4xx is temporary --
-                // the other way round from HTTP, and the reason this mapping is
-                // written out rather than assumed.
                 if reason.contains(": 5") {
                     Err(Status::invalid_argument(reason))
                 } else {
@@ -434,9 +407,6 @@ impl PluginHealth for Health {
             state: if self.ready.is_empty() {
                 HealthState::Ok as i32
             } else {
-                // NOT_CONFIGURED and not a failure: the difference matters to an
-                // operator, and `plugin-health-states.yaml` names it for this
-                // reason (REQ-PLG-015).
                 HealthState::NotConfigured as i32
             },
             detail: self.ready.join("; "),
@@ -469,9 +439,6 @@ mod tests {
 
     #[test]
     fn each_missing_piece_is_named_rather_than_summarised() {
-        // REQ-PLG-015: an outbound plugin refuses service on a partial state and
-        // says which part. "It is broken" is the diagnosis an operator can do
-        // least with.
         let mut configuration = configured();
         configuration.host = None;
         configuration.sender = None;
@@ -500,8 +467,6 @@ mod tests {
 
     #[test]
     fn an_unreadable_security_setting_is_missing_rather_than_assumed() {
-        // Guessing here means guessing whether the credentials travel in the
-        // clear, so nothing is guessed.
         let mut configuration = configured();
         configuration.security = None;
         assert!(configuration

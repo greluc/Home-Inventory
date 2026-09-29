@@ -77,8 +77,6 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
 
     assertThat(runner.eraseDueTenants()).isPositive();
 
-    // The rows are gone. Read under the tenant's own context, which is the only
-    // context that could still see them.
     assertThat(rowsIn(tenant, "inventory.item")).isZero();
     assertThat(rowsIn(tenant, "tagging.tag_assignment")).isZero();
     assertThat(rowsIn(tenant, "tagging.tag")).isZero();
@@ -87,8 +85,6 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
     assertThat(rowsIn(tenant, "authz.role_definition")).isZero();
     assertThat(rowsIn(tenant, "tenancy.membership")).isZero();
 
-    // The tenant row stays, as the tombstone the certificate points at, and it
-    // says what it is.
     assertThat(stateOf(tenant)).isEqualTo("ERASED");
 
     ErasureCertificates.Certificate certificate =
@@ -97,24 +93,16 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
     assertThat(certificate.tenantName()).isNotBlank();
     assertThat(certificate.requestedBy()).isEqualTo(tenant.userId());
 
-    // In the order the run went, which is the order the foreign keys allow.
-    // `tenancy` is deliberately not last: a membership names the location a
-    // member is confined to and the role definition they hold (V28, V26), so it
-    // has to go before both of those blocks.
     assertThat(certificate.report())
         .extracting(TenantErasure.BlockReport::block)
         .containsExactly(
             "idempotency", "media", "tagging", "inventory", "tenancy", "locations", "catalog",
             "authorization", "crypto", "audit");
 
-    // And the blocks that held something say how much.
     assertThat(reportOf(certificate, "inventory").rowsRemoved()).isPositive();
     assertThat(reportOf(certificate, "locations").rowsRemoved()).isPositive();
     assertThat(reportOf(certificate, "tenancy").rowsRemoved()).isPositive();
 
-    // The audit log is the one entry that always carries a note: the application
-    // may not delete it (REQ-SEC-069) and the certificate says so rather than
-    // implying it went.
     assertThat(reportOf(certificate, "audit").rowsRemoved()).isZero();
     assertThat(reportOf(certificate, "audit").note()).contains("REQ-SEC-069").contains("retained");
   }
@@ -129,14 +117,10 @@ class TenantErasureRunIT extends AbstractIntegrationTest {
     runner.eraseDueTenants();
     Instant first = certificates.forTenant(tenant.tenantId()).orElseThrow().completedAt();
 
-    // The tenant is no longer due — the tombstone took it off the list — so a
-    // second sweep finds nothing and changes nothing.
     runner.eraseDueTenants();
     assertThat(certificates.forTenant(tenant.tenantId()).orElseThrow().completedAt())
         .isEqualTo(first);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Gives the tenant one row in each block that references another.

@@ -121,10 +121,6 @@ public class DefaultServiceAccounts implements ServiceAccounts {
   @Transactional
   public int revokeAll(UUID actor) {
     Instant now = Instant.now(clock);
-    // Through the entities rather than one UPDATE, so that the tombstone, the
-    // version and the audit columns are written exactly as a single revocation
-    // writes them -- a bulk path that set a column directly would be a second
-    // definition of what "revoked" means.
     List<ServiceAccount> live =
         accounts.findAll().stream().filter(account -> account.getDeletedAt() == null).toList();
     live.forEach(account -> account.revoke(actor, now));
@@ -143,16 +139,10 @@ public class DefaultServiceAccounts implements ServiceAccounts {
     Instant now = Instant.now(clock);
     Optional<ServiceAccountTokens.TokenHolder> holder = tokens.byToken(hash(token));
     if (holder.isEmpty() || !holder.get().isUsable(now)) {
-      // One answer for unknown, revoked and expired. Telling them apart says
-      // which tokens once existed, which is the same reasoning REQ-SEC-110
-      // applies to addresses.
       return Optional.empty();
     }
 
     ServiceAccountTokens.TokenHolder found = holder.get();
-    // The last-used stamp is written inside the token's own tenant context: the
-    // row is tenant-scoped, and the policy is what makes the update touch this
-    // tenant's row and no other.
     TenantContext.runAs(
         found.tenantId(),
         () -> accounts.findById(found.id()).ifPresent(account -> account.used(now)));
@@ -161,8 +151,6 @@ public class DefaultServiceAccounts implements ServiceAccounts {
         new AuthenticatedUser(
             found.id(),
             found.tenantId(),
-            // No address: a service account has none, and the field is what the
-            // interface shows and the log records. The id is what identifies it.
             "service-account:" + found.id(),
             "en",
             found.role(),

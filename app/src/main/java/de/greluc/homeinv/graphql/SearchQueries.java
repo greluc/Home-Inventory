@@ -77,10 +77,6 @@ public class SearchQueries {
       @Argument String q,
       @Argument String language,
       @Argument List<String> filter) {
-    // Mapped rather than lower-cased: `groupBy` is a GraphQL enum, so the set is
-    // closed, and a `switch` says what each value means instead of relying on the
-    // two names happening to match after a case fold — which find-sec-bugs refuses
-    // anyway, because folding maps characters outside ASCII onto ASCII ones.
     String dimension =
         switch (groupBy) {
           case "TYPE" -> "type";

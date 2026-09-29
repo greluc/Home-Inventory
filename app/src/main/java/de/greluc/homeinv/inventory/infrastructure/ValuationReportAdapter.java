@@ -169,18 +169,12 @@ public class ValuationReportAdapter implements ValuationReport {
     Map<UUID, Figures> own = grouped(BY_LOCATION, tenantId);
     Map<UUID, Long> counts = counted(COUNT_BY_LOCATION, tenantId);
 
-    // THE ROLL-UP. Each place's own figures are added to itself and to every one
-    // of its ancestors, so one pass over the places that actually hold something
-    // gives a subtree total for every place above them. Walking down instead
-    // would ask the tree about places that hold nothing, which is most of them.
     Map<UUID, Figures> subtree = new HashMap<>();
     Map<UUID, Long> subtreeCounts = new HashMap<>();
     Set<UUID> inScope = root == null ? null : Set.copyOf(places.subtreeOf(root));
 
     for (Map.Entry<UUID, Figures> entry : own.entrySet()) {
       UUID place = entry.getKey();
-      // `ancestorIds` is "root first, ITSELF LAST" -- the place is already in the
-      // list, and adding it again counted everything directly in a room twice.
       for (UUID at : places.ancestorsOf(place)) {
         subtree.merge(at, entry.getValue(), Figures::plus);
         subtreeCounts.merge(at, counts.getOrDefault(place, 0L), Long::sum);
@@ -212,14 +206,7 @@ public class ValuationReportAdapter implements ValuationReport {
     Map<UUID, Figures> perVersion = grouped(BY_TYPE, tenantId);
     Map<UUID, Long> countsPerVersion = counted(COUNT_BY_TYPE, tenantId);
 
-    // An item written last year is still a power tool: the figures are collected
-    // per type VERSION and merged per type, which is the argument 08 §8.2 makes
-    // about the `type:` filter naming a key rather than a version.
     Set<UUID> versions = union(perVersion.keySet(), countsPerVersion.keySet());
-    // Two published reads rather than one: the type an item's version belongs to,
-    // and that type's key for the label. `TypeIdentity` carries the key and not
-    // the id, which is the same choice 08 §8.2 makes for the `type:` filter -- a
-    // key is what a person writes.
     Map<UUID, UUID> typeOfVersion = types.itemTypesOfVersions(versions);
     Map<UUID, de.greluc.homeinv.catalog.api.TypeRegistry.TypeIdentity> identities =
         types.typesOfVersions(versions);
@@ -246,8 +233,6 @@ public class ValuationReportAdapter implements ValuationReport {
     List<ValuationRow> rows = new ArrayList<>();
     for (Map.Entry<UUID, Long> entry : perTypeCounts.entrySet()) {
       Figures figures = perType.getOrDefault(entry.getKey(), Figures.NONE);
-      // No tree here, so `subtree` repeats `own` rather than being absent: one
-      // shape reads the same whichever dimension produced it.
       rows.add(
           new ValuationRow(
               entry.getKey(),
@@ -266,11 +251,6 @@ public class ValuationReportAdapter implements ValuationReport {
     UUID tenantId = TenantContext.require();
     List<ValuationRow> rows = new ArrayList<>();
 
-    // ONE QUERY PER TAG, and bounded by the page rather than by the inventory.
-    // `tagging` owns which things carry a tag and this block must not read its
-    // table (ADR-0002), so the ids come through its published port and the money
-    // is summed here. A household has tens of tags; a join would be cheaper and
-    // would be a block reading another's schema.
     for (de.greluc.homeinv.tagging.api.TagView tag :
         tagService.tags(null, Math.clamp(limit, 1, MAX_ROWS)).data()) {
       List<UUID> tagged = tagQueries.itemsTagged(List.of(tag.name()));
@@ -281,13 +261,8 @@ public class ValuationReportAdapter implements ValuationReport {
       long count = countFor(tenantId, tagged);
       rows.add(new ValuationRow(tag.id(), tag.name(), figures, figures, count, count));
     }
-    // OVERLAPPING: an item with three tags is in three rows, so the column does
-    // not add up to the tenant's total. The report says so rather than leaving a
-    // reader to find out by adding it up.
     return report("tag", rows, limit, true);
   }
-
-  // -------------------------------------------------------------------------
 
   private Map<UUID, Figures> grouped(String sql, UUID tenantId) {
     Map<UUID, Map<String, List<Money>>> collected = new HashMap<>();
@@ -359,9 +334,6 @@ public class ValuationReportAdapter implements ValuationReport {
   }
 
   private String labelOfPlace(UUID place) {
-    // A place that vanished between the sum and the label answers null. The row
-    // still says something true about money, and dropping it would make the
-    // totals of the places above it stop adding up.
     String name = places.labelOf(place);
     return name == null ? "?" : name;
   }
@@ -400,9 +372,6 @@ public class ValuationReportAdapter implements ValuationReport {
         }
       }
     }
-    // `converted` is always false and is a FIELD rather than an omission:
-    // REQ-LIFE-017 asks the report to state that no conversion took place, and a
-    // client can render a statement where it cannot render a missing one.
     return new ValuationSummary(dimension, sorted, List.copyOf(currencies), false, overlapping);
   }
 }

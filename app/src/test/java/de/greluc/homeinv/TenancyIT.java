@@ -88,8 +88,6 @@ class TenancyIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.name").value("Workshop"))
         .andExpect(jsonPath("$.role").value("OWNER"));
 
-    // The session is NOT moved: creating a tenant must not lose whatever the
-    // person had open in the one they were working in.
     mockMvc
         .perform(get("/api/v1/me/tenants").session(login("ten-entitled@example.org")))
         .andExpect(status().isOk())
@@ -141,7 +139,6 @@ class TenancyIT extends AbstractIntegrationTest {
             .getContentAsString();
     UUID second = UUID.fromString(json.readTree(created).get("id").asString());
 
-    // The session still acts for the tenant it was established in.
     mockMvc
         .perform(get("/api/v1/auth/me").session(session))
         .andExpect(jsonPath("$.tenantId").value(first.toString()));
@@ -157,8 +154,6 @@ class TenancyIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.tenantId").value(second.toString()))
         .andExpect(jsonPath("$.role").value("OWNER"));
 
-    // And the change outlives the request that made it: the next one reads the
-    // rewritten principal out of the session rather than the original.
     mockMvc
         .perform(get("/api/v1/auth/me").session(session))
         .andExpect(jsonPath("$.tenantId").value(second.toString()));
@@ -179,8 +174,6 @@ class TenancyIT extends AbstractIntegrationTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("tenantId", foreign.toString()))))
-        // 404 and not 403: a denial would confirm that the tenant exists, which
-        // for somebody outside it is the fact they were not supposed to learn.
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/not-found"));
   }
@@ -193,7 +186,6 @@ class TenancyIT extends AbstractIntegrationTest {
     UUID ordinary = createUser("ten-ordinary@example.org");
     provisioning.provision("Ordinary", ordinary);
 
-    // An ordinary account cannot reach the instance surface at all.
     mockMvc
         .perform(
             get("/api/v1/instance/accounts")
@@ -218,9 +210,6 @@ class TenancyIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.mayCreateTenants").value(true))
         .andExpect(jsonPath("$.instanceOperator").value(false));
 
-    // The session that was already open gets the new entitlement without being
-    // re-established: an entitlement is read from the account, not from the
-    // principal, precisely so that a grant an operator watches actually happens.
     mockMvc
         .perform(
             post("/api/v1/tenants")
@@ -230,7 +219,6 @@ class TenancyIT extends AbstractIntegrationTest {
                 .content(json.writeValueAsString(Map.of("name", "Newly allowed"))))
         .andExpect(status().isCreated());
 
-    // And the operator appears in the list of who can do this.
     mockMvc
         .perform(get("/api/v1/instance/operators").session(operatorSession))
         .andExpect(status().isOk())
@@ -245,10 +233,6 @@ class TenancyIT extends AbstractIntegrationTest {
         status -> accounts.replaceEntitlements(userId, true, true, null, userId));
     assertThat(entitlements.holds(userId, Entitlement.INSTANCE_OPERATOR)).isTrue();
 
-    // Written directly, because locking an account is an operator action that
-    // does not exist yet. What is being tested is the read: an entitlement that
-    // survived a lock would be one the lock does not reach, including the one
-    // that grants entitlements.
     transactions.executeWithoutResult(
         status ->
             jdbc.sql("update identity.app_user set locked_at = now() where id = ?")
@@ -260,8 +244,6 @@ class TenancyIT extends AbstractIntegrationTest {
     assertThat(accounts.byId(userId)).get().extracting(AccountAdministration.AccountView::locked)
         .isEqualTo(true);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Grants the tenant-creation entitlement, with an optional limit.
@@ -292,9 +274,6 @@ class TenancyIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

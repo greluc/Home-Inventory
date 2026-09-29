@@ -63,9 +63,6 @@ public class JsonBodyLimitFilter extends OncePerRequestFilter {
   @Override
   protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
     String contentType = request.getContentType();
-    // Multipart carries the uploads, which have their own, much higher limit and
-    // their own answer for exceeding it. Everything else — JSON, form encoding,
-    // whatever a client invents — is bounded here.
     return contentType != null
         && contentType.toLowerCase(java.util.Locale.ROOT).startsWith(MediaType.MULTIPART_FORM_DATA_VALUE);
   }

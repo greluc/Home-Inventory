@@ -56,9 +56,6 @@ public final class InsuranceDocument {
                 new DocumentRenderer.Fact(
                     "Currency conversion", report.converted() ? "applied" : "none"))));
 
-    // The total first, because it is the number somebody is looking for, and the
-    // statement about what is missing directly under it rather than at the end
-    // where it would be read after the figure had already been believed.
     blocks.add(new DocumentRenderer.Heading(2, "Total"));
     blocks.add(new DocumentRenderer.Facts("Replacement value", factsOf(report.totals())));
     if (report.withoutAReplacementValue() > 0) {

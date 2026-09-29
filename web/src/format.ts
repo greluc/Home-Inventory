@@ -28,17 +28,11 @@
 export function formatTimestamp(iso: string, language: string, timeZone?: string): string {
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) {
-    // Shown as it arrived rather than as "Invalid Date". A value this function
-    // cannot read is a bug somewhere else, and hiding it behind a friendly
-    // string is how it stays hidden.
     return iso;
   }
   return new Intl.DateTimeFormat(language, {
     dateStyle: "medium",
     timeStyle: "short",
-    // Omitted rather than set to undefined: with `exactOptionalPropertyTypes` the
-    // two differ, and an explicit `undefined` would be a zone option that is
-    // present and empty.
     ...(timeZone === undefined ? {} : { timeZone }),
   }).format(when);
 }

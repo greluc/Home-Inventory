@@ -52,8 +52,6 @@ class OrphanedBlobSweepIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("orphan-grace@example.org");
     UUID object = anUnreferencedBlob(tenant, "a".repeat(64), Instant.now());
 
-    // Unreferenced as of now, so the week has not elapsed. Detaching a photograph
-    // and reattaching it is two operations, and this is the gap between them.
     assertThat(sweep.sweep()).isZero();
     assertThat(stillThere(tenant, object)).isTrue();
   }
@@ -79,9 +77,6 @@ class OrphanedBlobSweepIT extends AbstractIntegrationTest {
 
     assertThat(sweep.sweep()).isEqualTo(1);
 
-    // Both halves: the row and the bytes. A row without its blob is a photograph
-    // that 404s for ever, so the order matters and the outcome is that neither
-    // is left behind.
     assertThat(stillThere(tenant, object)).isFalse();
     assertThat(inOwn(tenant, () -> blobs.exists(tenant.tenantId(), sha))).isFalse();
   }
@@ -92,9 +87,6 @@ class OrphanedBlobSweepIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("orphan-referenced@example.org");
     UUID object = anUnreferencedBlob(tenant, "c".repeat(64), Instant.now().minusSeconds(86_400 * 30));
 
-    // A reference arriving puts the blob back out of reach, however long it had
-    // been unreferenced -- the column and the count are written together, and
-    // the check constraint refuses a row where they disagree.
     inOwn(
         tenant,
         () ->
@@ -124,11 +116,8 @@ class OrphanedBlobSweepIT extends AbstractIntegrationTest {
     sweep.sweep();
 
     assertThat(stillThere(mine, ours)).isFalse();
-    // Another tenant's blob is judged by its own grace period and not by ours.
     assertThat(stillThere(theirs, fresh)).isTrue();
   }
-
-  // -------------------------------------------------------------------------
 
   private boolean stillThere(Tenant tenant, UUID object) {
     return inOwn(

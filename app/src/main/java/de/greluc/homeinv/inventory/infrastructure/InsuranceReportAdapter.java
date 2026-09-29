@@ -99,8 +99,6 @@ public class InsuranceReportAdapter implements InsuranceReport {
     Map<UUID, List<ItemEvidence.Attached>> attached =
         evidence.forItems(flat.stream().map(LineRow::itemId).toList());
 
-    // Grouped here rather than by the query, because a room is a place and the
-    // label of a place is `locations`' answer, not a column of `inventory.item`.
     Map<UUID, List<InsuranceReport.Line>> byRoom = new LinkedHashMap<>();
     for (LineRow line : flat) {
       byRoom
@@ -140,8 +138,6 @@ public class InsuranceReportAdapter implements InsuranceReport {
       if (replacement == null) {
         continue;
       }
-      // Times the quantity: two of a thing cost twice as much to replace, and a
-      // report that ignored the count would understate a shelf of the same tool.
       BigDecimal amount =
           replacement.amount().multiply(line.quantity() == null ? BigDecimal.ONE : line.quantity());
       byCurrency.merge(replacement.currency(), amount, BigDecimal::add);

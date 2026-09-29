@@ -71,8 +71,6 @@ mod tests {
 
     #[test]
     fn the_signature_changes_with_the_key() {
-        // The property a receiver relies on: a body signed with somebody else's
-        // secret does not verify with theirs.
         assert_ne!(
             sign(b"mine", 1_700_000_000, b"body"),
             sign(b"theirs", 1_700_000_000, b"body")
@@ -81,9 +79,6 @@ mod tests {
 
     #[test]
     fn the_signature_changes_with_the_timestamp() {
-        // The property REQ-API-010 asks for: a captured request cannot be
-        // replayed with a fresh timestamp, because the timestamp is inside what
-        // was signed.
         assert_ne!(
             sign(b"secret", 1_700_000_000, b"body"),
             sign(b"secret", 1_700_000_060, b"body")
@@ -92,8 +87,6 @@ mod tests {
 
     #[test]
     fn the_signed_material_is_the_timestamp_a_stop_and_the_body() {
-        // Written out, because a receiver in another language has to reproduce
-        // it exactly and this is the line that says how.
         assert_eq!(
             sign(b"secret", 1_700_000_000, b"body"),
             sign_raw(b"secret", b"1700000000.body")

@@ -83,15 +83,10 @@ public class RequestCounters {
     try {
       Long count = redis.opsForValue().increment(key);
       if (count != null && count == 1L) {
-        // Twice the window, so a counter cannot outlive its own window by a
-        // rounding error and cannot accumulate either.
         redis.expire(key, WINDOW.multipliedBy(2));
       }
       return count == null ? 1L : count;
     } catch (DataAccessException unreachable) {
-      // Once per window per key would still be one line per request under a
-      // sustained outage, so this is debug and the operator learns it from the
-      // Valkey health indicator instead (13 §13.6).
       log.debug("Valkey is not answering; rate limiting falls back to this instance", unreachable);
       return local
           .compute(

@@ -72,9 +72,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
     UUID third = aPhysicalItem(session, "Brushes", house);
     UUID gone = UUID.randomUUID();
 
-    // The third entry names nothing. Were the call one transaction, that exception
-    // would mark it rollback-only and the moves either side of it would be lost at
-    // the commit -- which is exactly what this asserts did not happen.
     String body =
         bulk(
             "MOVE",
@@ -101,8 +98,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
             jsonPath("$.entries[2].type").value("https://home-inv.example/problems/not-found"))
         .andExpect(jsonPath("$.entries[3].status").value(200));
 
-    // The three that worked are in the cellar, and they are still there after the
-    // call that also failed. This is the whole point of a transaction per entry.
     for (UUID moved : List.of(first, second, third)) {
       mockMvc
           .perform(get("/api/v1/items/" + moved).session(session))
@@ -130,13 +125,9 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
                     bulk("MOVE", Map.of("locationId", shed.toString()), entry(spade), entry(rake))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.entries[0].status").value(200))
-        // Nothing failed, so nothing says what failed. A client reading these
-        // lines must not have to distinguish "no problem" from "a problem with no
-        // type".
         .andExpect(jsonPath("$.entries[0].type").doesNotExist())
         .andExpect(jsonPath("$.entries[1].status").value(200));
 
-    // A version that has moved on is this entry's 412 and nobody else's.
     long stale = versionOf(session, spade);
     mockMvc
         .perform(
@@ -157,7 +148,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
                 .value("https://home-inv.example/problems/precondition-failed"))
         .andExpect(jsonPath("$.entries[1].status").value(200));
 
-    // The refused entry stayed where it was; the other one moved.
     mockMvc
         .perform(get("/api/v1/items/" + spade).session(session))
         .andExpect(jsonPath("$.locationId").value(shed.toString()));
@@ -195,11 +185,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.entries[0].status").value(200))
         .andExpect(jsonPath("$.entries[1].status").value(404));
 
-    // The item is created again under the id that was missing, and the very same
-    // request is sent a second time -- which is what a client with a dropped
-    // connection does. The first entry must do nothing (its key is spent) and the
-    // second must now work (its key was rolled back with its own transaction, so it
-    // was never spent at all).
     anItemWithId(session, gone, "Christmas decorations", house);
     mockMvc
         .perform(
@@ -216,8 +201,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/items/" + gone).session(session))
         .andExpect(jsonPath("$.locationId").value(attic.toString()));
 
-    // And a key spent on a move is not accepted later as having deleted anything:
-    // one key, one change.
     mockMvc
         .perform(
             post(BULK)
@@ -239,9 +222,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
     UUID tool = importedType(session, "tool");
     UUID appliance = importedType(session, "appliance");
 
-    // `manufacturer` and `model` are text in both templates; `corded` is a boolean
-    // the appliance template does not declare at all. So two survive and one does
-    // not -- and the revision written by the change is where the third still is.
     UUID drill =
         aDigitalItemOfType(
             session,
@@ -263,14 +243,10 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
     mockMvc
         .perform(get("/api/v1/items/" + drill).session(session))
         .andExpect(status().isOk())
-        // `attributes` is JSON text in the view, not a nested object: the source of
-        // truth is a jsonb column and the API hands it over as it stands.
         .andExpect(jsonPath("$.attributes").value(containsString("Bosch")))
         .andExpect(jsonPath("$.attributes").value(containsString("GSB 18")))
         .andExpect(jsonPath("$.attributes").value(not(containsString("corded"))));
 
-    // Nothing was lost: the revision before the change still holds the value the
-    // new type has nowhere to put.
     String revisions =
         mockMvc
             .perform(get("/api/v1/items/" + drill + "/revisions").session(session))
@@ -280,8 +256,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
             .getContentAsString(StandardCharsets.UTF_8);
     assertThat(revisions).contains("corded");
 
-    // Asking for the type it already has succeeds and changes nothing, so a
-    // selection spanning three types can be given one type in a single pass.
     mockMvc
         .perform(
             post(BULK)
@@ -317,8 +291,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].name").value("Kitchen"));
 
-    // An item that is not there is this entry's 404 rather than a foreign-key
-    // violation that would abort the transaction the other entries are using.
     mockMvc
         .perform(
             post(BULK)
@@ -348,8 +320,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/items/" + mug).session(session))
         .andExpect(status().isNotFound());
 
-    // Deleting them again succeeds: a client retrying a call it never saw the
-    // answer to must not be told it failed for succeeding twice.
     mockMvc
         .perform(
             post(BULK)
@@ -368,8 +338,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
     UUID shed = aLocation(session, "Shed");
     UUID barrow = aPhysicalItem(session, "Barrow", house);
 
-    // An item named twice: each entry would get a line, and the second would
-    // report on a state the first had already changed.
     mockMvc
         .perform(
             post(BULK)
@@ -384,7 +352,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
                         entry(barrow))))
         .andExpect(status().isUnprocessableContent());
 
-    // A move with nowhere to move to.
     mockMvc
         .perform(
             post(BULK)
@@ -394,8 +361,6 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
                 .content(bulk("MOVE", Map.of(), entry(barrow))))
         .andExpect(status().isUnprocessableContent());
 
-    // More than the 500 of 08 §8.2, refused by the bean validation before a
-    // transaction is opened at all.
     List<Map<String, Object>> tooMany = new ArrayList<>();
     for (int index = 0; index <= 500; index++) {
       tooMany.add(entry(UUID.randomUUID()));
@@ -413,13 +378,10 @@ class BulkItemOperationsIT extends AbstractIntegrationTest {
                         tooMany.toArray(new Map[0]))))
         .andExpect(status().isUnprocessableContent());
 
-    // None of the three touched anything.
     mockMvc
         .perform(get("/api/v1/items/" + barrow).session(session))
         .andExpect(jsonPath("$.locationId").value(house.toString()));
   }
-
-  // -------------------------------------------------------------------------
 
   @SafeVarargs
   private String bulk(String operation, Map<String, String> target, Map<String, Object>... entries)

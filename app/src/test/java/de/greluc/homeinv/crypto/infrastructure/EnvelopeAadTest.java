@@ -43,9 +43,6 @@ class EnvelopeAadTest {
     for (int dekId : new int[] {1, 2}) {
       for (UUID tenant : new UUID[] {TENANT, OTHER_TENANT}) {
         for (UUID entity : new UUID[] {ENTITY, OTHER_ENTITY}) {
-          // The pairs that would collide under a plain concatenation IF the field
-          // key were not last, and which will collide the moment a member is
-          // appended after it: "ab" + "" against "a" + "b".
           for (String field : new String[] {"", "a", "b", "ab", "ab ", " ab", "licenceKey"}) {
             encodings.add(EnvelopeCrypto.aad(dekId, tenant, entity, field));
           }
@@ -66,7 +63,6 @@ class EnvelopeAadTest {
     String field = "licenceKey";
     byte[] encoding = EnvelopeCrypto.aad(1, TENANT, ENTITY, field);
 
-    // version(1) + dek_id(1) + tenantId(16) + entityId(16) = 34, then the length.
     ByteBuffer buffer = ByteBuffer.wrap(encoding);
     assertThat(buffer.get()).as("format version").isEqualTo((byte) 0x01);
     assertThat(buffer.get()).as("data key version").isEqualTo((byte) 1);

@@ -49,13 +49,9 @@ public class LocationScopeAdapter implements LocationScope, PlaceScope, PlaceTre
   @Transactional(readOnly = true)
   public boolean contains(UUID scopeRootId, UUID locationId) {
     if (scopeRootId == null) {
-      // No scope is the whole tenant, which is what a membership without one has.
       return true;
     }
     if (locationId == null) {
-      // A thing with no place is in nobody's garage. Saying `true` here would make
-      // every digital item visible to every scoped role, which is the opposite of
-      // what confining somebody to a place means.
       return false;
     }
     return Boolean.TRUE.equals(
@@ -98,9 +94,6 @@ public class LocationScopeAdapter implements LocationScope, PlaceScope, PlaceTre
 
   @Override
   public String labelOf(java.util.UUID locationId) {
-    // Read straight from the table rather than through `LocationService.get`,
-    // which would be this block calling its own service through a port declared
-    // by another -- and which throws where a report wants a null.
     return jdbc
         .sql("select name from locations.location where tenant_id = ? and id = ?")
         .param(de.greluc.homeinv.platform.TenantContext.require())

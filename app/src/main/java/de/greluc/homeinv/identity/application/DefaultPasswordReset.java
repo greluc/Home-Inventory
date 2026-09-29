@@ -108,26 +108,16 @@ public class DefaultPasswordReset implements PasswordReset {
   public void request(String email, String ip) {
     Instant now = clock.instant();
 
-    // The throttle is part of what a reset IS, not of how HTTP reaches it: what
-    // it protects is somebody else's mailbox, and a second caller of this port
-    // would otherwise arrive without it. Its own counters, so a run of requests
-    // cannot lock the account holder out of signing in (REQ-SEC-018).
     java.time.Duration wait = throttle.retryAfterReset(email, ip);
     if (!wait.isZero()) {
       throw new TooManyAttemptsException(wait);
     }
     throttle.recordResetRequest(email, ip);
-    // Minted before the account is looked up, and always. The work is then the
-    // same either way, which is what makes the two cases indistinguishable from
-    // outside — including in how long they take.
     String token = SingleUseTokens.mint();
     String tokenHash = SingleUseTokens.hash(token);
 
     Optional<AppUser> account = users.findByEmail(email);
     if (account.isEmpty() || !account.get().canAuthenticate()) {
-      // Nothing happens, and the caller cannot tell which of the two it was. A
-      // locked account is deliberately on this side of the line: a reset that
-      // worked for one would say that it is locked.
       log.info("A password reset was asked for an address with no usable account.");
       return;
     }
@@ -144,18 +134,12 @@ public class DefaultPasswordReset implements PasswordReset {
             resetMessage(token, ip),
             null,
             user.getLocale(),
-            // One key per reset rather than per account: asking twice replaces
-            // the token, and the second message has to go out or the first
-            // token — now dead — would be the only one anybody received.
             "password-reset:" + tokenHash));
   }
 
   @Override
   @Transactional
   public void complete(String token, String newPassword) {
-    // Before the token is looked at, so that a password the policy refuses does
-    // not spend the link: the person would otherwise have to ask for a new one
-    // because they typed a short password once (REQ-SEC-011).
     policy.check(newPassword);
 
     Instant now = clock.instant();
@@ -164,8 +148,6 @@ public class DefaultPasswordReset implements PasswordReset {
             .find(SingleUseTokens.hash(token), now)
             .orElseThrow(InvalidResetTokenException::new);
 
-    // Spent first. Two redemptions racing each other both find the row open, and
-    // only the one that changes it may go on to set a password.
     if (!resets.spend(reset.id())) {
       throw new InvalidResetTokenException();
     }
@@ -174,9 +156,6 @@ public class DefaultPasswordReset implements PasswordReset {
     user.replacePasswordHash(passwordEncoder.encode(newPassword), now);
     users.save(user);
 
-    // Somebody who took the account over is signed out by the real owner's
-    // reset. Without this the reset would return the password and leave the
-    // intruder logged in (REQ-SEC-018).
     int ended = sessions.endAll(user.getId());
 
     notifications.raise(
@@ -201,10 +180,6 @@ public class DefaultPasswordReset implements PasswordReset {
    * @return the plain-text body
    */
   private String resetMessage(String token, String ip) {
-    // Placeholders rather than a format string. The newlines here are the shape
-    // of the message somebody reads, not a platform's line separator, and
-    // `formatted` would have them judged as one — plus a percent sign in a
-    // future message would become a format specifier nobody meant.
     return RESET_BODY
         .replace("{from}", ip == null || ip.isBlank() ? "" : " from " + ip)
         .replace("{baseUrl}", publicBaseUrl)

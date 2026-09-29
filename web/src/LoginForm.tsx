@@ -42,8 +42,6 @@ export function LoginForm({
       onAuthenticated(await api.login(email, password));
     } catch (cause) {
       if (cause instanceof ApiError && cause.type.endsWith("/second-factor-required")) {
-        // Not a failure: the password was right and the account is protected.
-        // The pending login lives on the server for five minutes (REQ-AUTH-002).
         setNeedsCode(true);
       } else if (cause instanceof ApiError && cause.status === 429) {
         setError(t("login.throttled"));
@@ -62,8 +60,6 @@ export function LoginForm({
     try {
       onAuthenticated(await api.completeSecondFactor(code));
     } catch (cause) {
-      // One message for a wrong code, a spent one and a window that ran out: the
-      // server answers them the same way and so does this.
       setError(t("login.codeFailed"));
       setCode("");
       if (cause instanceof ApiError && cause.status !== 401) {
@@ -81,9 +77,6 @@ export function LoginForm({
       const ceremony = await api.passkeyChallenge();
       onAuthenticated(await api.completeWithPasskey(await provePasskey(ceremony.options)));
     } catch {
-      // Whether the authenticator refused, the browser cancelled or the server
-      // rejected the assertion, the answer here is the same: try again, or use a
-      // code. Telling them apart would say whether this account has passkeys.
       setError(t("login.passkeyFailed"));
     } finally {
       setBusy(false);

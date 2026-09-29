@@ -107,8 +107,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
     String email = emailOf("whole-flow");
     Cookie[] before = signInWith(email, PASSWORD);
 
-    // The session works right now, which is what makes the assertion after the
-    // reset mean something.
     mockMvc.perform(get("/api/v1/auth/me").cookie(before)).andExpect(status().isOk());
 
     ask(email).andExpect(status().isNoContent());
@@ -119,18 +117,11 @@ class PasswordResetIT extends AbstractIntegrationTest {
 
     complete(tokenFor(userId), NEW_PASSWORD).andExpect(status().isNoContent());
 
-    // Every session the account had open is gone. Somebody who took the account
-    // over is signed out by the real owner's reset -- without this the reset
-    // would return the password and leave the intruder logged in.
     mockMvc.perform(get("/api/v1/auth/me").cookie(before)).andExpect(status().isUnauthorized());
 
-    // And the new password is the password.
     Cookie[] after = signInWith(email, NEW_PASSWORD);
     mockMvc.perform(get("/api/v1/auth/me").cookie(after)).andExpect(status().isOk());
 
-    // The old address is told, at the address the account had. That is the half
-    // that matters: if this was not the owner, they find out somewhere the
-    // attacker does not control.
     SecurityNotifications.Queued told = onlyNotification(userId, "security.password-changed");
     assertThat(told.address()).isEqualTo(email);
   }
@@ -145,8 +136,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
     complete(token, NEW_PASSWORD).andExpect(status().isNoContent());
     complete(token, PASSWORD + "-a-third-time").andExpect(status().isUnprocessableContent());
 
-    // And the second attempt changed nothing: the password is still the one the
-    // first redemption set.
     signInWith(emailOf("single-use"), NEW_PASSWORD);
   }
 
@@ -157,13 +146,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
     ask(emailOf("expiry")).andExpect(status().isNoContent());
     String token = tokenFor(userId);
 
-    // Written directly rather than waiting half an hour. What is being tested is
-    // the lookup: an expired row must not be found, and "expired" is a property
-    // of the row rather than of the caller.
-    // Both timestamps move, not just the expiry: the row checks that it expires
-    // after it was requested, and a reset that expired before it was asked for
-    // is not a state the flow can reach. This is the state it can: asked for an
-    // hour ago, good for thirty minutes.
     transactions.executeWithoutResult(
         status ->
             jdbc.sql(
@@ -178,7 +160,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
                 .update());
 
     complete(token, NEW_PASSWORD).andExpect(status().isUnprocessableContent());
-    // The old password still works, because nothing happened.
     signInWith(emailOf("expiry"), PASSWORD);
   }
 
@@ -193,8 +174,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
     String second = tokenFor(userId);
     assertThat(second).isNotEqualTo(first);
 
-    // Two live tokens would be two ways in. Somebody clicking the older message
-    // is told it no longer works rather than let in.
     complete(first, NEW_PASSWORD).andExpect(status().isUnprocessableContent());
     complete(second, NEW_PASSWORD).andExpect(status().isNoContent());
   }
@@ -207,8 +186,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
     ask(emailOf("known")).andExpect(status().isNoContent());
     ask("password-reset-nobody-at-all@example.org").andExpect(status().isNoContent());
 
-    // Nothing was queued for the address nobody has, which is the other half:
-    // the answer is identical and so is the absence of a message.
     assertThat(
             jdbc.sql(
                     "select count(*) from notification.security_notification where address = ?")
@@ -225,11 +202,8 @@ class PasswordResetIT extends AbstractIntegrationTest {
     ask(emailOf("policy")).andExpect(status().isNoContent());
     String token = tokenFor(userId);
 
-    // REQ-SEC-011: twelve characters, no forced complexity. Eleven is refused.
     complete(token, "short-pass1").andExpect(status().isUnprocessableContent());
 
-    // And the token survived the refusal. A policy failure that spent the link
-    // would send somebody back to the login page to ask for another one.
     complete(token, NEW_PASSWORD).andExpect(status().isNoContent());
   }
 
@@ -240,34 +214,16 @@ class PasswordResetIT extends AbstractIntegrationTest {
     String email = emailOf("throttle");
     String from = "198.51.100.250";
 
-    // Three are free, as on the login path. The fourth is where the wait starts.
     for (int attempt = 0; attempt < 4; attempt++) {
       askFrom(email, from).andExpect(status().isNoContent());
     }
 
-    // Six tenths of the first step's second, deliberately spent, and the figure
-    // is chosen rather than picked: Redis rounds `TTL` to the NEAREST second, so
-    // the defect below shows itself only once more than half a second has gone.
-    // This test used to ask again immediately, which meant it passed or failed
-    // on how long five HTTP calls happened to take -- a flake that fired in CI
-    // on 2026-09-21. Waiting past the rounding boundary makes it an assertion.
-    //
-    // It also pins the defect underneath it. `delayFor` derived the elapsed time
-    // from the counter's remaining TTL in whole SECONDS, which rounds the
-    // remainder down and so the elapsed time up by as much as a second -- a
-    // failure at 12:00:00.999 and a retry at 12:00:01.001 read as a full second
-    // gone, and the first step of every throttle in the system was, some of the
-    // time, no throttle at all. It reads `PTTL` now.
     Thread.sleep(600);
 
     askFrom(email, from).andExpect(status().isTooManyRequests());
 
-    // And it is the reset's own counter: signing in still works, because a flood
-    // of reset requests must not lock the account holder out.
     signInWith(email, PASSWORD);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Asks for a reset, from a caller address of this test's own.
@@ -385,8 +341,6 @@ class PasswordResetIT extends AbstractIntegrationTest {
             users.save(
                 AppUser.create(
                     userId, email, name, "en", passwordEncoder.encode(PASSWORD), Instant.now())));
-    // A tenant of their own, so that signing in lands somewhere. The reset
-    // itself needs none, which is the point of the table being instance-wide.
     provisioning.provision("Password reset " + name, userId);
     return userId;
   }

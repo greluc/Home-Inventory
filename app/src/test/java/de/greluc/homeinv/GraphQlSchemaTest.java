@@ -68,18 +68,12 @@ class GraphQlSchemaTest {
   void everyExpensiveFieldSaysSo() throws IOException {
     String schema = Files.readString(SCHEMA, StandardCharsets.UTF_8);
 
-    // A field declaration may span lines — an argument list long enough to wrap
-    // puts `first` on one line and `@cost` on another, and a line-by-line check
-    // reports it as undeclared. Collapsed to one line per declaration first.
     String flattened = schema.replaceAll("\\(\\s*\\R\\s*", "(").replaceAll(",\\s*\\R\\s*", ", ")
         .replaceAll("\\R\\s*\\)", ")").replaceAll("\\)\\s*:", "): ");
 
     List<String> undeclared = new ArrayList<>();
     for (String line : flattened.split("\\R")) {
       String trimmed = line.strip();
-      // A field taking `first` returns as many rows as the client asks for, and
-      // the budget is computed from the weight beside it. One without a weight
-      // costs 1 per row, which is the wrong answer for anything that reads.
       if (trimmed.contains("first: Int") && !trimmed.contains("@cost")) {
         undeclared.add(trimmed);
       }
@@ -99,8 +93,6 @@ class GraphQlSchemaTest {
     String schema = Files.readString(SCHEMA, StandardCharsets.UTF_8);
     assertThat(schema).contains("scalar JSON");
     assertThat(schema).contains("scalar DateTime");
-    // And no Float anywhere: GraphQL's Float is a double, and a quantity or an
-    // amount never travels as one (ADR-0025).
     assertThat(schema).doesNotContain(": Float");
   }
 }

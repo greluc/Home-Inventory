@@ -71,8 +71,6 @@ public class HostChannelServer {
     ServerCredentials credentials =
         TlsServerCredentials.newBuilder()
             .keyManager(new ByteArrayInputStream(bundle), new ByteArrayInputStream(bundle))
-            // A registered plugin's certificate, by fingerprint -- not "anything
-            // our CA signed", which would let a neighbour in (ADR-0044).
             .trustManager(plugins)
             .clientAuth(TlsServerCredentials.ClientAuth.REQUIRE)
             .build();

@@ -71,10 +71,6 @@ public class MediaUrlSigner {
       @Value("${homeinv.media.url-validity-seconds:300}") long validitySeconds,
       Clock clock) {
     if (validitySeconds <= 0 || validitySeconds > MAXIMUM_VALIDITY.toSeconds()) {
-      // Refused at startup rather than clamped. REQ-SEC-044 puts a ceiling of 15
-      // minutes on a media link, and an operator who set an hour would otherwise
-      // get five minutes and no explanation - which reads as the setting being
-      // ignored, and is how somebody concludes the value does not work.
       throw new IllegalStateException(
           ("homeinv.media.url-validity-seconds is %d. It must be between 1 and %d: a media link "
                   + "is issued per view, and one that outlives the permission it was issued under "
@@ -137,15 +133,9 @@ public class MediaUrlSigner {
     try {
       presented = DECODER.decode(signature);
     } catch (IllegalArgumentException malformed) {
-      // Not base64: a forged or truncated link. Answered exactly like a link
-      // whose signature does not match, so the caller learns nothing about which
-      // of the two it was.
       return false;
     }
 
-    // The signature is checked before the expiry, and both are checked. Checking
-    // the expiry first would answer faster for an expired link than for a forged
-    // one, which says which of the two a probe got wrong.
     boolean signatureMatches =
         MessageDigest.isEqual(
             presented, mac(payload(tenantId, userId, sha256, variant, expiresAt)));

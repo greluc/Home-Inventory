@@ -48,8 +48,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCUMENT = ROOT / "api" / "openapi.yaml"
 CLIENT = ROOT / "api" / "clients" / "kotlin" / "src" / "commonMain"
 
-# Pinned exactly. The output is committed, so a generator that changed its
-# formatting between two contributors would show up as a diff nobody made.
 GENERATOR = "@openapitools/openapi-generator-cli@2.25.2"
 GENERATOR_VERSION = "7.25.0"
 

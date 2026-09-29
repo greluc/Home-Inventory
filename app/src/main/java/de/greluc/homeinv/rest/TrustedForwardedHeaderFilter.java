@@ -36,9 +36,6 @@ public final class TrustedForwardedHeaderFilter extends ForwardedHeaderFilter {
    */
   public TrustedForwardedHeaderFilter(TrustedProxies trusted) {
     this.trusted = trusted;
-    // The headers are consumed, not passed on: everything downstream sees the
-    // request as the client sent it, and nothing can read them a second time and
-    // reach a different conclusion.
     setRemoveOnly(false);
   }
 
