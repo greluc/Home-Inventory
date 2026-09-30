@@ -177,4 +177,5 @@ rules of the `web → api` hop are [06 §6.7](06-deployment-view.md). What the g
 | A one-shot's output is read from its own container log after `--force-recreate`. | An attached stream races the start; a reused container accumulates earlier runs. |
 | A timed-out Quadlet unit is diagnosed from the journal. | systemd removes the container with the unit. |
 | gitleaks runs a version that reads top-level `[[allowlists]]`. | Older versions ignore the array and report the allowlisted literals. |
+| A version Spring Boot manages is overridden through the property name its BOM declares, read from that BOM's `pom`. | An unknown property name is ignored without a warning; `jackson2.version` moved nothing while Boot 4 reads `jackson-2-bom.version`. `./gradlew :app:dependencies` shows the version that resolved, and the vulnerability scan fails on the one that did not move. |
 | A dependency job uses a warm Gradle cache. | An uncached job asks Maven Central for everything on every run and meets its rate limits. |

@@ -26,7 +26,7 @@
     },
     {
       "name": "amqp-client",
-      "version": "5.35.0",
+      "version": "5.36.0",
       "licences": [
         "Apache-2.0",
         "GPL-2.0-only",
@@ -468,7 +468,7 @@
     },
     {
       "name": "jackson-annotations",
-      "version": "2.21",
+      "version": "2.22",
       "licences": [
         "Apache-2.0"
       ],
@@ -481,7 +481,7 @@
     },
     {
       "name": "jackson-core",
-      "version": "2.21.5",
+      "version": "2.22.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -506,7 +506,7 @@
     },
     {
       "name": "jackson-core",
-      "version": "3.1.5",
+      "version": "3.2.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -531,7 +531,7 @@
     },
     {
       "name": "jackson-databind",
-      "version": "2.21.5",
+      "version": "2.22.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -544,7 +544,7 @@
     },
     {
       "name": "jackson-databind",
-      "version": "3.1.5",
+      "version": "3.2.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -557,7 +557,7 @@
     },
     {
       "name": "jackson-dataformat-cbor",
-      "version": "3.1.5",
+      "version": "3.2.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -574,7 +574,7 @@
     },
     {
       "name": "jackson-dataformat-csv",
-      "version": "3.1.5",
+      "version": "3.2.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -591,7 +591,7 @@
     },
     {
       "name": "jackson-dataformat-yaml",
-      "version": "2.21.5",
+      "version": "2.22.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -608,7 +608,7 @@
     },
     {
       "name": "jackson-dataformat-yaml",
-      "version": "3.1.5",
+      "version": "3.2.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -625,7 +625,7 @@
     },
     {
       "name": "jackson-datatype-jsr310",
-      "version": "2.21.5",
+      "version": "2.22.3",
       "licences": [
         "Apache-2.0"
       ],
@@ -2510,7 +2510,7 @@
     },
     {
       "name": "tomcat-embed-core",
-      "version": "11.0.25",
+      "version": "11.0.26",
       "licences": [
         "Apache-2.0"
       ],
@@ -2523,7 +2523,7 @@
     },
     {
       "name": "tomcat-embed-el",
-      "version": "11.0.25",
+      "version": "11.0.26",
       "licences": [
         "Apache-2.0"
       ],
@@ -2536,7 +2536,7 @@
     },
     {
       "name": "tomcat-embed-websocket",
-      "version": "11.0.25",
+      "version": "11.0.26",
       "licences": [
         "Apache-2.0"
       ],

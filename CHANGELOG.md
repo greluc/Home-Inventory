@@ -118,6 +118,9 @@ commit".
 
 ### Fixed
 
+- **`jackson-databind` is on 2.22.3 and 3.2.3**, closing CVE-2026-68497, a denial of service
+  through unbounded number parsing. The override meant to move the 2.x line had used a property
+  name Spring Boot 4 does not read, and had never taken effect.
 - **The list of which roles may see which fields comes back as a list.** It was a
   JSON object whose keys were field names, which no client library can describe;
   each entry now carries its own field name.

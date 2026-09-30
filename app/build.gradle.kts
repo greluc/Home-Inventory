@@ -12,10 +12,11 @@ plugins {
     jacoco
 }
 
-extra["tomcat.version"] = "11.0.25"
-extra["rabbit-amqp-client.version"] = "5.35.0"
+extra["tomcat.version"] = "11.0.26"
+extra["rabbit-amqp-client.version"] = "5.36.0"
 
-extra["jackson2.version"] = "2.21.5"
+extra["jackson-2-bom.version"] = "2.22.3"
+extra["jackson-bom.version"] = "3.2.3"
 
 dependencies {
     implementation(platform(libs.spring.modulith.bom))
