@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.media.api;
 
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -38,5 +40,26 @@ import org.springframework.modulith.events.Externalized;
  * @param sha256 the content address of the stored {@code full} variant, from which the others are
  *     derived
  */
-@Externalized("homeinv.media::media-object-stored")
-public record MediaObjectStored(UUID tenantId, UUID mediaObjectId, String sha256) {}
+@Externalized("homeinv.media::media-object-stored.v1")
+public record MediaObjectStored(UUID tenantId, UUID mediaObjectId, String sha256) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return media.object-stored
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.MEDIA_OBJECT_STORED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the media object that was stored
+   */
+  @Override
+  public UUID subjectId() {
+    return mediaObjectId;
+  }
+}

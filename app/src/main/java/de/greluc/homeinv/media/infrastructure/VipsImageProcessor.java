@@ -65,15 +65,6 @@ public class VipsImageProcessor implements ImageProcessor {
 
   @Override
   public Dimensions probe(Path source) {
-    // Header only: no pixels are decoded, which is the entire point. The limit
-    // that protects against a decompression bomb has to be checked before the
-    // bitmap it would allocate exists (REQ-SEC-040).
-    //
-    // `vipsheader`, not `vips header`. `vips` dispatches libvips OPERATIONS and
-    // there is no operation called `header`, so the latter exits 1 with `unknown
-    // action "header"` and every image upload answers 500 — which is what it did
-    // until 2026-09-12, found by running the journey suite against the stack. The
-    // JVM tests did not see it: they stub `ImageProcessor` rather than libvips.
     String width = run(List.of(vipsheader, "-f", "width", source.toString()));
     String height = run(List.of(vipsheader, "-f", "height", source.toString()));
     return new Dimensions(number(width, source), number(height, source));
@@ -81,20 +72,6 @@ public class VipsImageProcessor implements ImageProcessor {
 
   @Override
   public Dimensions derive(Path source, Path target, int maxEdge, OutputFormat format) {
-    // --size=NxN> - the trailing '>' means "shrink only". Without it a 40x40
-    // avatar becomes a 1024x1024 blur that is larger than the original.
-    //
-    // strip=true removes every metadata block, EXIF and its GPS tags included
-    // (REQ-MED-006). It is the default in recent libvips and stated anyway,
-    // because a privacy guarantee that depends on a default is a guarantee that
-    // changes when the default does.
-    //
-    // The OPTIONS only. libvips takes the output format from the file name's
-    // extension and the options from the brackets after it, so appending a second
-    // extension here writes `…​.avif.avif` — a file beside the one the caller is
-    // holding, leaving that one empty and the next `probe` reporting "not a known
-    // file format". That is what this did until 2026-09-12; the missing AVIF
-    // encoder failed one step earlier and hid it, and every JVM test stubs libvips.
     String extension =
         switch (format) {
           case AVIF -> ".avif";
@@ -106,13 +83,6 @@ public class VipsImageProcessor implements ImageProcessor {
           case WEBP -> "[Q=80,strip=true]";
         };
 
-    // The caller names the file, libvips reads the format off that name, and this
-    // method takes a format as well. If the two disagree the file is written in a
-    // format nobody asked for and everything downstream reports it as the other
-    // one, so they are required to agree rather than trusted to.
-    //
-    // `getFileName` is null for a root path, which is not a file anything can be
-    // written to either — so it fails here rather than being dereferenced.
     Path name = target.getFileName();
     if (name == null || !name.toString().endsWith(extension)) {
       throw new ImageProcessingException(
@@ -170,13 +140,9 @@ public class VipsImageProcessor implements ImageProcessor {
     try {
       process =
           new ProcessBuilder(command)
-              // Merged, so a libvips warning on stderr appears in the same place
-              // as its output and a failure carries its own explanation.
               .redirectErrorStream(true)
               .start();
 
-      // The child gets no input. Closing it immediately means a tool that decides
-      // to read stdin fails fast instead of hanging until the timeout.
       process.getOutputStream().close();
 
       String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -186,8 +152,6 @@ public class VipsImageProcessor implements ImageProcessor {
             "Image conversion exceeded " + TIMEOUT_SECONDS + "s and was abandoned", null);
       }
       if (process.exitValue() != 0) {
-        // The output is logged and not returned: libvips echoes the file path,
-        // and the path carries content the uploader chose.
         log.warn("libvips exited {} for {}: {}", process.exitValue(), command.get(0), output.strip());
         throw new ImageProcessingException("Image conversion failed", null);
       }
@@ -203,7 +167,6 @@ public class VipsImageProcessor implements ImageProcessor {
       throw new ImageProcessingException("Image conversion was interrupted", interrupted);
     } finally {
       if (process != null && process.isAlive()) {
-        // A timed-out child must not outlive the request that started it.
         process.destroyForcibly();
       }
     }

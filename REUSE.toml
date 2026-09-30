@@ -1,20 +1,7 @@
-# REUSE configuration — https://reuse.software
-#
-# Why this file exists: the core is AGPL-3.0-or-later, but the plugin API and
-# the SDKs are Apache-2.0 so that plugin authors can choose their own licence
-# ([ADR-0018](docs/adr/0018-licensing.md)). That separation is only worth
-# anything if it is machine-checkable, and REUSE is how it gets checked.
-#
-# Files that carry their own SPDX header do not need an entry here. This file
-# covers what cannot carry one (licence texts, generated data, binary assets)
-# and the directory-wide defaults.
-
 version = 1
 SPDX-PackageName = "Home Inventory"
 SPDX-PackageSupplier = "Lucas Greuloch <lucas.greuloch@gmail.com>"
 SPDX-PackageDownloadLocation = "https://github.com/greluc/Home-Inventory"
-
-# --- The core: AGPL ---------------------------------------------------------
 
 [[annotations]]
 path = [
@@ -24,17 +11,26 @@ path = [
   "deploy/**",
   "api/**",
   "blobstore/**",
+  "egress-proxy/**",
+  "plugins/**",
   "website/**",
   ".github/**",
+  "tools/**",
+  "build.gradle.kts",
+  "settings.gradle.kts",
+  "gradle.properties",
+  "gradle/libs.versions.toml",
+  ".dockerignore",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Lucas Greuloch"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
-# --- The plugin contract: Apache-2.0, deliberately ---------------------------
-# Anything a plugin author compiles against must stay permissive. A file that
-# ends up here by accident makes the promise in ADR-0018 false, which is why CI
-# checks this boundary rather than trusting it.
+[[annotations]]
+path = ["gradle/wrapper/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "Gradle Inc."
+SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [
@@ -46,18 +42,20 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Lucas Greuloch"
 SPDX-License-Identifier = "Apache-2.0"
 
-# --- Documentation ----------------------------------------------------------
-
 [[annotations]]
 path = ["docs/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Lucas Greuloch"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 
-# --- Third-party text, kept verbatim ----------------------------------------
-
 [[annotations]]
-path = ["LICENSES/**", "LICENSE"]
+path = [
+  "LICENSES/**",
+  "LICENSE",
+  "plugin-api/LICENSE",
+  "proto/LICENSE",
+  "plugin-sdk/LICENSE",
+]
 precedence = "override"
 SPDX-FileCopyrightText = "NONE"
 SPDX-License-Identifier = "CC0-1.0"
@@ -68,21 +66,11 @@ precedence = "override"
 SPDX-FileCopyrightText = "Organization for Ethical Source and Contributor Covenant contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 
-# --- Third-party assets vendored into the design system ------------------------
-# These must come AFTER the `design-system/**` rule above: where several
-# annotations match a file, the last one wins. Without these two blocks the
-# AGPL default would swallow them and declare somebody else's permissively
-# licensed work as AGPL — a false statement, and the reason ADR-0000 A4 existed.
-
 [[annotations]]
 path = ["design-system/assets/fonts/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "2017 IBM Corp. with Reserved Font Name \"Plex\""
 SPDX-License-Identifier = "OFL-1.1"
-
-# Lucide is a Feather fork and its licence file is genuinely two licences: ISC
-# for the set, MIT for the icons inherited from Feather. `assets/icons/
-# LUCIDE-LICENSE.txt` carries both verbatim, the Feather icon list included.
 
 [[annotations]]
 path = ["design-system/assets/icons/**"]
@@ -93,7 +81,11 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "ISC AND MIT"
 
-# --- Project meta -----------------------------------------------------------
+[[annotations]]
+path = ["app/src/main/resources/security/breached-passwords.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Daniel Miessler, Jason Haddix, g0tmi1k and SecLists contributors"
+SPDX-License-Identifier = "MIT"
 
 [[annotations]]
 path = [
@@ -105,3 +97,28 @@ path = [
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Lucas Greuloch"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+[[annotations]]
+path = [
+  "app/src/main/resources/third-party-notices.json",
+  "web/public/third-party-notices.json",
+  "plugins/oidc/src/main/resources/THIRD-PARTY-NOTICES.txt",
+  "blobstore/THIRD-PARTY-NOTICES.txt",
+  "egress-proxy/THIRD-PARTY-NOTICES.txt",
+  "plugins/*/THIRD-PARTY-NOTICES.txt",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "The respective copyright holders, named per component in the file"
+SPDX-License-Identifier = "LicenseRef-ThirdPartyNotices"
+
+[[annotations]]
+path = ["tools/notices/licences/**", "tools/notices/overrides/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "The respective licence stewards and copyright holders, named in each file"
+SPDX-License-Identifier = "LicenseRef-ThirdPartyNotices"
+
+[[annotations]]
+path = ["deploy/keys/*.pem", "plugins/*/manifest.yaml.sig"]
+precedence = "override"
+SPDX-FileCopyrightText = "Lucas Greuloch"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

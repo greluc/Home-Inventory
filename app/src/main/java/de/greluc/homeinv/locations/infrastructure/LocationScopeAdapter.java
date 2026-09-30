@@ -5,6 +5,7 @@
 package de.greluc.homeinv.locations.infrastructure;
 
 import de.greluc.homeinv.inventory.api.PlaceScope;
+import de.greluc.homeinv.inventory.api.PlaceTree;
 import de.greluc.homeinv.locations.api.LocationScope;
 import de.greluc.homeinv.platform.TenantContext;
 import java.util.List;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @RequiredArgsConstructor
-public class LocationScopeAdapter implements LocationScope, PlaceScope {
+public class LocationScopeAdapter implements LocationScope, PlaceScope, PlaceTree {
 
   private static final String CONTAINS =
       """
@@ -48,13 +49,9 @@ public class LocationScopeAdapter implements LocationScope, PlaceScope {
   @Transactional(readOnly = true)
   public boolean contains(UUID scopeRootId, UUID locationId) {
     if (scopeRootId == null) {
-      // No scope is the whole tenant, which is what a membership without one has.
       return true;
     }
     if (locationId == null) {
-      // A thing with no place is in nobody's garage. Saying `true` here would make
-      // every digital item visible to every scoped role, which is the opposite of
-      // what confining somebody to a place means.
       return false;
     }
     return Boolean.TRUE.equals(
@@ -84,4 +81,26 @@ public class LocationScopeAdapter implements LocationScope, PlaceScope {
         ? List.of()
         : tree.subtreeIds(TenantContext.require(), scopeRootId);
   }
+
+  @Override
+  public java.util.List<java.util.UUID> ancestorsOf(java.util.UUID locationId) {
+    return tree.ancestorIds(de.greluc.homeinv.platform.TenantContext.require(), locationId);
+  }
+
+  @Override
+  public java.util.List<java.util.UUID> subtreeOf(java.util.UUID locationId) {
+    return tree.subtreeIds(de.greluc.homeinv.platform.TenantContext.require(), locationId);
+  }
+
+  @Override
+  public String labelOf(java.util.UUID locationId) {
+    return jdbc
+        .sql("select name from locations.location where tenant_id = ? and id = ?")
+        .param(de.greluc.homeinv.platform.TenantContext.require())
+        .param(locationId)
+        .query(String.class)
+        .optional()
+        .orElse(null);
+  }
+
 }

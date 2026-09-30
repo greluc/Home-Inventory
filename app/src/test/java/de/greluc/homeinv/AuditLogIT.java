@@ -99,12 +99,8 @@ class AuditLogIT extends AbstractIntegrationTest {
     List<Map<String, Object>> rows = chainOf(tenant);
     assertThat(rows).hasSize(2);
 
-    // The first chains from a value derived from the tenant id, so an empty chain
-    // and one whose first entry was removed are different things.
     assertThat(hex(rows.get(0).get("prev_hash")))
         .isEqualTo(hex(sha256("homeinv-audit-genesis:" + tenant)));
-    // And the second chains from the first, which is what makes a removal in the
-    // middle visible.
     assertThat(hex(rows.get(1).get("prev_hash"))).isEqualTo(hex(rows.get(0).get("entry_hash")));
     assertThat(rows.get(0).get("entry_hash")).isNotEqualTo(rows.get(1).get("entry_hash"));
   }
@@ -122,9 +118,6 @@ class AuditLogIT extends AbstractIntegrationTest {
     TenantContext.runAs(
         first, () -> transactions.executeWithoutResult(s -> audit.record(anEntry("item.updated"))));
 
-    // Both start at one. A global chain would have given the second tenant a
-    // sequence number that discloses how much the first has been writing
-    // (ADR-0031).
     assertThat(seqsOf(first)).containsExactly(1L, 2L);
     assertThat(seqsOf(second)).containsExactly(1L);
   }
@@ -132,8 +125,6 @@ class AuditLogIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("records a plugin's write with the plugin as the actor, and no user id at all")
   void aPluginIsDistinguishable() throws Exception {
-    // REQ-PLG-011 and REQ-SEC-073. Distinguishable means no reader has to know
-    // which ids belong to people: the kind says it and there is no actor id.
     UUID tenant = aTenant("plugin");
 
     TenantContext.runAs(
@@ -165,8 +156,6 @@ class AuditLogIT extends AbstractIntegrationTest {
   void anActorIsAlwaysIdentified() throws Exception {
     UUID tenant = aTenant("anonymous");
 
-    // In the database and not in a service: a rule about what an entry must
-    // contain is worth as much as the place it is enforced.
     assertThatThrownBy(
             () ->
                 TenantContext.runAs(
@@ -192,7 +181,6 @@ class AuditLogIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("answers what one account did in a period, and nothing anybody else did")
   void whatDidThisAccountDo() throws Exception {
-    // REQ-SEC-071, the question an incident asks first.
     UUID tenant = aTenant("account");
     UUID theirs = UUID.randomUUID();
     UUID somebodyElse = UUID.randomUUID();
@@ -219,17 +207,11 @@ class AuditLogIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("is append-only for the application, and PostgreSQL is what says so")
   void appendOnlyByPrivilege() {
-    // REQ-SEC-069. Asked of the database rather than of the code: a log the
-    // application could edit would be evidence of nothing, and the guarantee is
-    // worth what the privilege is worth.
     assertThat(may("homeinv_app", "INSERT")).isTrue();
     assertThat(may("homeinv_app", "SELECT")).isTrue();
     assertThat(may("homeinv_app", "UPDATE")).isFalse();
     assertThat(may("homeinv_app", "DELETE")).isFalse();
 
-    // And the role that may delete is a different one, which is what makes
-    // REQ-PRIV-010's retention possible without giving it to the application
-    // (ADR-0046).
     assertThat(may("homeinv_housekeeping", "DELETE")).isTrue();
     assertThat(may("homeinv_housekeeping", "INSERT")).isFalse();
     assertThat(may("homeinv_housekeeping", "UPDATE")).isFalse();
@@ -238,11 +220,6 @@ class AuditLogIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("keeps the uniqueness of a tenant's sequence on every partition it writes")
   void everyPartitionCarriesTheUniqueness() {
-    // The cost of partitioning monthly, made visible: the parent cannot carry
-    // `UNIQUE (tenant_id, seq)` because a unique index on a partitioned table
-    // must contain the partition key. Every partition carries it instead, and a
-    // partition created later must carry it too — which is why the function that
-    // creates one also creates the index.
     List<String> without =
         jdbc.sql(
                 """
@@ -266,8 +243,6 @@ class AuditLogIT extends AbstractIntegrationTest {
     assertThat(without).as("every partition of audit.audit_entry is unique on (tenant_id, seq)")
         .isEmpty();
   }
-
-  // -------------------------------------------------------------------------
 
   private static AuditLog.NewEntry anEntry(String action) {
     return byUser(UUID.randomUUID(), action);

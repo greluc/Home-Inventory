@@ -170,9 +170,6 @@ public class ErasureCertificateWriter implements ErasureCertificates {
               .list();
     }
 
-    // From the last row rather than from a field on this component. A mapper that
-    // wrote where it had got to would be shared state on a singleton, and two
-    // operators paging at once would hand each other their cursors.
     String next =
         rows.size() == size
             ? cursors.encode(

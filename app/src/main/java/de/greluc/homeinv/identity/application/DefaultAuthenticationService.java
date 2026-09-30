@@ -106,17 +106,11 @@ public class DefaultAuthenticationService implements AuthenticationService {
 
     Optional<AppUser> found = users.findByEmail(email);
 
-    // Verified in every branch. An early return on an unknown address would make
-    // that case measurably faster, and the difference says whether the address
-    // has an account here.
     String hash = found.map(AppUser::passwordHash).orElse(dummyHash);
     boolean passwordMatches = passwordEncoder.matches(password, hash);
 
     if (found.isEmpty() || !passwordMatches || !found.get().canAuthenticate()) {
       rateLimiter.recordFailure(email, clientIp);
-      // The reason is logged; it is never returned. An operator investigating a
-      // lockout needs to tell "wrong password" from "locked account"; the caller
-      // must not be able to.
       log.info(
           "Failed login for '{}' from {} ({})",
           email,
@@ -126,12 +120,6 @@ public class DefaultAuthenticationService implements AuthenticationService {
     }
 
     AppUser user = found.get();
-    // Belonging to no tenant is a state, not a failure. An instance operator may
-    // be a member of nothing (ADR-0057); somebody entitled to create their first
-    // tenant has not yet; somebody removed from their only one must still be able
-    // to sign in, or they could never accept an invitation back. The session they
-    // get reads nothing: no tenant context is published, so every policy yields
-    // zero rows, and the null role holds no permission.
     Optional<MembershipLookup.Membership> membership =
         memberships.primaryMembershipOf(user.getId());
 
@@ -146,6 +134,43 @@ public class DefaultAuthenticationService implements AuthenticationService {
 
     log.info(
         "User {} logged in for tenant {} as {}",
+        user.getId(),
+        membership.get().tenantId(),
+        membership.get().role());
+    return new AuthenticatedUser(
+        user.getId(),
+        membership.get().tenantId(),
+        user.getEmail(),
+        user.getLocale(),
+        membership.get().role(),
+        membership.get().roleDefinitionId(),
+        membership.get().scopeLocationId());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public AuthenticatedUser signInFederated(UUID userId, String clientIp) {
+    AppUser user =
+        users
+            .findById(userId)
+            .filter(AppUser::canAuthenticate)
+            .orElseThrow(
+                () -> {
+                  log.info(
+                      "Refused a federated sign-in for {} from {}: the account cannot authenticate",
+                      userId,
+                      clientIp);
+                  return new InvalidCredentialsException();
+                });
+
+    Optional<MembershipLookup.Membership> membership =
+        memberships.primaryMembershipOf(user.getId());
+    if (membership.isEmpty()) {
+      log.info("User {} signed in federated and belongs to no tenant", user.getId());
+      return new AuthenticatedUser(user.getId(), null, user.getEmail(), user.getLocale(), null);
+    }
+    log.info(
+        "User {} signed in federated for tenant {} as {}",
         user.getId(),
         membership.get().tenantId(),
         membership.get().role());

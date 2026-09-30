@@ -73,8 +73,6 @@ class AuthorizationRegistryTest {
 
     assertThat(documented).isEqualTo(implemented);
 
-    // And the database's own check constraint, which is the third copy of this
-    // list and the one that fails at insert time rather than at review time.
     String migration = read(Path.of("src", "main", "resources", "db", "migration", "tenancy",
         "V3__tenant_and_membership.sql"));
     for (String role : implemented) {
@@ -116,9 +114,6 @@ class AuthorizationRegistryTest {
   @Test
   @DisplayName("keeps the ladder monotonic: a higher role never loses a lower one's permission")
   void theLadderOnlyGrows() {
-    // Not a style rule. A ladder with a gap - CONTRIBUTOR able to do something
-    // MEMBER cannot - is one where "promote this person" can take a capability
-    // away, and nobody reviewing a role change would expect that.
     List<Role> ascending = List.of(Role.GUEST, Role.VIEWER, Role.CONTRIBUTOR, Role.MEMBER,
         Role.ADMIN, Role.OWNER);
     List<String> regressions = new ArrayList<>();
@@ -136,15 +131,9 @@ class AuthorizationRegistryTest {
     assertThat(regressions).isEmpty();
   }
 
-  // -------------------------------------------------------------------------
-
   @Test
   @DisplayName("names exactly the entitlements the code defines, with the same ids (ADR-0057)")
   void entitlementsMatchTheCode() {
-    // The second mechanism, written down in the same file and checked the same
-    // way. An entitlement id reaches an audit entry and a denial log line exactly
-    // as a permission id does, so the same drift is possible and the same check
-    // closes it.
     Map<String, String> documented = new LinkedHashMap<>();
     for (Map<String, Object> entry : entitlementEntries()) {
       documented.put((String) entry.get("name"), (String) entry.get("id"));

@@ -79,15 +79,9 @@ public class TenantErasureRunner {
     this.due = due;
     this.certificates = certificates;
     this.tombstone = tombstone;
-    // Sorted once, here, rather than trusted to injection order: Spring's list is
-    // whatever the classpath scan produced, and an order that happened to be
-    // right would be right until somebody renamed a class.
     this.blocks = blocks.stream().sorted(Comparator.comparingInt(TenantErasure::order)).toList();
     this.graceDays = graceDays;
 
-    // At startup rather than at the first erasure. A duplicate position is a
-    // mistake a reviewer makes once and a run discovers a month later, when a
-    // tenant is already half gone.
     List<Integer> ambiguous =
         blocks.stream()
             .collect(Collectors.groupingBy(TenantErasure::order, Collectors.counting()))
@@ -125,9 +119,6 @@ public class TenantErasureRunner {
         erase(tenant);
         erased++;
       } catch (RuntimeException failed) {
-        // Logged and carried on. One tenant's failure is not a reason to leave
-        // everybody else's request unhonoured, and the next run picks this one up
-        // again from wherever it stopped.
         log.error("Could not erase tenant {}; the next run will resume it.", tenant.tenantId(),
             failed);
       }
@@ -145,24 +136,15 @@ public class TenantErasureRunner {
     UUID tenantId = tenant.tenantId();
     List<TenantErasure.BlockReport> report = new ArrayList<>();
 
-    // Read before anything goes: the certificate names the tenant, and the name
-    // is one of the things being erased.
     ErasureCertificateWriter.Snapshot snapshot =
         TenantContext.callAs(tenantId, () -> certificates.snapshotOf(tenantId));
 
     for (TenantErasure block : blocks) {
-      // Each in its own transaction and inside the tenant's own context, so the
-      // policies scope every delete and a failure in one block leaves the others
-      // done rather than rolling back an hour of work.
       report.add(TenantContext.callAs(tenantId, () -> block.erase(tenantId)));
     }
 
-    // Now, and not a block earlier: this mark is what takes the tenant off the
-    // due list, and a run that stopped before it is one the next sweep resumes.
     TenantContext.runAs(tenantId, () -> tombstone.tombstone(tenantId));
 
-    // Outside the tenant context: the certificate table is instance-wide, and a
-    // context set here would be one the table's absent policy ignores anyway.
     certificates.write(tenantId, snapshot, report);
     log.warn("Tenant {} was erased; a certificate has been issued.", tenantId);
   }

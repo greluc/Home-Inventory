@@ -119,19 +119,4 @@ class SessionCookieIT extends AbstractIntegrationTest {
 
   }
 
-  /*
-   * The other half of REQ-SEC-017 — that a client which has only read holds a token it can then
-   * write with — is checked in `deploy/smoke/journey.sh`, against a running stack: it signs in,
-   * reads the categories, and creates a location with the token those responses left in its cookie
-   * jar. It was a test here and it belongs there.
-   *
-   * Spring Security defers the CSRF token, and which response resolves it depends on what the
-   * request touched. Through MockMvc that made the assertion depend on the order the suite happened
-   * to run in — green alone, red in the full suite, and the other way round on the next run. A test
-   * that passes for a reason nobody can name is worse than no test: the property is about a browser
-   * making four requests in a row, and the journey makes them.
-   *
-   * `CsrfCookieFilter` is what makes it hold. Without it a client that signs in and reads has no
-   * token at all, and its first write is refused with a 403 it can do nothing about.
-   */
 }

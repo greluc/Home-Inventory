@@ -59,7 +59,7 @@ half cannot read back.
 
 ## Status
 
-**The manifest model and the fourteen ports are here. The SDK is not.**
+**The manifest model and the fifteen ports are here. The SDK is not.**
 
 `PluginManifest`, `PluginManifestReader` and `InvalidManifestException` arrived on
 2026-09-14 with `REQ-PLG-004`, which is stage 1: the core reads a manifest to
@@ -67,7 +67,7 @@ register a plugin, and the SDK reads the same one to tell an author what is wron
 with theirs before they ship it. Two readers of one format is one reader too
 many, so it lives in the module both sides may depend on.
 
-The **fourteen ports** followed the same day with `REQ-PLG-001`, in
+The **ports** followed the same day with `REQ-PLG-001`, in
 `de.greluc.homeinv.plugin.api.port`. They are here rather than in the core's own
 blocks because this is the module a plugin author compiles against, and it is
 Apache-2.0 ([ADR-0064](../docs/adr/0064-the-ports-a-plugin-implements-are-apache.md)).

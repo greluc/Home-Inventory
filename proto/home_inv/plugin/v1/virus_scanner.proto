@@ -1,15 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// CHECKING AN UPLOAD BEFORE ANYBODY CAN DOWNLOAD IT AGAIN.
-//
-// ClamAV is in the core image and mandatory: `clamd` is part of the deployment,
-// so the adapter opens no connection outside it. Other scanners are
-// interchangeable; "NO SCANNER" IS NOT A SUPPORTED CONFIGURATION.
-//
-// A file whose verdict is not yet in is PENDING_SCAN and is not served. That is
-// the behaviour a caller preserves when this port is unavailable: an unscanned
-// file is withheld, never released on the grounds that the scanner was down.
 
 syntax = "proto3";
 

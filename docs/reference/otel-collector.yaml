@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# An EXAMPLE OpenTelemetry Collector configuration, for an operator who wants
+# distributed tracing (REQ-NFR-044, 13 §13.4).
+#
+# Nothing in this repository runs it. The collector is not part of the
+# deployment: `deploy/services.yaml` defines no container for it, `setup.sh`
+# creates none, and no image is built for one. That is deliberate — a collector
+# is where an operator's telemetry policy lives, it is the component most likely
+# to already exist in a homelab, and shipping one would be this project deciding
+# how long somebody else keeps their traces.
+#
+# What it is instead is the shape of the answer, so that "run a collector" is not
+# left as an exercise. Copy it, adapt it, run it beside the deployment.
+#
+# ── Two things that are not optional ────────────────────────────────────────
+#
+#  1. The collector sits ON THE `internal` SEGMENT. `api` and `worker` have no
+#     outbound route to the internet (ADR-0026) and tracing does not give them
+#     one: they reach a collector that is in the deployment with them, and what
+#     that collector forwards to afterwards is entirely the operator's business.
+#     Attach the container to the `homeinv_internal` network and point
+#     `HOMEINV_TRACING_ENDPOINT` at it.
+#
+#  2. THE SAMPLING DECISION IS HERE, and the application sends everything. A
+#     tail policy -- keep what failed or was slow, keep a fraction of the rest --
+#     can only be taken once a trace is complete, and the collector can only see
+#     what reached it. That is why `management.tracing.sampling.probability` is
+#     1.0 in `application.yaml`: a head sample of 5% there would discard 95% of
+#     the errors before anything could notice they were errors.
+#
+# Tested by nobody, and it says so: this is documentation of an external
+# component's configuration format, not a file this project's build can verify.
+# Check it with `otelcol validate --config` before relying on it.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        # What `HOMEINV_TRACING_ENDPOINT` points at:
+        #   http://otel-collector:4318/v1/traces
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Holds each trace until it is complete, then decides. `decision_wait` has to
+  # exceed the longest request worth keeping, or a slow trace is judged on the
+  # spans that arrived in time -- which is exactly the trace the policy below
+  # exists to keep.
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 50000
+    policies:
+      # Everything that failed. This is 13 §13.4's "100 % for errors".
+      - name: errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      # Everything slow. One second is above every service level objective in
+      # 13 §13.6 -- a detail view is p95 < 150 ms and a search p95 < 500 ms --
+      # so a trace kept here is one that already missed its target.
+      - name: slow
+        type: latency
+        latency:
+          threshold_ms: 1000
+      # A sample of the rest, which is what makes a normal request comparable
+      # with a slow one. Without it every trace kept would be a failure, and a
+      # trace is most useful next to one that worked.
+      - name: the-rest
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 5
+
+  batch:
+    timeout: 5s
+
+exporters:
+  # Replace with whatever the operator actually runs -- Jaeger, Tempo, a hosted
+  # backend. THIS is the hop that leaves the deployment, and it leaves from the
+  # collector rather than from `api`, which is the whole point of the
+  # arrangement.
+  otlphttp:
+    endpoint: http://tempo:4318
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      # tail_sampling BEFORE batch: batching first would hand the sampler spans
+      # in groups it then has to reassemble, and the decision would be taken on
+      # whatever happened to be in the batch.
+      processors: [tail_sampling, batch]
+      exporters: [otlphttp]

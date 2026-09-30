@@ -436,8 +436,9 @@ logging:
 | | `minimal` | `standard` |
 |---|---|---|
 | Services | web, api, worker, **blobstore**, postgres, valkey, **rabbitmq**, clamav, egress-proxy | + opensearch, first-party plugins |
-| Sum of **reservations** | ≈ **3.7 GB** | ≈ **5.2 GB** (+ 64 MB per plugin) |
-| Sum of **limits** | ≈ **7.7 GB** | ≈ **9.7 GB** (+ 256 MB per plugin) |
+| Where a plugin counts | — | in the **adder**, not the base: `plugin-webhook` reserves 32 MB and is the first one the matrix declares ([ADR-0072](../adr/0072-first-party-plugins-live-here.md)) |
+| Sum of **reservations** | ≈ **3.7 GB** | ≈ **5.2 GB** (+ 64 MB per Rust plugin, + 192 MB for `plugin-oidc`) |
+| Sum of **limits** | ≈ **7.7 GB** | ≈ **9.7 GB** (+ 256 MB per Rust plugin, + 512 MB for `plugin-oidc`) |
 | VM | ≥ 8 GB | ≥ 8 GB |
 
 **The reservations are the budget; the limits deliberately over-commit.** That is
@@ -512,8 +513,14 @@ container. Exactly two containers therefore sit on a non-internal segment, and
 **neither holds data, a credential or domain logic**:
 
 - **`web`** — the ingress. It publishes the single host port, serves the bundle
-  and the security headers, and proxies `/api`, `/graphql`, `/c/`, `/.well-known`
-  and the SSE stream to `api` over `frontend`. `api` publishes nothing and is not
+  and the security headers, and proxies `/api` (the SSE stream of `REQ-API-011`
+  with it), `/graphql` and `/media` to `api` over `frontend`. *It listed `/c/` and
+  `/.well-known` until 2026-09-21, and the application serves neither yet — the
+  public code resolution of `REQ-CORE-040` and the OIDC metadata document are the
+  features that add them, and each adds its own location when it lands. A
+  generated file that proxies a path nothing answers is a 404 with extra steps;
+  one that names a path it does not proxy is the shell served to a client
+  expecting JSON, which is worse.* `api` publishes nothing and is not
   on `edge` at all, which is stricter than the shape this replaced.
 - **`egress-proxy`** — which until the same pass sat only on internal segments and
   so could not make the one call it exists to make. That was the identical defect
@@ -537,7 +544,7 @@ Only Docker was measured; Podman with `pasta` and `kind` remain as CI work. That
 does not weaken the conclusion — the service matrix generates **one** topology for
 all three, so a shape Docker cannot carry is a shape the design cannot use.
 
-Six properties, all verified in CI by a connectivity test rather than asserted:
+Seven properties, all verified in CI by a connectivity test rather than asserted:
 
 - **A plugin reaches PostgreSQL, OpenSearch, RabbitMQ or Valkey not at all.** It
   speaks gRPC with the core and HTTP with the proxy, nothing else.
@@ -564,6 +571,18 @@ Six properties, all verified in CI by a connectivity test rather than asserted:
   `REQ-SEC-102`'s "holds no data, no credential, no domain logic" was true of what it
   *holds* and silent about what it could *reach* — the same distinction
   [ADR-0037](../adr/0037-per-plugin-network-segments.md) drew for plugins.
+
+**The one port a plugin segment is meant to reach is 8091 on `api`** — the host
+channel of [ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md), off
+unless `HOMEINV_PLUGIN_HOST_PORT` names it. It is the one core listener that is *not*
+bound to a segment, because there is no single segment to bind it to: `api` is a member
+of every plugin segment. What refuses a caller there is the TLS handshake — the
+certificate must be the one pinned at that plugin's registration — and that is proved
+by `HostChannelIT` over a real socket rather than by this suite, which opens TCP
+connections and can neither present a client certificate nor read a gRPC status. The
+network-shape half of it — a plugin segment reaches 8091 and no other core port —
+joins the list above with the first plugin container in `deploy/services.yaml`
+(`REQ-PLG-013`), of which there is none yet.
 
 ### The `web` → `api` hop, and what it must not do
 
@@ -741,7 +760,7 @@ about 3 GB.
 | Profile | `search` | Events | Media | Plugins | RAM (reserved) | Purpose |
 |---|---|---|---|---|---|---|
 | `minimal` | PostgreSQL adapter | outbox, in-process dispatch | filesystem (in-core adapter → the `blobstore` service, [ADR-0043](../adr/0043-blobstore-as-its-own-service.md)) | none — but the `egress-proxy` runs, for the scanner | ≈ 3.7 GB | Small home server, Raspberry Pi 5 **with 8 GB**, development |
-| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ≈ 5.2 GB (+ 64 MB per plugin) | **The profile of this installation** |
+| `standard` | **OpenSearch** | **RabbitMQ** | Nextcloud/S3 **via plugin** | `egress-proxy` + `plugin-blobstore-*` + `plugin-smtp` | ≈ 5.2 GB (+ 64 MB per Rust plugin, + 192 MB for `plugin-oidc`) | **The profile of this installation** |
 | `ha` | OpenSearch cluster | RabbitMQ cluster | S3 via plugin | as `standard` | ≥ 16 GB | Kubernetes, multiple instances |
 
 > **`minimal` opens exactly one connection outside the deployment, and it is the
@@ -820,6 +839,8 @@ data loss, no migration.
 | `HOMEINV_MQ_USER`, `_PASSWORD_FILE` | yes in `standard`/`ha` | RabbitMQ user. There was none, and `guest` is loopback-only — the generated stack could not connect at all |
 | `HOMEINV_SEARCH_USER`, `_PASSWORD_FILE` | yes in `standard`/`ha` | The core's OpenSearch client user, distinct from the admin account |
 | `HOMEINV_PLUGINS_FILE` | no | Where the generated list of installed plugins is (`REQ-PLG-013`). Generated from `deploy/services.yaml` beside the units, the per-plugin network segment ([ADR-0037](../adr/0037-per-plugin-network-segments.md)) and the egress allowlist, so the registration and the container cannot disagree. The core reads that list and nothing else — it fetches nothing and installs nothing, because installation stays an operator action. Unset means no plugins, which is what `minimal` is and is a complete deployment rather than a degraded one |
+| `HOMEINV_PLUGINS_ALLOW_UNSIGNED` | no (`false`) | Whether this deployment runs plugins **nobody signed** (`REQ-PLG-004`, [ADR-0085](../adr/0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md)). Off. The core verifies each manifest's detached signature at every start-up against the public key installed as that plugin's `cosign-plugin-*` secret, offline because `api` has no outbound route; a plugin with no signature and no key is *unsigned*, and this is the explicit operator setting the requirement asks for. It is one value for the deployment rather than a field per entry, because a decision about trust is taken once and in the open instead of being carried along by a copied line. **It does not cover a signature that fails to verify** — that is an altered document rather than an unsigned one, it is registered `DISABLED` with its reason, and no setting runs it |
+| `HOMEINV_PLUGIN_HOST_PORT` | no (`0`, off) | The port on which `api` answers the plugins that call **it** — the one channel whose direction is reversed ([ADR-0071](../adr/0071-the-core-answers-plugins-on-one-channel.md), `REQ-PLG-016`), serving `HostServices.RenderDocument` and nothing else. `0` is off, and off is right until a plugin is installed that holds `host:render-document`: a listener nothing can authenticate to is still a listener. Set it to `8091`, which is what `deploy/services.yaml` reserves. Unlike the management port it is **not** bound to one segment, because `api` sits on every plugin segment and there is no single segment to bind to — what gates it is mTLS against the fingerprint pinned at registration, refused in the handshake rather than in the call. `worker` runs no second copy: every plugin segment has `api` on it |
 | `HOMEINV_SEARCH_ENGINE` | no (`postgresql`) | Which engine answers a search: `postgresql` or `opensearch` ([ADR-0008](../adr/0008-search.md), `REQ-SRCH-005`). `minimal` has no OpenSearch at all and leaves this alone; `standard` and `ha` set `opensearch`. Deliberately a **switch and not a probe** — "use it if it answers" would erase the difference between an installation deliberately running without an index and one whose index is down, and the second is what `meta.degraded` reports ([ADR-0039](../adr/0039-degraded-response-signalling.md)). Choosing `opensearch` without `HOMEINV_SEARCH_URL`, `_USER` and `_PASSWORD_FILE` **aborts startup**: an operator who asked for OpenSearch and silently got the other engine has a deployment that is not the one they described. The generated Quadlet unit deliberately does not state the default: systemd does not interpolate `Environment=`, so a unit carrying `${HOMEINV_SEARCH_ENGINE:-postgresql}` handed the container those characters and the worker refused to start on a circular placeholder (fixed 2026-09-15, and the generator now refuses to emit one). An operator who wants `opensearch` sets it in the environment file the unit already reads |
 | `HOMEINV_SEARCH_URL` | yes in `standard`/`ha` | Where OpenSearch listens, scheme included (`https://opensearch:9200` in the generated stack). Named like `HOMEINV_DB_URL` rather than as a host, because the scheme is part of reaching a TLS-only service |
 | `HOMEINV_SEARCH_FINGERPRINT` | yes in `standard`/`ha` | The SHA-256 fingerprint of the one certificate OpenSearch may present, checked on every connection — the same mechanism `HOMEINV_BLOBSTORE_FINGERPRINT` uses (`REQ-SEC-056`). The deployment's CA signs every service and every plugin, so trusting it alone would let any of them answer as the index ([ADR-0044](../adr/0044-internal-is-not-a-trust-boundary.md)). An `https` URL without one **aborts startup**; a plain `http` URL skips the pin and is a test's shape, never a deployment's |
@@ -830,6 +851,7 @@ data loss, no migration.
 | `HOMEINV_TENANT_ERASURE_GRACE_DAYS` | no (`30`) | How long a tenant waits between being asked to be erased and being erased (`REQ-TEN-011`, `REQ-PRIV-005`). Configurable so that a test does not have to wait a month; the shipped default is what the requirements name |
 | `HOMEINV_TENANT_ERASURE_INTERVAL_MS` | no (`3600000`) | How often the `worker` looks for tenants whose grace period has elapsed (`REQ-TEN-011`). A fixed delay measured from the end of the last run, so a sweep that took longer than the interval does not have a second one starting on top of it. `api` reads it and never acts on it: the sweep is `worker`-only ([ADR-0060](../adr/0060-the-erasure-runs-in-one-pass.md)) |
 | `HOMEINV_TENANTS_PER_USER` | no (`10`) | How many tenants one account may be in, unless the operator sets a limit on the account itself. Between 0 and **200**, which is the page size `REQ-NFR-010` caps every collection at — so a person's tenants always fit in one answer and the switcher never silently omits one. A value outside that range **aborts startup** rather than being clamped ([ADR-0057](../adr/0057-the-instance-operator.md)) |
+| `HOMEINV_NOTIFICATION_INTERVAL_MS`, `_REMINDER_`, `_EXPORT_`, `_IMPORT_`, `_BLOB_SWEEP_`, `_AUDIT_ANCHOR_`, `_DEPRECIATION_`, `HOMEINV_RECONCILIATION_INTERVAL_MS` | no (`30000`, `3600000`, `30000`, `30000`, `604800000`, `900000`, `86400000`, `86400000`) | How often the `worker` runs each of its eight queues — delivering notifications, raising reminders (`REQ-NOTI-001`), building an export (`REQ-PORT-005`), reading an uploaded archive (`REQ-PORT-003`), removing blobs nothing points at (`REQ-MED-011`), anchoring the audit chain (`REQ-SEC-070`) and keeping the depreciated values current (`REQ-LIFE-009`, daily because a straight line over months does not move between breakfast and lunch), and comparing the derived stores with the truth (`REQ-NFR-073`, daily: the attribute index against `item.attributes` and the location tree against its parents, each publishing a deviation gauge and repairing nothing). All six are a **fixed delay** measured from the end of the last run rather than a rate, so a run that took longer than its interval does not have a second one starting on top of it. `api` reads them and acts on none: every one of these is `worker`-only, and the two containers share a database and nothing else |
 | `HOMEINV_PROFILE` | no (`standard`) | see 6.10 |
 
 ### 6.11.1 Rotating the data encryption master key

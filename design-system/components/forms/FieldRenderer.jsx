@@ -13,8 +13,6 @@ import { SecretInput } from "./SecretInput.jsx";
 import { FileInput } from "./FileInput.jsx";
 import { FormSection } from "./FormSection.jsx";
 
-/* The renderer for a runtime-defined type. Every branch produces the same
-   Field shell, which is why a form nobody designed still looks designed. */
 export function renderControl(def, ctx = {}) {
   const p = { id: def.key, disabled: def.disabled, readOnly: ctx.readOnly || def.readOnly, ...(def.props || {}) };
   switch (def.type) {

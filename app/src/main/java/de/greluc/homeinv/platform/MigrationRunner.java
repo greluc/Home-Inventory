@@ -68,14 +68,7 @@ public class MigrationRunner implements ApplicationRunner {
             .locations("classpath:db/migration")
             .schemas("flyway")
             .defaultSchema("flyway")
-            // Every migration this build ships must already be applied or be
-            // applicable. Out-of-order would let a lower version land after a
-            // higher one, and the version comparison SchemaVersionCheck makes
-            // would then be answering a different question than it appears to.
             .outOfOrder(false)
-            // A changed checksum means a migration that has already run was
-            // edited. Repairing it silently is how two installations end up with
-            // different schemas and the same version number.
             .validateOnMigrate(true)
             .load();
 
@@ -91,8 +84,6 @@ public class MigrationRunner implements ApplicationRunner {
       }
       exit(0);
     } catch (RuntimeException failed) {
-      // Logged here and rethrown nowhere: the message is what an operator reads,
-      // and the exit code is what the runtime acts on.
       log.error("Migration failed. api and worker will not start.", failed);
       exit(1);
     }

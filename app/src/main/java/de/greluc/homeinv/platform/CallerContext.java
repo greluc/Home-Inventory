@@ -157,6 +157,23 @@ public final class CallerContext {
                         + "work moved to a thread the context was not propagated to."));
   }
 
+  /**
+   * Binds the caller on this thread, for context propagation only.
+   *
+   * <p>Package-private and used by exactly one caller: {@link ContextPropagation}, which restores a
+   * snapshot on a thread the request did not start on. Everything else uses {@link #runAs}, which
+   * puts back what was there before.
+   *
+   * @param caller the caller, or {@code null} to bind nobody
+   */
+  static void bind(Caller caller) {
+    if (caller == null) {
+      CURRENT.remove();
+    } else {
+      CURRENT.set(caller);
+    }
+  }
+
   /** Removes the caller. Only the filter that set one should need this. */
   public static void clear() {
     CURRENT.remove();

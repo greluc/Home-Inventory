@@ -9,7 +9,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.greluc.homeinv.identity.api.RegistrationClosedException;
 import de.greluc.homeinv.identity.api.RegistrationMode;
+import de.greluc.homeinv.identity.infrastructure.OpenRegistrationReadiness;
 import de.greluc.homeinv.identity.infrastructure.RegistrationPolicy;
+import de.greluc.homeinv.plugin.api.port.IdentityProvider;
+import de.greluc.homeinv.plugin.api.port.NotificationChannel;
+import de.greluc.homeinv.plugins.api.ExtensionRegistry;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -33,8 +40,6 @@ class RegistrationModeIT {
   void theDefault() {
     RegistrationPolicy policy = new RegistrationPolicy("invite_only");
     assertThat(policy.mode()).isEqualTo(RegistrationMode.INVITE_ONLY);
-    // An invitation for an address nobody has creates the account, which is what
-    // invite-only means.
     policy.requireRegistrationPermitted();
   }
 
@@ -67,13 +72,71 @@ class RegistrationModeIT {
   }
 
   @Test
-  @DisplayName("stops the instance when it is open and nothing can confirm an address")
-  void openNeedsAMailSender() {
-    // REQ-AUTH-004's open mode confirms the address first, and confirming it needs
-    // plugin-smtp, which this build has no runtime for. The alternative to
-    // refusing is a sign-up page nobody could ever finish.
-    assertThatThrownBy(() -> new RegistrationPolicy("open"))
+  @DisplayName("is read on its own, and whether `open` can be served is asked later")
+  void openParsesAndIsCheckedWhereTheRegistryIsReadable() {
+    assertThat(new RegistrationPolicy("open").mode()).isEqualTo(RegistrationMode.OPEN);
+  }
+
+  @Test
+  @DisplayName("stops an open instance that can confirm nothing (REQ-AUTH-004)")
+  void openWithoutAnythingToConfirmWith() {
+    assertThatThrownBy(() -> readiness("open", false, false).check())
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("plugin-smtp");
+        .hasMessageContaining("nothing installed here can confirm one");
+  }
+
+  @Test
+  @DisplayName("is served by a mail sender, or by an identity provider, or by both")
+  void eitherMechanismServesIt() {
+    readiness("open", true, false).check();
+    readiness("open", false, true).check();
+    readiness("open", true, true).check();
+  }
+
+  @Test
+  @DisplayName("asks nothing of an instance that is not open")
+  void theOtherModesNeedNothingInstalled() {
+    readiness("invite_only", false, false).check();
+    readiness("closed", false, false).check();
+  }
+
+  /**
+   * The readiness check over a registry that holds what the two flags say.
+   *
+   * @param mode the configured mode
+   * @param channel whether a notification channel is installed for the instance
+   * @param provider whether an identity provider is
+   * @return the check, ready to run
+   */
+  private static OpenRegistrationReadiness readiness(
+      String mode, boolean channel, boolean provider) {
+    ExtensionRegistry registry =
+        new ExtensionRegistry() {
+          @Override
+          public <T> Optional<T> lookup(Class<T> port, UUID tenantId) {
+            return Optional.empty();
+          }
+
+          @Override
+          public <T> Optional<T> lookupForInstance(Class<T> port) {
+            boolean installed =
+                (port == NotificationChannel.class && channel)
+                    || (port == IdentityProvider.class && provider);
+            return installed
+                ? Optional.of(
+                    port.cast(
+                        java.lang.reflect.Proxy.newProxyInstance(
+                            port.getClassLoader(),
+                            new Class<?>[] {port},
+                            (proxy, method, arguments) -> null)))
+                : Optional.empty();
+          }
+
+          @Override
+          public <T> List<T> lookupAll(Class<T> port, UUID tenantId) {
+            return List.of();
+          }
+        };
+    return new OpenRegistrationReadiness(new RegistrationPolicy(mode), registry);
   }
 }

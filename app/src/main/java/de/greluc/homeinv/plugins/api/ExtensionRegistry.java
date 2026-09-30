@@ -68,4 +68,30 @@ public interface ExtensionRegistry {
    * @return the implementations, possibly empty
    */
   <T> List<T> lookupAll(Class<T> port, UUID tenantId);
+
+  /**
+   * The plugin that implements this port <b>for the instance itself</b>, or none (ADR-0066).
+   *
+   * <p>Resolved without a tenant and without reading any tenant's grants: what makes a plugin
+   * available here is an <b>instance-level</b> capability grant, which only the instance operator
+   * can make (ADR-0057). It exists for the obligations the deployment owes an account rather than a
+   * tenant — today the security notifications of {@code REQ-NOTI-004}, which must reach somebody who
+   * is a member of no tenant at all.
+   *
+   * <p>What comes back is wrapped in the same envelope as every other resolution, and the call it
+   * makes carries {@link de.greluc.homeinv.plugin.api.CallContext.Scope#INSTANCE} and no tenant. A
+   * plugin calling back into the core under it therefore reaches nothing that belongs to a tenant:
+   * there is no tenant context, so every row-level policy yields zero rows (REQ-SEC-057).
+   *
+   * <p><b>Use it nowhere else.</b> Every other caller has a tenant and must resolve with it —
+   * {@code ArchitectureRulesTest.onlyAccountNotificationsResolveAtInstanceLevel} holds that line,
+   * so the second level cannot quietly become a way around the first.
+   *
+   * @param port the port interface from {@code de.greluc.homeinv.plugin.api.port}
+   * @param <T> the port
+   * @return an implementation, or empty when no installed plugin implements this port under an
+   *     instance-level grant — which is the ordinary answer on an installation whose operator has
+   *     granted none
+   */
+  <T> Optional<T> lookupForInstance(Class<T> port);
 }

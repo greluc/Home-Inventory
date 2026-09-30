@@ -76,19 +76,13 @@ class EnumerationIT extends AbstractIntegrationTest {
         failedLogin("enumeration-nobody@example.org", "whatever-2026", "203.0.113.11");
     ObjectNode wrongPassword = failedLogin(known, "not-the-right-one-2026", "203.0.113.12");
 
-    // The whole document, field for field. A status code is the easy half; the
-    // leak lives in a `detail` that distinguishes the two.
     assertThat(unknownAddress)
         .as("an unknown address and a wrong password are one answer")
         .isEqualTo(wrongPassword);
 
-    // And the answer is the registered condition rather than something ad hoc,
-    // so a client branches on a token that is in `problem-types.yaml`.
     assertThat(unknownAddress.get("type").asString())
         .isEqualTo("https://home-inv.example/problems/unauthenticated");
 
-    // Nothing in it names the address, the account or which half failed. Checked
-    // rather than assumed: the detail is prose, and prose is what drifts.
     String text = unknownAddress.toString().toLowerCase(java.util.Locale.ROOT);
     assertThat(text)
         .as("the document says nothing about which half of the credential was wrong")
@@ -104,9 +98,6 @@ class EnumerationIT extends AbstractIntegrationTest {
     String known = "enumeration-repeat@example.org";
     anAccount(known);
 
-    // Twice each, alternating. A difference that only appears on the second
-    // attempt — a counter that exists for a known account and not for an unknown
-    // one — would be the same oracle one step further back.
     String nobody = "enumeration-nobody-2@example.org";
     ObjectNode firstUnknown = failedLogin(nobody, "whatever-2026", "203.0.113.21");
     ObjectNode firstKnown = failedLogin(known, "not-the-right-one-2026", "203.0.113.22");
@@ -117,8 +108,6 @@ class EnumerationIT extends AbstractIntegrationTest {
     assertThat(secondKnown).isEqualTo(firstKnown);
     assertThat(secondUnknown).isEqualTo(secondKnown);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The problem document a refused login answered, with {@code traceId} removed.
@@ -152,7 +141,6 @@ class EnumerationIT extends AbstractIntegrationTest {
     JsonNode parsed = json.readTree(body);
     assertThat(parsed.isObject()).as("a refused login answers a problem document").isTrue();
     ObjectNode document = (ObjectNode) parsed;
-    // The one field that may differ: it identifies the request, not its outcome.
     document.remove("traceId");
     return document;
   }

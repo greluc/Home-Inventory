@@ -13,6 +13,7 @@ import com.networknt.schema.SpecificationVersion;
 import com.networknt.schema.path.PathType;
 import de.greluc.homeinv.catalog.api.AttributeValidator;
 import de.greluc.homeinv.catalog.api.TypeRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,6 +41,12 @@ import org.springframework.stereotype.Component;
  *       carries and what a client uses to highlight a field (REQ-CORE-005).
  *   <li><b>English messages.</b> A violation travels into a problem document and into logs, and the
  *       language of the interface is the client's business (REQ-NFR-032).
+ *   <li><b>Every {@code pattern} runs under a time limit.</b> The patterns in a generated schema
+ *       come from field definitions, which are tenant data, and Java's regular expressions
+ *       backtrack — so one administrator's {@code (a+)+} would otherwise hang a request thread for
+ *       as long as the input is long (REQ-SEC-035, {@link BoundedRegularExpressions}). The other
+ *       half of that requirement refuses the known shapes when the definition is saved; this half
+ *       is what covers the shapes nobody anticipated.
  * </ul>
  */
 @Component
@@ -72,6 +79,7 @@ public class SchemaAttributeValidator implements AttributeValidator {
             .formatAssertionsEnabled(Boolean.TRUE)
             .pathType(PathType.JSON_POINTER)
             .locale(Locale.ENGLISH)
+            .regularExpressionFactory(new BoundedRegularExpressions(Duration.ofMillis(100)))
             .build();
     this.registry =
         SchemaRegistry.withDefaultDialect(
@@ -103,9 +111,6 @@ public class SchemaAttributeValidator implements AttributeValidator {
         errors.stream()
             .map(error -> new Violation(pointer(error), error.getMessage()))
             .toList();
-    // At debug, and without a value: a rejected attribute set may hold a licence
-    // key or an account number, and a log line is the one place a `secret` must
-    // never reach (REQ-SEC-041, LogHygieneIT).
     log.debug("Attribute set rejected against version {}: {} violation(s)", typeVersionId, violations.size());
     return new ValidationResult(violations);
   }

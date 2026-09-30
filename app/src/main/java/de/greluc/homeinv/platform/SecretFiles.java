@@ -76,9 +76,6 @@ public final class SecretFiles implements EnvironmentPostProcessor {
     });
 
     if (!resolved.isEmpty()) {
-      // First, so a mounted secret wins over anything else that happens to define
-      // the same property. There is no legitimate case for overriding a mounted
-      // secret from a file in the image.
       environment.getPropertySources().addFirst(new MapPropertySource(SOURCE_NAME, resolved));
     }
   }
@@ -114,9 +111,6 @@ public final class SecretFiles implements EnvironmentPostProcessor {
     try {
       return Files.readString(Path.of(path), StandardCharsets.UTF_8).stripTrailing();
     } catch (IOException | RuntimeException unreadable) {
-      // Silent on purpose - see the class comment. Logging here would run before
-      // logging is configured, and a warning about a secret is worth getting to
-      // the right place rather than to the console early.
       return null;
     }
   }

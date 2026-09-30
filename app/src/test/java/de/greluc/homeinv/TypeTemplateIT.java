@@ -76,14 +76,10 @@ class TypeTemplateIT extends AbstractIntegrationTest {
                   "document",
                   "food");
 
-          // Detailed rather than minimal, decided 2026-09-13: a template is a
-          // starting point a person prunes, and a field nobody has costs more
-          // than a field nobody fills.
           assertThat(offered.templates())
               .allSatisfy(
                   template -> assertThat(template.fieldCount()).isBetween(8, 12));
 
-          // Each names itself in both shipped languages.
           assertThat(offered.templates())
               .allSatisfy(
                   template ->
@@ -103,8 +99,6 @@ class TypeTemplateIT extends AbstractIntegrationTest {
           assertThat(book.key()).isEqualTo("book");
           assertThat(book.kind()).isEqualTo(TypeKind.PHYSICAL);
           assertThat(book.builtin()).isFalse();
-          // Published, not left as a draft: an imported template is usable at
-          // once, and a type whose only version were a draft could hold nothing.
           assertThat(book.publishedVersionId()).isNotNull();
           assertThat(book.draftVersionId()).isNull();
 
@@ -113,8 +107,6 @@ class TypeTemplateIT extends AbstractIntegrationTest {
               .extracting(FieldDefinitionView::key)
               .contains("author", "isbn", "publisher", "published", "pages");
 
-          // "Fully editable": a next draft takes a field of the tenant's own, and
-          // nothing about the type remembers the file it came from.
           TypeAdministration.VersionView draft =
               types.draftVersion(book.id(), tenant.userId());
           types.addField(
@@ -174,8 +166,6 @@ class TypeTemplateIT extends AbstractIntegrationTest {
               types.importTemplate("software-licence", tenant.userId());
           typeId.set(licence.id());
 
-          // A digital item has no physical location; the four fields REQ-CORE-004
-          // names are the ones it has instead.
           assertThat(licence.kind()).isEqualTo(TypeKind.DIGITAL);
           assertThat(types.version(licence.publishedVersionId()).fields())
               .extracting(FieldDefinitionView::key)
@@ -187,17 +177,10 @@ class TypeTemplateIT extends AbstractIntegrationTest {
                   .findFirst()
                   .orElseThrow();
           assertThat(key.sensitive()).isTrue();
-          // Not required, decided 2026-09-13: a licence is often recorded before
-          // the key is to hand, and a required field somebody may not read is one
-          // they cannot supply.
           assertThat(key.required()).isFalse();
-          // And not indexed, which the editor would refuse anyway: the value is
-          // stored encrypted, so an index over it would hold ciphertext.
           assertThat(key.projected()).isFalse();
         });
 
-    // The acceptance in as many words: creatable without a location, and the
-    // licence field stored encrypted.
     UUID item =
         asOwner(
             tenant,
@@ -235,8 +218,6 @@ class TypeTemplateIT extends AbstractIntegrationTest {
     assertThat(stored).doesNotContain("nothing real");
     assertThat(stored).contains("vendor portal").contains("2027-01-31");
   }
-
-  // -------------------------------------------------------------------------
 
   private UUID asOwner(Tenant tenant, java.util.function.Supplier<UUID> body) {
     AtomicReference<UUID> result = new AtomicReference<>();

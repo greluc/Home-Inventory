@@ -60,9 +60,6 @@ class EntityTagIT extends AbstractIntegrationTest {
     UUID id = anItem(session, "Kettle");
     String path = "/api/v1/items/" + id;
 
-    // A read hands out the tag. It is the version, quoted -- not a hash of the
-    // body, which is redacted per caller and would differ between two people
-    // looking at the same unchanged row.
     String first =
         mockMvc
             .perform(get(path).session(session))
@@ -71,12 +68,8 @@ class EntityTagIT extends AbstractIntegrationTest {
             .andReturn()
             .getResponse()
             .getHeader("ETag");
-    // Quoted and strong. What number it starts at is Hibernate's business, not
-    // the contract's: what a client needs is that the tag identifies one state
-    // and changes when the state does, both of which are asserted below.
     assertThat(first).isNotNull().startsWith("\"").endsWith("\"").doesNotStartWith("W/");
 
-    // Without the header: 428, and the item is untouched.
     mockMvc
         .perform(
             put(path)
@@ -89,9 +82,6 @@ class EntityTagIT extends AbstractIntegrationTest {
             jsonPath("$.type")
                 .value("https://home-inv.example/problems/precondition-required"));
 
-    // `*` is refused too, and that is deliberate: RFC 9110 gives the wildcard
-    // "the resource exists", which for an update means "overwrite whatever is
-    // there" -- the blind overwrite the requirement forbids.
     mockMvc
         .perform(
             put(path)
@@ -102,7 +92,6 @@ class EntityTagIT extends AbstractIntegrationTest {
                 .content(body("Kettle, renamed")))
         .andExpect(status().isPreconditionRequired());
 
-    // With the current tag: taken, and the answer carries the next one.
     MvcResult updated =
         mockMvc
             .perform(
@@ -118,8 +107,6 @@ class EntityTagIT extends AbstractIntegrationTest {
     String second = updated.getResponse().getHeader("ETag");
     assertThat(second).isNotNull().isNotEqualTo(first);
 
-    // The stale tag now: 412, naming both versions so a client can say what
-    // happened rather than only that something did.
     mockMvc
         .perform(
             put(path)
@@ -134,13 +121,10 @@ class EntityTagIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.expectedVersion").value(versionIn(first)))
         .andExpect(jsonPath("$.currentVersion").value(versionIn(second)));
 
-    // The refusal changed nothing.
     mockMvc
         .perform(get(path).session(session))
         .andExpect(jsonPath("$.name").value("Kettle, renamed"));
 
-    // A tag this API never issued is a 412 as well: it cannot match, and the
-    // caller's next move is the same as for any mismatch.
     mockMvc
         .perform(
             put(path)
@@ -165,9 +149,6 @@ class EntityTagIT extends AbstractIntegrationTest {
 
     String stale = eTagOf(session, path);
 
-    // Change it, so the tag the caller holds goes stale, and then try to delete
-    // with the old one: this is the case the rule is really for, because a
-    // deletion taken on a stale view destroys somebody else's edit.
     String current =
         mockMvc
             .perform(
@@ -207,8 +188,6 @@ class EntityTagIT extends AbstractIntegrationTest {
             .getResponse()
             .getHeader("ETag");
 
-    // A verb-path POST is a write on one resource, so it is guarded like a PUT.
-    // The rule is about the resource, not about the method.
     mockMvc
         .perform(
             post(path + "/move")
@@ -229,7 +208,6 @@ class EntityTagIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(header().exists("ETag"));
 
-    // And renaming with the tag that the move has just superseded is refused.
     mockMvc
         .perform(
             put(path)
@@ -240,8 +218,6 @@ class EntityTagIT extends AbstractIntegrationTest {
                 .content("{\"name\":\"Basement\"}"))
         .andExpect(status().isPreconditionFailed());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The number inside an entity tag.

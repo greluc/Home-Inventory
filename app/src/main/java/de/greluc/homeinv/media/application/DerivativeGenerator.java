@@ -75,8 +75,6 @@ public class DerivativeGenerator {
 
     Optional<MediaObject> found = objects.findById(mediaObjectId);
     if (found.isEmpty()) {
-      // Deleted between the publish and the delivery. Not an error: the outbox
-      // guarantees the event arrives, not that its subject still exists.
       log.debug("Media object {} is gone; nothing to derive.", mediaObjectId);
       return;
     }
@@ -88,8 +86,6 @@ public class DerivativeGenerator {
     }
 
     if (!object.getMediaType().startsWith("image/")) {
-      // A PDF has no thumbnail at stage 0. Marked done all the same, or the
-      // worker claims it again on every redelivery for the life of the object.
       object.recordDerivatives(null, null, Instant.now(clock));
       objects.save(object);
       return;
@@ -111,11 +107,6 @@ public class DerivativeGenerator {
           "Derived thumb and preview for media object {} of tenant {}.", mediaObjectId, tenantId);
 
     } catch (IOException | RuntimeException failed) {
-      // Logged and swallowed, deliberately. Rethrowing would return the message
-      // to the broker and the same file would fail again on every redelivery,
-      // filling the queue with work that cannot succeed. The columns stay null,
-      // no URL is offered for what does not exist, and the `full` variant - the
-      // one that matters - is unaffected.
       log.warn(
           "Could not derive variants for media object {} of tenant {}: {}",
           mediaObjectId,
@@ -141,9 +132,6 @@ public class DerivativeGenerator {
       images.derive(source, target, maxEdge, ImageProcessor.OutputFormat.AVIF);
       String sha256 = hashOf(target);
       try (InputStream bytes = Files.newInputStream(target)) {
-        // Content-addressed in its own right, so two objects whose thumbnails
-        // come out identical store one. Two photographs of the same white wall
-        // have the same 200-pixel version, and that is not a rare case.
         blobs.store(tenantId, sha256, bytes);
       }
       return sha256;

@@ -4,8 +4,10 @@
  */
 package de.greluc.homeinv.identity.application;
 
+import de.greluc.homeinv.platform.LogSafe;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -70,7 +72,6 @@ public class LoginRateLimiter {
   public Duration retryAfter(String email, String clientIp) {
     Duration byAccount = delayFor(accountKey(email));
     Duration byAddress = delayFor(addressKey(clientIp));
-    // The stricter of the two, because an attacker only needs one of them to be lax.
     return byAccount.compareTo(byAddress) >= 0 ? byAccount : byAddress;
   }
 
@@ -104,6 +105,41 @@ public class LoginRateLimiter {
   }
 
   /**
+   * How long the caller must wait before another password reset may be asked for (REQ-SEC-018).
+   *
+   * <p>Its own counters, not the login ones, and the separation is the point in both directions: a
+   * flood of reset requests must not lock the account holder out of signing in, and somebody
+   * failing to guess a password must not thereby stop the real owner from asking for a reset.
+   *
+   * <p>What it protects is the mailbox. A reset endpoint with no throttle is a way to send somebody
+   * a hundred messages, and the account it belongs to has no say in whether they arrive.
+   *
+   * @param email the address a reset was asked for, in any casing
+   * @param clientIp the caller's address
+   * @return the remaining wait, or {@link Duration#ZERO} when the request may proceed now
+   */
+  public Duration retryAfterReset(String email, String clientIp) {
+    Duration byAccount = delayFor(resetAccountKey(email));
+    Duration byAddress = delayFor(resetAddressKey(clientIp));
+    return byAccount.compareTo(byAddress) >= 0 ? byAccount : byAddress;
+  }
+
+  /**
+   * Records that a reset was asked for.
+   *
+   * <p>Counted whether or not the address has an account, for the reason {@link #recordFailure}
+   * gives: a counter that only moved for known addresses would answer the question the endpoint
+   * refuses to answer (REQ-SEC-110).
+   *
+   * @param email the address a reset was asked for
+   * @param clientIp the caller's address
+   */
+  public void recordResetRequest(String email, String clientIp) {
+    bump(resetAccountKey(email));
+    bump(resetAddressKey(clientIp));
+  }
+
+  /**
    * Computes the wait a key's failure count currently imposes.
    *
    * @param key the Valkey key holding the count
@@ -122,13 +158,11 @@ public class LoginRateLimiter {
     long seconds = 1L << Math.min(failures - FREE_ATTEMPTS - 1, 20);
     Duration required = Duration.ofSeconds(Math.min(seconds, MAX_DELAY.toSeconds()));
 
-    Long elapsedTtl = redis.getExpire(key);
-    if (elapsedTtl == null || elapsedTtl < 0) {
+    Long remainingMillis = redis.getExpire(key, TimeUnit.MILLISECONDS);
+    if (remainingMillis == null || remainingMillis < 0) {
       return Duration.ZERO;
     }
-    // The counter's remaining TTL tells us how long ago the last failure was:
-    // every failure resets the window, so elapsed = WINDOW - remaining.
-    Duration sinceLastFailure = WINDOW.minusSeconds(elapsedTtl);
+    Duration sinceLastFailure = WINDOW.minusMillis(remainingMillis);
     Duration remaining = required.minus(sinceLastFailure);
     return remaining.isNegative() ? Duration.ZERO : remaining;
   }
@@ -142,9 +176,7 @@ public class LoginRateLimiter {
     Long count = redis.opsForValue().increment(key);
     redis.expire(key, WINDOW);
     if (count != null && count == FREE_ATTEMPTS + 1L) {
-      // Logged once, when the delay starts applying, rather than on every failure:
-      // an attacker must not be able to fill the log by failing.
-      log.info("Login throttling engaged for key {}", key);
+      log.info("Login throttling engaged for key {}", LogSafe.value(key));
     }
   }
 
@@ -183,5 +215,25 @@ public class LoginRateLimiter {
    */
   private static String addressKey(String clientIp) {
     return "login:fail:address:" + clientIp;
+  }
+
+  /**
+   * The key for an account's reset requests.
+   *
+   * @param email the address
+   * @return the Valkey key
+   */
+  private static String resetAccountKey(String email) {
+    return "reset:ask:account:" + email.toLowerCase(Locale.ROOT);
+  }
+
+  /**
+   * The key for a client address's reset requests.
+   *
+   * @param clientIp the address
+   * @return the Valkey key
+   */
+  private static String resetAddressKey(String clientIp) {
+    return "reset:ask:address:" + clientIp;
   }
 }

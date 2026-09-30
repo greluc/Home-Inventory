@@ -1,11 +1,7 @@
-/* Home Inventory — the whole of the site's JavaScript.
-   Nothing here is required to read a page; it only adds the theme toggle,
-   the runtime tabs and the conflict picker. No dependencies, no third party. */
 (function () {
   "use strict";
   var root = document.documentElement;
 
-  /* ── Appearance. Dark is the default; the choice is remembered. ── */
   var theme = "dark";
   try { theme = localStorage.getItem("homeinv.theme") || "dark"; } catch (e) {}
 
@@ -31,7 +27,6 @@
     paint();
   });
 
-  /* ── Runtime tabs. Without JavaScript every panel is simply shown. ── */
   var tablist = document.querySelector("[data-tabs]");
   if (tablist) {
     var tabs = [].slice.call(tablist.querySelectorAll("[role=tab]"));
@@ -46,8 +41,6 @@
     show(tabs[0].getAttribute("data-tab"));
   }
 
-  /* ── The conflict picker. Static it shows all three versions, which is
-       the point of the component; this makes it answerable. ── */
   var resolver = document.querySelector("[data-conflicts]");
   if (resolver) {
     var fields = [].slice.call(resolver.querySelectorAll(".hi-conflict__field"));

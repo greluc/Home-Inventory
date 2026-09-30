@@ -1,21 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Publishes the project website to GitHub Pages.
-#
-# Two things this workflow exists to prevent, rather than merely to deploy:
-#
-#  1. **A second copy of the design system.** The site does not carry one. This
-#     job copies `design-system/` into the build output, so the published page
-#     and the repository can never show different tokens (ADR-0035).
-#  2. **A third-party host on the project page.** REQ-PRIV-015 has no exception,
-#     and a site advertising a self-hosted, privacy-respecting application must
-#     not hand every visitor's address to a CDN. The guard below fails the build
-#     rather than trusting review.
-#
-# All four actions run on the node24 runtime. NOTE: they are pinned to
-# major-version tags; pinning to full commit SHAs is the hardened form and should
-# happen when the supply-chain gates in .github/workflows/README.md are built.
 
 name: Pages
 
@@ -33,7 +17,6 @@ permissions:
   pages: write
   id-token: write
 
-# One deployment at a time; never cancel one that is already publishing.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -46,9 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The workflow lands before the site does. Until `website/index.html`
-      # exists there is nothing to publish, and a red cross on every push would
-      # teach everyone to ignore this workflow.
       - name: Is there a site yet?
         id: guard
         run: |
@@ -65,34 +45,20 @@ jobs:
           set -euo pipefail
           rm -rf _site && mkdir -p _site
           cp -r website/. _site/
-          rm -f _site/README.md          # the directory's own notes, not a page
+          rm -f _site/README.md
 
-          # The design system, from the one place it lives. Only what a browser
-          # needs: no .jsx, no .d.ts, no .prompt.md, no ui_kits, no lint config.
           mkdir -p _site/design-system
           cp design-system/styles.css _site/design-system/
           cp -r design-system/tokens _site/design-system/
-          rm -f _site/design-system/tokens/tokens.json      # the source, not a runtime asset
+          rm -f _site/design-system/tokens/tokens.json
           cp -r design-system/assets _site/design-system/
           mkdir -p _site/design-system/components
           (cd design-system && find components -name '*.css' -print0 \
             | tar --null -cf - -T -) | (cd _site/design-system && tar -xf -)
 
-          # Both licences require their notice in every copy, and publishing the
-          # fonts and icons is a copy (REQ-CON-013). These two files are not
-          # optional extras.
           test -f _site/design-system/assets/fonts/OFL.txt
           test -f _site/design-system/assets/icons/LUCIDE-LICENSE.txt
 
-          # No `touch _site/.nojekyll` here on purpose: since
-          # upload-pages-artifact v4 the artifact excludes dotfiles, so the line
-          # would look like protection and provide none. It costs nothing either:
-          # Pages built by Actions never run Jekyll. The copy in `website/`
-          # stays, for the case where publishing ever moves back to a branch.
-
-      # REQ-PRIV-015, enforced rather than asserted. Hyperlinks to other sites
-      # are fine — a visitor choosing to click one is not a silent disclosure.
-      # What must not exist is a resource the browser fetches on its own.
       - name: No third-party host
         if: steps.guard.outputs.ready == 'true'
         run: |
@@ -100,17 +66,14 @@ jobs:
           fail=0
           report() { echo "::error file=$1::external resource: $2"; fail=1; }
 
-          # Resource-loading attributes pointing at an absolute URL
           while IFS=: read -r f _ line; do
             [ -n "${f:-}" ] && report "$f" "$line"
           done < <(grep -rnEo '<(script|link|img|iframe|source|video|audio|embed|object)[^>]+(src|href|data)=["'"'"']https?://[^"'"'"']+' _site || true)
 
-          # CSS @import and url()
           while IFS=: read -r f _ line; do
             [ -n "${f:-}" ] && report "$f" "$line"
           done < <(grep -rnEo '(@import[^;]*|url\()["'"'"']?https?://[^)"'"'"']+' _site || true)
 
-          # Anything fetching at runtime, plus the usual CDNs by name
           while IFS=: read -r f _ line; do
             [ -n "${f:-}" ] && report "$f" "$line"
           done < <(grep -rnEo '(fetch\(|importScripts\(|new Worker\()["'"'"']https?://[^"'"'"']+|https?://(unpkg\.com|cdn\.|cdnjs\.|[a-z.]*jsdelivr\.net|esm\.sh|fonts\.googleapis\.com|fonts\.gstatic\.com)[^"'"'"' )]*' _site || true)

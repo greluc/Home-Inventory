@@ -1,11 +1,13 @@
 # tools/
 
-The gates that read the corpus rather than the code.
+The gates that read the corpus rather than the code, and the two generators whose
+output is committed.
 
 Each is a plain Python script with no dependency beyond `pyyaml`, runs in under a
-second, and is wired into [`ci.yml`](../.github/workflows/ci.yml). They are here
-and not in `.github/` because a gate you can only run by pushing is a gate nobody
-runs before pushing.
+second — `notices.py` and `kotlin_client.py` excepted, which read build output and
+take a few — and is wired into [`ci.yml`](../.github/workflows/ci.yml). They are
+here and not in `.github/` because a gate you can only run by pushing is a gate
+nobody runs before pushing.
 
 | Script | What it refuses | Origin |
 |---|---|---|
@@ -15,6 +17,7 @@ runs before pushing.
 | [`dead_links.py`](dead_links.py) | A relative link that resolves to nothing — resolved against what git tracks, so a wrong-case link fails here and not only on the Linux runner | Replaced a shell step on 2026-09-12 that had never passed |
 | [`workflow_shell.py`](workflow_shell.py) | A `run:` block that is not valid shell — a heredoc terminator that YAML indentation moved off column zero, most often | Two of those shipped on 2026-09-12 |
 | [`render_problems.py`](render_problems.py) | A `problem.type` document that has drifted from [`problem-types.yaml`](../docs/reference/problem-types.yaml), which is the registry | A8 in [ADR-0000](../docs/adr/0000-open-points.md) |
+| [`notices.py`](notices.py) | A licence notice that no longer describes what its artifact carries, and — with a message naming each one — any component in it that can be attributed to no licence text at all (`REQ-CON-013`) | [ADR-0083](../docs/adr/0083-the-notice-travels-inside-the-artifact.md) |
 
 ## The one with a baseline
 
@@ -28,6 +31,22 @@ day one and is switched off by week two.
 is a decision to promise something and not check it, and should be as uncomfortable
 as it sounds. `python tools/unbacked_claims.py --update` rewrites it — after
 reading what changed, never to silence a failure.
+
+## The one that reads build output
+
+`notices.py` is the exception to the first sentence above: it reads the **artifacts**
+— the jars inside the boot jar, the packages Rollup put into the chunks, the crates
+in the registry — rather than the corpus, because the question it answers is what a
+distributed artifact carries and no document knows that. Run it after building the
+thing you are asking about; with no arguments it does every artifact that has been
+built and says which it skipped, and `--check` is what CI runs.
+
+Its two data directories are **third-party text kept verbatim** and are never edited
+to fit this project's style (`CLAUDE.md`, the second carve-out of `REQ-CON-014`):
+`notices/licences/` holds the canonical text of a licence whose wording is the same
+for everyone under it, and `notices/overrides/` the notice of a component that
+publishes none inside its own artifact — each with the URL it was taken from and the
+date it was read.
 
 ## Stage
 

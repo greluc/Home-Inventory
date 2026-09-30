@@ -52,8 +52,6 @@ class ProductionImagesTest {
       List<String> offenders =
           sources
               .filter(path -> path.toString().endsWith(".java"))
-              // ProductionImages is the one place allowed to name an image, which
-              // is what makes it the single list.
               .filter(path -> !path.getFileName().toString().equals("ProductionImages.java"))
               .filter(
                   path -> {
@@ -78,13 +76,6 @@ class ProductionImagesTest {
   @Test
   @DisplayName("resolve to what the deployment runs")
   void coordinatesMatchTheMatrix() {
-    // Read back through the same accessor the containers use, so this fails for
-    // the same reason they would rather than for a reason of its own.
-    //
-    // Asserted as a DIGEST rather than against a literal digest string: pinning one
-    // is a deliberate act and bumping it must not mean editing a test, but running
-    // against a floating tag when the matrix names a digest is exactly the drift
-    // REQ-NFR-027 is about.
     assertThat(ProductionImages.of("valkey").asCanonicalNameString())
         .as("valkey is pulled by digest, as the matrix pins it")
         .startsWith("docker.io/valkey/valkey@sha256:");
@@ -92,10 +83,6 @@ class ProductionImagesTest {
         .as("the deployment runs the management image by digest, and so must the tests")
         .startsWith("docker.io/library/rabbitmq@sha256:");
 
-    // PostgreSQL is the documented exception: the deployment's own image is built
-    // from this repository and cannot be pulled, so the tests run the base it is
-    // built FROM — which is pinned in that Dockerfile — and copy the same role
-    // script in.
     assertThat(ProductionImages.postgresBase().asCanonicalNameString())
         .startsWith("docker.io/library/postgres@sha256:");
   }

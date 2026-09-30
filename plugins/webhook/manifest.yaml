@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+apiVersion: home-inv.plugin/v1
+
+metadata:
+  id: de.greluc.homeinv.plugin.webhook
+  name: "Webhook"
+  version: "0.1.0"
+  vendor: "greluc"
+  license: "AGPL-3.0-or-later"
+  homepage: "https://github.com/greluc/Home-Inventory"
+  descriptions:
+    en: "Delivers a notification to a URL as a signed JSON POST."
+    de: "Stellt eine Benachrichtigung als signierten JSON-POST an eine URL zu."
+
+spec:
+  contract: ">=1.0.0 <2.0.0"
+  runtime: out-of-process
+
+  implements:
+    - port: NotificationChannel
+      priority: 100
+
+  capabilities:
+    - id: network:outbound
+      hosts: ["hooks.example.org"]
+      reason: "Delivering notifications to the receivers this deployment allows"
+    - id: core:setting:read
+      reason: "Sending the signing secret a tenant agreed with the receiver of one target"
+
+  health:
+    endpoint: /healthz
+    intervalSeconds: 60
+
+  resources:
+    memoryMiB: 32
+    timeoutSeconds: 15

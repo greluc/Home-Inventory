@@ -56,7 +56,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
     MockHttpSession owner = login("role-owner@example.org");
     UUID helper = addMember(tenant, "role-helper@example.org", "CONTRIBUTOR", null);
 
-    // A CONTRIBUTOR may not delete an item. The role below adds exactly that.
     UUID roleId =
         UUID.fromString(
             json.readTree(
@@ -75,8 +74,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
                                                 List.of("inventory:item:delete")))))
                         .andExpect(status().isCreated())
                         .andExpect(jsonPath("$.baseRole").value("CONTRIBUTOR"))
-                        // The effective set is what a client shows, so it does not
-                        // have to re-implement the ladder.
                         .andExpect(
                             jsonPath("$.effectivePermissions")
                                 .value(org.hamcrest.Matchers.hasItem("inventory:item:create")))
@@ -96,10 +93,8 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
                     json.writeValueAsString(
                         Map.of("role", "CONTRIBUTOR", "roleDefinitionId", roleId.toString()))))
         .andExpect(status().isOk())
-        // The member list shows the role's NAME, not its id.
         .andExpect(jsonPath("$.roleName").value("Stocktaker"));
 
-    // The session established after the assignment holds the added permission.
     MockHttpSession helperSession = login("role-helper@example.org");
     String created =
         mockMvc
@@ -123,9 +118,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
                 .header("If-Match", eTagOf(helperSession, "/api/v1/items/" + itemId)))
         .andExpect(status().isNoContent());
 
-    // Take the permission away again, and the SAME session loses it: an
-    // entitlement of a role is read from the definition, not carried in the
-    // principal, so a change reaches somebody who is signed in while it happens.
     mockMvc
         .perform(
             put("/api/v1/roles/" + roleId)
@@ -167,10 +159,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
     Tenant tenant = tenantWithOwner("role-esc-owner@example.org", "Escalating");
     addMember(tenant, "role-esc-member@example.org", "MEMBER", null);
 
-    // A MEMBER holds the content band and not the type system. Defining a role
-    // that adds it would be a way to exercise it through somebody else — which is
-    // exactly what the requirement forbids. They cannot reach the endpoint at all,
-    // because defining a role IS deciding who may do what.
     mockMvc
         .perform(
             post("/api/v1/roles")
@@ -185,8 +173,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
                             "permissions", List.of("catalog:type:create")))))
         .andExpect(status().isForbidden());
 
-    // An ADMIN may define roles, and may not start one from OWNER: ownership is a
-    // relationship rather than a permission set.
     addMember(tenant, "role-esc-admin@example.org", "ADMIN", null);
     mockMvc
         .perform(
@@ -225,8 +211,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
             .getContentAsString();
     UUID roleId = UUID.fromString(json.readTree(created).get("id").asString());
 
-    // Case-insensitively unique, like every other name here: two roles called
-    // "Warehouse" and "warehouse" are a way to grant one and revoke the other.
     mockMvc
         .perform(
             post("/api/v1/roles")
@@ -246,7 +230,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
         .perform(delete("/api/v1/roles/" + roleId).session(owner).with(csrf()))
         .andExpect(status().isNoContent());
 
-    // The membership survives and falls back to the base the definition extended.
     mockMvc
         .perform(get("/api/v1/tenants/" + tenant.tenantId() + "/members").session(owner))
         .andExpect(status().isOk())
@@ -254,7 +237,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
             jsonPath("$.data[?(@.userId == '" + member + "')].roleName")
                 .value(org.hamcrest.Matchers.hasItem("VIEWER")));
 
-    // And the name is free again.
     mockMvc
         .perform(
             post("/api/v1/roles")
@@ -264,8 +246,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
                 .content(body))
         .andExpect(status().isCreated());
   }
-
-  // -------------------------------------------------------------------------
 
   /** A provisioned tenant and the user who owns it. */
   private record Tenant(UUID tenantId, UUID ownerId) {}
@@ -313,9 +293,6 @@ class TenantOwnedRolesIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

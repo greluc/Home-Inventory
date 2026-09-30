@@ -125,9 +125,6 @@ public final class TrustedProxies {
 
   private static byte[] parse(String address) {
     try {
-      // getByName on a literal address performs no name lookup, which is what is
-      // wanted here: a hostname arriving as a peer address would be a bug, and
-      // resolving it would hide that behind a DNS round trip.
       return InetAddress.getByName(address).getAddress();
     } catch (UnknownHostException notAnAddress) {
       return null;
@@ -155,8 +152,6 @@ public final class TrustedProxies {
 
     boolean contains(byte[] candidate) {
       if (candidate.length != network.length) {
-        // An IPv4 range never contains an IPv6 address, and comparing them by
-        // prefix would produce an answer rather than a mismatch.
         return false;
       }
       int wholeBytes = prefixBits / 8;

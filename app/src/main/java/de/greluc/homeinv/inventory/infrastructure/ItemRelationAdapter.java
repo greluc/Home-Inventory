@@ -62,9 +62,6 @@ public class ItemRelationAdapter implements ItemRelations {
         union all
         select id, source_id, target_id, relation_type, true as inbound, created_at
         from inventory.item_relation where tenant_id = ? and target_id = ?
-      -- `either_end` and not `both`: `both` is a reserved word in PostgreSQL
-      -- (`trim(both ...)`), so the alias was a syntax error -- in the statement
-      -- that only the SECOND page reaches, which is why it stood for months.
       ) either_end
       where created_at > ? or (created_at = ? and id > ?)
       order by created_at, id
@@ -75,9 +72,6 @@ public class ItemRelationAdapter implements ItemRelations {
   private final CursorCodec cursors;
   private final ItemRepository items;
 
-  // Where the last row of a page sat lives in a `LastRow` per call: a field here
-  // would be shared by every request in flight, this being a singleton.
-
   @Override
   @Transactional
   public RelationView relate(UUID sourceId, UUID targetId, RelationType type, UUID actor) {
@@ -87,9 +81,6 @@ public class ItemRelationAdapter implements ItemRelations {
           "An item cannot be related to itself: a thing is not an accessory of itself, nor a part "
               + "of itself.");
     }
-    // Both ends are checked here rather than left to the foreign keys, so a
-    // caller naming something this tenant cannot see gets a 404 instead of a
-    // constraint violation surfacing as a 500.
     items.findLive(tenantId, sourceId).orElseThrow(() -> new NotFoundException("item", sourceId));
     items.findLive(tenantId, targetId).orElseThrow(() -> new NotFoundException("item", targetId));
 
@@ -111,7 +102,6 @@ public class ItemRelationAdapter implements ItemRelations {
             where tenant_id = ? and source_id = ? and target_id = ? and relation_type = ?
             """)
         .params(tenantId, sourceId, targetId, type.name())
-        // A single row: the holder is a formality, because nothing pages one.
         .query((rs, rowNum) -> relationOf(rs, new LastRow()))
         .single();
   }
@@ -120,15 +110,8 @@ public class ItemRelationAdapter implements ItemRelations {
   @Transactional
   public void unrelate(UUID itemId, UUID relationId, UUID actor) {
     UUID tenantId = TenantContext.require();
-    // The same check the read path has made all along, on the path that had
-    // none: an item this tenant cannot see is a 404, not a quiet 204.
-    // `findAny`, not `findLive`, because a relation may be taken off something
-    // that is already in the trash.
     items.findAny(tenantId, itemId).orElseThrow(() -> new NotFoundException("item", itemId));
 
-    // And the relation has to be one of this item's. Without the condition the
-    // item in the path is decoration, and any item id would delete any relation
-    // the tenant has.
     jdbc.sql(
             """
             delete from inventory.item_relation
@@ -156,8 +139,6 @@ public class ItemRelationAdapter implements ItemRelations {
               .list();
     } else {
       CursorCodec.Position from = cursors.decode(cursor, CURSOR);
-      // Wrapped, not an Instant: the driver cannot infer a SQL type for one, and
-      // the statement is only reached on the second page.
       java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
       rows =
           jdbc.sql(RELATIONS_AFTER)

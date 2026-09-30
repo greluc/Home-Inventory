@@ -30,6 +30,11 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`constraint-loosened`](constraint-loosened.md) | `422` | assigned | An inheriting type widened a field it inherits. An inheriting type may tighten a field and may not loosen one. |
 | [`name-taken`](name-taken.md) | `409` | assigned | A location's name is already carried by a live sibling. Names are unique among siblings, case-insensitively, so that the tree a person reads matches the tree the database holds. |
 | [`bundle-cycle`](bundle-cycle.md) | `409` | assigned | Putting that item into that bundle would make the bundle contain itself — directly, or through a chain of bundles. |
+| [`item-lent`](item-lent.md) | `409` | assigned | The item is out on loan, and what was asked cannot be done while somebody else has it. |
+| [`item-state`](item-state.md) | `409` | assigned | The item is in a state where what was asked cannot be done -- it has been sold, disposed of or trashed. |
+| [`unserved-trigger`](unserved-trigger.md) | `422` | assigned | A reminder rule names a trigger that nothing in this installation can answer. |
+| [`no-document-renderer`](no-document-renderer.md) | `409` | assigned | A document was asked for and nothing installed can render one. |
+| [`export-not-ready`](export-not-ready.md) | `409` | assigned | The export archive was asked for before it had been built. |
 | [`invalid-move`](invalid-move.md) | `409` | assigned | A location cannot be moved where the request asks: into itself or into something it contains, or under a category that has said which categories it takes and did not name this one. |
 | [`invitation-already-open`](invitation-already-open.md) | `409` | assigned | This tenant already has an unused invitation for the address, or the person at that address is already a member of it. |
 | [`last-owner`](last-owner.md) | `409` | assigned | The change would leave the tenant without an owner — the last one cannot be demoted or removed. |
@@ -56,3 +61,10 @@ A client branches on the `type` and never on the `detail`: the URI is stable and
 | [`internal-error`](internal-error.md) | `500` | assigned | Something failed that the application does not have a specific answer for. The request may be repeatable; nothing about what went wrong is disclosed. |
 | [`plugin-unavailable`](plugin-unavailable.md) | `503` | assigned | A plugin the requested ACTION depends on cannot be reached — its circuit is open, its deadline expired, or it is disabled. |
 | [`tenant-inaccessible`](tenant-inaccessible.md) | `403` | assigned | The tenant is suspended, or pending deletion within its grace period. One token for both states, deliberately. |
+| [`federated-flow-unknown`](federated-flow-unknown.md) | `410` | assigned | The sign-in this callback belongs to is unknown, expired or already finished; start again from the sign-in page. |
+| [`federated-identity-unlinked`](federated-identity-unlinked.md) | `403` | assigned | The provider verified who you are and no account here is linked to that identity; sign in and link it from your account settings. |
+| [`federated-address-taken`](federated-address-taken.md) | `409` | assigned | This instance creates accounts, and the address the provider verified already has one; sign in with it and link the provider deliberately. |
+| [`federated-address-unverified`](federated-address-unverified.md) | `403` | assigned | The provider did not confirm the address it reported, so no account can be created from it. |
+| [`federated-identity-linked-elsewhere`](federated-identity-linked-elsewhere.md) | `409` | assigned | That provider identity is already linked to another account here. |
+| [`upload-offset-mismatch`](upload-offset-mismatch.md) | `409` | assigned | The bytes were offered at a place the upload is not at. |
+| [`upload-in-progress`](upload-in-progress.md) | `423` | assigned | Another request is already writing to this upload. |

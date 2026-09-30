@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv;
 
+import de.greluc.homeinv.plugins.domain.ManifestSignature;
 import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
@@ -46,10 +47,6 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @ActiveProfiles("test")
-// On the base class, so every integration test gets it without repeating the
-// import. A nested @TestConfiguration would not do: Spring Boot discovers those
-// on the test class itself, not on its superclass, which is a difference that
-// shows up only in the one test that actually stores a blob.
 @Import(TestBlobStore.class)
 public abstract class AbstractIntegrationTest {
 
@@ -64,20 +61,34 @@ public abstract class AbstractIntegrationTest {
    * {@code ci.yml} pinned anything — which is a claim with no mechanism, sitting in the file that
    * would have implemented it.
    */
-  @SuppressWarnings("resource") // Testcontainers closes it with the JVM via Ryuk.
+  @SuppressWarnings("resource")
+  /**
+   * What a test fixture's manifest verifies as: nothing signed it.
+   *
+   * <p>Every manifest a test builds is written in the test, so no signature exists over it and no
+   * key is installed for it — which is {@link ManifestSignature.State#UNSIGNED} and not a failure.
+   * Registering with it and {@code allowUnsigned = true} is what leaves the plugin enabled, which is
+   * what these tests are about; the signature itself has its own tests.
+   *
+   * <p>Deliberately not a real signature over a real fixture: a private key in this repository would
+   * be a private key in a public repository, whatever the comment beside it said.
+   */
+  static final ManifestSignature.Result UNSIGNED_FIXTURE =
+      new ManifestSignature.Result(
+          ManifestSignature.State.UNSIGNED, "a manifest a test wrote is signed by nobody");
+
   protected static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(ProductionImages.postgresBase().asCompatibleSubstituteFor("postgres"))
           .withDatabaseName("homeinv")
           .withUsername("postgres")
           .withPassword("test-superuser")
-          // The production role script, then the passwords a container needs.
-          // Running the real script is what keeps NOBYPASSRLS in the test path.
           .withCopyFileToContainer(
               MountableFile.forClasspathResource("db/00-roles.sql"),
               "/docker-entrypoint-initdb.d/00-roles.sql")
           .withCopyFileToContainer(
               MountableFile.forClasspathResource("db/test-roles.sql"),
-              "/docker-entrypoint-initdb.d/01-test-roles.sql");
+              "/docker-entrypoint-initdb.d/01-test-roles.sql")
+          .withCommand("postgres", "-c", "max_connections=300");
 
   /** Valkey, where sessions and the login throttle live. */
   @SuppressWarnings("resource")
@@ -140,16 +151,6 @@ public abstract class AbstractIntegrationTest {
   /** Builds MockMvc with the real security filter chain in place. */
   @BeforeEach
   void buildMockMvc() {
-    // apply(springSecurity()) is what puts the actual filter chain in the path.
-    // Without it the tests would exercise the controllers directly and every
-    // authentication and CSRF assertion below would pass vacuously.
-    //
-    // The two filters are added by hand because `webAppContextSetup` registers
-    // none of the application's own: they are servlet filters registered with the
-    // container, not beans the DispatcherServlet consults. Leaving them out cost
-    // nothing visible and hid two properties completely — a request had no
-    // `traceId` (REQ-NFR-042) and a body of any size was accepted (REQ-SEC-065) —
-    // in exactly the tests written to check them.
     mockMvc =
         MockMvcBuilders.webAppContextSetup(webApplicationContext)
             .addFilters(
@@ -214,6 +215,29 @@ public abstract class AbstractIntegrationTest {
               throw new AssertionError("No second factor was enrolled for " + email);
             });
 
+    answerTheSecondFactor(session, userId);
+    return session;
+  }
+
+  /**
+   * Answers the second factor for a login that is waiting on it.
+   *
+   * <p>The half after the password — or, for a federated sign-in, after the provider: both
+   * stop at the same place, because a provider proved who somebody is and not that they hold
+   * the authenticator this instance knows about (REQ-AUTH-002).
+   *
+   * @param session the session carrying the pending login
+   * @param userId whose account it is
+   * @throws Exception when the call fails, which is the test failing
+   */
+  protected void answerTheSecondFactor(MockHttpSession session, UUID userId)
+      throws Exception {
+    String secret =
+        secondFactorSecrets.computeIfAbsent(
+            userId,
+            id -> {
+              throw new AssertionError("No second factor was enrolled for " + id);
+            });
     rewindSecondFactor(userId);
     String code =
         de.greluc.homeinv.identity.application.TotpCodes.generate(
@@ -231,7 +255,6 @@ public abstract class AbstractIntegrationTest {
                 .content("{\"code\":\"" + code + "\"}"))
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
-    return session;
   }
 
   /**
@@ -278,6 +301,31 @@ public abstract class AbstractIntegrationTest {
                     .sql("update identity.credential set last_used_at = null where user_id = ?")
                     .param(userId)
                     .update());
+  }
+
+  /**
+   * The moment the <b>database</b> is at.
+   *
+   * <p>For a test that raises something and then asks a delivery run to pick it up. Those rows
+   * carry a {@code next_attempt_at} written by {@code now()} in PostgreSQL, and the run compares it
+   * against an instant the caller supplies — so a caller supplying {@code Instant.now()} is
+   * comparing two clocks in two processes, and a skew of a millisecond makes a row that was just
+   * written not yet due. In production the run comes round every thirty seconds and never notices;
+   * in a test it is the difference between a pass and a flake.
+   *
+   * <p>Asking the database for its own clock compares like with like. It is deliberately <b>not</b>
+   * "now plus a second": widening the window sweeps up rows other tests scheduled for the future,
+   * and this queue is shared — that was tried on 2026-09-20 and made a different test deliver
+   * somebody else's message.
+   *
+   * @return the database's current instant
+   */
+  protected java.time.Instant databaseNow() {
+    return webApplicationContext
+        .getBean(org.springframework.jdbc.core.simple.JdbcClient.class)
+        .sql("select now()")
+        .query(java.time.Instant.class)
+        .single();
   }
 
   /**
@@ -355,10 +403,6 @@ public abstract class AbstractIntegrationTest {
     registry.add("spring.data.redis.port", () -> VALKEY.getMappedPort(6379));
     registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
     registry.add("spring.rabbitmq.port", () -> RABBITMQ.getMappedPort(5672));
-    // The gRPC client is still CONSTRUCTED — the pin and the identity have no
-    // default and its constructor refuses without them, which is the behaviour
-    // under test elsewhere. It never connects: a gRPC channel is lazy, and the
-    // in-memory store above is what actually gets injected.
     registry.add("HOMEINV_BLOBSTORE_ENDPOINT", () -> "blobstore.invalid:8100");
     registry.add("HOMEINV_BLOBSTORE_FINGERPRINT", BLOBSTORE_IDENTITY::fingerprint);
     registry.add("HOMEINV_MTLS_CORE_FILE", () -> CORE_IDENTITY.bundle().toString());

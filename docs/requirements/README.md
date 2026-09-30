@@ -82,9 +82,9 @@ it is worth.
 
 | File | Areas | Count |
 |---|---|---|
-| [01 Functional](01-functional.md) | CORE 43 · MED 13 · IDENT 18 · LBL 14 · ENR 9 · SRCH 11 · LIFE 17 · TEN 12 · AUTH 11 · API 12 · PLG 15 · SYNC 16 · NOTI 9 · PORT 8 | **208** |
+| [01 Functional](01-functional.md) | CORE 43 · MED 13 · IDENT 18 · LBL 14 · ENR 9 · SRCH 11 · LIFE 17 · TEN 12 · AUTH 11 · API 12 · PLG 17 · SYNC 16 · NOTI 9 · PORT 8 | **210** |
 | [02 Non-functional](02-non-functional.md) | NFR 79 · CON 15 | **94** |
 | [03 Security and privacy](03-security-and-privacy.md) | SEC 110 · PRIV 15 | **125** |
-| **Total** | | **427** |
+| **Total** | | **429** |
 
-As of 2026-09-13. The count is kept current with every addition.
+As of 2026-09-20. The count is kept current with every addition.

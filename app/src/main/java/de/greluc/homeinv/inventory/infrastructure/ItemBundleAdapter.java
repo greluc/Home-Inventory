@@ -134,10 +134,6 @@ public class ItemBundleAdapter implements ItemBundles {
     if (bundleId.equals(memberId)) {
       throw new BundleCycleException("A bundle cannot contain itself.");
     }
-    // Both ends here rather than left to the foreign keys, so that naming
-    // something this tenant cannot see is a 404 and not a constraint violation
-    // surfacing as a 500. `findLive`, because putting a trashed item into a
-    // bundle is a request about something that is on its way out.
     items.findLive(tenantId, bundleId).orElseThrow(() -> new NotFoundException("item", bundleId));
     items.findLive(tenantId, memberId).orElseThrow(() -> new NotFoundException("item", memberId));
     requireNoLoop(tenantId, bundleId, memberId);
@@ -173,10 +169,6 @@ public class ItemBundleAdapter implements ItemBundles {
   @Transactional
   public void remove(UUID bundleId, UUID memberId, UUID actor) {
     UUID tenantId = TenantContext.require();
-    // The same check `contentsOf` has made all along, on the path that had none.
-    // `findAny`, not `findLive`: a thing may be taken out of a bundle after
-    // either of them has gone to the trash, which is often exactly when somebody
-    // wants to.
     items.findAny(tenantId, bundleId).orElseThrow(() -> new NotFoundException("item", bundleId));
     items.findAny(tenantId, memberId).orElseThrow(() -> new NotFoundException("item", memberId));
 
@@ -208,8 +200,6 @@ public class ItemBundleAdapter implements ItemBundles {
     items.findAny(tenantId, memberId).orElseThrow(() -> new NotFoundException("item", memberId));
     return page(tenantId, memberId, cursor, limit, BUNDLES, BUNDLES_AFTER, BUNDLES_CURSOR);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Refuses the edge that would close a loop.
@@ -264,10 +254,6 @@ public class ItemBundleAdapter implements ItemBundles {
       rows = jdbc.sql(first).params(tenantId, itemId, size).query(Row.class).list();
     } else {
       CursorCodec.Position from = cursors.decode(cursor, fingerprint);
-      // Wrapped, not passed as an Instant. The driver cannot infer a SQL type
-      // for java.time.Instant and answers "bad SQL grammar" for a statement that
-      // is perfectly good -- on the SECOND page only, which is why an adapter
-      // tested with one page at a time can carry this for months.
       java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
       rows =
           jdbc.sql(after)

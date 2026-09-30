@@ -78,8 +78,6 @@ public class DefaultSavedSearches implements SavedSearches {
             ? Optional.empty()
             : Optional.of(cursors.decode(cursor, CURSOR_FINGERPRINT));
 
-    // One more than asked for, so the caller learns whether another page exists
-    // without a second count query.
     List<SavedSearchView> rows =
         searches.list(
             after.map(CursorCodec.Position::createdAt).orElse(null),
@@ -134,8 +132,6 @@ public class DefaultSavedSearches implements SavedSearches {
 
     String name = requireName(command.name());
     List<String> filters = checked(command.filters());
-    // Ignoring this one's own id, so that keeping the name while changing the
-    // query is not a conflict with itself.
     if (searches.nameTaken(name, id)) {
       throw new SavedSearchNameTakenException(name);
     }
@@ -157,9 +153,6 @@ public class DefaultSavedSearches implements SavedSearches {
     SavedSearchView current = get(id);
     Versions.requireCurrent("saved search", id, expectedVersion, current.version());
 
-    // The revision first, while there is still something to snapshot. Afterwards
-    // the row is gone and "who removed the list called Repairs" would be a
-    // question with no answer (CLAUDE.md rule 12).
     revisions.record(
         RevisionLog.EntityType.SAVED_SEARCH,
         id,
@@ -183,6 +176,14 @@ public class DefaultSavedSearches implements SavedSearches {
             QueryFilter.parseAll(saved.filters(), MAX_FILTERS, MAX_FILTER_LENGTH),
             List.of(),
             limit));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public java.util.Set<UUID> matchingIds(UUID id, int limit) {
+    return run(id, null, Math.clamp(limit, 1, 200)).data().stream()
+        .map(ItemView::id)
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
   }
 
   /**

@@ -58,8 +58,10 @@ public final class FieldTightening {
       return Optional.of("the value list");
     }
 
-    FieldConstraints tighter = child.constraints() == null ? FieldConstraints.NONE : child.constraints();
-    FieldConstraints looser = parent.constraints() == null ? FieldConstraints.NONE : parent.constraints();
+    FieldConstraints childConstraints = child.constraints();
+    FieldConstraints parentConstraints = parent.constraints();
+    FieldConstraints tighter = childConstraints == null ? FieldConstraints.NONE : childConstraints;
+    FieldConstraints looser = parentConstraints == null ? FieldConstraints.NONE : parentConstraints;
 
     if (dropped(tighter.min(), looser.min()) || lower(tighter.min(), looser.min())) {
       return Optional.of("min");

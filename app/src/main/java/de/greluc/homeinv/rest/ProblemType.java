@@ -99,6 +99,53 @@ public enum ProblemType {
   FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
 
   /**
+   * The sign-in a callback belongs to is unknown, expired or already finished
+   * (REQ-AUTH-005).
+   *
+   * <p>What a REPLAYED callback gets, which is the property the requirement is verified by,
+   * and what an expired one gets after ten minutes. It says nothing about whether the handle
+   * ever existed: a token that distinguished "never seen" from "already spent" would let
+   * somebody probe for sign-ins in flight.
+   */
+  FEDERATED_FLOW_UNKNOWN(
+      "federated-flow-unknown", HttpStatus.GONE, "Sign-in no longer available"),
+
+  /**
+   * The provider said who somebody is and no account here is linked to that identity
+   * (REQ-AUTH-006).
+   *
+   * <p>Given even when the verified address matches an account this instance has: that match
+   * is not permission to sign in as it, and a different answer for a known address would be
+   * an account oracle.
+   */
+  FEDERATED_IDENTITY_UNLINKED(
+      "federated-identity-unlinked", HttpStatus.FORBIDDEN, "Identity not linked"),
+
+  /**
+   * An `open` instance would have created an account, and the verified address already
+   * has one (REQ-AUTH-004, REQ-AUTH-006).
+   */
+  FEDERATED_ADDRESS_TAKEN(
+      "federated-address-taken", HttpStatus.CONFLICT, "Address already registered"),
+
+  /**
+   * An `open` instance would have created an account, and the provider did not confirm the
+   * address it reported.
+   *
+   * <p>An unverified address is a claim about somebody else. It refuses the creation only:
+   * an identity already linked signs in whatever the address says, because the link is on
+   * {@code (issuer, subject)}.
+   */
+  FEDERATED_ADDRESS_UNVERIFIED(
+      "federated-address-unverified", HttpStatus.FORBIDDEN, "Address not confirmed"),
+
+  /** That provider identity is already linked to another account here (REQ-AUTH-006). */
+  FEDERATED_IDENTITY_LINKED_ELSEWHERE(
+      "federated-identity-linked-elsewhere",
+      HttpStatus.CONFLICT,
+      "Identity linked elsewhere"),
+
+  /**
    * A quota would be exceeded by this operation (REQ-TEN-009).
    *
    * <p>Carries the current and the permitted amount, because a client that has to parse the
@@ -224,6 +271,73 @@ public enum ProblemType {
   BUNDLE_CYCLE("bundle-cycle", HttpStatus.CONFLICT, "Bundle would contain itself"),
 
   /**
+   * The item is out on loan, and what was asked cannot be done while it is (REQ-LIFE-005).
+   *
+   * <p>Two requests get it, and a caller does the same thing about both: record the return first.
+   * Lending something somebody already has would open a second loan on one object, and trashing it
+   * would throw away the only record of who to ask for it back — which is what REQ-LIFE-005 means
+   * by "a lent item is *not deletable*".
+   *
+   * <p>A {@code 409} rather than a {@code 422}: nothing about the request is malformed, and the
+   * identical request succeeds once the thing is back.
+   */
+  ITEM_LENT("item-lent", HttpStatus.CONFLICT, "The item is lent out"),
+
+  /**
+   * The item is in a state where what was asked cannot be done (04 §4.4, REQ-LIFE-007).
+   *
+   * <p>Separate from {@link #ITEM_LENT} because a caller acts differently on the two: "somebody has
+   * it" is answered by asking for it back, "you sold it in March" is not answered at all. A client
+   * that had to read the detail text to tell them apart would be doing the work a stable {@code
+   * type} exists to remove.
+   */
+  ITEM_STATE("item-state", HttpStatus.CONFLICT, "The item is not in a state for that"),
+
+  /**
+   * The export archive was asked for before it existed (REQ-PORT-005).
+   *
+   * <p>A {@code 409} and not a {@code 404}: the job is there and the caller is looking at the right
+   * thing, it is simply not finished. A 404 would send somebody looking for a job they can see in
+   * their own list. The detail says which state it is in, because "still running" and "it failed"
+   * lead a caller somewhere different — one waits, the other asks again.
+   */
+  EXPORT_NOT_READY("export-not-ready", HttpStatus.CONFLICT, "That export is not ready"),
+
+  /**
+   * A document was asked for and nothing installed can render one (REQ-LIFE-016).
+   *
+   * <p>A {@code 409} and not a {@code 501}: the report exists and the figures are
+   * available, as data and as a table. What is missing is a renderer, which is something an
+   * operator installs rather than something this application is incapable of.
+   */
+  NO_DOCUMENT_RENDERER(
+      "no-document-renderer", HttpStatus.CONFLICT, "No document renderer is installed"),
+
+  /**
+   * A plugin the requested ACTION depends on cannot be reached (O25, REQ-PLG-007).
+   *
+   * <p>Its circuit is open, its deadline expired, it is disabled, or nothing implementing
+   * that port is installed at all. Nothing happened, which is what separates this from a
+   * {@code degradedReason}: there the action succeeded and something derived from it is
+   * poorer.
+   *
+   * <p><i>Registered since the set was written and without a constant here until 2026-09-21,
+   * so no endpoint could answer with it — which the federated sign-in needed and found.</i>
+   */
+  PLUGIN_UNAVAILABLE(
+      "plugin-unavailable", HttpStatus.SERVICE_UNAVAILABLE, "Plugin unavailable"),
+
+  /**
+   * A reminder rule names a trigger nothing can answer here (REQ-NOTI-003).
+   *
+   * <p>A {@code 422}: the request is well formed and the value is one the enum accepts — what is
+   * wrong is that this installation has nothing behind it, which is a property of the field's value
+   * and so a validation failure rather than a conflict. The detail names the triggers that do work,
+   * because the caller's next move is to pick one of them.
+   */
+  UNSERVED_TRIGGER("unserved-trigger", HttpStatus.UNPROCESSABLE_ENTITY, "No source for that trigger"),
+
+  /**
    * The move would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>A {@code 409}: nothing about the request is malformed, and the same request would work
@@ -266,6 +380,22 @@ public enum ProblemType {
 
   /** The body exceeds the JSON limit, or an upload exceeds its size or pixel limit. */
   PAYLOAD_TOO_LARGE("payload-too-large", HttpStatus.CONTENT_TOO_LARGE, "Payload too large"),
+
+  /**
+   * A resumable upload was offered bytes at a place it is not at (REQ-MED-008).
+   *
+   * <p>The response carries the authoritative offset in {@code Upload-Offset}, which is where the
+   * client continues from. The ordinary outcome of a broken connection rather than a fault.
+   */
+  UPLOAD_OFFSET_MISMATCH("upload-offset-mismatch", HttpStatus.CONFLICT, "Upload offset mismatch"),
+
+  /**
+   * Another request is already writing to this upload (REQ-MED-008).
+   *
+   * <p>{@code 423}, which is the status tus names. Two appends that both read the offset before
+   * either writes would leave a file of the right length and the wrong bytes.
+   */
+  UPLOAD_IN_PROGRESS("upload-in-progress", HttpStatus.LOCKED, "Upload in progress"),
 
   /**
    * The request's {@code Content-Type} is not one this endpoint reads.

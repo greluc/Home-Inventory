@@ -1,34 +1,5 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# The gate that cannot run anywhere else.
-#
-# Stage 0 asks for two container runtimes as equals (REQ-NFR-051, REQ-NFR-059),
-# both rootless. This is the one requirement no developer workstation can
-# demonstrate: rootless is a Linux concept, and a Windows or macOS runtime runs in
-# a virtual machine where "rootless" says nothing about the host.
-#
-# `kind`, SELinux `enforcing` and a RHEL-family distribution are REQ-NFR-064,
-# which is stage 1 — this file covers the two runtimes and says so rather than
-# claiming the third.
-#
-# It is a separate workflow rather than a job in CI: it is slower, it needs its
-# own setup per runtime, and when it fails the answer is usually about the
-# deployment rather than about the code.
-#
-# What it proves, in order:
-#
-#   1. the host prerequisites are what `setup.sh` says they are (REQ-NFR-060)
-#   2. ONE command takes a fresh checkout to a running stack (REQ-NFR-028/051)
-#   3. the segments refuse what the matrix says they refuse — a flag in a file is
-#      a claim and a refused connection is evidence (REQ-SEC-099/102/104/105,
-#      REQ-PRIV-003)
-#   4. an item can be created, photographed, stored and found again, through the
-#      published port, with a real malware scanner (stage 0's definition of done,
-#      REQ-SEC-092)
-#   5. it comes back up against its own volumes (REQ-NFR-062), the bootstrap
-#      one-shot creates nothing on a second run (REQ-TEN-012), and nothing inside
-#      runs as root (REQ-SEC-083)
 
 name: Rootless smoke
 
@@ -42,12 +13,8 @@ on:
       - 'app/docker/**'
       - 'web/Dockerfile'
       - '.github/workflows/smoke.yml'
-      # The journey below signs in and uploads; a change to either is a change to
-      # what this workflow is checking.
       - 'app/src/main/**'
       - 'web/src/**'
-  # Runtimes and base images change underneath us; a weekly run finds that
-  # before a release does.
   schedule:
     - cron: '0 4 * * 1'
 
@@ -61,18 +28,8 @@ permissions:
 jobs:
   rootless:
     name: ${{ matrix.runtime }} (rootless)
-    # ubuntu-26.04 and not ubuntu-latest, which is still 24.04 and ships podman
-    # 4.9.3. `REQ-NFR-051` asks for **Podman >= 5.0 with Quadlet**, and 4.9's
-    # quadlet does not understand `Network=<unit>:alias=<name>` — the syntax the
-    # generator emits so that the management listener binds to one segment
-    # (REQ-SEC-099). It rejected every unit file and reported "No files parsed",
-    # which reads as a missing unit rather than as a version that is too old.
-    # 26.04 carries podman 5.7.
     runs-on: ubuntu-26.04
     strategy:
-      # Both are run to completion. Cancelling the second on the first failure
-      # would hide exactly the case this matrix exists to find: a change that
-      # works under one runtime and not the other.
       fail-fast: false
       matrix:
         runtime: [podman, docker]
@@ -85,11 +42,6 @@ jobs:
           python-version: '3.14'
       - run: pip install pyyaml
 
-      # The host prerequisites for rootless operation. Debian's podman only
-      # *recommends* uidmap, passt and dbus-user-session, and does not ship
-      # aardvark-dns at all — so an install with --no-install-recommends silently
-      # produces a podman that cannot run rootless (06 §6.2). Named explicitly
-      # for that reason.
       - name: Install the runtime
         run: |
           set -euo pipefail
@@ -98,9 +50,6 @@ jobs:
             sudo apt-get install -y podman uidmap passt dbus-user-session aardvark-dns
             podman --version
 
-            # REQ-NFR-051 names a minimum, so it is enforced here rather than
-            # assumed. A runner whose distribution moves backwards would
-            # otherwise fail later, inside quadlet, with a message about units.
             version=$(podman --version | awk '{print $3}')
             major=${version%%.*}
             if [ "$major" -lt 5 ]; then
@@ -108,45 +57,11 @@ jobs:
                    "quadlet cannot parse the units this deployment generates"
               exit 1
             fi
-            # Proof, not assumption: a rootful podman would pass every test below
-            # and mean nothing.
             test "$(id -u)" -ne 0
             podman info --format '{{.Host.Security.Rootless}}' | grep -qx true
           else
-            # Docker's rootless mode is a separate installation from the daemon
-            # the runner already has — and that daemon is why the installer
-            # refuses: "Aborting because rootful Docker is running and
-            # accessible." On a GitHub-hosted runner it always is, so the install
-            # never ran and this job has never reached a container.
-            #
-            # FORCE_ROOTLESS_INSTALL only gets the rootless daemon installed
-            # alongside it. What makes the rest of this job mean anything is
-            # DOCKER_HOST below plus the check in the next step, which reads
-            # `rootless` out of the daemon's own security options — so a silent
-            # fallback to the rootful socket fails the job instead of passing it.
-            # Everything rootlesskit needs, not only the two packages the
-            # installer names: without slirp4netns or fuse-overlayfs the daemon
-            # installs and then fails to start, which is how this job spent two
-            # rounds reporting "Failed to start docker.service" and nothing else.
             sudo apt-get install -y uidmap dbus-user-session slirp4netns fuse-overlayfs
 
-            # Ubuntu 23.10 and later refuse an unprivileged user namespace unless
-            # the binary asking for one has an AppArmor profile permitting it, so
-            # rootlesskit dies with "fork/exec /proc/self/exe: permission denied"
-            # and the daemon never starts. The profile is the one rootlesskit
-            # itself prints in that error.
-            #
-            # It has to be in place BEFORE the installer runs, because the
-            # installer ends by starting the daemon. It was written in a later
-            # step for one round, which is why this failed again with the fix
-            # already in the workflow. The path does not exist yet and that is
-            # fine: AppArmor applies the profile when the binary appears.
-            #
-            # A profile per binary rather than
-            # `sysctl kernel.apparmor_restrict_unprivileged_userns=0`: turning the
-            # restriction off host-wide would also turn it off for everything the
-            # deployment then starts, and this job exists to prove rootless works
-            # rather than that it works with a protection removed.
             profile=/etc/apparmor.d/home.runner.bin.rootlesskit
             printf '%s\n' \
               'abi <abi/4.0>,' \
@@ -159,23 +74,11 @@ jobs:
               | sudo tee "$profile" >/dev/null
             sudo systemctl restart apparmor.service || true
 
-            # The rootful daemon goes first. FORCE_ROOTLESS_INSTALL alone gets the
-            # installer past its own refusal and then its `systemctl --user start
-            # docker.service` fails anyway, because the two daemons contend for
-            # the same iptables chains and the same default bridge. Stopping the
-            # system one is also the honest thing for a job whose whole subject is
-            # that rootless is the only supported path (REQ-NFR-059).
             sudo systemctl disable --now docker.service docker.socket || true
             sudo rm -f /var/run/docker.sock
 
             export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 
-            # The installer ends by starting the service and exits non-zero when
-            # that fails — taking the step down before anything can say why. The
-            # start is retried in the next step, so a failure HERE is allowed
-            # through and the journal is printed instead of a sentence naming no
-            # cause. If the daemon really is unusable, the next step fails and
-            # this output is what explains it.
             if ! curl -fsSL https://get.docker.com/rootless | FORCE_ROOTLESS_INSTALL=1 sh; then
               echo "::warning::the rootless installer reported a failure; its journal follows"
               journalctl --user -n 60 --no-pager -u docker.service || true
@@ -193,15 +96,10 @@ jobs:
             systemctl --user start docker || true
             for _ in $(seq 1 30); do docker info > /dev/null 2>&1 && break; sleep 1; done
             if ! docker info > /dev/null 2>&1; then
-              # The installer's own advice, taken here so a failure arrives with
-              # its reason attached rather than as "the daemon did not start".
               echo "::error::the rootless daemon did not come up"
               journalctl --user -n 40 --no-pager -u docker.service || true
               exit 1
             fi
-            # Docker reports rootless as a security option. Without this check a
-            # fallback to the rootful daemon would go unnoticed, and the job would
-            # claim to prove something it had not.
             docker info --format '{{.SecurityOptions}}' | grep -q rootless
           fi
           echo "runtime is rootless"
@@ -209,10 +107,6 @@ jobs:
       - name: The descriptions still match the matrix
         run: python deploy/generate.py --check
 
-      # REQ-NFR-060: the host prerequisites a rootless stack needs and no
-      # container can give itself. `setup.sh check` refuses without them, which is
-      # the behaviour under test — so the runner is brought up to them first,
-      # with the commands that script prints.
       - name: Bring the host up to the prerequisites
         run: |
           set -euo pipefail
@@ -225,18 +119,13 @@ jobs:
           Delegate=cpu cpuset io memory pids
           CONF
           sudo systemctl daemon-reload
-          # subuid/subgid for the runner's user: Debian's adduser writes them for
-          # interactive accounts and the runner's is not one.
           grep -q "^$USER:" /etc/subuid || echo "$USER:100000:65536" | sudo tee -a /etc/subuid
           grep -q "^$USER:" /etc/subgid || echo "$USER:100000:65536" | sudo tee -a /etc/subgid
 
-      # Every one of them from the repository root. The Dockerfiles copy paths
-      # like `web/package.json` and `deploy/postgres/initdb/`, so a narrower
-      # context fails on a file it cannot see.
-      - name: Build the five images the deployment names
+      - name: Build the six images the deployment names
         run: |
           set -euo pipefail
-          ${{ matrix.runtime }} build -f app/Dockerfile -t ghcr.io/greluc/home-inv:latest .
+          ${{ matrix.runtime }} build -f app/Dockerfile             --build-arg HOMEINV_BUILD_COMMIT="$(git rev-parse --short=12 HEAD)"             -t ghcr.io/greluc/home-inv:latest .
           ${{ matrix.runtime }} build -f web/Dockerfile -t ghcr.io/greluc/home-inv-web:latest .
           ${{ matrix.runtime }} build -f deploy/images/postgres/Dockerfile \
             -t ghcr.io/greluc/home-inv-postgres:latest .
@@ -244,12 +133,9 @@ jobs:
             -t ghcr.io/greluc/home-inv-blobstore:latest .
           ${{ matrix.runtime }} build -f egress-proxy/Dockerfile \
             -t ghcr.io/greluc/home-inv-egress-proxy:latest .
+          ${{ matrix.runtime }} build -f plugins/webhook/Dockerfile \
+            -t ghcr.io/greluc/home-inv-plugin-webhook:latest .
 
-      # REQ-NFR-028 and REQ-NFR-051: one command, from a fresh checkout to a
-      # running stack, on both runtimes. Running the real script rather than a
-      # transcription of it is the point — the secrets it generates, the
-      # templates it renders and the `.env` it writes are all things a
-      # hand-written step in this file would drift from.
       - name: The one command (deploy/setup.sh)
         timeout-minutes: 10
         env:
@@ -261,16 +147,6 @@ jobs:
         run: |
           set -euo pipefail
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          # setup.sh starts `homeinv-minimal.target` itself, on both runtimes
-          # one command. This step is the assertion that it did: the target is
-          # reached only when every service the profile names is up, so an
-          # inactive target here means the deployment is incomplete even though
-          # the command that built it returned.
-          #
-          # Until 2026-09-12 this step started `homeinv-api.service` and nothing
-          # else, which left `web` down — the only published port in the
-          # deployment — and would have failed every step below for a reason
-          # that had nothing to do with them.
           systemctl --user list-units 'homeinv-*' --all --no-pager
           systemctl --user is-active --quiet homeinv-minimal.target \
             || { echo "::error::homeinv-minimal.target is not active"; exit 1; }
@@ -289,12 +165,6 @@ jobs:
           ${{ matrix.runtime }} ps -a || true
           exit 1
 
-      # The scanner downloads its signatures through the egress proxy on first
-      # start (ADR-0036). Until it can answer, an upload is accepted and never
-      # reaches a verdict — fail-closed, which is the design working: nothing
-      # becomes retrievable without one (REQ-SEC-092, ADR-0054). The journey below
-      # uploads and then polls for the verdict with a bounded budget, so it waits
-      # here rather than timing out there in a way that would read like a bug.
       - name: The scanner has its signatures
         timeout-minutes: 20
         run: |
@@ -310,29 +180,16 @@ jobs:
           ${{ matrix.runtime }} logs homeinv-clamav --tail 50 || true
           exit 1
 
-      # REQ-SEC-099, 102, 104, 105 and REQ-PRIV-003. Every one of them says its
-      # gate is a refused connection; until this step existed, CI read the
-      # descriptions and never opened a socket.
       - name: The segments are what the matrix claims
         run: sh deploy/smoke/connectivity.sh ${{ matrix.runtime }}
 
-      # Stage 0's definition of done, end to end through the published port:
-      # sign in as the owner the bootstrap one-shot created, put something
-      # somewhere, photograph it, and find it again. Carries REQ-SEC-092's EICAR
-      # case, which needs a real scanner with real signatures.
       - name: An item can be created, photographed, stored and found again
         run: sh deploy/smoke/journey.sh http://localhost:8080
 
-      # REQ-NFR-062: the volumes are runtime-managed and survive a restart with
-      # their ownership intact. A stack that only ever starts once never finds out.
       - name: It comes back up against its own volumes
         run: |
           set -euo pipefail
           if [ "${{ matrix.runtime }}" = "podman" ]; then
-            # The whole profile down and up, which is what the Compose branch
-            # does. Restarting a target restarts nothing — a target is reached,
-            # not run — so the services are stopped by name and the target is
-            # started again, which brings back exactly the profile's set.
             systemctl --user stop 'homeinv-*.service'
             systemctl --user start homeinv-minimal.target
           else
@@ -348,29 +205,18 @@ jobs:
           echo "::error::the stack did not come back up against its existing volumes"
           exit 1
 
-      # REQ-TEN-012: the bootstrap one-shot runs on every deployment and must
-      # create nothing the second time.
       - name: A second bootstrap changes nothing
         if: matrix.runtime == 'docker'
         working-directory: deploy/compose
         run: |
           set -euo pipefail
-          # The output of THIS run, not `compose logs` afterwards. `logs` shows
-          # whatever container currently carries the service name, and on
-          # 2026-09-12 it came back without the line the run had just printed, in
-          # a step that had passed twenty minutes earlier on the same code. What
-          # the second run said is the evidence this step is about, so it is read
-          # where it is produced rather than asked for again.
-          said=$(docker compose --profile minimal up bootstrap \
-                   --exit-code-from bootstrap 2>&1) || { echo "$said"; exit 1; }
+          docker compose --profile minimal up bootstrap --force-recreate \
+            --exit-code-from bootstrap
+          said=$(docker logs "$(docker compose --profile minimal ps -aq bootstrap)" 2>&1)
           echo "$said"
-          echo "$said" | grep -q "already has its owner" \
+          grep -q "already has its owner" <<< "$said" \
             || { echo "::error::the second run did not recognise the existing owner"; exit 1; }
 
-      # The check that makes the rest of this job mean something: the containers
-      # are running as a mapped, unprivileged user. A stack that starts as root
-      # under a rootless runtime is a stack that will start as root under a
-      # rootful one too.
       - name: Nothing inside runs as root
         run: |
           set -euo pipefail
@@ -386,11 +232,6 @@ jobs:
           done
           exit $fail
 
-      # Two runtimes, two ways of holding the containers — and until 2026-09-12
-      # this step assumed one. Under Podman the stack is systemd units, not a
-      # compose project, so `podman compose logs` answered "failed to connect to
-      # the docker API" and every podman failure arrived with no container log
-      # at all. Which is precisely when one is wanted.
       - name: Logs on failure
         if: failure()
         run: |
@@ -399,24 +240,12 @@ jobs:
             echo "::group::unit states"
             systemctl --user list-units 'homeinv-*' --all --no-pager
             echo "::endgroup::"
-            # Quadlet turns the .container files into services through a systemd
-            # GENERATOR, and a generator that does not run leaves every unit
-            # "not found" with the files sitting installed and correct one
-            # directory away. That happened, and it reported itself as a missing
-            # unit, so what the generator did is printed rather than guessed at.
             echo "::group::installed files and the generator"
             ls -la "${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd/"
             ls -la "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/"
             ls -la /usr/lib/systemd/user-generators/ /usr/libexec/podman/ 2>/dev/null
             /usr/libexec/podman/quadlet -dryrun -user 2>&1 | head -40
             echo "::endgroup::"
-            # The journal rather than `podman logs`: systemd tears a timed-out unit
-            # down together with its container, so the one log worth reading is
-            # already gone by the time this step runs. That is what happened to
-            # homeinv-api on 2026-09-12 — 210 s of "activating", then a failure
-            # report that named no container, because `podman ps --all` no longer
-            # listed one. Quadlet sends container output to the unit's journal,
-            # which outlives it.
             for unit in $(systemctl --user list-units 'homeinv-*' --all --no-legend                           --plain | awk '{print $1}'); do
               echo "::group::$unit"
               systemctl --user status "$unit" --no-pager --lines 0

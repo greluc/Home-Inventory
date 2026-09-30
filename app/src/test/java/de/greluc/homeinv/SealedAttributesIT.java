@@ -89,18 +89,12 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                     .id()));
     UUID item = created.get();
 
-    // The column. Not the API, which would be the same code answering its own
-    // question: a system that stored the key in the clear would pass that.
     String stored = rawAttributes(tenant, item);
     assertThat(stored).doesNotContain("not a real licence key");
     assertThat(stored).contains("vendor account");
 
-    // An owner with a fresh second factor reads the value itself.
     assertThat(attributesAsOwner(tenant, item)).contains("not a real licence key");
 
-    // A caller who proved no second factor does not: REQ-AUTH-011 makes reading
-    // one of these an operation that asks for the factor again, and the field is
-    // removed rather than masked — a mask says how long the value is.
     String toStranger =
         TenantContext.callAs(
             tenant.tenantId(),
@@ -146,8 +140,6 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                     .id()));
     UUID item = created.get();
 
-    // Somebody who cannot read the key edits the carrier. They send back exactly
-    // what they were shown, which does not mention the key at all.
     TenantContext.runAs(
         tenant.tenantId(),
         () ->
@@ -170,8 +162,6 @@ class SealedAttributesIT extends AbstractIntegrationTest {
                                 OptionalLong.empty(),
                                 tenant.userId()))));
 
-    // The edit landed, and the key is still there. Without the merge it would be
-    // gone, and the person who deleted it would have no way of knowing.
     String afterwards = attributesAsOwner(tenant, item);
     assertThat(afterwards).contains("a different account").contains("not a real licence key");
   }
@@ -198,8 +188,6 @@ class SealedAttributesIT extends AbstractIntegrationTest {
               .hasMessageContaining("cannot also be searchable");
         });
   }
-
-  // -------------------------------------------------------------------------
 
   private String rawAttributes(Tenant tenant, UUID item) {
     return TenantContext.callAs(

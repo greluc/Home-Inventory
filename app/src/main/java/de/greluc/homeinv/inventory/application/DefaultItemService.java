@@ -124,6 +124,15 @@ public class DefaultItemService implements ItemService {
   private final de.greluc.homeinv.inventory.api.PlaceScope scope;
 
   /**
+   * Whether an item is out on loan (REQ-LIFE-005).
+   *
+   * <p>Asked before a deletion and nowhere else here. "A lent item is ... not deletable" is
+   * REQ-LIFE-005's acceptance criterion, and the reason is that the loan row is the only record of
+   * who has the thing: trashing the item would take the question and the answer away together.
+   */
+  private final de.greluc.homeinv.inventory.api.LoanLog loans;
+
+  /**
    * Creates an item, or returns the one that is already there.
    *
    * <p>The id may come from the client, because an offline client creates items without asking
@@ -145,10 +154,6 @@ public class DefaultItemService implements ItemService {
     UUID tenantId = TenantContext.require();
     UUID id = command.id() != null ? command.id() : UUID.randomUUID();
 
-    // Before anything else, and inside this transaction: a key that has already
-    // been spent answers with what it answered then, and nothing here runs
-    // (REQ-API-005). The record and the item it protects share one COMMIT, which
-    // is the whole of ADR-0009's decision and the reason this is not a filter.
     Optional<String> answered =
         idempotency.flatMap(key -> requests.replay(CREATE_ITEM, key.key(), key.requestHash()));
     if (answered.isPresent()) {
@@ -166,22 +171,12 @@ public class DefaultItemService implements ItemService {
 
     requireInScope(command.locationId());
 
-    // Before anything is written, and after the idempotent short circuit above:
-    // a repeat of a creation that already happened must not claim a second item.
     quotas.require(de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.ITEM_COUNT, 1);
 
-    // A client names the TYPE; the version is resolved here, once, and stored.
-    // The item then keeps the shape the type had at this moment however often the
-    // type moves on afterwards (REQ-CORE-025). A client that names no type gets
-    // the tenant's built-in one, which is what a stage-0 client always did and
-    // what a quick capture still does.
     UUID typeVersionId =
         command.itemTypeId() != null
             ? types.publishedItemTypeVersion(command.itemTypeId())
             : catalog.builtinItemTypeVersion(tenantId);
-    // Merge, validate, seal — in that order (ADR-0019). Nothing is stored here
-            // yet, so there is nothing to merge from; the call is made anyway so
-    // that the one path through this is the path every write takes.
     String attributes =
         sealing.sealed(
             typeVersionId,
@@ -204,16 +199,11 @@ public class DefaultItemService implements ItemService {
             command.notes(),
             command.minimumStock(),
             command.valuation(),
+            command.maintenanceIntervalDays(),
             actor,
             now);
 
-    // saveAndFlush, not save: the projection below is plain SQL against a table
-    // whose foreign key points at this row, and JPA would otherwise hold the
-    // insert until the transaction commits — which is after the projection. The
-    // database said so plainly: "Key is not present in table item".
     items.saveAndFlush(item);
-    // In the same transaction as the write, which is what makes an attribute
-    // filter transactionally exact (REQ-CORE-013).
     projector.project(id, typeVersionId, attributes);
     revisions.record(
         de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
@@ -228,8 +218,6 @@ public class DefaultItemService implements ItemService {
             item.getItemTypeVersionId(),
             item.getName(),
             item.getLocationId()));
-    // A consumable that starts below its own minimum is already low; nothing
-    // "fell", but the thing a reminder is for is true from the first moment.
     if (item.isBelowMinimum()) {
       events.publishEvent(
           new de.greluc.homeinv.inventory.api.StockBelowMinimum(
@@ -298,19 +286,12 @@ public class DefaultItemService implements ItemService {
 
   private static boolean sameContent(Item item, CreateItemCommand command) {
     BigDecimal wanted = command.quantity() != null ? command.quantity() : BigDecimal.ONE;
-    // The type is not compared: at stage 0 the client never sends one, so a repeat
-    // would compare a resolved id against null and call every retry a conflict.
     return Objects.equals(item.getName(), command.name())
         && Objects.equals(item.getDescription(), command.description())
         && item.getKind() == command.kind()
         && Objects.equals(item.getLocationId(), command.locationId())
-        // compareTo, not equals: BigDecimal.equals is scale-sensitive, so 1 and
-        // 1.0 would count as different content and turn a retry into a conflict.
         && item.getQuantity().compareTo(wanted) == 0
         && Objects.equals(item.getQuantityUnit(), command.quantityUnit())
-        // The notes as they would be STORED, not as they were sent: a retry that
-        // sends `<b>x</b>` where `x` is stored is the same request, and comparing
-        // the raw text would make every such retry a conflict.
         && Objects.equals(
             item.getNotes(), de.greluc.homeinv.inventory.domain.Notes.sanitise(command.notes()));
   }
@@ -354,12 +335,6 @@ public class DefaultItemService implements ItemService {
     Item item = items.findLive(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
     Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
 
-    // Against the version the item was written against, not against whatever the
-    // type says today: an edit to an old item must not start failing because the
-    // type moved on (REQ-CORE-025).
-    // Merge, validate, seal. The merge is what stops an edit by somebody who
-    // cannot read a sensitive field from deleting it: they were shown the record
-    // without it, and what they send back says nothing about it.
     String attributes =
         sealing.sealed(
             item.getItemTypeVersionId(),
@@ -368,11 +343,7 @@ public class DefaultItemService implements ItemService {
                 item.getItemTypeVersionId(),
                 sealing.merged(
                     item.getItemTypeVersionId(), id, command.attributes(), item.getAttributes())));
-    // Read before the change, so the event below reports a CROSSING rather than a
-    // state: an edit to something already known to be low is not news.
     boolean wasBelow = item.isBelowMinimum();
-    // Likewise: `ItemUpdated` says whether the attributes are not the ones the
-    // item had, and after `item.update` there is nothing left to compare against.
     String attributesBefore = item.getAttributes();
 
     item.update(
@@ -385,12 +356,10 @@ public class DefaultItemService implements ItemService {
         command.notes(),
         command.minimumStock(),
         command.valuation(),
+        command.maintenanceIntervalDays(),
         actor,
         Instant.now(clock));
 
-    // The dirty aggregate reaches the database here rather than at commit, for
-    // the same reason the creation flushes: the projection is SQL and cannot see
-    // a change that is still in the persistence context.
     items.flush();
     projector.project(id, item.getItemTypeVersionId(), attributes);
     revisions.record(
@@ -427,9 +396,6 @@ public class DefaultItemService implements ItemService {
     for (Item item : items.findLiveIn(tenantId, ids)) {
       found.put(item.getId(), item);
     }
-    // The order is the caller's, not the database's: it is the relevance the
-    // index worked out, and a query by id returns rows in whatever order suits
-    // the plan.
     return ids.stream().map(found::get).filter(java.util.Objects::nonNull).map(this::toView).toList();
   }
 
@@ -455,9 +421,6 @@ public class DefaultItemService implements ItemService {
     UUID from = item.getLocationId();
     item.movedTo(locationId, actor, Instant.now(clock));
     items.flush();
-    // No projection: the side table mirrors attribute values, and a move changes
-    // none of them. The revision is written because 04 §4.2 says every change is
-    // one -- a move that left no trace would be the one edit nobody could undo.
     revisions.record(
         de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
         id,
@@ -489,15 +452,9 @@ public class DefaultItemService implements ItemService {
 
     UUID target = types.publishedItemTypeVersion(itemTypeId);
     if (target.equals(item.getItemTypeVersionId())) {
-      // Already there. Not an error: a selection spanning three types is given one
-      // type in a single pass, and the entries that were already on it are the
-      // reason a person pressed the button rather than a reason to refuse.
       return toView(item);
     }
 
-    // Merge, validate, seal -- the order AttributeSealing lays down, and the same
-    // three calls the ordinary edit makes. What differs is the document going in:
-    // not what a caller sent, but what survives the change of type.
     String attributes =
         sealing.sealed(
             target,
@@ -605,6 +562,10 @@ public class DefaultItemService implements ItemService {
     UUID tenantId = TenantContext.require();
     Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
     Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+    if (loans.isLent(id)) {
+      throw new de.greluc.homeinv.inventory.api.ItemLentException(
+          "This item is lent out. Record its return before deleting it.");
+    }
     item.markDeleted(actor, Instant.now(clock));
     items.flush();
     revisions.record(
@@ -613,11 +574,43 @@ public class DefaultItemService implements ItemService {
         de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.TRASHED,
         snapshot(item),
         actor);
-    // The projection goes with it, in the same transaction: a trashed item that
-    // kept answering attribute filters would be a deleted thing that is still
-    // findable, for the whole retention period (07 §7.3, REQ-CORE-013).
     projector.clear(id);
     events.publishEvent(new de.greluc.homeinv.inventory.api.ItemDeleted(tenantId, id));
+  }
+
+  @Transactional
+  @Override
+  public de.greluc.homeinv.inventory.api.ItemView dispose(
+      UUID id,
+      de.greluc.homeinv.inventory.api.ItemService.Disposal disposal,
+      OptionalLong expectedVersion,
+      UUID actor) {
+    UUID tenantId = TenantContext.require();
+    Item item = items.findAny(tenantId, id).orElseThrow(() -> new NotFoundException("item", id));
+    Versions.requireCurrent("item", id, expectedVersion, item.getVersion());
+
+    item.dispose(
+        disposal.state(),
+        disposal.price() == null ? null : disposal.price().amount(),
+        disposal.price() == null ? null : disposal.price().currency().getCurrencyCode(),
+        disposal.on(),
+        disposal.recipient(),
+        disposal.note(),
+        actor,
+        Instant.now(clock));
+    items.flush();
+
+    revisions.record(
+        de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
+        id,
+        de.greluc.homeinv.audit.api.RevisionLog.ChangeKind.UPDATED,
+        snapshot(item),
+        actor);
+    events.publishEvent(
+        new de.greluc.homeinv.inventory.api.ItemDisposed(
+            tenantId, id, item.getLifecycleState(), disposal.on()));
+    log.info("Item {} left the inventory as {}", id, item.getLifecycleState());
+    return toView(item);
   }
 
   @Transactional
@@ -631,9 +624,6 @@ public class DefaultItemService implements ItemService {
     }
     item.restore(actor, Instant.now(clock));
     items.flush();
-    // The projection comes back with it: trashing removed the item's rows so it
-    // would stop answering attribute filters, and restoring has to undo exactly
-    // that (07 §7.3).
     projector.project(id, item.getItemTypeVersionId(), item.getAttributes());
     revisions.record(
         de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
@@ -658,8 +648,6 @@ public class DefaultItemService implements ItemService {
               + "shortcut past the first (REQ-CORE-009).");
     }
 
-    // The last revision is written BEFORE the row goes, and says what was
-    // destroyed. Afterwards there is nothing left to take a snapshot of.
     revisions.record(
         de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM,
         id,
@@ -667,17 +655,10 @@ public class DefaultItemService implements ItemService {
         snapshot(item),
         actor);
 
-    // Inside this transaction: `media.attachment` is polymorphic and can have no
-    // foreign key into the item (07 §7.8), so nothing in the database would
-    // remove it and a purge would leave an attachment pointing at an id nothing
-    // answers for.
     events.publishEvent(new de.greluc.homeinv.inventory.api.ItemPurged(tenantId, id));
 
     items.delete(item);
     items.flush();
-    // Given back here and not when the item was trashed: a trashed item is still
-    // a row and still carries its attachments, and this is the operation that
-    // actually gives the space back (REQ-CORE-009).
     quotas.release(de.greluc.homeinv.tenancy.api.QuotaGuard.Quota.ITEM_COUNT, 1);
     log.info("Item {} purged in tenant {} by {}", id, tenantId, actor);
   }
@@ -708,12 +689,6 @@ public class DefaultItemService implements ItemService {
   public Page<de.greluc.homeinv.audit.api.RevisionLog.RevisionView> history(
       UUID id, String cursor, int limit) {
     UUID tenantId = TenantContext.require();
-    // Either the item is still here or its history is: a purge removes the row
-    // and deliberately keeps the record (REQ-CORE-009), so a check for the row
-    // alone would make the last thing a person can learn about a removed item
-    // unreachable. Both halves are tenant-scoped, so neither says anything about
-    // a foreign id (REQ-SEC-025) — and an id this tenant never had is a 404
-    // rather than an empty page.
     boolean known =
         items.findAny(tenantId, id).isPresent()
             || !revisions
@@ -726,10 +701,6 @@ public class DefaultItemService implements ItemService {
     var page =
         revisions.history(
             de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, cursor, limit);
-    // The snapshots are stored whole — a restore has to put back the real value —
-    // so the redaction happens here, on the way out. Without it the history would
-    // be the way round REQ-TEN-008: a purchase price nobody may read today, read
-    // out of yesterday.
     return Page.of(
         page.data().stream().map(revision -> redacted(id, revision)).toList(),
         page.nextCursor());
@@ -772,7 +743,8 @@ public class DefaultItemService implements ItemService {
             stored.minimumStock(),
             stored.itemTypeVersionId(),
             stored.lifecycleState(),
-            stored.valuation());
+            stored.valuation(),
+            stored.maintenanceIntervalDays());
     return new de.greluc.homeinv.audit.api.RevisionLog.RevisionView(
         revision.revision(),
         revision.kind(),
@@ -792,12 +764,6 @@ public class DefaultItemService implements ItemService {
         revisions.revision(de.greluc.homeinv.audit.api.RevisionLog.EntityType.ITEM, id, revision);
     Snapshot earlier = json.readValue(record.snapshot(), Snapshot.class);
 
-    // Against the item's own type version, not against the one the snapshot was
-    // written with: an item does not travel between versions, and a set that was
-    // valid then may not be now — which is a refusal a person can act on rather
-    // than a write that quietly stores something the type forbids.
-    // A snapshot is stored whole, so a sensitive value in it is already sealed:
-    // `merged` opens it for the validation and `sealed` leaves it as it is.
     String attributes =
         sealing.sealed(
             item.getItemTypeVersionId(),
@@ -816,11 +782,8 @@ public class DefaultItemService implements ItemService {
         attributes,
         earlier.notes(),
         earlier.minimumStock(),
-        // A restore puts back what the snapshot holds, and a snapshot written
-        // before this column existed holds nothing -- which clears the figures
-        // rather than keeping today's. That is the honest reading of "restore":
-        // the state as it was, including what it did not have.
         earlier.valuation(),
+        earlier.maintenanceIntervalDays(),
         actor,
         Instant.now(clock));
     items.flush();
@@ -859,8 +822,9 @@ public class DefaultItemService implements ItemService {
             item.getNotes(),
             item.getMinimumStock(),
             item.getItemTypeVersionId(),
-            item.getLifecycleState(),
-            item.valuation()));
+            item.getLifecycleState().name(),
+            item.valuation(),
+            item.getMaintenanceIntervalDays()));
   }
 
   /**
@@ -878,6 +842,8 @@ public class DefaultItemService implements ItemService {
    * @param minimumStock the restocking level, or {@code null}
    * @param itemTypeVersionId which definitions those attributes were written against
    * @param lifecycleState the state a person reads
+   * @param valuation what it cost, what covered it and what replacing it would cost
+   * @param maintenanceIntervalDays how often it needed servicing, or {@code null} (REQ-LIFE-004)
    */
   private record Snapshot(
       String name,
@@ -891,7 +857,8 @@ public class DefaultItemService implements ItemService {
       BigDecimal minimumStock,
       UUID itemTypeVersionId,
       String lifecycleState,
-      de.greluc.homeinv.inventory.api.Valuation valuation) {}
+      de.greluc.homeinv.inventory.api.Valuation valuation,
+      Integer maintenanceIntervalDays) {}
 
   /**
    * Refuses a place outside the part of the tree this session is confined to (REQ-TEN-007).
@@ -926,17 +893,19 @@ public class DefaultItemService implements ItemService {
         item.getName(),
         item.getDescription(),
         item.getKind().name(),
+        item.getItemTypeVersionId(),
         item.getLocationId(),
         item.getQuantity(),
         item.getQuantityUnit(),
         redaction.forCaller(item.getItemTypeVersionId(), item.getId(), item.getAttributes()),
         item.getNotes(),
         item.getMinimumStock(),
-        item.getLifecycleState(),
+        item.getLifecycleState().name(),
         item.getCreatedAt(),
         item.getUpdatedAt(),
         item.valuation(),
-        item.getVersion());
+        item.getVersion(),
+        item.getMaintenanceIntervalDays());
   }
 
 }

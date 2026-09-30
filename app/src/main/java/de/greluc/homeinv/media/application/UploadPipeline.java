@@ -115,7 +115,6 @@ public class UploadPipeline {
       Integer width = null;
       Integer height = null;
       if (detected.image()) {
-        // Header only. Nothing is decoded until this has passed.
         ImageProcessor.Dimensions dimensions = images.probe(spool);
         if (dimensions.pixels() > maxPixels) {
           throw new PayloadTooLargeException(
@@ -127,36 +126,12 @@ public class UploadPipeline {
       }
 
       if (!detected.image()) {
-        // A document is stored as it arrived. There is no re-encoding that makes
-        // a PDF safer without also making it a different document, and the
-        // serving side refuses to render it inline anyway (REQ-SEC-045).
         try (InputStream forStore = Files.newInputStream(spool)) {
           blobs.store(tenantId, sha256, forStore);
         }
         return new Stored(sha256, detected.mediaType(), false, size, width, height);
       }
 
-      // EVERY image is re-encoded, and what is stored is the re-encoding — never
-      // the bytes that arrived (REQ-SEC-041). Three things follow from doing it
-      // here rather than later:
-      //
-      //   * an embedded payload in a polyglot file does not survive being decoded
-      //     and written out again, and it never reaches the store to begin with;
-      //   * EXIF, GPS included, is gone before anything is persisted, rather than
-      //     being stripped from a copy while the original keeps it
-      //     (REQ-MED-006, REQ-PRIV-007);
-      //   * HEIC is transcoded before it is written, which is the only way
-      //     REQ-MED-003's "no stored blob has a HEIC magic number" can be true.
-      //
-      // AVIF for all of them, at Q=60: one output format is one decoder path to
-      // reason about, and the alternative — preserving each input's format —
-      // would mean JPEG stays JPEG and its metadata handling stays JPEG's.
-      //
-      // This is the one derivative produced synchronously. `thumb` and `preview`
-      // are the worker's (ADR-0051); `full` cannot be, because until it exists
-      // the only bytes on hand are the ones that must not be stored — and after
-      // ADR-0054 that is the reason the re-encode stays here rather than joining
-      // the scan in the worker.
       Path reEncoded = Files.createTempFile("homeinv-full-", ".avif");
       try {
         ImageProcessor.Dimensions dimensions =
@@ -177,8 +152,6 @@ public class UploadPipeline {
       }
 
     } finally {
-      // The spool file holds an unscanned upload; it does not outlive the request
-      // under any exit path.
       Files.deleteIfExists(spool);
     }
   }
@@ -232,8 +205,6 @@ public class UploadPipeline {
       while ((read = content.read(buffer)) != -1) {
         total += read;
         if (total > maxBytes) {
-          // Stops here. Reading to the end to report an accurate size would mean
-          // accepting the whole oversized upload in order to refuse it.
           throw new PayloadTooLargeException(
               "The upload exceeds the limit of %d MB".formatted(maxBytes / (1024 * 1024)));
         }

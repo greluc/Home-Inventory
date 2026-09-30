@@ -35,7 +35,7 @@ public class MediaMessagingConfiguration {
   public static final String EXCHANGE = "homeinv.media";
 
   /** The routing key {@code MediaObjectStored} is published with and the scan listener binds. */
-  public static final String SCAN_ROUTING_KEY = "media-object-stored";
+  public static final String SCAN_ROUTING_KEY = "media-object-stored.v1";
 
   /** Where a scan that reached no verdict waits before it is tried again. */
   public static final String SCAN_RETRY_QUEUE = "homeinv.media.scan-retry";

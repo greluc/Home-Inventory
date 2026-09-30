@@ -57,27 +57,39 @@ class CatalogSchemaTest {
     return new SchemaAttributeValidator(
         new TypeRegistry() {
           @Override
+          public java.util.List<TypeRegistry.ExpiryField> expiryFields() {
+            return java.util.List.of();
+          }
+
+          @Override
           public UUID publishedItemTypeVersion(UUID itemTypeId) {
             return VERSION;
           }
 
           @Override
+          public java.util.Optional<UUID> itemTypeByKey(String key) {
+            return java.util.Optional.empty();
+          }
+
+          @Override
+          public java.util.Map<UUID, Integer> usefulLivesOfVersions(
+              java.util.Collection<UUID> versionIds) {
+            return java.util.Map.of();
+          }
+
+          @Override
           public java.util.Map<UUID, TypeIdentity> typesOfVersions(
               java.util.Collection<UUID> versionIds) {
-            // Nor what a version's type is called.
             return java.util.Map.of();
           }
 
           @Override
           public java.util.List<UUID> itemTypeVersionsByKeys(java.util.Collection<String> keys) {
-            // Nor what a type key resolves to.
             return java.util.List.of();
           }
 
           @Override
           public java.util.List<QueryableField> queryableFields() {
-            // This stub exists to answer one schema question; nothing here asks
-            // what may be filtered.
             return java.util.List.of();
           }
 
@@ -93,9 +105,6 @@ class CatalogSchemaTest {
 
           @Override
           public boolean permitsChildCategory(UUID parentCategoryId, UUID childCategoryId) {
-            // Unrestricted, which is what a category with no rule is. Nothing in
-            // this test moves a location; the method is here because the port has
-            // it.
             return true;
           }
 
@@ -154,7 +163,7 @@ class CatalogSchemaTest {
         false,
         false,
         false,
-        false);
+        false, false);
   }
 
   /**
@@ -191,8 +200,6 @@ class CatalogSchemaTest {
       String document = generator.generate(VERSION, List.of(), id -> List.of());
       AttributeValidator validator = validatorFor(document);
       assertThat(validator.validate(VERSION, "{}").valid()).isTrue();
-      // `{}` as a schema would accept this. The generated one does not, which is
-      // the difference between "no fields declared" and "anything goes".
       assertThat(validator.validate(VERSION, "{\"invented\":1}").valid()).isFalse();
     }
   }
@@ -246,8 +253,6 @@ class CatalogSchemaTest {
     void patternIsAnchored() {
       FieldConstraints digits =
           new FieldConstraints("[0-9]+", null, null, null, null, null, null);
-      // Unanchored, "abc123" contains digits and would pass. A tenant writing
-      // `[0-9]+` means the value is digits, so the generator anchors it.
       assertThat(check(field("code", FieldDataType.TEXT, false, digits), "{\"code\":\"abc123\"}", List.of()))
           .isNotEmpty();
       assertThat(check(field("code", FieldDataType.TEXT, false, digits), "{\"code\":\"123\"}", List.of()))
@@ -283,7 +288,6 @@ class CatalogSchemaTest {
       FieldDefinitionView price = field("purchasePrice", FieldDataType.MONEY, false, FieldConstraints.NONE);
       assertThat(check(price, "{\"purchasePrice\":{\"amount\":\"49.90\",\"currency\":\"EUR\"}}", List.of()))
           .isEmpty();
-      // A JSON number is a double by the time it reaches a browser (ADR-0025).
       assertThat(check(price, "{\"purchasePrice\":{\"amount\":49.90,\"currency\":\"EUR\"}}", List.of()))
           .isNotEmpty();
       assertThat(check(price, "{\"purchasePrice\":{\"amount\":\"49.90\",\"currency\":\"Euro\"}}", List.of()))
@@ -322,9 +326,8 @@ class CatalogSchemaTest {
       FieldDefinitionView retired =
           new FieldDefinitionView(
               UUID.randomUUID(), "old", FieldDataType.TEXT, Map.of(), Map.of(), true, null,
-              FieldConstraints.NONE, null, null, null, 0, false, false, false, false, true);
+              FieldConstraints.NONE, null, null, null, 0, false, false, false, false, true, false);
       assertThat(retired.effectivelyRequired()).isFalse();
-      // And its values still validate, which is the half REQ-CORE-026 is about.
       assertThat(check(retired, "{\"old\":\"kept\"}", List.of())).isEmpty();
     }
 
@@ -334,7 +337,7 @@ class CatalogSchemaTest {
       FieldDefinitionView licence =
           new FieldDefinitionView(
               UUID.randomUUID(), "licenceKey", FieldDataType.SECRET, Map.of(), Map.of(), false, null,
-              FieldConstraints.NONE, null, null, null, 0, true, true, true, true, false);
+              FieldConstraints.NONE, null, null, null, 0, true, true, true, true, false, false);
       assertThat(licence.projected()).isFalse();
       assertThat(FieldDataType.SECRET.projectable()).isFalse();
     }

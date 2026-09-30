@@ -83,17 +83,12 @@ public class ClamAvScanner implements VirusScanner {
   public Verdict scan(InputStream content) {
     try (Socket socket = new Socket()) {
       socket.connect(new InetSocketAddress(host, port), timeoutMillis);
-      // Without this a scanner that accepts the connection and then stops
-      // answering holds the request thread forever.
       socket.setSoTimeout(timeoutMillis);
 
       try (OutputStream rawOut = socket.getOutputStream();
           DataOutputStream out = new DataOutputStream(rawOut);
           InputStream in = socket.getInputStream()) {
 
-        // The leading 'z' selects the NUL-terminated command form. The newline
-        // form exists too and answers differently; mixing them is the classic way
-        // to end up parsing a reply that never comes.
         out.write("zINSTREAM\0".getBytes(StandardCharsets.US_ASCII));
 
         byte[] buffer = new byte[CHUNK_BYTES];
@@ -102,10 +97,6 @@ public class ClamAvScanner implements VirusScanner {
           if (read == 0) {
             continue;
           }
-          // Each chunk is a four-byte big-endian length followed by the bytes.
-          // A zero length means end of stream, so an empty chunk written here
-          // would terminate the transfer early and have the file judged on
-          // whatever had arrived so far.
           out.writeInt(read);
           out.write(buffer, 0, read);
         }
@@ -175,20 +166,6 @@ public class ClamAvScanner implements VirusScanner {
       return Optional.empty();
     }
     try {
-      // Three things about this pattern, each of which fails silently without it:
-      //
-      //   * the locale is pinned to ROOT, because clamd prints the weekday and
-      //     the month in the C locale whatever the host's is, and a German
-      //     default would refuse "Thu";
-      //   * `ppd` accepts the space-padded day clamd prints before the tenth,
-      //     which neither `d` nor `dd` does;
-      //   * the reply carries no zone, so it is read as UTC. The container runs
-      //     UTC, and being an hour or two out cannot change the answer to
-      //     "older than 48 hours".
-      //   * the weekday is dropped rather than parsed. It is redundant — the date
-      //     is complete without it — and parsing it makes the formatter compare
-      //     the two and refuse a correct date whose weekday is wrong, which is a
-      //     way to fail for no benefit.
       String withoutWeekday = fields[2].trim().substring(FIRST_SPACE_AFTER_WEEKDAY).trim();
       return Optional.of(
           LocalDateTime.parse(
@@ -216,7 +193,6 @@ public class ClamAvScanner implements VirusScanner {
       return new Verdict(true, null);
     }
     if (cleaned.endsWith("FOUND")) {
-      // "stream: Eicar-Test-Signature FOUND"
       int start = cleaned.indexOf(':');
       String signature =
           start >= 0

@@ -91,6 +91,17 @@ public class MediaObject {
   @Column(name = "ref_count", nullable = false)
   private int refCount;
 
+  /**
+   * When the last attachment pointing at this blob went (REQ-MED-011).
+   *
+   * <p>Null exactly when {@link #refCount} is above zero, which a check constraint enforces. It is
+   * its own column and not {@code updatedAt}, which moves when a scan finishes or a derivative is
+   * recorded — a grace period measured from "anything changed" would be measured from the wrong
+   * thing.
+   */
+  @Column(name = "unreferenced_since")
+  private Instant unreferencedSince;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -121,6 +132,7 @@ public class MediaObject {
     this.heightPx = heightPx;
     this.scanState = ScanState.PENDING_SCAN;
     this.refCount = 0;
+    this.unreferencedSince = now;
     this.createdAt = now;
     this.updatedAt = now;
     this.createdBy = actor;
@@ -207,6 +219,7 @@ public class MediaObject {
    */
   public void addReference(Instant now) {
     this.refCount++;
+    this.unreferencedSince = null;
     this.updatedAt = now;
   }
 
@@ -220,6 +233,7 @@ public class MediaObject {
     if (this.refCount > 0) {
       this.refCount--;
     }
+    this.unreferencedSince = this.refCount == 0 ? now : null;
     this.updatedAt = now;
     return this.refCount == 0;
   }

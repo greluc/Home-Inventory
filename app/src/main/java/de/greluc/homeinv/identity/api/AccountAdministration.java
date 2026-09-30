@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.identity.api;
 
+import jakarta.annotation.Nullable;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,7 +45,7 @@ public interface AccountAdministration {
       String displayName,
       boolean instanceOperator,
       boolean mayCreateTenants,
-      Integer tenantLimit,
+      @Nullable Integer tenantLimit,
       boolean locked) {}
 
   /**

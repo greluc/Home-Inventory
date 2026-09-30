@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Money;
 import java.time.LocalDate;
 
@@ -37,30 +38,87 @@ import java.time.LocalDate;
  *     or {@code null}
  * @param currentValue what it is worth now, or {@code null} (REQ-LIFE-009)
  * @param currentValueAsOf the day that figure was true, or {@code null}
+ * @param currentValueSource who says so — {@link Provenance#MANUAL}, {@link
+ *     Provenance#DEPRECIATION} or {@link Provenance#PLUGIN} — or {@code null}. Not decoration: the
+ *     refresh run rewrites only what it wrote, so a figure somebody typed survives the night
  */
 public record Valuation(
-    Money purchase,
-    LocalDate purchasedOn,
-    String purchaseSource,
-    LocalDate warrantyUntil,
-    boolean lifetimeWarranty,
-    Money replacement,
-    LocalDate replacementAsOf,
-    Provenance replacementSource,
-    Money currentValue,
-    LocalDate currentValueAsOf) {
+    @Nullable Money purchase,
+    @Nullable LocalDate purchasedOn,
+    @Nullable String purchaseSource,
+    @Nullable LocalDate warrantyUntil,
+    @Nullable boolean lifetimeWarranty,
+    @Nullable Money replacement,
+    @Nullable LocalDate replacementAsOf,
+    @Nullable Provenance replacementSource,
+    @Nullable Money currentValue,
+    @Nullable LocalDate currentValueAsOf,
+    @Nullable Provenance currentValueSource) {
+
+  /**
+   * A valuation that says nothing about where its current value came from.
+   *
+   * <p>For every caller that has a figure and no opinion about its provenance — a test, an import,
+   * a request body, which is most of them. Whoever <b>stores</b> it decides: a number that differs
+   * from what is there was typed by somebody, and a number that does not is the number that was
+   * already there. {@code Item} holds that rule, in one place, because a provenance decided in two
+   * places is a provenance that disagrees with itself.
+   *
+   * @param purchase what it cost
+   * @param purchasedOn when it was bought
+   * @param purchaseSource who from
+   * @param warrantyUntil when the warranty ends
+   * @param lifetimeWarranty whether it is covered for life
+   * @param replacement what replacing it would cost
+   * @param replacementAsOf the day that figure was true
+   * @param replacementSource who said so
+   * @param currentValue what it is worth now
+   * @param currentValueAsOf the day that figure was true
+   */
+  public Valuation(
+      Money purchase,
+      LocalDate purchasedOn,
+      String purchaseSource,
+      LocalDate warrantyUntil,
+      boolean lifetimeWarranty,
+      Money replacement,
+      LocalDate replacementAsOf,
+      Provenance replacementSource,
+      Money currentValue,
+      LocalDate currentValueAsOf) {
+    this(
+        purchase,
+        purchasedOn,
+        purchaseSource,
+        warrantyUntil,
+        lifetimeWarranty,
+        replacement,
+        replacementAsOf,
+        replacementSource,
+        currentValue,
+        currentValueAsOf,
+        null);
+  }
 
   /** Where a figure came from (REQ-LIFE-014). */
   public enum Provenance {
     /** Somebody typed it. */
     MANUAL,
+    /**
+     * This application depreciated it, straight-line over the useful life of the item's type
+     * (REQ-LIFE-009).
+     *
+     * <p>The one provenance a refresh run may overwrite, which is the whole reason the three are
+     * told apart.
+     */
+    DEPRECIATION,
     /** A valuation plugin determined it (REQ-LIFE-009). */
     PLUGIN
   }
 
   /** Nothing recorded, which is what every item starts with. */
   public static final Valuation NONE =
-      new Valuation(null, null, null, null, false, null, null, null, null, null);
+      new Valuation(null, null, null, null, false, null, null, null, null, null, null);
 
   /**
    * Refuses the one combination that is two answers to one question.

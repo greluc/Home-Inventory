@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.media.api;
 
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,14 +28,19 @@ import java.util.UUID;
  * @param primaryImage whether this is the image lists show for the thing it hangs on
  *     (REQ-MED-002). Carried per attachment rather than implied by position, because the list is
  *     paged and the primary is not guaranteed to be on the page a client is looking at
+ * @param role what the attachment is for — {@code PHOTO}, {@code RECEIPT}, {@code
+ *     WARRANTY_PROOF} or {@code OTHER} (REQ-LIFE-016). On the <b>attachment</b> rather than on the
+ *     file, because the same scan of a receipt may be the purchase proof of one item and an
+ *     ordinary document on another, and the file is stored once by content address either way
  * @param urls variant name to signed URL, empty until the scan says clean
  */
 public record MediaView(
     UUID id,
     String mediaType,
     long byteSize,
-    Integer widthPx,
-    Integer heightPx,
+    @Nullable Integer widthPx,
+    @Nullable Integer heightPx,
     String scanState,
     boolean primaryImage,
+    String role,
     Map<String, String> urls) {}

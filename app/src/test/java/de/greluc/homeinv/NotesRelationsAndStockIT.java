@@ -69,10 +69,7 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                 .contains("Second shelf.")
                 .doesNotContain("<b>")
                 .doesNotContain("<script>")
-                // The tag goes and the text inside it stays: a person wrote the
-                // word, whatever they wrapped it in.
                 .contains("market");
-            // What a client would have rendered is now what is stored.
             assertThat(stored.notes()).doesNotContain("alert");
           });
     }
@@ -106,7 +103,6 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                     lens, camera, ItemRelations.RelationType.ACCESSORY_OF, tenant.userId());
             assertThat(relation.inbound()).isFalse();
 
-            // The lens states it; the camera reads the same row the other way.
             assertThat(relations.relationsOf(lens, null, 50).data())
                 .singleElement()
                 .satisfies(view -> assertThat(view.inbound()).isFalse());
@@ -114,7 +110,6 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                 .singleElement()
                 .satisfies(view -> assertThat(view.inbound()).isTrue());
 
-            // Asked for twice, the second is the first.
             relations.relate(lens, camera, ItemRelations.RelationType.ACCESSORY_OF, tenant.userId());
             assertThat(relations.relationsOf(lens, null, 50).data()).hasSize(1);
 
@@ -124,18 +119,12 @@ class NotesRelationsAndStockIT extends AbstractIntegrationTest {
                             lens, lens, ItemRelations.RelationType.PART_OF, tenant.userId()))
                 .isInstanceOf(IllegalArgumentException.class);
 
-            // A relation comes off the item it is named with, and only that one.
-            // Until 2026-09-14 `unrelate` took the relation's id alone: the item
-            // in the path was decoration, so any item at all could remove any
-            // relation the tenant had. Naming a different item now changes
-            // nothing.
             UUID tripod = anItem(tenant, "Tripod");
             relations.unrelate(tripod, relation.id(), tenant.userId());
             assertThat(relations.relationsOf(camera, null, 50).data())
                 .as("a relation that does not join the named item is left alone")
                 .hasSize(1);
 
-            // And an item this tenant cannot see is not a quiet success.
             assertThatThrownBy(
                     () ->
                         relations.unrelate(

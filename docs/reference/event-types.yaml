@@ -1,0 +1,156 @@
+# Home Inventory — the domain events a webhook target may subscribe to
+#
+# THIS FILE IS THE SOURCE OF TRUTH FOR THE SET OF EVENT TYPES.
+#
+# An event type is a string that leaves this deployment. A tenant administrator
+# names it in a webhook subscription (`REQ-API-010`) and a receiver branches on
+# it in a system nobody here controls, so it outlives the class that raises it:
+# a rename, a package move or a refactoring must never change one.
+#
+# ---------------------------------------------------------------------------
+# WHAT HOLDS THIS TO THE CODE
+#
+# `TenantScopedEvent.eventType()`, declared on the event itself, and
+# `EventTypeRegistryTest`, which fails when the two sets differ in either
+# direction — the treatment `problem-types.yaml` and `plugin-health-states.yaml`
+# get, and for the same reason: an identifier that reaches a stored row, or
+# somebody else's configuration, outlives the constant that produced it.
+#
+# The same test asserts that an event which is also **externalised** to the
+# broker carries a routing key containing this name with its dots written as
+# hyphens — `item.type-changed` inside `homeinv.inventory::item-type-changed.v1`.
+# Two names for one event is how the two drift.
+#
+# ---------------------------------------------------------------------------
+# THE NOUN IN FRONT OF THE DOT IS ALSO THE LIVE KIND
+#
+# `GET /api/v1/events` nudges an open view with the part before the dot
+# (`REQ-API-011`): `item.moved` and `item.type-changed` both arrive as `item`,
+# because a view showing items refreshes for either and there is nothing it
+# would do differently. A webhook gets the whole name, because an integration
+# mirroring into another system does.
+#
+# ---------------------------------------------------------------------------
+# WHAT TRAVELS WITH ONE
+#
+# The type, the moment, and the **subject's id** — what it happened *to*, which
+# is the thing a receiver would go and read. Never the name, never a field, and
+# never the event's own payload: a receiver re-reads through the ordinary API,
+# which applies the ordinary permissions (ADR-0078).
+#
+# A live nudge deliberately carries **less** — the kind and the moment, no id at
+# all — because the party at the other end of an SSE stream is a member whose
+# role may be scoped to part of the location tree, and the party at the other
+# end of a webhook is a receiver a tenant administrator entered themselves.
+
+version: 1
+updated: 2026-09-21
+
+types:
+
+  - type: item.created
+    event: de.greluc.homeinv.inventory.api.ItemCreated
+    subject: the item that was created
+    summary: Somebody added a thing to the inventory.
+
+  - type: item.updated
+    event: de.greluc.homeinv.inventory.api.ItemUpdated
+    subject: the item that was edited
+    summary: >
+      A name, a description or an attribute changed. The event says whether
+      attributes changed, the webhook payload does not — a receiver re-reads.
+
+  - type: item.moved
+    event: de.greluc.homeinv.inventory.api.ItemMoved
+    subject: the item that was put somewhere else
+    summary: >
+      Its own type rather than an update, because "what is in the shed" is a
+      question a receiver answers differently from "what is this called".
+
+  - type: item.type-changed
+    event: de.greluc.homeinv.inventory.api.ItemTypeChanged
+    subject: the item whose type changed
+    summary: The item was re-typed, so its attribute set is a different one.
+
+  - type: item.deleted
+    event: de.greluc.homeinv.inventory.api.ItemDeleted
+    subject: the item that went to the bin
+    summary: >
+      Stage one of two. The item is out of sight and recoverable; nothing is
+      gone yet (`REQ-CORE-020`).
+
+  - type: item.restored
+    event: de.greluc.homeinv.inventory.api.ItemRestored
+    subject: the item that came back
+    summary: A deletion was undone before the bin was emptied.
+
+  - type: item.purged
+    event: de.greluc.homeinv.inventory.api.ItemPurged
+    subject: the item that is gone
+    summary: >
+      Stage two. A receiver mirroring the inventory deletes its own copy here
+      and not at `item.deleted`.
+
+  - type: item.lent
+    event: de.greluc.homeinv.inventory.api.ItemLent
+    subject: the item that went out on loan
+    summary: Somebody borrowed it (`REQ-LIFE-005`).
+
+  - type: item.returned
+    event: de.greluc.homeinv.inventory.api.ItemReturned
+    subject: the item that came back from a loan
+    summary: It is back (`REQ-LIFE-005`).
+
+  - type: item.disposed
+    event: de.greluc.homeinv.inventory.api.ItemDisposed
+    subject: the item that left the inventory
+    summary: >
+      Sold, given away, scrapped or lost (`REQ-LIFE-007`). The row stays; the
+      thing is no longer here.
+
+  - type: location.moved
+    event: de.greluc.homeinv.locations.api.LocationMoved
+    subject: the location that was moved
+    summary: >
+      A whole subtree changed place. Every item under it is somewhere else now
+      and **no `item.moved` is raised for them** — a receiver that mirrors paths
+      re-reads the subtree.
+
+  - type: tag.created
+    event: de.greluc.homeinv.tagging.api.TagCreated
+    subject: the tag that was created
+    summary: A new tag exists. Nothing wears it yet.
+
+  - type: tag.assigned
+    event: de.greluc.homeinv.tagging.api.TagAssigned
+    subject: the thing that now wears the tag, not the tag
+    summary: >
+      The subject is the item or location, because a receiver told that a tag
+      changed wants to know which thing wears it now.
+
+  - type: tag.unassigned
+    event: de.greluc.homeinv.tagging.api.TagUnassigned
+    subject: the thing that no longer wears the tag, not the tag
+    summary: The tag came off something.
+
+  - type: type.created
+    event: de.greluc.homeinv.catalog.api.TypeCreated
+    subject: the item type or location category that was defined
+    summary: >
+      The tenant's type system gained a type. A receiver that maps attributes
+      re-reads the type before it reads the next item written against it.
+
+  - type: type.field-searchability-changed
+    event: de.greluc.homeinv.catalog.api.FieldSearchabilityChanged
+    subject: the type version whose field changed
+    summary: >
+      A field became searchable or stopped being so, which changes what the
+      index and `item_attr_index` hold for every item of that type.
+
+  - type: media.object-stored
+    event: de.greluc.homeinv.media.api.MediaObjectStored
+    subject: the media object that was stored
+    summary: >
+      A photo or document finished scanning and re-encoding. Its derivatives are
+      not made yet, so a receiver asking for a thumbnail may still be told to
+      wait.

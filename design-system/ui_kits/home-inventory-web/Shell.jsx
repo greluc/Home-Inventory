@@ -16,9 +16,6 @@ const WIDTHS = [
   { key: "desktop", label: "Desktop", w: null, h: 900, cls: "large" },
 ];
 
-/* The chrome around the prototype — not part of the product, and therefore English. Everything
-   BELOW it renders the simulated product UI, whose German is the deliberate width fixture
-   (REQ-CON-012, REQ-CON-014, closed carve-out list). */
 function KitBar({ width, setWidth, theme, setTheme, density, setDensity, offline, setOffline, screen, setScreen, screens }) {
   return (
     <div className="kitbar">
@@ -47,8 +44,6 @@ function KitBar({ width, setWidth, theme, setTheme, density, setDensity, offline
   );
 }
 
-/* The product shell: app bar, status strip, navigation per width class. Its strings are German
-   because this is the simulated product, not the harness — see the note above. */
 function AppShell({ cls, nav, setNav, title, crumbs, actions, offline, conflicts = 2, degraded, children, noPad, theme, setTheme }) {
   const compact = cls === "compact";
   const medium = cls === "medium";
@@ -95,7 +90,6 @@ function AppShell({ cls, nav, setNav, title, crumbs, actions, offline, conflicts
   );
 }
 
-/* Master pane used at expanded/large: the location tree beside its contents. */
 function TreePane({ current, onSelect }) {
   const [open, setOpen] = React.useState(["h", "k", "rb"]);
   return (

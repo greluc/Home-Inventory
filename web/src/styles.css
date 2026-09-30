@@ -1,17 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Lucas Greuloch
  * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- * The application stylesheet.
- *
- * Static CSS with custom properties, never CSS-in-JS: the CSP forbids
- * `unsafe-inline`, which rules out emotion and styled-components because both
- * inject `<style>` at runtime (ADR-0038, web/README.md).
- *
- * The tokens below are a stage-0 subset written by hand. The binding set is
- * `design-system/tokens/tokens.json` (ADR-0035, REQ-NFR-075), and generating this
- * file from it is the next step - stated here rather than left implicit, because a
- * hand-written token is exactly the drift that requirement exists to prevent.
  */
 
 :root,
@@ -37,9 +26,6 @@
   --danger: #b3261e;
 }
 
-/* Until the inline bootstrap has run, nothing paints. It runs in the head and
-   finishes before the first paint, so this is invisible - and it is what stops a
-   light-preferring user from seeing a dark flash (ADR-0033). */
 html[data-theme-pending] body {
   visibility: hidden;
 }
@@ -56,6 +42,54 @@ body {
 .shell { max-width: 70rem; margin: 0 auto; padding: 1rem; }
 
 .bar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+
+.about {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem 1rem;
+  margin-top: 2rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+  font-size: .85rem;
+}
+.about a { color: var(--text-muted); }
+.about .as-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notices {
+  width: min(60rem, 92vw);
+  max-height: 85dvh;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.5rem;
+}
+.notices::backdrop { background: rgb(0 0 0 / 60%); }
+.notices header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.notices h2 { font-size: 1.1rem; margin: 0; }
+.notices h3 { font-size: 1rem; margin: 1.5rem 0 .5rem; }
+.notices h4 { font-size: .9rem; margin: 1rem 0 .5rem; color: var(--text-muted); }
+.notices .components { list-style: none; margin: 0; padding: 0; }
+.notices .components li { border-top: 1px solid var(--border); padding: .75rem 0; }
+.notices .components p { margin: 0; }
+.notices pre {
+  margin: .5rem 0 0;
+  padding: .5rem;
+  background: var(--surface);
+  border-radius: 3px;
+  font-size: .75rem;
+  white-space: pre;
+  overflow-x: auto;
+}
+.notices summary { cursor: pointer; font-size: .85rem; }
 .bar h1 { font-size: 1.1rem; margin: 0; }
 .bar-actions { display: flex; align-items: center; gap: .75rem; }
 
@@ -69,8 +103,6 @@ input, textarea, button {
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: .5rem .625rem;
-  /* REQ-NFR-071: hit-target size follows the pointer, not the width. A tablet
-     with a keyboard is wide and still touch. */
   min-height: 2.75rem;
 }
 
@@ -80,8 +112,6 @@ button { cursor: pointer; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
 button.ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
 button:focus-visible, input:focus-visible, textarea:focus-visible {
-  /* Two-tone, so the ring is visible on both themes without relying on colour
-     alone to carry the meaning (WCAG 2.2 AA). */
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -108,10 +138,6 @@ label input, label textarea { display: block; width: 100%; margin-top: .25rem; }
 .login-head h1 { font-size: 1.15rem; margin: 0 0 1rem; }
 .login button[type="submit"] { width: 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
 
-/* A label wrapping a select in the bar: the select carries the control, the
-   label only names it for a screen reader. */
-/* The recovery codes, shown once and copied onto paper: monospaced so a 5 and an
-   S are told apart, and wide enough that a code never wraps mid-way. */
 .recovery-codes { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: .35rem; }
 .recovery-codes code { font-size: 1rem; letter-spacing: .08em; }
 
@@ -125,8 +151,6 @@ label.narrow { flex: 1; }
 
 .row-actions { white-space: nowrap; }
 
-/* The photographs of an expanded row. A strip rather than a grid: an item has a
-   handful of pictures, and a grid of three would leave two empty cells. */
 .expansion > td { background: var(--surface-raised); }
 .photos { padding: .5rem 0; }
 .photo-strip { display: flex; flex-wrap: wrap; gap: .75rem; list-style: none; padding: 0; margin: 0 0 .75rem; }
@@ -135,15 +159,11 @@ label.narrow { flex: 1; }
   width: 6.25rem; height: 6.25rem; object-fit: cover;
   border: 1px solid var(--border); border-radius: 3px; background: var(--surface);
 }
-/* The one shown in lists, marked rather than implied by position: the list is
-   paged and the primary is not guaranteed to be first on the page. */
 .photo-strip li.primary img { border-color: var(--accent); border-width: 2px; }
 .photo-strip .pending {
   display: grid; place-items: center; width: 6.25rem; height: 6.25rem;
   border: 1px dashed var(--border); border-radius: 3px; font-size: .8rem; text-align: center;
 }
-/* The file input itself is off-screen; the label is the control. A styled file
-   input is not possible across browsers, and a label is a real one. */
 .upload input[type="file"] {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip-path: inset(50%);
@@ -170,8 +190,6 @@ label.narrow { flex: 1; }
   padding: .4rem .5rem; border-bottom: 1px solid var(--border);
 }
 
-/* Visible to a screen reader, not on screen. `display: none` would hide it from
-   both, which is the usual mistake. */
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap;

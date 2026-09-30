@@ -69,7 +69,6 @@ class ItemFilteringIT extends AbstractIntegrationTest {
     Caller caller = aTenantWithTools("text");
 
     assertThat(namesOf(caller, "attr.manufacturer:Stanley")).containsExactly("Hammer");
-    // The same filter with the operator spelled out.
     assertThat(namesOf(caller, "attr.manufacturer:eq:Stanley")).containsExactly("Hammer");
     assertThat(namesOf(caller, "attr.manufacturer:in:Stanley,Bosch"))
         .containsExactlyInAnyOrder("Hammer", "Drill");
@@ -81,8 +80,6 @@ class ItemFilteringIT extends AbstractIntegrationTest {
   void filteringOnNumbers() throws Exception {
     Caller caller = aTenantWithTools("numbers");
 
-    // The whole point of the cast. As text, '90' sorts after '100' and this
-    // would answer "Drill" alone.
     assertThat(namesOf(caller, "attr.published:gte:100"))
         .containsExactlyInAnyOrder("Hammer", "Drill", "Spanner");
     assertThat(namesOf(caller, "attr.published:lt:2000")).containsExactly("Hammer");
@@ -93,13 +90,10 @@ class ItemFilteringIT extends AbstractIntegrationTest {
   void filteringWithinAUnit() throws Exception {
     Caller caller = aTenantWithTools("units");
 
-    // The Spanner costs 150 USD and is not an answer to "at least 100 euros",
-    // however the numbers compare. This is the assertion `unit_value` exists for.
     assertThat(namesOf(caller, "attr.purchasePrice:gte:100:EUR")).containsExactly("Drill");
     assertThat(namesOf(caller, "attr.purchasePrice:gte:100:USD")).containsExactly("Spanner");
     assertThat(namesOf(caller, "attr.purchasePrice:lte:50:EUR")).containsExactly("Hammer");
 
-    // A quantity works the same way, with the unit the item was written with.
     assertThat(namesOf(caller, "attr.netWeight:gte:100:g"))
         .containsExactlyInAnyOrder("Hammer", "Drill");
     assertThat(namesOf(caller, "attr.netWeight:gte:100:kg")).isEmpty();
@@ -114,8 +108,6 @@ class ItemFilteringIT extends AbstractIntegrationTest {
         .containsExactly("Drill");
     assertThat(namesOf(caller, "attr.netWeight:gte:100:g", "attr.manufacturer:Nobody")).isEmpty();
 
-    // Two filters over two different attributes of one item must not return it
-    // twice: they are `exists` subqueries and not joins.
     assertThat(namesOf(caller, "attr.manufacturer:Bosch", "attr.published:gte:2000"))
         .containsExactly("Drill");
   }
@@ -125,20 +117,14 @@ class ItemFilteringIT extends AbstractIntegrationTest {
   void whatIsRefused() throws Exception {
     Caller caller = aTenantWithTools("refusals");
 
-    // A range over money with no unit. 08 §8.2 showed exactly this and the
-    // example was wrong; the answer would silently span every currency.
     refused(caller, "attr.purchasePrice:gte:100");
     refused(caller, "attr.netWeight:lt:500");
 
-    // The converse: a unit on a field that has no dimension means nothing, so it
-    // is a mistake worth naming rather than a part to drop.
     refused(caller, "attr.published:gte:2000:EUR");
 
-    // A field no published type marks searchable, and one no type declares at all.
     refused(caller, "attr.serial:ABC-1");
     refused(caller, "attr.nothingLikeThis:1");
 
-    // Not an attribute, no value, and an empty field.
     refused(caller, "name:Hammer");
     refused(caller, "attr.manufacturer");
     refused(caller, "attr.:Stanley");
@@ -153,22 +139,16 @@ class ItemFilteringIT extends AbstractIntegrationTest {
     String cursor = first.get("page").get("nextCursor").asString();
     assertThat(cursor).isNotBlank();
 
-    // Same query, other filter. The list it was taken from no longer exists, so
-    // resuming it would page through a sequence that never did. A malformed
-    // request, the established answer for a cursor that does not belong here.
     mockMvc
         .perform(
             filtered(caller, 1, cursor, "attr.published:lt:2000")
                 .session(caller.session()))
         .andExpect(status().isBadRequest());
 
-    // And with the filter it was taken from, it resumes.
     mockMvc
         .perform(filtered(caller, 1, cursor, "attr.published:gte:100").session(caller.session()))
         .andExpect(status().isOk());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Every name a filtered list gives, paging to the end.
@@ -322,8 +302,6 @@ class ItemFilteringIT extends AbstractIntegrationTest {
     types.addField(type.draftVersionId(), field("published", FieldDataType.INTEGER, true), userId);
     types.addField(type.draftVersionId(), field("purchasePrice", FieldDataType.MONEY, true), userId);
     types.addField(type.draftVersionId(), field("netWeight", FieldDataType.QUANTITY, true), userId);
-    // Declared, stored, and deliberately not searchable: a filter on it is
-    // refused because the tenant said so, not because the key is unknown.
     types.addField(type.draftVersionId(), field("serial", FieldDataType.TEXT, false), userId);
     types.publish(type.draftVersionId(), userId);
     return type.id();

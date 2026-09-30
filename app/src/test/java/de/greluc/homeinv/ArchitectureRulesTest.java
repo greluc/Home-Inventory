@@ -23,6 +23,7 @@ import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.authorization.api.RequiresEntitlement;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.Role;
+import de.greluc.homeinv.plugins.api.ExtensionRegistry;
 import jakarta.persistence.Entity;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -31,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -54,6 +56,22 @@ import org.springframework.web.bind.annotation.RestController;
 @DisplayName("The architecture rules")
 class ArchitectureRulesTest {
 
+  /**
+   * The one {@code @RestController} that is not in the published contract.
+   *
+   * <p>Spring's error dispatcher. It answers {@code /error} — the path the container forwards to,
+   * which no client calls and which springdoc leaves out of the document, as {@code api/openapi.yaml}
+   * shows by not containing it. A tag on it would name a group with nothing in it.
+   */
+  private static final Set<String> UNPUBLISHED = Set.of("ProblemErrorController");
+
+  /** Every annotation that turns a method into a GraphQL resolver. */
+  private static final List<Class<? extends Annotation>> RESOLVERS =
+      List.of(
+          org.springframework.graphql.data.method.annotation.QueryMapping.class,
+          org.springframework.graphql.data.method.annotation.SchemaMapping.class,
+          org.springframework.graphql.data.method.annotation.BatchMapping.class);
+
   /** Every annotation that turns a method into an HTTP handler. */
   private static final List<Class<? extends Annotation>> MAPPINGS =
       List.of(
@@ -76,12 +94,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("keep the domain free of the framework")
   void domainHasNoFrameworkDependency() {
-    // REQ-NFR-022. The aggregates are the part worth keeping portable and the part
-    // worth testing without a context; both stop being true the moment a domain
-    // class needs Spring to be constructed.
-    //
-    // JPA is the deliberate exception: the aggregates are mapped with jakarta.persistence,
-    // which is a specification rather than a framework and travels with the entity.
     noClasses()
         .that()
         .resideInAPackage("..domain..")
@@ -97,10 +109,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("keep entities inside their block")
   void entitiesDoNotLeave() {
-    // REQ-NFR-023. An entity handed outward carries its persistence context with
-    // it: the holder can modify the aggregate without passing the use case that
-    // guards its invariants, and the call site looks exactly like one returning
-    // plain data.
     methods()
         .that()
         .areDeclaredInClassesThat()
@@ -118,10 +126,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("forbid field injection")
   void noFieldInjection() {
-    // A field-injected collaborator cannot be supplied by a constructor, so the
-    // class cannot be instantiated in a test without reflection - and a missing
-    // dependency surfaces as a NullPointerException at first use rather than as a
-    // failure to start.
     fields()
         .should()
         .notBeAnnotatedWith(org.springframework.beans.factory.annotation.Autowired.class)
@@ -132,9 +136,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("keep SQL out of the domain and the application layer")
   void sqlLivesInInfrastructure() {
-    // Not purity: a query in a use case is a query that cannot be swapped when the
-    // store changes, and one that nobody looks for when tuning. ADR-0017 puts
-    // hand-written SQL in infrastructure, next to the repository it belongs to.
     noClasses()
         .that()
         .resideInAnyPackage("..domain..", "..application..")
@@ -148,9 +149,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("let no controller reach past a published interface")
   void controllersUseOnlyPublishedTypes() {
-    // The access layer decides nothing (REQ-SEC-022) and must therefore also know
-    // nothing: a controller that can see a repository is a controller that will
-    // eventually use one, and the authorization decision moves with it.
     noClasses()
         .that()
         .resideInAPackage("de.greluc.homeinv.rest..")
@@ -166,11 +164,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("refuse an endpoint that says nothing about who may reach it")
   void everyEndpointDeclaresItsAccess() {
-    // REQ-SEC-023, and the reason it is a BUILD failure rather than a runtime
-    // one: the default is deny, so a forgotten annotation is caught before it
-    // ships rather than as a 500 the first time somebody calls the endpoint.
-    // PermissionInterceptor refuses the same case at runtime; this is the half
-    // that fails in the pull request.
     List<String> undeclared = new ArrayList<>();
 
     for (JavaClass controller : CLASSES) {
@@ -186,9 +179,6 @@ class ArchitectureRulesTest {
         if (!isHandler) {
           continue;
         }
-        // Three markers, one rule: every handler DECLARES what it needs. The
-        // third arrived with ADR-0057, because an endpoint that creates the
-        // caller's first tenant has no tenant to hold a permission in.
         boolean declared =
             method.isAnnotatedWith(RequiresPermission.class)
                 || method.isAnnotatedWith(RequiresEntitlement.class)
@@ -207,16 +197,68 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("give every published controller a tag it chose itself")
+  void everyControllerCarriesAChosenTag() {
+    List<String> untagged = new ArrayList<>();
+
+    for (JavaClass controller : CLASSES) {
+      if (!controller.getPackageName().startsWith("de.greluc.homeinv.rest")) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(RestController.class)) {
+        continue;
+      }
+      if (UNPUBLISHED.contains(controller.getSimpleName())) {
+        continue;
+      }
+      if (!controller.isAnnotatedWith(io.swagger.v3.oas.annotations.tags.Tag.class)) {
+        untagged.add(controller.getSimpleName());
+      }
+    }
+
+    assertThat(untagged)
+        .as(
+            "every controller in the contract carries @Tag with a name it chose and a sentence "
+                + "describing it. Without one the generated clients of REQ-API-002 are one class "
+                + "each, and springdoc's inferred alternative publishes our class names")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("declare what every GraphQL resolver needs, one field at a time")
+  void everyResolverDeclaresItsAccess() {
+    List<String> undeclared = new ArrayList<>();
+
+    for (JavaClass resolver : CLASSES) {
+      if (!resolver.getPackageName().startsWith("de.greluc.homeinv.graphql")) {
+        continue;
+      }
+      for (JavaMethod method : resolver.getMethods()) {
+        boolean isResolver =
+            RESOLVERS.stream().anyMatch(mapping -> method.isAnnotatedWith(mapping));
+        if (!isResolver) {
+          continue;
+        }
+        boolean declared =
+            method.isAnnotatedWith(RequiresPermission.class)
+                || method.isAnnotatedWith(PublicEndpoint.class);
+        if (!declared) {
+          undeclared.add(resolver.getSimpleName() + "." + method.getName());
+        }
+      }
+    }
+
+    assertThat(undeclared)
+        .as(
+            "every GraphQL resolver carries @RequiresPermission, or an explicit @PublicEndpoint "
+                + "with a written reason. A field nobody declared is a field nobody checks "
+                + "(REQ-SEC-023)")
+        .isEmpty();
+  }
+
+  @Test
   @DisplayName("keep the shared kernel free of every block's domain")
   void theSharedKernelDependsOnNoBlock() {
-    // REQ-NFR-024, mechanically. "Contains no domain logic" is not checkable as
-    // written — a machine cannot tell a domain rule from a utility — but the
-    // property that makes it true is: a shared kernel that depends on no block
-    // cannot contain one's domain, because it cannot name any of its types.
-    //
-    // The direction is the whole point. Every block depends on `platform`; the
-    // moment `platform` depends back, the two are one module with a package
-    // boundary drawn through it, and every later extraction has to unpick it.
     noClasses()
         .that()
         .resideInAPackage("de.greluc.homeinv.platform..")
@@ -242,16 +284,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("never let a record holding a secret print it")
   void secretsAreNotPrintable() {
-    // Spring MVC logs the deserialised request body at DEBUG, through the type's
-    // `toString`. A record gets one generated that prints every component, so
-    // `LoginRequest` wrote passwords into the log for anybody who turned debug
-    // logging on — which is what an operator does when something is wrong
-    // (REQ-SEC-050).
-    //
-    // Records only, and that is the whole point rather than a convenience: an
-    // ordinary class inherits `Object.toString`, which prints a hash code. A
-    // record is the one shape that prints its contents unless somebody says
-    // otherwise.
     ArchRuleDefinition.classes()
         .that(
             new DescribedPredicate<JavaClass>("are records holding a field named like a secret") {
@@ -293,11 +325,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("keep every endpoint of ours in the access layer")
   void controllersLiveInTheAccessLayer() {
-    // The companion to the rule above, and the reason PermissionInterceptor may
-    // narrow itself to `de.greluc.homeinv.rest`: a controller anywhere else would
-    // be one the interceptor lets through, silently, because it looks like a
-    // handler the framework contributed. Two rules that each cover the other's
-    // gap (REQ-SEC-023).
     noClasses()
         .that()
         .areAnnotatedWith(RestController.class)
@@ -312,10 +339,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("let only the authorization block answer whether somebody may")
   void onlyAuthorizationDecides() {
-    // REQ-SEC-022 and ADR-0010: REST, GraphQL and gRPC are adapters that decide
-    // nothing. They may DECLARE what is needed - the annotation is in the access
-    // layer by design - but the evaluation happens in one place, so that a second
-    // surface cannot grow a second set of rules.
     noClasses()
         .that()
         .resideOutsideOfPackages("de.greluc.homeinv.authorization..")
@@ -333,13 +356,55 @@ class ArchitectureRulesTest {
   }
 
   @Test
+  @DisplayName("keep every class under the one package root")
+  void onePackageRoot() {
+    JavaClasses everything =
+        new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPath(Path.of("build", "classes", "java", "main"));
+
+    List<String> strays =
+        everything.stream()
+            .map(JavaClass::getName)
+            .filter(name -> !name.startsWith("de.greluc.homeinv."))
+            .sorted()
+            .toList();
+
+    assertThat(strays)
+        .as("classes outside the package root de.greluc.homeinv (REQ-CON-001)")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("let only the two named blocks resolve a plugin at instance level")
+  void onlyAccountNotificationsResolveAtInstanceLevel() {
+    noClasses()
+        .that()
+        .resideOutsideOfPackages(
+            "de.greluc.homeinv.notification..",
+            "de.greluc.homeinv.identity..",
+            "de.greluc.homeinv.plugins..")
+        .should()
+        .callMethodWhere(
+            DescribedPredicate.describe(
+                "resolves a plugin for the instance rather than for a tenant",
+                target ->
+                    target
+                            .getTarget()
+                            .getOwner()
+                            .getFullName()
+                            .equals(ExtensionRegistry.class.getName())
+                        && target.getTarget().getName().equals("lookupForInstance")))
+        .because(
+            "an instance-level resolution bypasses every tenant's consent by design, and only "
+                + "the account notifications of REQ-NOTI-004 and the breach check of REQ-SEC-011 "
+                + "are allowed to need that (ADR-0066, ADR-0067)")
+        .check(CLASSES);
+  }
+
+  @Test
   @DisplayName("let no request type be bound onto an entity")
   void requestsAreNotBoundOntoEntities() {
-    // REQ-SEC-030. A controller that binds a request body onto an entity accepts
-    // whatever fields that entity happens to have - including `version`,
-    // `tenantId` and `deletedAt`, none of which a client may set. A dedicated
-    // input type per use case is the only shape where the accepted fields are
-    // visible in the signature.
     noClasses()
         .that()
         .resideInAPackage("de.greluc.homeinv.rest..")
@@ -355,12 +420,6 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("let no money ever touch a double or a float (REQ-NFR-070)")
   void moneyNeverTouchesABinaryFloat() {
-    // Stated over the WHOLE application rather than over "the money path",
-    // because the money path is not a package: a price reaches a request record,
-    // a projection, a report and a total, and a rule that named those four would
-    // be a rule that missed the fifth. Nothing here has ever needed a binary
-    // float — measures are SI base units in `BigDecimal`, money is `Money` — so
-    // the strict form costs nothing and cannot be quietly widened.
     fields()
         .should()
         .notHaveRawType(double.class)
@@ -407,20 +466,10 @@ class ArchitectureRulesTest {
   @Test
   @DisplayName("keep SQL out of string concatenation")
   void sqlIsNeverConcatenated() {
-    // REQ-SEC-031. Dynamic SQL goes through a checked builder whose field and
-    // sort names come from an allowlist derived from `field_definition` - never
-    // from user input. Anywhere else, a `+` joining a query to something that is
-    // not a literal is an injection waiting for a value that came from a request.
-    //
-    // ArchUnit reads bytecode, where concatenation has already become an
-    // invokedynamic and the literals are gone, so this reads the sources - the
-    // only place the evidence survives.
+            Set<String> checkedBuilders = Set.of("de/greluc/homeinv/portability/api/ImportSql.java");
+
     List<String> offenders = new ArrayList<>();
 
-    // A query split across lines for readability is two literals joined by `+`,
-    // and that is not what this rule is about. Adjacent literals are merged
-    // first, so what remains is a literal joined to an *expression* - which is
-    // the only shape a value can enter through.
     Pattern adjacentLiterals = Pattern.compile("\"\\s*\\+\\s*\"", Pattern.DOTALL);
     Pattern injectable =
         Pattern.compile(
@@ -435,8 +484,9 @@ class ArchitectureRulesTest {
               file -> {
                 try {
                   String merged = adjacentLiterals.matcher(Files.readString(file)).replaceAll("");
-                  if (injectable.matcher(merged).find()) {
-                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  String name = sources.relativize(file).toString().replace('\\', '/');
+                  if (injectable.matcher(merged).find() && !checkedBuilders.contains(name)) {
+                    offenders.add(name);
                   }
                 } catch (IOException unreadable) {
                   throw new UncheckedIOException(unreadable);
@@ -450,6 +500,76 @@ class ArchitectureRulesTest {
         .as(
             "SQL is parameterised; a query joined to an expression is an injection waiting for a "
                 + "value that came from a request (REQ-SEC-031)")
+        .isEmpty();
+  }
+  @Test
+  @DisplayName("names no plugin of its own: being first-party buys nothing")
+  void noPluginIsPrivilegedByItsName() {
+    List<String> offenders = new ArrayList<>();
+    Pattern blockComments = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+    Pattern lineComments = Pattern.compile("//[^\\n]*");
+    Pattern pluginId = Pattern.compile("\"de\\.greluc\\.homeinv\\.plugin\\.[a-z]");
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String code = Files.readString(file);
+                  code = blockComments.matcher(code).replaceAll("");
+                  code = lineComments.matcher(code).replaceAll("");
+                  if (pluginId.matcher(code).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "the core names no plugin. A first-party plugin is installed, granted and revoked "
+                + "exactly like a third party's (ADR-0072, 09 §9.9), and an id in a literal is how "
+                + "that stops being true")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("keeps what dials a datastore at startup out of the one-shot roles")
+  void nothingThatConnectsAtStartupLoadsInMigrateOrBootstrap() {
+    List<String> offenders = new ArrayList<>();
+    Pattern container = Pattern.compile("RedisMessageListenerContainer\\s+\\w+\\s*\\(");
+    Pattern excluded = Pattern.compile("@Profile\\(\"[^\"]*!\\s*migrate[^\"]*\"\\)");
+
+    Path sources = Path.of("src", "main", "java");
+    try (Stream<Path> files = Files.walk(sources)) {
+      files
+          .filter(file -> file.toString().endsWith(".java"))
+          .forEach(
+              file -> {
+                try {
+                  String code = Files.readString(file);
+                  if (container.matcher(code).find() && !excluded.matcher(code).find()) {
+                    offenders.add(sources.relativize(file).toString().replace('\\', '/'));
+                  }
+                } catch (IOException unreadable) {
+                  throw new UncheckedIOException(unreadable);
+                }
+              });
+    } catch (IOException unreadable) {
+      throw new UncheckedIOException(unreadable);
+    }
+
+    assertThat(offenders)
+        .as(
+            "a bean that opens a connection when the context starts must not load in `migrate` or "
+                + "`bootstrap`: both talk to PostgreSQL and nothing else, and a refused connection "
+                + "there is not a degraded feature but a deployment that does not come up")
         .isEmpty();
   }
 }

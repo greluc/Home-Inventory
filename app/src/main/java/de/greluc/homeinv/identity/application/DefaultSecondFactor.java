@@ -199,9 +199,6 @@ public class DefaultSecondFactor implements SecondFactor {
       if (existing.get().isUsable()) {
         throw new SecondFactorAlreadyEnrolledException();
       }
-      // An enrolment that was never confirmed is somebody who scanned a code and
-      // closed the app. Replacing it is what "ask again" means, and the partial
-      // unique index would refuse a second live row anyway.
       existing.get().remove(userId, now);
     }
 
@@ -219,8 +216,6 @@ public class DefaultSecondFactor implements SecondFactor {
     Instant now = Instant.now(clock);
     Credential totp = credentials.findTotp(userId).orElseThrow(InvalidSecondFactorException::new);
     if (totp.isUsable()) {
-      // Already confirmed: this call has nothing to do, and answering "fine"
-      // would hand out a second set of recovery codes for one enrolment.
       throw new InvalidSecondFactorException();
     }
     long step = TotpCodes.verify(credentialKey.open(totp.material()), code, now);
@@ -229,9 +224,6 @@ public class DefaultSecondFactor implements SecondFactor {
     }
 
     totp.confirm(now);
-    // The step is spent by proving it, exactly as it would be by a login: the
-    // code that confirmed an enrolment must not also be the code that completes
-    // the next sign-in.
     totp.used(TotpCodes.startOf(step), now);
     log.info("Account {} confirmed a second factor.", userId);
     return issueRecoveryCodes(userId, now);
@@ -241,9 +233,6 @@ public class DefaultSecondFactor implements SecondFactor {
   @Transactional
   public List<String> reissueRecoveryCodes(UUID userId) {
     if (!isRequiredFor(userId)) {
-      // Recovery codes exist to recover a second factor. Issued without one they
-      // would be the only factor, and a set of ten printable passwords is not
-      // what REQ-AUTH-002 asks for.
       throw new InvalidSecondFactorException();
     }
     return issueRecoveryCodes(userId, Instant.now(clock));
@@ -258,9 +247,6 @@ public class DefaultSecondFactor implements SecondFactor {
     if (totp.isPresent()) {
       long step = TotpCodes.verify(credentialKey.open(totp.get().material()), code, now);
       if (step >= 0) {
-        // The replay guard of RFC 6238 §5.2: a code from a step already spent is
-        // refused, so somebody who read one over a shoulder cannot use it in the
-        // thirty seconds it is still arithmetically valid.
         Instant lastUsed = totp.get().getLastUsedAt();
         if (lastUsed != null && TotpCodes.stepOf(lastUsed) >= step) {
           throw new InvalidSecondFactorException();
@@ -294,8 +280,6 @@ public class DefaultSecondFactor implements SecondFactor {
             .filter(Credential::isUsable)
             .orElseThrow(InvalidSecondFactorException::new);
 
-    // The code first: an open session somebody walked away from must not be able
-    // to strip the factor that would have stopped them.
     verify(userId, code);
 
     totp.remove(userId, now);

@@ -48,8 +48,6 @@ function initialLanguage(): Language {
       return stored;
     }
   } catch {
-    // A private window may refuse storage. The browser's preference still
-    // applies; only the memory of a manual choice is lost.
   }
 
   for (const preferred of navigator.languages ?? [navigator.language]) {
@@ -72,7 +70,6 @@ export function chooseLanguage(language: Language): void {
   try {
     localStorage.setItem(STORED, language);
   } catch {
-    // As above: the choice applies to this page and is not remembered.
   }
 }
 
@@ -91,7 +88,6 @@ export function adoptProfileLanguage(locale: string): void {
       return;
     }
   } catch {
-    // Storage refused; fall through and use the profile.
   }
   const base = locale.split("-")[0];
   if (isLanguage(base)) {
@@ -108,19 +104,10 @@ void init({
   },
   lng: initialLanguage(),
   fallbackLng: "en",
-  // The bundles are a plain nested object, and a key is a path into it. Without
-  // this, i18next would treat a colon in a key as a namespace separator.
   nsSeparator: false,
   interpolation: {
-    // React escapes what it renders, and escaping twice turns an apostrophe into
-    // `&#39;` on screen.
     escapeValue: false,
   },
-  // No `initImmediate: false` any more. It made init synchronous when there was
-  // nothing to fetch, and i18next 26 removed it because that is now the default
-  // for a bundled resource set — there is no backend here, so `t()` answers on
-  // the line after this one. `init.test.ts` holds that, because it is the
-  // difference between a first paint with words and one with keys.
 });
 
 document.documentElement.setAttribute("lang", i18next.language);

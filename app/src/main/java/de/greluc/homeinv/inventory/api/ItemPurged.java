@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -22,5 +24,26 @@ import org.springframework.modulith.events.Externalized;
  * @param tenantId the tenant the item belonged to; a consumer establishes its context from here
  * @param itemId the item that no longer exists
  */
-@Externalized("homeinv.inventory::item-purged")
-public record ItemPurged(UUID tenantId, UUID itemId) {}
+@Externalized("homeinv.inventory::item-purged.v1")
+public record ItemPurged(UUID tenantId, UUID itemId) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.purged
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_PURGED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that is gone
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

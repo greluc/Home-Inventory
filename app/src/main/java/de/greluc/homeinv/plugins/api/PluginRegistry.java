@@ -103,6 +103,56 @@ public interface PluginRegistry {
   void revoke(String pluginId, String capability, UUID actor);
 
   /**
+   * What the <b>instance</b> has granted one plugin (ADR-0066).
+   *
+   * <p>A second level above the per-tenant grants, and a narrow one: it authorises only the calls
+   * the deployment makes on its own behalf — today the security notifications of REQ-NOTI-004,
+   * which must reach an account that belongs to no tenant. It is not a way around a tenant's
+   * consent, because a call made under it carries no tenant context and therefore reaches no
+   * tenant's data.
+   *
+   * @param pluginId the plugin
+   * @return the instance-level grants, by capability
+   */
+  List<Grant> instanceGrants(String pluginId);
+
+  /**
+   * Whether this plugin may do this <b>for the instance</b> (ADR-0066).
+   *
+   * <p>The same four questions {@link #permits} asks, with the tenant's consent replaced by the
+   * operator's: installed, not disabled, granted at instance level, and still declared by the
+   * current manifest.
+   *
+   * @param pluginId the plugin
+   * @param capability the capability, from the closed set of 09 §9.4
+   * @return whether the instance-level call may be made
+   */
+  boolean permitsForInstance(String pluginId, String capability);
+
+  /**
+   * Grants one capability for the instance (ADR-0066).
+   *
+   * @param pluginId the plugin
+   * @param capability the capability, which the plugin's manifest must declare
+   * @param actor the instance operator consenting (ADR-0057)
+   * @return the grant
+   * @throws de.greluc.homeinv.platform.NotFoundException when nothing is installed under that id
+   * @throws IllegalArgumentException when the manifest does not declare that capability
+   */
+  Grant grantForInstance(String pluginId, String capability, UUID actor);
+
+  /**
+   * Withdraws one instance-level capability (ADR-0066).
+   *
+   * <p>Withdrawing something never granted is not an error, for the reason {@link #revoke} gives.
+   *
+   * @param pluginId the plugin
+   * @param capability the capability
+   * @param actor the instance operator withdrawing it
+   */
+  void revokeForInstance(String pluginId, String capability, UUID actor);
+
+  /**
    * One installed plugin.
    *
    * @param pluginId the reverse-domain id, which grants are recorded against
@@ -113,10 +163,16 @@ public interface PluginRegistry {
    * @param runtime {@code out-of-process} or {@code in-process}
    * @param capabilities every capability its current manifest declares, whether granted or not
    * @param manifestDigest the SHA-256 of the manifest these capabilities came from
-   * @param signed whether the manifest's signature verified. An unsigned plugin runs only where the
-   *     operator allowed it, and an administration surface shows that permanently (REQ-PLG-004)
-   * @param disabled whether the operator, a permanently open circuit or a failed signature took it
-   *     out of service
+   * @param signed whether <b>this core</b> verified the manifest's signature against the public key
+   *     the operator installed for this plugin (REQ-PLG-004, ADR-0085). It was the operator's own
+   *     report until 2026-09-22 and is a result now. An unsigned plugin runs only where the operator
+   *     allowed it, and an administration surface shows that permanently
+   * @param disabled whether the operator, a permanently open circuit or a signature that did not
+   *     verify took it out of service
+   * @param stateReason why it is in that state, in a sentence an operator can act on, or {@code
+   *     null} when there is nothing to say. A plugin out of service because of its signature is the
+   *     case this exists for: "disabled" alone does not distinguish a document that was altered from
+   *     one nobody signed, and those are not the same problem
    * @param registeredAt when it was first seen
    */
   record Registration(
@@ -130,7 +186,27 @@ public interface PluginRegistry {
       String manifestDigest,
       boolean signed,
       boolean disabled,
+      String stateReason,
       Instant registeredAt) {}
+
+  /**
+   * Takes a plugin out of service, or puts it back (REQ-SEC-082).
+   *
+   * <p>The immediate measure of 12 §12: one plugin stops being called at once, for every tenant,
+   * without uninstalling it and without touching a grant. A disabled plugin answers nothing and
+   * every call to it fails as though it were unavailable, which is the state a permanently open
+   * circuit already puts it in — this is the same state, reached on purpose.
+   *
+   * <p>Enabling is the same call with {@code false}, and it restores exactly what was there: the
+   * grants were never removed, so no tenant has to consent again to a plugin that was switched off
+   * for an afternoon.
+   *
+   * @param pluginId which plugin
+   * @param disabled true to take it out of service, false to put it back
+   * @param actor the operator making the decision
+   * @return true when a plugin was changed, false when nothing is installed under that id
+   */
+  boolean setDisabled(String pluginId, boolean disabled, UUID actor);
 
   /**
    * One capability a tenant has granted a plugin.

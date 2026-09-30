@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.authorization.infrastructure;
 
+import de.greluc.homeinv.platform.LogSafe;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.Role;
@@ -83,11 +84,6 @@ public class RoleDefinitionAdapter implements RoleAdministration {
           + " (id, tenant_id, name, description, base_role, created_by, updated_by)"
           + " values (?, ?, ?, ?, ?, ?, ?)";
 
-  // `now()` rather than a bound instant, as every other adapter here does. The
-  // driver has no type for `java.time.Instant` and sends it as text, which
-  // PostgreSQL refuses against a `timestamptz` column with a 42-class error that
-  // Spring reports as "bad SQL grammar" — a message that sends a reader looking
-  // for a typo that is not there.
   private static final String UPDATE_DEFINITION =
       "update authz.role_definition set name = ?, description = ?, updated_by = ?,"
           + " updated_at = now(), version = version + 1"
@@ -141,7 +137,6 @@ public class RoleDefinitionAdapter implements RoleAdministration {
       jdbc.sql(DEFINITIONS).params(tenantId, size).query(collect);
     } else {
       CursorCodec.Position from = cursors.decode(cursor, CURSOR);
-      // Wrapped, not an Instant: the driver cannot infer a SQL type for one.
       java.sql.Timestamp at = java.sql.Timestamp.from(from.createdAt());
       jdbc.sql(DEFINITIONS_AFTER).params(tenantId, at, at, from.id(), size).query(collect);
     }
@@ -185,7 +180,12 @@ public class RoleDefinitionAdapter implements RoleAdministration {
     }
     writeGrants(tenantId, id, added, actor);
 
-    log.info("Role '{}' defined in tenant {} on {} by {}", name, tenantId, baseRole, actor);
+    log.info(
+        "Role '{}' defined in tenant {} on {} by {}",
+        LogSafe.value(name),
+        tenantId,
+        baseRole,
+        actor);
     return viewOf(id, name.trim(), description, baseRole.name(), added);
   }
 
@@ -210,9 +210,6 @@ public class RoleDefinitionAdapter implements RoleAdministration {
       throw new NotFoundException("role", id);
     }
 
-    // Replaced wholesale rather than diffed. The caller sent what the role should
-    // add, and computing the difference here would make "what does it add" depend
-    // on what it added before — which is the state the caller is replacing.
     jdbc.sql(CLEAR_GRANTS).params(tenantId, id).update();
     writeGrants(tenantId, id, added, actor);
 
@@ -226,8 +223,6 @@ public class RoleDefinitionAdapter implements RoleAdministration {
     UUID tenantId = TenantContext.require();
     int changed = jdbc.sql(TOMBSTONE_DEFINITION).params(actor, tenantId, id).update();
     if (changed > 0) {
-      // Members keep their membership and its built-in role, so removing a role
-      // demotes its holders to the base it extended rather than stranding them.
       log.info("Role {} of tenant {} removed by {}", id, tenantId, actor);
     }
   }

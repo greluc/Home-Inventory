@@ -89,8 +89,6 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
                   new TypeAdministration.CreateItemTypeCommand(key, TypeKind.PHYSICAL, null, null),
                   tenant.userId()));
     }
-    // Four created plus the built-in `general` one every tenant is provisioned
-    // with, so three pages of two.
     assertEveryRowIsSeenExactlyOnce(
         tenant,
         5,
@@ -107,7 +105,6 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
   void locationCategories() {
     Tenant tenant = newTenant("paging-categories@example.org");
 
-    // The thirteen REQ-CORE-042 ships, through the editor...
     assertEveryRowIsSeenExactlyOnce(
         tenant,
         13,
@@ -118,8 +115,6 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
               page.nextCursor());
         });
 
-    // ...and through the picker a client builds a location with, which is a
-    // different query over the same rows.
     assertEveryRowIsSeenExactlyOnce(
         tenant,
         13,
@@ -274,8 +269,6 @@ class KeysetPaginationIT extends AbstractIntegrationTest {
               page.nextCursor());
         });
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Follows a listing's cursor to the end and checks that it gave every row exactly once.

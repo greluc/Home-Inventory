@@ -1,0 +1,17 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory network plugin-webhook
+
+[Network]
+NetworkName=homeinv-plugin-webhook
+Internal=true
+Subnet=10.89.31.0/24
+
+[Install]
+WantedBy=default.target

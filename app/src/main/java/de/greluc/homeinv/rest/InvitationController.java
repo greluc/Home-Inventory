@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.tenancy.api.InvitationService;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  * of 07 §7.5, and never from anything in the request. That is the same rule REQ-SEC-004 states for
  * a session's tenant, applied to the one flow that has no session yet.
  */
+@Tag(name = "Invitations", description = "Inviting somebody, and accepting an invitation.")
 @RestController
 @RequestMapping("/api/v1/invitations")
 @RequiredArgsConstructor

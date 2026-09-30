@@ -102,9 +102,6 @@ public class DefaultInvitationService implements InvitationService {
           throw new InvitationAlreadyOpenException(open.getId());
         });
 
-    // Somebody who is already here does not need an invitation. Issuing one would
-    // produce a token that spends itself on nothing, and an administrator would
-    // read the resulting "accepted" as somebody having joined.
     accounts
         .byEmail(address)
         .flatMap(account -> memberships.findLiveInTenant(account.id()))
@@ -173,8 +170,6 @@ public class DefaultInvitationService implements InvitationService {
   public AcceptedInvitation accept(
       String token, String displayName, String locale, String password, UUID signedInAs) {
 
-    // The one lookup that runs with no tenant set. Everything after it happens
-    // inside the context this establishes, under the ordinary policies.
     InvitationLookupAdapter.Located located =
         lookup.locate(hash(token)).orElseThrow(InvitationUnusableException::new);
 
@@ -226,8 +221,6 @@ public class DefaultInvitationService implements InvitationService {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException impossible) {
-      // Every JVM ships SHA-256; the checked exception is a relic of an era when
-      // that was not true. Failing loudly beats pretending to have hashed.
       throw new IllegalStateException("SHA-256 is not available in this JVM", impossible);
     }
   }

@@ -27,12 +27,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * carries it on every line of the request, and {@link Problems} copies it into every problem
  * document.
  *
- * <h2>Why not the tracing library</h2>
+ * <h2>It steps aside when the deployment traces</h2>
  *
- * <p>Because distributed tracing is stage 1 (REQ-NFR-044) and the {@code traceId} is stage 0. When
- * the OpenTelemetry agent arrives it populates the same MDC key from the same W3C id, so the log
- * format, the error documents and anything reading them stay as they are; this filter then becomes
- * a fallback for the case that requirement already names, "inactive when unconfigured".
+ * <p>Since 2026-09-21 tracing exists (REQ-NFR-044) and, when a collector is configured, the tracer
+ * puts the <b>same MDC key</b> there from the span it started — the real W3C trace id of a trace
+ * that spans core, broker, worker and plugin. Two mechanisms writing one key would give one request
+ * two ids, so this one yields: it runs <i>after</i> Spring's observation filter and fills the key
+ * only when that found nothing to put there.
+ *
+ * <p>That is not a degraded mode. Tracing is off unless an operator names a collector — the
+ * requirement's own "inactive when unconfigured" — so on most deployments this filter is still the
+ * whole of the mechanism, exactly as it was at stage 0. What it stopped being is the only one.
  *
  * <h2>An incoming traceparent is adopted</h2>
  *
@@ -43,10 +48,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * gets a newline in it.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 2)
 public class TraceIdFilter extends OncePerRequestFilter {
 
-  /** The MDC key. The same one OpenTelemetry's logging integration uses. */
+  /** The MDC key. The same one Micrometer Tracing's SLF4J integration uses. */
   static final String TRACE_ID = "traceId";
 
   /** W3C trace-context: 32 lowercase hex characters, and not the all-zero id. */
@@ -64,13 +69,16 @@ public class TraceIdFilter extends OncePerRequestFilter {
       @NonNull FilterChain chain)
       throws ServletException, IOException {
 
+    String traced = MDC.get(TRACE_ID);
+    if (traced != null && !traced.isBlank()) {
+      chain.doFilter(request, response);
+      return;
+    }
+
     MDC.put(TRACE_ID, traceIdOf(request));
     try {
       chain.doFilter(request, response);
     } finally {
-      // The thread goes back to a pool — a virtual one here, but the container
-      // may still reuse the carrier's MDC — and a leftover id would label the
-      // next request with the previous one's, which is worse than none.
       MDC.remove(TRACE_ID);
     }
   }
@@ -84,8 +92,6 @@ public class TraceIdFilter extends OncePerRequestFilter {
   private static String traceIdOf(HttpServletRequest request) {
     String header = request.getHeader("traceparent");
     if (header != null) {
-      // version "-" trace-id "-" parent-id "-" flags. Only the trace-id is used:
-      // the parent-id identifies a span this application does not yet produce.
       String[] fields = header.split("-");
       if (fields.length >= 2
           && TRACE_ID_SHAPE.matcher(fields[1]).matches()

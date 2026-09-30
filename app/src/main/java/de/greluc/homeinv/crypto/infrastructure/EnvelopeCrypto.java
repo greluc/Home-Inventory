@@ -122,10 +122,6 @@ public class EnvelopeCrypto implements SensitiveValues {
       byte[] plain = cipher.doFinal(raw, HEADER_BYTES, raw.length - HEADER_BYTES);
       return new String(plain, StandardCharsets.UTF_8);
     } catch (GeneralSecurityException failed) {
-      // Altered, moved to another field, moved to another record, moved to
-      // another tenant: one answer for all of them, because the answer to all of
-      // them is the same and telling them apart would be telling an attacker
-      // which of the four they had managed.
       throw new IllegalStateException(
           "A sensitive value did not verify. It was altered, or it does not belong to this "
               + "tenant, this record and this field.",
@@ -137,8 +133,6 @@ public class EnvelopeCrypto implements SensitiveValues {
   public boolean isSealed(String value) {
     return decode(value).isPresent();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The bytes of a sealed value, when it is one.

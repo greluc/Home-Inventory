@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
 import de.greluc.homeinv.identity.api.AuthenticatedUser;
 import de.greluc.homeinv.identity.api.UserSessions;
@@ -58,6 +59,7 @@ import org.springframework.web.bind.annotation.RestController;
  * and its permissions from. The session id stays: rotating it is the answer to a privilege
  * <em>escalation</em>, and this is a move sideways between tenants the caller already belongs to.
  */
+@Tag(name = "Me", description = "The signed-in person's own profile, sessions and notification preferences.")
 @RestController
 @RequestMapping("/api/v1/me")
 @RequiredArgsConstructor
@@ -125,6 +127,37 @@ public class MeController {
       @PathVariable @Size(max = 64) String handle, @AuthenticationPrincipal AuthenticatedUser user) {
     sessions.end(user.userId(), handle);
   }
+
+  /**
+   * Ends every session this account has, including this one (REQ-SEC-082).
+   *
+   * <p>The measure somebody takes when they think their password reached somebody else: every
+   * device is signed out within the second, and the next thing anybody does with a stolen session
+   * cookie is sign in again — which they cannot, without the password.
+   *
+   * <p>It ends the caller's own session too, and that is the point rather than a side effect.
+   * Leaving one alive would mean the person taking the measure has to guess which of the listed
+   * sessions is theirs, and the browser signing itself out is the visible proof it worked.
+   *
+   * @param user the authenticated principal
+   * @return how many sessions were ended
+   */
+  @DeleteMapping(path = "/sessions", produces = MediaType.APPLICATION_JSON_VALUE)
+  @CanFail(ProblemType.UNAUTHENTICATED)
+  @PublicEndpoint(
+      reason =
+          "It ends the caller's own sessions and reaches nobody else's: the account is the "
+              + "authenticated principal and not a parameter.")
+  public EndedView endEverySession(@AuthenticationPrincipal AuthenticatedUser user) {
+    return new EndedView(sessions.endAll(user.userId()));
+  }
+
+  /**
+   * What a mass sign-out did.
+   *
+   * @param ended how many sessions stopped
+   */
+  public record EndedView(int ended) {}
 
   /**
    * The caller's own session id, for marking it in the list.
@@ -250,18 +283,4 @@ public class MeController {
    */
   public record SwitchTenantRequest(@NotNull UUID tenantId) {}
 
-  /**
-   * Who the caller is after the switch.
-   *
-   * <p>The same shape {@code GET /api/v1/auth/me} answers with, so a client has one type for "the
-   * session" however it changed.
-   *
-   * @param userId the person
-   * @param tenantId the tenant this session now acts for
-   * @param email the address they signed in with
-   * @param locale their interface language
-   * @param role the role they hold in the new tenant
-   */
-  public record SessionView(
-      UUID userId, UUID tenantId, String email, String locale, String role) {}
 }

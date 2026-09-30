@@ -95,13 +95,6 @@ public class ChainAnchors {
       return newest.get().plus(1, ChronoUnit.HOURS);
     }
 
-    // No anchors yet. The oldest entry's hour, or the current one on an instance
-    // where nothing has happened at all.
-    //
-    // Through the SECURITY DEFINER function, because this run has no tenant
-    // context: reading `min` directly under row-level security returns nothing,
-    // and a run that concludes there is nothing to anchor leaves a log with
-    // entries and no anchors.
     return jdbc
         .sql("select audit.oldest_entry_at()")
         .query((ResultSet rs, int row) -> rs.getObject(1, java.time.OffsetDateTime.class))
@@ -119,9 +112,6 @@ public class ChainAnchors {
   private void anchorWindow(Instant windowStart) {
     Instant windowEnd = windowStart.plus(1, ChronoUnit.HOURS);
 
-    // Across every tenant, which row-level security correctly forbids the
-    // application — so this goes through the one SECURITY DEFINER function that
-    // returns hashes and nothing else.
     List<byte[]> hashes =
         jdbc.sql("select entry_hash from audit.entry_hashes_in(?, ?)")
             .param(java.sql.Timestamp.from(windowStart))

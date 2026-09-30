@@ -21,12 +21,12 @@ import org.junit.jupiter.api.Test;
 /**
  * The ports REQ-PLG-001 names are the ports that exist.
  *
- * <p>The requirement lists fourteen extension points by name. That list is a fact stated twice —
+ * <p>The requirement lists sixteen extension points by name. That list is a fact stated twice —
  * once in the catalogue and once in this source tree — and this test is what keeps the second copy
  * from drifting. A port renamed in code and not in the requirement fails here, which is the
  * cheapest moment to notice.
  *
- * <p>Six of the fourteen belong to features that ship at stage 2 or 3. They exist now because the
+ * <p>Six of the sixteen belong to features that ship at stage 2 or 3. They exist now because the
  * contract is written once (ADR-0028), and because a port added after the runtime was built is a
  * port the runtime was not designed for.
  */
@@ -43,7 +43,7 @@ class PortCatalogueTest {
 
     assertThat(named)
         .as("REQ-PLG-001 names the ports in its description cell; the row was not found or is empty")
-        .hasSize(14);
+        .hasSize(16);
 
     List<String> missing = new ArrayList<>();
     List<String> notAnInterface = new ArrayList<>();
@@ -68,6 +68,19 @@ class PortCatalogueTest {
         .isEmpty();
   }
 
+  @Test
+  @DisplayName("lets a manifest declare every port there is, and no port there is not")
+  void theManifestReaderKnowsTheSamePorts() {
+    List<String> named = portsNamedByTheRequirement();
+
+    assertThat(PluginManifestReader.PORTS)
+        .as(
+            "a manifest may name exactly the ports REQ-PLG-001 names. A port missing here is a "
+                + "plugin that cannot be installed; a port here that does not exist is a manifest "
+                + "accepted for something nobody calls")
+        .containsExactlyInAnyOrderElementsOf(named);
+  }
+
   /**
    * Reads the port names out of the requirement's own description.
    *
@@ -84,8 +97,6 @@ class PortCatalogueTest {
                         "REQ-PLG-001 is not in docs/requirements/01-functional.md. It is the "
                             + "requirement this whole package implements."));
 
-    // The description cell only. The verification cell after it names test
-    // classes and chapters in backticks too, and those are not ports.
     String[] cells = row.split("\\|");
     String description = cells.length > 2 ? cells[2] : "";
 

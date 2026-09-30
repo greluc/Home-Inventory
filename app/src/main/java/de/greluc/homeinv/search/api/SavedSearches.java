@@ -113,6 +113,23 @@ public interface SavedSearches {
   Page<ItemView> run(UUID id, String cursor, int limit);
 
   /**
+   * The ids a saved search matches, and nothing else.
+   *
+   * <p>For callers that want to know <b>which</b> things a search covers without wanting the things
+   * — {@code notification}'s reminder rules narrow by a saved search and need ids to intersect
+   * with. {@link #run} would serve, but only by handing back {@link ItemView}s, and a block that
+   * received those would depend on {@code inventory} in order to read a field it throws away. That
+   * is how the module check found a cycle between {@code inventory} and {@code notification} on
+   * 2026-09-20: this method is the answer to it.
+   *
+   * @param id the saved search
+   * @param limit how many at most; capped at 200 like every collection (REQ-NFR-010)
+   * @return the matching ids, in no particular order
+   * @throws de.greluc.homeinv.platform.NotFoundException when the tenant has no such search
+   */
+  java.util.Set<UUID> matchingIds(UUID id, int limit);
+
+  /**
    * What to save, or to save over.
    *
    * @param name what to call it; unique per tenant, compared without regard to case

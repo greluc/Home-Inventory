@@ -135,9 +135,6 @@ public class AuditLogAdapter implements AuditLog {
     Tail tail = tailOf(tenantId);
 
     long seq = tail.seq() + 1;
-    // Truncated to microseconds, which is what `timestamptz` keeps. Hashing a
-    // nanosecond the column cannot store would mean the value read back never
-    // reproduces its own hash, and every verification run would report tampering.
     Instant occurredAt = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     String diff = canonicalJson(entry.diff());
     byte[] entryHash = hash(tail.hash(), tenantId, seq, occurredAt, entry, diff);
@@ -155,11 +152,6 @@ public class AuditLogAdapter implements AuditLog {
     UUID tenantId = TenantContext.require();
     int size = Math.clamp(limit, 1, MAX_PAGE);
 
-    // Four shapes of one query rather than a builder: the two questions a caller
-    // asks (one actor or all) times the two positions (first page or a cursor),
-    // each with its parameters in a fixed order. A StringBuilder here would be
-    // dynamic SQL, which this project routes through a checked allowlist or not
-    // at all (CLAUDE.md).
     String actorClause = actorId == null ? "" : " and actor_id = ?";
     String cursorClause = cursor == null || cursor.isBlank() ? "" : " and seq < ?";
     String sql =
@@ -167,9 +159,6 @@ public class AuditLogAdapter implements AuditLog {
             + " where tenant_id = ? and occurred_at >= ? and occurred_at < ?"
             + actorClause
             + cursorClause
-            // Newest first, and ordered by `seq` rather than by time: two entries
-            // of one tenant can share a microsecond, and the sequence orders them
-            // without a tie-break nobody can reproduce.
             + " order by seq desc limit ?";
 
     JdbcClient.StatementSpec spec =
@@ -181,9 +170,6 @@ public class AuditLogAdapter implements AuditLog {
       spec = spec.param(actorId);
     }
     if (!cursorClause.isEmpty()) {
-      // The position is a sequence number, which is already an ordered key of its
-      // own — the cursor still carries the signed pair, so a tampered one is
-      // refused by the same code path as everywhere else (REQ-SEC-106).
       spec = spec.param(cursors.decode(cursor, CURSOR).createdAt().toEpochMilli());
     }
     List<AuditView> rows = spec.param(size).query(AuditLogAdapter::toView).list();
@@ -210,10 +196,6 @@ public class AuditLogAdapter implements AuditLog {
       return bound;
     }
 
-    // Held to the end of the transaction, which is what makes the read below and
-    // the insert after it one step as far as any other writer is concerned.
-    // `listOfRows` and not a typed query: the function returns `void`, and asking
-    // the driver for an `Integer` asks it to convert nothing into a number.
     jdbc.sql("select pg_advisory_xact_lock(?, hashtext(?))")
         .param(LOCK_NAMESPACE)
         .param(tenantId.toString())
@@ -337,8 +319,6 @@ public class AuditLogAdapter implements AuditLog {
         .append('\n')
         .append(seq)
         .append('\n')
-        // ISO-8601 in UTC to nanosecond precision: the same instant must render
-        // the same way on every machine that verifies it.
         .append(occurredAt)
         .append('\n')
         .append(entry.actorKind().name())
@@ -355,12 +335,6 @@ public class AuditLogAdapter implements AuditLog {
         .append('\n')
         .append(diff)
         .append('\n')
-        // THE ADDRESS AS A HASH, not as itself. REQ-PRIV-006 removes it from
-        // ordinary entries after seven days, and a chain computed over a column
-        // somebody is required to clear would break at every cleared row —
-        // honouring one requirement would forge evidence against another. The
-        // hash never changes, so the tamper evidence stays complete and the
-        // address stays removable.
         .append(ipHash == null ? "" : java.util.HexFormat.of().formatHex(ipHash))
         .append('\n')
         .append(orEmpty(entry.client()))
@@ -476,8 +450,6 @@ public class AuditLogAdapter implements AuditLog {
         rs.getString("client"),
         rs.getString("correlation_id"));
   }
-
-  // --- the transaction-scoped tail -----------------------------------------
 
   private static String key(UUID tenantId) {
     return AuditLogAdapter.class.getName() + ":" + tenantId;

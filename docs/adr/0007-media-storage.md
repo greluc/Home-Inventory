@@ -17,6 +17,11 @@
 >
 > **Amended by [ADR-0032](0032-per-tenant-blob-addressing.md)** — content addressing
 > is scoped to the tenant (`sha256/<tenantId>/<hash>`) rather than global.
+>
+> **Amended by [ADR-0074](0074-granting-a-store-routes-and-does-not-move.md)** — *"switching is
+> configuration"* said nothing about what switching does to what is already stored. A tenant
+> that grants a storage plugin has its next bytes routed there and none of its older ones
+> moved; reads fall back to the deployment's store and deletions remove from both.
 
 ## Context
 

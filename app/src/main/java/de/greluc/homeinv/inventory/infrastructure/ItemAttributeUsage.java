@@ -58,8 +58,6 @@ public class ItemAttributeUsage implements AttributeUsage {
     UUID tenantId = TenantContext.require();
     String versions = array(typeVersionIds);
 
-    // The side table first: its rows hang off the item, and once the key is gone
-    // from `attributes` nothing would say which of them to remove.
     jdbc.sql(
             """
             delete from inventory.item_attr_index

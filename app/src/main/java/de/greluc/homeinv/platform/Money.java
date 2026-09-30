@@ -61,10 +61,6 @@ public record Money(BigDecimal amount, Currency currency) {
   public Money {
     Objects.requireNonNull(amount, "an amount is required");
     Objects.requireNonNull(currency, "a currency is required");
-    // HALF_UP rather than an argument, and it is the one place rounding is not
-    // the caller's to choose: this is not arithmetic, it is the currency saying
-    // how many digits it has. A value arriving with more of them is a value
-    // somebody typed, and rounding it half up is what a person expects of it.
     amount = amount.setScale(currency.getDefaultFractionDigits(), RoundingMode.HALF_UP);
   }
 

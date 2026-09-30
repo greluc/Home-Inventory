@@ -1,16 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// DELIVERING A MESSAGE TO A PERSON.
-//
-// EVERY implementation is a plugin, e-mail and webhook included, because every
-// one of them talks to a host outside the deployment (ADR-0026). There is no
-// in-core channel and there cannot be one: the core has no outbound route.
-//
-// A stage 1 installation without `plugin-smtp` is a valid but reduced
-// deployment — no invitations by mail, no password reset by mail, no
-// notifications. The core says so plainly rather than failing silently
-// (ADR-0028).
 
 syntax = "proto3";
 

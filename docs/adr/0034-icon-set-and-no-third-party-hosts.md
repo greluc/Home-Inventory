@@ -2,6 +2,14 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 **Records:** `REQ-PRIV-015` and the icon decision in the design brief.
+
+> **Amended by [ADR-0083](0083-the-notice-travels-inside-the-artifact.md)** — the obligation
+> table below dated the notice by trigger, *"with the first distributed build"*, and named
+> the three places it has to reach. That build arrived on 2026-09-22 and the answer is one
+> generated notice per distributed artifact, taken from what the artifact carries: a
+> resource in the two jars, a file in the bundle, and **compiled into the binary** for the
+> six `scratch` images, which have no filesystem to put a file on. The third place — the app
+> packages — is stage 2 and 3 and does not exist yet.
 **Moves here:** the Lucide licence analysis that was filed as note **A4** in
 [ADR-0000](0000-open-points.md) — it is a settled decision with obligations, not an
 open point, and ADR-0000 is for things that are still open.

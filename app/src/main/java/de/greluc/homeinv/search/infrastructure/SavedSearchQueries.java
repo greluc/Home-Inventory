@@ -218,9 +218,6 @@ public class SavedSearchQueries {
         rs.getString("query_text"),
         parameters,
         rs.getString("sort"),
-        // OffsetDateTime, not Instant: the PostgreSQL driver refuses a direct
-        // conversion from timestamptz to Instant, and says so at runtime rather
-        // than at compile time.
         rs.getObject("created_at", OffsetDateTime.class).toInstant(),
         rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
         rs.getLong("version"));

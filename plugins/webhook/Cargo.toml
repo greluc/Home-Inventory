@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Lucas Greuloch
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "homeinv-plugin-webhook"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Delivers Home Inventory notifications to a URL, signed"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/greluc/Home-Inventory"
+publish = false
+
+[dependencies]
+homeinv-plugin-common = { path = "../common" }
+tonic = { version = "0.14", features = ["tls-ring"] }
+tonic-prost = "0.14"
+prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "signal", "fs"] }
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+protox = "0.9"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,11 +1,3 @@
-/* Mock data for the UI kit. German throughout, and deliberately so: these are the long compounds
-   the shipped German UI actually produces, and they are the width fixture that
-   `guidelines/type-german.html`, `components/data/Table.d.ts` and REQ-NFR-071 all lean on.
-   Translating them would remove exactly what the screens exist to prove.
-
-   This file and `guidelines/type-german.html` are the TWO entries on the closed carve-out list of
-   REQ-CON-012 / REQ-CON-014; everything else in the corpus is English. A third German fixture
-   needs a row there and a sentence saying why English will not do. */
 const LOCATIONS = [
   { id: "h", name: "Haus Lindenstraße", kind: "building", count: 1284, children: [
     { id: "k", name: "Keller", kind: "room", count: 412, children: [
@@ -38,7 +30,6 @@ const ITEMS = [
   { id: "i10", name: "Umzugskarton Bücher — Arbeitszimmer", code: "R2M-5VQ-1KX", path: "Dachboden", loc: "Dachboden", type: "Umzugskarton", value: 0, warranty: null, photo: false, status: "unassigned", qty: 1 },
 ];
 
-/* Two runtime-defined item types. Nobody designed either form. */
 const TYPE_BOOK = [
   { key: "b_title", label: "Titel", type: "text", required: true, value: "Die Architektur nachhaltiger Systeme" },
   { key: "b_author", label: "Verfasser", type: "text", value: "M. Behrens" },

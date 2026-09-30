@@ -56,9 +56,6 @@ public class UrlSigningKey {
           "The URL signing key at " + keyFile + " could not be read", unreadable);
     }
 
-    // Accept a base64 line as well as raw bytes: a key handed over as text is
-    // what a secret manager usually produces, and silently hashing the literal
-    // characters of a base64 string would work and be wrong.
     byte[] decoded = tryDecodeBase64(read);
     this.material = decoded != null ? decoded : read;
 

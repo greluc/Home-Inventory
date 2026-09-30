@@ -114,8 +114,6 @@ class ProblemTypeRegistryTest {
         .isEmpty();
   }
 
-  // -------------------------------------------------------------------------
-
   private static Map<String, Integer> statusByToken() throws Exception {
     Map<String, Integer> registered = new TreeMap<>();
     for (Map<String, Object> entry : entries()) {
@@ -129,8 +127,6 @@ class ProblemTypeRegistryTest {
     Map<String, Object> registry =
         new Yaml().loadAs(Files.readString(REGISTRY, StandardCharsets.UTF_8), Map.class);
 
-    // `pending` is deliberately excluded: those are proposed and not yet emitted,
-    // which the registry's own preamble says is what the list means.
     List<Map<String, Object>> entries = new java.util.ArrayList<>();
     for (String list : List.of("registered", "assigned")) {
       List<Map<String, Object>> rows = (List<Map<String, Object>>) registry.get(list);

@@ -49,31 +49,19 @@ class MigrationRulesTest {
   private static final List<String> INSTANCE_WIDE =
       List.of(
           "identity.app_user",
-          // What the operator installed. A plugin is installed for the instance
-          // and consented to per tenant (09 §9.4), so the registration describes
-          // the deployment and the GRANT beside it carries the tenant id and the
-          // policy. A tenant-scoped registration would mean installing a plugin
-          // once per tenant, which is the thing REQ-PLG-013 says an operator
-          // does once.
           "plugins.plugin_registration",
+          "plugins.instance_capability_grant",
           "identification.public_code",
           "identification.label_base_url_usage",
           "audit.chain_anchor",
-          // Infrastructure rather than domain data (07 §7.1, rule 4): the relay
-          // reads every tenant's rows by design, and a policy would hide them
-          // from the one process whose job is to publish them.
           "outbox.event_publication",
-          // Evidence of an erasure has to outlive the thing it is about: a
-          // tenant-scoped certificate would be removed by the very run that
-          // writes it (REQ-TEN-011). It holds no content — a tenant id, the name
-          // it had, who asked, when, and counts — and only the instance operator
-          // reads it.
           "tenancy.erasure_certificate",
-          // The second factor is asked for between the password and the session,
-          // when there is no tenant yet to scope a policy with (REQ-AUTH-002).
-          // Reachable only through the caller's own session: no endpoint takes a
-          // user id, and no operator path reaches somebody else's authenticator.
-          "identity.credential");
+          "identity.credential",
+          "identity.password_reset",
+          "identity.federated_identity",
+          "identity.federated_login",
+          "notification.security_notification",
+          "notification.security_delivery_attempt");
 
   /**
    * The tables rule 4 exempts, as 07 §7.1 lists them.
@@ -85,35 +73,74 @@ class MigrationRulesTest {
    */
   private static final List<String> NOT_DOMAIN_TABLES =
       List.of(
-          // Derived.
           "inventory.item_attr_index",
-          // Append-only records of an event.
           "sync.change_log",
           "audit.audit_entry",
           "audit.chain_anchor",
           "audit.chain_truncation",
           "audit.revision_record",
+          "inventory.maintenance_entry",
           "identification.label_base_url_usage",
           "tenancy.erasure_certificate",
-          // Infrastructure.
-          //
-          // A queued notification is a unit of work owned by the delivery
-          // mechanism, like an outbox row: its `state` and `next_attempt_at` are
-          // the mechanism's bookkeeping, and an `updated_by` on it would name the
-          // scheduler rather than a person. Its attempts are an append-only
-          // record of what happened on each try.
           "notification.notification",
           "notification.delivery_attempt",
+          "notification.reminder",
+          "portability.export_job",
+          "portability.import_job",
+          "portability.import_provenance",
           "outbox.event_publication",
           "idempotency.processed_request",
           "crypto.tenant_data_key",
-          // Issued, never edited.
+          "identity.password_reset",
+          "identity.federated_login",
+          "identity.federated_identity",
+          "notification.security_notification",
+          "notification.security_delivery_attempt",
           "identification.public_code",
           "identification.code_binding",
           "inventory.item_relation",
           "inventory.item_bundle",
-          // A rule that exists or does not.
           "catalog.location_category_child");
+
+  /**
+   * The {@code SECURITY DEFINER} functions, as {@code 07 §7.5} lists them (REQ-SEC-008).
+   *
+   * <p>The requirement asks for the list to be documented, and a documented list nobody compares
+   * with reality is the thing this project calls a claim. So it is compared in both directions: a
+   * new definer function without a row in that chapter fails, and a row that outlived its function
+   * fails too.
+   *
+   * <p>Every one of them crosses row-level security because the tenant context is what the caller
+   * is trying to establish — a login before it has a tenant, a token that names one, a run looking
+   * for the tenants that need a context.
+   */
+  private static final List<String> DOCUMENTED_SECURITY_DEFINERS =
+      List.of(
+          "audit.ensure_audit_partition",
+          "audit.entry_hashes_in",
+          "audit.oldest_entry_at",
+          "identity.service_account_by_token",
+          "notification.tenants_with_due_notifications",
+          "notification.tenants_with_enabled_rules",
+          "media.tenants_with_orphaned_blobs",
+          "media.tenants_with_expired_uploads",
+          "inventory.tenants_with_depreciable_items",
+          "portability.tenants_with_queued_exports",
+          "portability.tenants_with_queued_imports",
+          "tenancy.invitation_by_token",
+          "tenancy.lifecycle_state_of_tenant",
+          "tenancy.quotas_of_tenant",
+          "tenancy.set_tenant_lifecycle_state",
+          "tenancy.set_tenant_quota",
+          "tenancy.tenant_by_revocation_token",
+          "tenancy.tenants_due_for_erasure",
+          "tenancy.tenants_of_user");
+
+  /** Where a function is created, so the definer check can name it. */
+  private static final Pattern CREATE_FUNCTION =
+      Pattern.compile(
+          "create\\s+(?:or\\s+replace\\s+)?function\\s+([a-z_]+\\.[a-z_]+)",
+          Pattern.CASE_INSENSITIVE);
 
   /** What rule 4 demands of every other table. */
   private static final List<String> REQUIRED_COLUMNS =
@@ -165,17 +192,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("carry the tenant in every reference between tenant-scoped tables")
   void referencesBetweenTenantTablesAreComposite() throws IOException {
-    // 07 §7.5: a foreign key check bypasses row-level security, always. A
-    // single-column reference therefore succeeds across a tenant boundary, and
-    // the row comes into existence pointing at somebody else's data. Making the
-    // tenant part of the key is what makes that impossible rather than merely
-    // caught by the application.
-    // The exception is a property of the TARGET rather than a file name: a
-    // reference to an instance-wide table is single-column because that table has
-    // no tenant to carry. `tenancy.membership -> identity.app_user` is the entry
-    // 07 §7.9 names, and `identity.credential -> identity.app_user` is the same
-    // case. Keyed on the file name, as this was until 2026-09-13, the rule passed
-    // anything that happened to live in the same migration.
     Pattern singleColumn =
         Pattern.compile(
             "foreign\\s+key\\s*\\(\\s*[a-z_]+\\s*\\)\\s*references\\s+([a-z_]+\\.[a-z_]+)",
@@ -210,11 +226,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("never make tenant_id a foreign key of its own")
   void tenantIdCarriesNoForeignKey() throws IOException {
-    // 07 §7.5: tenant_id is a discriminator, not a reference between aggregates.
-    // Declaring REFERENCES tenancy.tenant(id) on it would put a cross-schema
-    // foreign key in every table of every block - the module rule turned inside
-    // out - and a row whose tenant names no tenant is invisible to every policy
-    // anyway, which is the same outcome the constraint would produce.
     Pattern offending =
         Pattern.compile("tenant_id\\s+uuid[^,]*\\breferences\\b", Pattern.CASE_INSENSITIVE);
 
@@ -230,16 +241,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("give every domain table `version` and the four audit columns (07 §7.1, rule 4)")
   void everyDomainTableIsVersionedAndAudited() throws IOException {
-    // 07 §7.1 rule 4 has said "a migration check enforces it" since the chapter
-    // was written, and until 2026-09-13 nothing did: the rule was a sentence and
-    // the list of tables it exempts was a list nothing read. A rule with no
-    // mechanism is exactly the drift that chapter exists to prevent, and this one
-    // was sitting in the paragraph that describes the mechanism.
-    //
-    // Run for the first time it found five tables. Two of them were right to have
-    // no such columns and joined the list; three were wrong and got the columns,
-    // because a version row records who published it and an assignment records
-    // who merged the tag out from under it.
     Map<String, String> tables = tablesWithTheirScript();
     Map<String, String> added = columnsAddedLater();
     List<String> offenders = new ArrayList<>();
@@ -272,8 +273,6 @@ class MigrationRulesTest {
   @Test
   @DisplayName("use version numbers that are unique across every block directory")
   void versionsAreUnique() throws IOException {
-    // Flyway keeps one history table for all locations, so two blocks that both
-    // start at V1 collide - and the failure appears at deployment, not here.
     Map<String, String> byVersion = new LinkedHashMap<>();
     List<String> duplicates = new ArrayList<>();
     for (Path script : scripts()) {
@@ -372,5 +371,32 @@ class MigrationRulesTest {
    */
   private static String stripComments(String sql) {
     return sql.lines().filter(line -> !line.stripLeading().startsWith("--")).reduce("", (a, b) -> a + "\n" + b);
+  }
+
+  @Test
+  @DisplayName("document every SECURITY DEFINER function, and document no function that is gone")
+  void everySecurityDefinerFunctionIsDocumented() throws IOException {
+    List<String> actual = new ArrayList<>();
+    for (Path script : scripts()) {
+      String sql = Files.readString(script, StandardCharsets.UTF_8);
+      Matcher functions = CREATE_FUNCTION.matcher(sql);
+      while (functions.find()) {
+        int from = functions.end();
+        int to = sql.indexOf("$$", from);
+        String header = to < 0 ? sql.substring(from) : sql.substring(from, to);
+        if (header.toLowerCase(Locale.ROOT).contains("security definer")
+            && !actual.contains(functions.group(1).toLowerCase(Locale.ROOT))) {
+          actual.add(functions.group(1).toLowerCase(Locale.ROOT));
+        }
+      }
+    }
+
+    assertThat(actual)
+        .describedAs(
+            "REQ-SEC-008: cross-tenant administration goes through explicit, logged "
+                + "SECURITY DEFINER functions and THE LIST IS DOCUMENTED. A new one needs a row "
+                + "in 07 §7.5 and an entry here, in the same change — and a row there that no "
+                + "longer names a function is a list nobody is reading.")
+        .containsExactlyInAnyOrderElementsOf(DOCUMENTED_SECURITY_DEFINERS);
   }
 }

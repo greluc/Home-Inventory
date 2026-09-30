@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.inventory.api;
 
+import de.greluc.homeinv.platform.EventType;
+import de.greluc.homeinv.platform.TenantScopedEvent;
 import java.util.UUID;
 import org.springframework.modulith.events.Externalized;
 
@@ -30,6 +32,27 @@ import org.springframework.modulith.events.Externalized;
  * @param name what it is called
  * @param locationId where it is, or {@code null} for a digital item, which is nowhere
  */
-@Externalized("homeinv.inventory::item-created")
+@Externalized("homeinv.inventory::item-created.v1")
 public record ItemCreated(
-    UUID tenantId, UUID itemId, UUID itemTypeVersionId, String name, UUID locationId) {}
+    UUID tenantId, UUID itemId, UUID itemTypeVersionId, String name, UUID locationId) implements TenantScopedEvent {
+
+  /**
+   * What happened.
+   *
+   * @return item.created
+   */
+  @Override
+  public EventType eventType() {
+    return EventType.ITEM_CREATED;
+  }
+
+  /**
+   * What it happened to.
+   *
+   * @return the item that was created
+   */
+  @Override
+  public UUID subjectId() {
+    return itemId;
+  }
+}

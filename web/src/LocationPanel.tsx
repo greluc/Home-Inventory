@@ -44,10 +44,6 @@ export function LocationPanel({
     [categories, t, language],
   );
 
-  // Derived rather than stored, so that the categories arriving after the first
-  // render do not need a second one to become selectable. A select whose value
-  // is not one of its options shows an empty row, and the first submit then
-  // fails on a field the user never touched.
   const categoryId = chosenCategory === "" ? (offered[0]?.id ?? "") : chosenCategory;
 
   async function submit(event: React.FormEvent): Promise<void> {
@@ -57,9 +53,6 @@ export function LocationPanel({
       await api.createLocation({
         name,
         categoryId,
-        // Omitted rather than undefined: with `exactOptionalPropertyTypes` the
-        // two differ, and on the wire an absent field and a null one mean
-        // different things.
         ...(parentId === "" ? {} : { parentId }),
       });
       setName("");

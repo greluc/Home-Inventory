@@ -2,6 +2,8 @@
 
 **Status:** Accepted · **Date:** 2026-09-11
 
+> **Amended by [ADR-0085](0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md)** — registration gains a verification step. The core checks a detached signature over the manifest's bytes against a key the operator installed, offline because `api` has no route to Fulcio, and the state a plugin reaches depends on what that check found: a signature that does not verify is registered `DISABLED` and no setting runs it, which is a different thing from a plugin nobody signed (`REQ-PLG-004`).
+
 ## Context
 
 Extensions range from purely computational building blocks (code generation)

@@ -70,11 +70,9 @@ class SavedSearchIT extends AbstractIntegrationTest {
     assertThat(saved.get("name").asString()).isEqualTo("Schwere Werkzeuge");
     assertThat(saved.get("q").isNull()).isFalse();
     assertThat(saved.get("q").asString()).isEqualTo("Hammer");
-    // Verbatim: a client puts this straight back into the query bar.
     assertThat(saved.get("filters").get(0).asString()).isEqualTo("attr.manufacturer:Stanley");
     assertThat(saved.get("sort").asString()).isEqualTo("-name");
 
-    // And the listing shows it.
     assertThat(namesOf(tenant)).containsExactly("Schwere Werkzeuge");
   }
 
@@ -87,7 +85,6 @@ class SavedSearchIT extends AbstractIntegrationTest {
     UUID id = UUID.fromString(save(tenant, "Alles", null, List.of(), "name").get("id").asString());
     assertThat(itemsOf(tenant, id)).containsExactly("Hammer");
 
-    // Saved before this existed.
     anItem(tenant, "Bohrmaschine");
     assertThat(itemsOf(tenant, id)).containsExactly("Bohrmaschine", "Hammer");
   }
@@ -125,8 +122,6 @@ class SavedSearchIT extends AbstractIntegrationTest {
   void aBrokenFilterIsRefusedEarly() throws Exception {
     Tenant tenant = aTenant("broken");
 
-    // A list that failed whenever anybody opened it would be reported by
-    // somebody who cannot fix it. The person who can is the one saving it.
     mockMvc
         .perform(
             post(SEARCHES)
@@ -158,7 +153,6 @@ class SavedSearchIT extends AbstractIntegrationTest {
         .andExpect(status().isOk());
     assertThat(namesOf(tenant)).containsExactly("Zu reparieren");
 
-    // A stale version is refused rather than overwriting somebody's change.
     mockMvc
         .perform(
             delete(path).session(tenant.session()).with(csrf()).header("If-Match", "\"1\""))
@@ -173,11 +167,8 @@ class SavedSearchIT extends AbstractIntegrationTest {
         .andExpect(status().isNoContent());
     assertThat(namesOf(tenant)).isEmpty();
 
-    // Gone from the list, and gone from the resource.
     mockMvc.perform(get(path).session(tenant.session())).andExpect(status().isNotFound());
   }
-
-  // -------------------------------------------------------------------------
 
   private JsonNode save(
       Tenant tenant, String name, String q, List<String> filters, String sort) throws Exception {

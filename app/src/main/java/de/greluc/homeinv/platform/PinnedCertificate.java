@@ -82,9 +82,6 @@ public record PinnedCertificate(String peer, String variable, String expected)
       throw new CertificateException(peer + " presented no certificate");
     }
     String presented = fingerprintOf(chain[0]);
-    // Constant-time, like every other comparison of a secret-shaped value here.
-    // A fingerprint is not a secret, but a comparison that leaks its prefix is a
-    // habit worth not having.
     if (!MessageDigest.isEqual(
         presented.getBytes(StandardCharsets.US_ASCII),
         expected.getBytes(StandardCharsets.US_ASCII))) {

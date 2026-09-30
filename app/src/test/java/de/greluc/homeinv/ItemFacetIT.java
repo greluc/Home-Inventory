@@ -68,8 +68,6 @@ class ItemFacetIT extends AbstractIntegrationTest {
 
     JsonNode body = list(fixture);
     assertThat(body.has("data")).isTrue();
-    // Null is omitted by the serialiser, so "nobody asked" is an absent member
-    // rather than an empty list, which would mean "counted, and there is nothing".
     assertThat(body.has("facets")).isFalse();
 
     assertThat(list(fixture, "facet", "tag").get("facets")).isNotNull();
@@ -80,18 +78,13 @@ class ItemFacetIT extends AbstractIntegrationTest {
   void countsEveryDimension() throws Exception {
     Fixture fixture = aShed("dimensions");
 
-    // Two tools and one book, so the type facet is 2 and 1.
     assertThat(bucketsOf(fixture, "type")).containsExactly(Map.entry("tool", 2L), Map.entry("book", 1L));
 
-    // A category is the type above the type: both tools sit under "equipment",
-    // the book sits under nothing and therefore in no bucket.
     assertThat(bucketsOf(fixture, "category")).containsExactly(Map.entry("equipment", 2L));
 
     assertThat(bucketsOf(fixture, "tag"))
         .containsExactly(Map.entry("heavy", 2L), Map.entry("borrowed", 1L), Map.entry("broken", 1L));
 
-    // The places are counted per root of the tree, each carrying its whole
-    // subtree: the shed holds the hammer on its shelf as well as the drill.
     assertThat(bucketsOf(fixture, "location"))
         .containsExactly(
             Map.entry(fixture.shed().toString(), 2L), Map.entry(fixture.study().toString(), 1L));
@@ -105,17 +98,11 @@ class ItemFacetIT extends AbstractIntegrationTest {
   void drillDown() throws Exception {
     Fixture fixture = aShed("drill-down");
 
-    // Filtered to one tag, the tag facet still shows all three: that is what
-    // makes it a control rather than an echo of the click that produced it.
     assertThat(bucketsOf(fixture, "tag", "tag:broken"))
         .containsExactly(Map.entry("heavy", 2L), Map.entry("borrowed", 1L), Map.entry("broken", 1L));
 
-    // Another dimension's filter does narrow it. Only the hammer is tagged
-    // "broken", so under that filter the type facet is the hammer's type alone.
     assertThat(bucketsOf(fixture, "type", "tag:broken")).containsExactly(Map.entry("tool", 1L));
 
-    // And both rules at once: the tag facet under a type filter counts the tags
-    // of the two tools, not of everything.
     assertThat(bucketsOf(fixture, "tag", "type:tool"))
         .containsExactly(Map.entry("heavy", 2L), Map.entry("broken", 1L));
   }
@@ -125,14 +112,9 @@ class ItemFacetIT extends AbstractIntegrationTest {
   void locationsDescend() throws Exception {
     Fixture fixture = aShed("tree");
 
-    // Inside the shed, the facet counts the shed's children — the shelf with the
-    // hammer on it. The drill lies in the shed itself and is in none of the
-    // shed's children, so it is in no bucket: the counts must not add up to more
-    // than the list.
     assertThat(bucketsOf(fixture, "location", "location:subtree:" + fixture.shed()))
         .containsExactly(Map.entry(fixture.shelf().toString(), 1L));
 
-    // The study has nothing under it, so inside it there is nothing to descend to.
     assertThat(bucketsOf(fixture, "location", "location:subtree:" + fixture.study())).isEmpty();
   }
 
@@ -143,8 +125,6 @@ class ItemFacetIT extends AbstractIntegrationTest {
 
     JsonNode body = list(fixture, "facet", "tag", "filter", "tag:broken", "filter", "tag:borrowed");
     assertThat(body.get("data")).isEmpty();
-    // Nothing carries both tags, so the list is empty — and the sidebar is how
-    // somebody gets back out of that, so it is still counted.
     assertThat(buckets(body, "tag")).isNotEmpty();
   }
 
@@ -153,16 +133,11 @@ class ItemFacetIT extends AbstractIntegrationTest {
   void whatIsRefused() throws Exception {
     Fixture fixture = aShed("refusals");
 
-    // A sidebar silently missing a section looks like a sidebar with nothing in
-    // it, so an unknown dimension is named rather than dropped.
     refused(fixture, "colour");
     refused(fixture, "attr.nothingLikeThis");
 
-    // Declared, stored, searchable — and not facetable. The tenant said so.
     refused(fixture, "attr.serial");
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The buckets of one dimension, as value to count.
@@ -217,8 +192,6 @@ class ItemFacetIT extends AbstractIntegrationTest {
         .perform(get(ITEMS).param("facet", dimension).session(fixture.session()))
         .andExpect(status().isUnprocessableContent());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A tenant with two tools and a book, arranged so that no two dimensions split them alike.
@@ -279,7 +252,6 @@ class ItemFacetIT extends AbstractIntegrationTest {
             userId);
     if ("tool".equals(key)) {
       types.addField(type.draftVersionId(), field("manufacturer", true), userId);
-      // Searchable and NOT facetable, so a refusal has something real to refuse.
       types.addField(type.draftVersionId(), field("serial", false), userId);
     }
     types.publish(type.draftVersionId(), userId);

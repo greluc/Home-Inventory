@@ -7,12 +7,20 @@ package de.greluc.homeinv.rest;
 import de.greluc.homeinv.authorization.api.AccessDeniedException;
 import de.greluc.homeinv.identity.api.InvalidCredentialsException;
 import de.greluc.homeinv.identity.api.InvalidSecondFactorException;
+import de.greluc.homeinv.identity.api.FederatedSignIn;
 import de.greluc.homeinv.identity.api.RegistrationClosedException;
 import de.greluc.homeinv.identity.api.SecondFactorAlreadyEnrolledException;
 import de.greluc.homeinv.idempotency.api.IdempotencyKeyConflictException;
 import de.greluc.homeinv.identity.api.SecondFactorRequiredException;
 import de.greluc.homeinv.identity.api.TooManyAttemptsException;
+import de.greluc.homeinv.media.api.OffsetMismatchException;
+import de.greluc.homeinv.media.api.UploadBusyException;
+import de.greluc.homeinv.identity.api.WeakPasswordException;
 import de.greluc.homeinv.inventory.api.BundleCycleException;
+import de.greluc.homeinv.inventory.api.ItemLentException;
+import de.greluc.homeinv.inventory.api.ItemStateException;
+import de.greluc.homeinv.notification.api.UnservedTriggerException;
+import de.greluc.homeinv.portability.api.ExportNotReadyException;
 import de.greluc.homeinv.inventory.api.ItemAlreadyExistsException;
 import de.greluc.homeinv.locations.api.InvalidMoveException;
 import de.greluc.homeinv.locations.api.LocationNotEmptyException;
@@ -37,11 +45,13 @@ import de.greluc.homeinv.locations.api.TooDeepException;
 import de.greluc.homeinv.media.api.MalwareDetectedException;
 import de.greluc.homeinv.media.api.ScannerUnavailableException;
 import de.greluc.homeinv.media.api.UnsupportedMediaTypeException;
+import de.greluc.homeinv.notification.api.WebhookTargets;
 import de.greluc.homeinv.platform.InvalidCursorException;
 import de.greluc.homeinv.platform.NotFoundException;
 import de.greluc.homeinv.platform.StaleVersionException;
 import de.greluc.homeinv.platform.PayloadTooLargeException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -85,8 +95,6 @@ public class ApiExceptionHandler {
    */
   @ExceptionHandler(NotFoundException.class)
   public ProblemDetail handleNotFound(NotFoundException exception, HttpServletRequest request) {
-    // Not logged above DEBUG: a 404 is an ordinary answer, and logging it at WARN
-    // lets anyone fill the log by requesting random ids.
     log.debug("Not found: {}", exception.getMessage());
     return problem(ProblemType.NOT_FOUND, "No such " + exception.getResource() + " is visible to you.",
         request);
@@ -114,8 +122,6 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnknownType(
       de.greluc.homeinv.catalog.api.TypeRegistry.UnknownTypeException exception,
       HttpServletRequest request) {
-    // DEBUG for the same reason a NotFoundException is: an id that resolves to
-    // nothing is an ordinary answer, and anybody could otherwise fill the log.
     log.debug("Unknown catalogue reference: {}", exception.getMessage());
     return problem(ProblemType.NOT_FOUND, exception.getMessage(), request);
   }
@@ -163,8 +169,6 @@ public class ApiExceptionHandler {
   @ExceptionHandler(AccessDeniedException.class)
   public ProblemDetail handleAccessDenied(
       AccessDeniedException exception, HttpServletRequest request) {
-    // At WARN: a denial is either an attack or a misconfigured role, and both are
-    // worth seeing. The caller is already in the MDC of every line (REQ-NFR-041).
     log.warn("Forbidden: {}", exception.getMessage());
     return problem(ProblemType.FORBIDDEN, "Your role does not permit this operation.",
         request);
@@ -298,9 +302,6 @@ public class ApiExceptionHandler {
   @ExceptionHandler(RoleEscalationException.class)
   public ProblemDetail handleRoleEscalation(
       RoleEscalationException exception, HttpServletRequest request) {
-    // REQ-TEN-010 asks for the attempt to be logged as well as rejected. It is
-    // logged in the application layer too; this line is what an operator reading
-    // the access log sees, with the caller already in the MDC.
     log.warn("Refused a role grant: {}", exception.getMessage());
     ProblemDetail problem =
         problem(
@@ -485,6 +486,24 @@ public class ApiExceptionHandler {
   }
 
   /**
+   * Answers a webhook target at an address the tenant already uses (REQ-API-010).
+   *
+   * <p>A {@code 409} rather than the constraint violation reaching the surface as a {@code 500}.
+   * The address is the tenant's own configuration and reaches the response as it was sent, which is
+   * what makes the message actionable — and it is not a secret: the signing secret is the secret,
+   * and it is in a different column and in no response at all.
+   *
+   * @param exception the refusal, carrying the address
+   * @param request the request
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(WebhookTargets.WebhookTargetUrlTakenException.class)
+  public ProblemDetail handleWebhookTargetUrlTaken(
+      WebhookTargets.WebhookTargetUrlTakenException exception, HttpServletRequest request) {
+    return problem(ProblemType.RESOURCE_EXISTS, exception.getMessage(), request);
+  }
+
+  /**
    * Answers a location whose name a sibling already has.
    *
    * <p>{@code 409} and not {@code 422}: a client branching on the status has to be able to tell a
@@ -562,6 +581,56 @@ public class ApiExceptionHandler {
   }
 
   /**
+   * Answers a federated callback whose flow is gone (REQ-AUTH-005).
+   *
+   * <p>Unknown, expired and already spent are one answer. Telling them apart would let
+   * somebody probe for sign-ins in flight, and the caller's way out is the same in all three:
+   * begin again.
+   *
+   * @param exception what was raised
+   * @param request the request, for the instance URI
+   * @return the problem document
+   */
+  @ExceptionHandler(FederatedSignIn.UnknownFlowException.class)
+  public ProblemDetail handleUnknownFederatedFlow(
+      FederatedSignIn.UnknownFlowException exception, HttpServletRequest request) {
+    return problem(ProblemType.FEDERATED_FLOW_UNKNOWN, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a federated sign-in with no provider to perform it (REQ-PLG-007).
+   *
+   * <p>Not installed and installed-but-unreachable are one answer, because what a stranger at
+   * a login page learns from the difference is something about the deployment rather than
+   * about their own request.
+   *
+   * @param exception what was raised
+   * @param request the request, for the instance URI
+   * @return the problem document
+   */
+  @ExceptionHandler(FederatedSignIn.NoIdentityProviderException.class)
+  public ProblemDetail handleNoIdentityProvider(
+      FederatedSignIn.NoIdentityProviderException exception, HttpServletRequest request) {
+    return problem(ProblemType.PLUGIN_UNAVAILABLE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a federated flow that finished and is refused (REQ-AUTH-006).
+   *
+   * <p>The refusal already knows which of the four it is; this turns it into the document, so
+   * that every error on this surface keeps one shape (REQ-API-003).
+   *
+   * @param exception what was raised, carrying the type
+   * @param request the request, for the instance URI
+   * @return the problem document
+   */
+  @ExceptionHandler(FederatedAuthController.FederatedRefusedException.class)
+  public ProblemDetail handleFederatedRefusal(
+      FederatedAuthController.FederatedRefusedException exception, HttpServletRequest request) {
+    return problem(exception.type(), exception.getMessage(), request);
+  }
+
+  /**
    * Answers a role being used without the second factor it requires (REQ-AUTH-003).
    *
    * <p>The detail says what to do about it, and it is the exception's own message rather than a
@@ -624,23 +693,159 @@ public class ApiExceptionHandler {
   }
 
   /**
-   * Answers a login the throttle is holding back.
+   * Answers a reset token that is unknown, expired or already spent (REQ-SEC-018).
+   *
+   * <p>One answer for all three. Telling them apart would tell somebody holding a stolen token
+   * which one they have, and the useful half — "ask for a new one" — is the same either way.
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(de.greluc.homeinv.identity.api.PasswordReset.InvalidResetTokenException.class)
+  public ProblemDetail handleInvalidResetToken(
+      de.greluc.homeinv.identity.api.PasswordReset.InvalidResetTokenException exception,
+      HttpServletRequest request) {
+    return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a password the policy refuses (REQ-SEC-011).
+   *
+   * <p>The message is for the person choosing it rather than for a client to branch on: there is
+   * one rule, and saying what it is beats a token they would have to look up.
+   *
+   * @param exception the refusal, carrying what to tell them
+   * @param request the request, for the instance URI
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(WeakPasswordException.class)
+  public ProblemDetail handleWeakPassword(
+      WeakPasswordException exception, HttpServletRequest request) {
+    return problem(ProblemType.VALIDATION_FAILED, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a tus request that is not shaped like one (REQ-MED-008).
+   *
+   * <p>The status comes from the exception rather than from here: a missing protocol version is a
+   * {@code 412} and a missing declared length is a {@code 400}, and flattening the two would hide
+   * which mistake was made from the only party that can fix it.
+   *
+   * @param exception the refusal, carrying its own problem type
+   * @param request the request
+   * @param response the response, which carries the protocol header
+   * @return the problem detail the exception names
+   */
+  @ExceptionHandler(TusRequestException.class)
+  public ProblemDetail handleTusRequest(
+      TusRequestException exception, HttpServletRequest request, HttpServletResponse response) {
+    response.setHeader("Tus-Resumable", MediaUploadController.TUS_VERSION);
+    return problem(exception.getType(), exception.getMessage(), request);
+  }
+
+  /**
+   * Tells a resumable upload where it actually is (REQ-MED-008).
+   *
+   * <p>The header is the part that matters: a client whose connection dropped mid-chunk does not
+   * know how much arrived, and the answer is not to guess but to be told. The problem document is
+   * there because REQ-API-003 admits no HTTP surface without one; a tus client reads the status and
+   * the header and ignores the body.
+   *
+   * @param exception the refusal, carrying the authoritative offset
+   * @param request the request
+   * @param response the response, which is where the header goes
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(OffsetMismatchException.class)
+  public ProblemDetail handleOffsetMismatch(
+      OffsetMismatchException exception, HttpServletRequest request, HttpServletResponse response) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.UPLOAD_OFFSET_MISMATCH,
+            "The upload is at a different offset. Continue from the one in Upload-Offset.",
+            request);
+    problem.setProperty("uploadOffset", exception.actual());
+    response.setHeader("Upload-Offset", Long.toString(exception.actual()));
+    response.setHeader("Tus-Resumable", MediaUploadController.TUS_VERSION);
+    return problem;
+  }
+
+  /**
+   * Refuses a second concurrent write to one upload (REQ-MED-008).
+   *
+   * @param exception what the store said
+   * @param request the request
+   * @param response the response, which carries the protocol header
+   * @return a {@code 423} problem detail
+   */
+  @ExceptionHandler(UploadBusyException.class)
+  public ProblemDetail handleUploadBusy(
+      UploadBusyException exception, HttpServletRequest request, HttpServletResponse response) {
+    response.setHeader("Tus-Resumable", MediaUploadController.TUS_VERSION);
+    return problem(
+        ProblemType.UPLOAD_IN_PROGRESS,
+        "Another request is writing to this upload. Try again in a moment.",
+        request);
+  }
+
+  /**
+   * Answers a login the throttle is holding back (REQ-SEC-012).
    *
    * <p>Carries {@code Retry-After} in seconds, so a client waits the right amount instead of
    * retrying immediately and making the delay grow. Distinct from a wrong password on purpose: a
    * client that cannot tell them apart will hammer.
    *
+   * <p>The header <b>and</b> the property, because they are read by different things: a browser
+   * and every HTTP library know what {@code Retry-After} means without being told, and a problem
+   * document is what a client of this API parses. Until 2026-09-21 only the property was written,
+   * which made the requirement's "the response is 429 with {@code Retry-After}" false of the one
+   * endpoint that had a throttle at all.
+   *
    * @param exception the throttle decision, carrying the remaining wait
    * @param request the request
+   * @param response the response, which is where a header can still be set from here
    * @return a {@code 429} problem detail with the wait in seconds
    */
   @ExceptionHandler(TooManyAttemptsException.class)
   public ProblemDetail handleTooManyAttempts(
-      TooManyAttemptsException exception, HttpServletRequest request) {
+      TooManyAttemptsException exception,
+      HttpServletRequest request,
+      HttpServletResponse response) {
     ProblemDetail problem =
-        problem(ProblemType.RATE_LIMITED, "Too many failed login attempts. Try again shortly.",
+        problem(ProblemType.RATE_LIMITED, "Too many attempts. Try again shortly.",
             request);
-    problem.setProperty("retryAfterSeconds", exception.getRetryAfter().toSeconds());
+    long seconds = exception.getRetryAfter().toSeconds();
+    problem.setProperty("retryAfterSeconds", seconds);
+    response.setHeader("Retry-After", Long.toString(seconds));
+    return problem;
+  }
+
+  /**
+   * Answers a caller who is simply going too fast (REQ-SEC-064).
+   *
+   * <p>The same problem type as the login throttle above, and that is deliberate: which limit was
+   * reached — the per-user one, the per-tenant one, the per-address one or the stricter one on the
+   * authentication endpoints — is an operational detail, and what a client does about any of them
+   * is identical. The {@code RateLimit} headers the interceptor already wrote say which scope it
+   * was, for anybody who wants to know.
+   *
+   * @param exception the refusal, carrying the wait and the scope
+   * @param request the request
+   * @param response the response, for {@code Retry-After}
+   * @return a {@code 429} problem detail
+   */
+  @ExceptionHandler(RateLimitedException.class)
+  public ProblemDetail handleRateLimited(
+      RateLimitedException exception, HttpServletRequest request, HttpServletResponse response) {
+    ProblemDetail problem =
+        problem(
+            ProblemType.RATE_LIMITED,
+            "Too many requests. Wait for the time in Retry-After and try again.",
+            request);
+    long seconds = Math.max(1, exception.getRetryAfter().toSeconds());
+    problem.setProperty("retryAfterSeconds", seconds);
+    response.setHeader("Retry-After", Long.toString(seconds));
     return problem;
   }
 
@@ -720,6 +925,82 @@ public class ApiExceptionHandler {
   }
 
   /**
+   * Answers a request that cannot be served while the item is out (REQ-LIFE-005).
+   *
+   * <p>Raised by two places -- lending something already lent, and trashing something somebody
+   * else has -- and answered identically, because the caller does the same thing about both.
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(ItemLentException.class)
+  public ProblemDetail handleItemLent(ItemLentException exception, HttpServletRequest request) {
+    return problem(ProblemType.ITEM_LENT, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a request the item's state refuses (04 §4.4, REQ-LIFE-007).
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(ItemStateException.class)
+  public ProblemDetail handleItemState(ItemStateException exception, HttpServletRequest request) {
+    return problem(ProblemType.ITEM_STATE, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a reminder rule naming a trigger nothing serves here (REQ-NOTI-003).
+   *
+   * <p>Refused when the rule is written rather than when it runs, so the person who can still pick
+   * another trigger is the one who hears about it.
+   *
+   * @param exception the refusal, whose message names the triggers that do work
+   * @param request the request, for the instance URI
+   * @return a {@code 422} problem detail
+   */
+  @ExceptionHandler(UnservedTriggerException.class)
+  public ProblemDetail handleUnservedTrigger(
+      UnservedTriggerException exception, HttpServletRequest request) {
+    return problem(ProblemType.UNSERVED_TRIGGER, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers an archive asked for before it was built (REQ-PORT-005).
+   *
+   * @param exception the refusal, whose message names the state instead
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(ExportNotReadyException.class)
+  public ProblemDetail handleExportNotReady(
+      ExportNotReadyException exception, HttpServletRequest request) {
+    return problem(ProblemType.EXPORT_NOT_READY, exception.getMessage(), request);
+  }
+
+  /**
+   * Answers a document asked for on an instance that cannot render one (REQ-LIFE-016).
+   *
+   * <p>A {@code 409} rather than a {@code 501}, because the report is there: the figures and the
+   * table are served by the endpoints beside this one, and what is missing is a plugin an operator
+   * installs. The detail says so, which is what tells a caller to use the other two rather than to
+   * report a fault.
+   *
+   * @param exception the refusal
+   * @param request the request, for the instance URI
+   * @return a {@code 409} problem detail
+   */
+  @ExceptionHandler(
+      de.greluc.homeinv.inventory.api.InsuranceDocuments.NoRendererException.class)
+  public ProblemDetail handleNoRenderer(
+      de.greluc.homeinv.inventory.api.InsuranceDocuments.NoRendererException exception,
+      HttpServletRequest request) {
+    return problem(ProblemType.NO_DOCUMENT_RENDERER, exception.getMessage(), request);
+  }
+
+  /**
    * Answers a move that would break the tree (REQ-CORE-045, REQ-CORE-047).
    *
    * <p>The detail says which of the two it was — a place moving into itself, or a category that
@@ -767,11 +1048,6 @@ public class ApiExceptionHandler {
             ProblemType.VALIDATION_FAILED,
             "One or more attributes do not match the type this was written against.",
             request);
-    // The paths, because REQ-CORE-005's acceptance is "422 with the field path" —
-    // a client told only that something is invalid has to guess which field to
-    // mark. The message travels with each one and the VALUE never does: a
-    // rejected attribute set may hold a licence key, and a problem document is
-    // logged by proxies.
     problem.setProperty(
         "errors",
         exception.getViolations().stream()
@@ -826,9 +1102,6 @@ public class ApiExceptionHandler {
    */
   @ExceptionHandler(MalwareDetectedException.class)
   public ProblemDetail handleMalware(MalwareDetectedException exception, HttpServletRequest request) {
-    // DEBUG and not WARN. The finding itself was logged at WARN by the worker that
-    // made it, once; this is the caller being told about it, which happens on
-    // every poll and is not a second security event.
     log.debug("Reporting a scanner finding to a caller: {}", exception.getSignature());
     return problem(
         ProblemType.MALWARE_DETECTED,
@@ -855,9 +1128,6 @@ public class ApiExceptionHandler {
   @ExceptionHandler(ScannerUnavailableException.class)
   public ProblemDetail handleScannerDown(
       ScannerUnavailableException exception, HttpServletRequest request) {
-    // INFO, because on this path it is ordinary: a client polling a file the
-    // worker has not reached yet gets one of these per poll. The scanner actually
-    // being unreachable is logged by the worker, which is the half that knows.
     log.info("A caller asked for a file that has no verdict yet: {}", exception.getMessage());
     return problem(
         ProblemType.SCAN_UNAVAILABLE,
@@ -1008,21 +1278,12 @@ public class ApiExceptionHandler {
   public ProblemDetail handleUnreadable(
       HttpMessageNotReadableException exception, HttpServletRequest request) {
 
-    // A body that stopped because it hit the limit is not a parse failure either.
-    // `JsonBodyLimitFilter` refuses a declared Content-Length before anything is
-    // read; a chunked body is only known to be oversized while Jackson is reading
-    // it, and what reaches here is the limit's exception wrapped in a parse one.
     for (Throwable cause = exception.getCause(); cause != null; cause = cause.getCause()) {
       if (cause instanceof PayloadTooLargeException) {
         return handleTooLarge((PayloadTooLargeException) cause, request);
       }
     }
 
-    // An unknown field is not a parse failure and must not be answered as one.
-    // The body was well-formed; it named something this endpoint does not accept,
-    // and REQ-SEC-029 makes that a rejection rather than something to ignore. A
-    // client sending `tenantId` or `version` in a create request needs to be told
-    // which word was refused, or they will believe it was honoured.
     String unknown = unknownFieldOf(exception);
     if (unknown != null) {
       log.debug("Unknown field in request body: {}", unknown);
@@ -1033,8 +1294,6 @@ public class ApiExceptionHandler {
       return problem;
     }
 
-    // The parser's own message can quote the payload. It is not echoed, because a
-    // malformed body may contain whatever the sender put in it.
     log.debug("Unreadable request body", exception);
     return problem(ProblemType.MALFORMED_REQUEST, "The request body could not be parsed.",
         request);
@@ -1099,8 +1358,6 @@ public class ApiExceptionHandler {
       return ResponseEntity.status(refused.getStatus()).body(refused);
     }
 
-    // ERROR, with the stack trace: this is the branch that means the application
-    // met something it has no answer for, and every occurrence is worth a look.
     log.error("Unhandled exception while serving {}", request.getRequestURI(), exception);
     ProblemDetail unexpected = problem(ProblemType.INTERNAL_ERROR, Problems.INTERNAL_DETAIL, request);
     return ResponseEntity.status(unexpected.getStatus()).body(unexpected);

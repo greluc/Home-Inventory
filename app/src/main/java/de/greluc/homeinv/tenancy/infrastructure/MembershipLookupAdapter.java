@@ -32,9 +32,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MembershipLookupAdapter implements MembershipLookup {
 
-  // LIMIT 1, not `.optional()` on the whole result: the function returns every
-  // membership in order, and `optional()` throws when there is more than one row.
-  // At stage 0 that never happens, which is exactly why it would be found later.
   private static final String PRIMARY =
       "select tenant_id, role, tenant_name, role_definition_id, scope_location_id"
           + " from tenancy.tenants_of_user(?) limit 1";

@@ -115,5 +115,16 @@
     "usePasskey": "Use a passkey instead",
     "passkeyLabel": "This device",
     "passkeyFailed": "This device could not create a passkey."
+  },
+  "about": {
+    "version": "Version {{version}} ({{commit}})",
+    "source": "Source code",
+    "licence": "Licensed under {{licence}}",
+    "notices": "Third-party notices",
+    "noticesClose": "Close",
+    "noticesServer": "Server ({{count}} components)",
+    "noticesClient": "Web client ({{count}} components)",
+    "noticesLicences": "Licence texts",
+    "noticesUnavailable": "The notices could not be loaded."
   }
 }

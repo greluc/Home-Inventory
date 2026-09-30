@@ -15,7 +15,6 @@
   ],
   "prConcurrentLimit": 5,
   "rebaseWhen": "behind-base-branch",
-  "_comment_automerge": "Patch versions merge themselves on a green build; anything larger is read by a human. Rationale in docs/architecture/12-security.md §12.10.",
   "packageRules": [
     {
       "description": "Patch updates merge automatically once CI is green.",

@@ -58,8 +58,6 @@ final class MerkleRoot {
         parents.add(pair(level.get(index), level.get(index + 1)));
       }
       if (level.size() % 2 == 1) {
-        // Promoted unchanged. Hashing it with itself is what makes two different
-        // lists collide.
         parents.add(level.getLast());
       }
       level = parents;

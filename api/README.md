@@ -1,6 +1,24 @@
 # api/
 
-The **OpenAPI 3.1 document** — [`openapi.yaml`](openapi.yaml).
+The **OpenAPI 3.1 document** — [`openapi.yaml`](openapi.yaml) — and the clients
+generated from it.
+
+```
+api/
+├── openapi.yaml        generated from the running application, committed (ADR-0049)
+├── spectral.yaml       the ruleset it is linted against
+├── problems/           one document per `problem.type`, rendered from the registry
+└── clients/kotlin/     the generated Kotlin Multiplatform client (REQ-API-002)
+```
+
+The **TypeScript** client is not here but in [`web/src/generated/`](../web/src/generated/),
+beside the only thing that consumes it and inside the toolchain that regenerates it
+(`npm run client:generate`). The Kotlin one is here because it is a Gradle subproject
+of its own, `:api-client-kotlin`, with no consumer in this repository yet — the apps of
+[ADR-0013](../docs/adr/0013-mobile-apps.md) are its reason for existing, and it is
+compiled in CI so the contract is proved to generate into the place they will use it
+from. Both are **committed and drift-checked**; see
+[ADR-0080](../docs/adr/0080-a-generated-client-is-committed-and-the-document-must-earn-it.md).
 
 ## It is generated, committed, and checked against the code
 

@@ -60,17 +60,13 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     assertThat(inTenant(tenant, () -> sealed.open(item, "licenceKey", value)))
         .isEqualTo("not a real licence key");
 
-    // Another field of the same item.
     assertThatThrownBy(() -> inTenant(tenant, () -> sealed.open(item, "serialNumber", value)))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("did not verify");
 
-    // Another item of the same tenant. This is the copy-into-my-own-record case.
     assertThatThrownBy(() -> inTenant(tenant, () -> sealed.open(otherItem, "licenceKey", value)))
         .isInstanceOf(IllegalStateException.class);
 
-    // Another tenant entirely, which fails twice over: its data key is not this
-    // one, and the tenant id is in the authenticated data.
     assertThatThrownBy(() -> inTenant(other, () -> sealed.open(item, "licenceKey", value)))
         .isInstanceOf(IllegalStateException.class);
   }
@@ -86,13 +82,10 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
 
     assertThat(raw[0]).as("format version").isEqualTo((byte) 0x01);
     assertThat(Byte.toUnsignedInt(raw[1])).as("the tenant's first data key").isEqualTo(1);
-    // Two header bytes, a 12-byte nonce, at least a 16-byte tag.
     assertThat(raw.length).isGreaterThanOrEqualTo(2 + 12 + 16);
     assertThat(sealed.isSealed(value)).isTrue();
     assertThat(sealed.isSealed("not a real licence key")).isFalse();
 
-    // Flipping the key version is refused rather than read under another key:
-    // the header is authenticated, not merely present.
     raw[1] = 2;
     String tampered = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
     assertThatThrownBy(() -> inTenant(tenant, () -> sealed.open(item, "licenceKey", tampered)))
@@ -105,15 +98,9 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     UUID tenant = newTenant("crypto-kek@example.org");
     UUID item = UUID.randomUUID();
 
-    // The test profile runs with master key version 2 active and version 1
-    // mounted beside it, which is the state a deployment is in during a rotation.
     String value = inTenant(tenant, () -> sealed.seal(item, "licenceKey", "before the rotation"));
     assertThat(kekVersionOf(tenant, 1)).isEqualTo(2);
 
-    // Put the tenant's data key back under version 1, as it was before the new
-    // master was mounted. Wrapped by the TEST, from the spec: a rotation that
-    // only ever re-wrapped what this code wrote would prove the code agrees with
-    // itself.
     byte[] material = unwrapInTest(wrappedDekOf(tenant, 1), tenant, 2);
     storeWrapped(tenant, 1, wrapInTest(material, tenant, 1), 1);
     assertThat(kekVersionOf(tenant, 1)).isEqualTo(1);
@@ -123,8 +110,6 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     assertThat(rewrapped).as("one key was under the old master").isEqualTo(1);
     assertThat(kekVersionOf(tenant, 1)).as("and is now under the new one").isEqualTo(2);
 
-    // The whole point: the ciphertext is the same string it was -- nothing
-    // rewrote a single value -- and it still opens.
     assertThat(inTenant(tenant, () -> sealed.open(item, "licenceKey", value)))
         .isEqualTo("before the rotation");
   }
@@ -132,15 +117,10 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("cannot be relabelled as if another master key had wrapped it")
   void aWrappedKeyCannotBeReplayed() throws Exception {
-    // A tenant this process has never unwrapped a key for, so nothing is cached
-    // and the row is what answers.
     UUID tenant = newTenant("crypto-relabel@example.org");
     byte[] material = new byte[32];
     new java.security.SecureRandom().nextBytes(material);
 
-    // Wrapped under version 1 and filed as if version 2 had produced it. The
-    // version is one byte of the wrapping's authenticated data, so this is a tag
-    // that does not verify rather than a key read under the wrong master.
     storeWrapped(tenant, 1, wrapInTest(material, tenant, 1), 2);
 
     assertThatThrownBy(
@@ -158,8 +138,6 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     String underFirst = inTenant(tenant, () -> sealed.seal(item, "licenceKey", "first key"));
     assertThat(Byte.toUnsignedInt(Base64.getUrlDecoder().decode(underFirst)[1])).isEqualTo(1);
 
-    // A rotation: issue the next version and retire the one before it. Nothing
-    // rewrites the value already written -- that is what the header byte is for.
     int next =
         inTenant(
             tenant,
@@ -173,7 +151,6 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
     String underSecond = inTenant(tenant, () -> sealed.seal(item, "licenceKey", "second key"));
     assertThat(Byte.toUnsignedInt(Base64.getUrlDecoder().decode(underSecond)[1])).isEqualTo(2);
 
-    // Both open, each under its own key.
     assertThat(inTenant(tenant, () -> sealed.open(item, "licenceKey", underFirst)))
         .isEqualTo("first key");
     assertThat(inTenant(tenant, () -> sealed.open(item, "licenceKey", underSecond)))
@@ -196,8 +173,6 @@ class SensitiveFieldCryptoIT extends AbstractIntegrationTest {
         });
     assertThat(dataKeysOf(tenant)).isZero();
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The master key of one version, as the test profile mounts it.

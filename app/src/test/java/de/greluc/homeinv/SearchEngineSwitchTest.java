@@ -52,8 +52,6 @@ class SearchEngineSwitchTest {
     assertThat(properties.usesOpenSearch()).isFalse();
     assertThat(properties.getUrl()).isNull();
 
-    // `minimal` leaves the variable unset altogether, and the placeholder's own
-    // default is what it lands on.
     assertThat(new SearchEngineProperties("PostgreSQL", null, null, null, null).getEngine())
         .as("the name is read without regard to case, like HOMEINV_REGISTRATION_MODE")
         .isEqualTo(SearchEngineProperties.Engine.POSTGRESQL);
@@ -80,8 +78,6 @@ class SearchEngineSwitchTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_SEARCH_USER");
 
-    // The password is named by its VARIABLE and never by its value, here as
-    // everywhere else (REQ-SEC-050).
     assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, USER, "", PIN))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_SEARCH_PASSWORD_FILE");
@@ -90,10 +86,6 @@ class SearchEngineSwitchTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("not a URL");
 
-    // An https URL without a pin. The deployment's CA signs every service and
-    // every plugin, so trusting it alone would let any of them answer as the
-    // index (ADR-0044) - and a client that accepted that would be no worse off
-    // for having been configured carefully.
     assertThatThrownBy(() -> new SearchEngineProperties("opensearch", URL, USER, MOUNTED, ""))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HOMEINV_SEARCH_FINGERPRINT");

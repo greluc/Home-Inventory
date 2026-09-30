@@ -62,14 +62,8 @@ class FirstOwnerIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.tenantId").value(tenantId.toString()))
         .andExpect(jsonPath("$.role").value("OWNER"))
-        // The language the operator set, which the client starts in (REQ-NFR-033).
         .andExpect(jsonPath("$.locale").value("en"));
 
-    // And then it stops, because an OWNER without a second factor may not use the
-    // role (REQ-AUTH-003). The bootstrap has nobody to ask for a code, so the
-    // membership is made and the first request in the tenant says what is
-    // missing — which is the one rule that covers the bootstrap, a tenant
-    // somebody creates for themselves, and every membership made before this.
     mockMvc
         .perform(get("/api/v1/locations/categories").session(session))
         .andExpect(status().isForbidden())
@@ -78,8 +72,6 @@ class FirstOwnerIT extends AbstractIntegrationTest {
 
     enrolSecondFactor(userId);
 
-    // The tenant is usable and not merely present: its catalogue is seeded, which
-    // is what an item and a location both need before they can exist at all.
     mockMvc
         .perform(get("/api/v1/locations/categories").session(session))
         .andExpect(status().isOk())
@@ -108,9 +100,6 @@ class FirstOwnerIT extends AbstractIntegrationTest {
     String email = "Mixed.Case.Owner@Example.ORG";
 
     assertThat(users.createIfAbsent(email, "Owner", "en", PASSWORD)).isPresent();
-    // Every mail provider treats the local part as case-insensitive, so storing it
-    // as typed would let the same person create a second account by capitalising
-    // one letter and then fail to sign in with the other spelling.
     assertThat(users.createIfAbsent(email.toLowerCase(java.util.Locale.ROOT), "Owner", "en", PASSWORD))
         .isEmpty();
   }

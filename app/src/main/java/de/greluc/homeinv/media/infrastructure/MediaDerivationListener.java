@@ -88,12 +88,9 @@ public class MediaDerivationListener {
   @RabbitListener(
       bindings =
           @QueueBinding(
-              // Durable and named, so a worker that is restarted finds the work
-              // that arrived while it was down. An anonymous exclusive queue
-              // would lose every message published during a deployment.
               value = @Queue(name = "homeinv.media.derivation", durable = "true"),
               exchange = @Exchange(name = "homeinv.media", type = "topic", durable = "true"),
-              key = "media-object-stored"))
+              key = "media-object-stored.v1"))
   public void onMediaObjectStored(MediaObjectStored event, Message message) {
     TenantContext.runAs(
         event.tenantId(),
@@ -102,18 +99,12 @@ public class MediaDerivationListener {
           try {
             state = scanner.scan(event.tenantId(), event.mediaObjectId());
           } catch (ScannerUnavailableException noVerdict) {
-            // Acknowledged and recorded rather than rethrown. Rethrowing returns
-            // the message to the broker immediately and it comes straight back,
-            // which is a hot loop against a scanner that is down — the delay
-            // queue is what makes the retry a retry (ADR-0054).
             scanner.recordScanFailed(event.tenantId(), event.mediaObjectId());
             scheduleRetry(event, message, noVerdict);
             return;
           }
 
           if (state != ScanState.CLEAN) {
-            // INFECTED, or the object was gone before this ran. Either way there
-            // is nothing to derive and nothing to retry.
             return;
           }
 

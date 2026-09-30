@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.tenancy.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Page;
 import java.time.Instant;
 import java.util.List;
@@ -38,9 +39,9 @@ public interface MembershipAdministration {
       String email,
       String displayName,
       String role,
-      UUID roleDefinitionId,
+      @Nullable UUID roleDefinitionId,
       String roleName,
-      UUID scopeLocationId,
+      @Nullable UUID scopeLocationId,
       Instant joinedAt) {}
 
 

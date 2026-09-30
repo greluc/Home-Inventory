@@ -1,9 +1,3 @@
-/* Conflict resolution. Two devices edited the same item offline; the user
-   decides field by field. Three versions side by side is a desktop idea, so
-   the phone gets the real design: ONE field at a time, stacked, with the
-   choice as three full-width options and a progress counter — not a
-   three-column table squeezed into 375px.
-   From 840px the same data becomes a three-column row per field. */
 .hi-conflict{display:grid;gap:var(--space-150)}
 .hi-conflict__head{display:flex;align-items:center;gap:var(--space-100);flex-wrap:wrap}
 .hi-conflict__field{border:1px solid var(--border-default);border-radius:var(--radius-2);background:var(--surface-raised);overflow:hidden}
@@ -12,7 +6,6 @@
 .hi-conflict__options{display:grid;gap:var(--space-100);padding:var(--space-150)}
 @media (min-width:840px){.hi-conflict__options{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
-/* An option = a whole card you tap, not a radio you have to hit. */
 .hi-conflict__opt{display:grid;gap:var(--space-075);align-content:start;min-height:var(--tap-min);padding:var(--space-100);background:var(--surface-input);border:1px solid var(--border-control);border-radius:var(--radius-1);text-align:left;color:var(--text-primary);cursor:pointer}
 .hi-conflict__opt:hover{border-color:var(--border-strong)}
 .hi-conflict__opt[aria-pressed="true"]{box-shadow:inset 0 0 0 1px currentColor}
@@ -29,7 +22,6 @@
 .hi-conflict__auto{display:flex;align-items:center;gap:var(--space-075);padding:var(--space-100) var(--space-150);background:var(--surface-sunken);border-top:1px solid var(--border-subtle);font-size:var(--fs-75);color:var(--text-muted)}
 .hi-conflict__progress{display:flex;align-items:center;gap:var(--space-100);font-size:var(--fs-100);color:var(--text-secondary);font-variant-numeric:tabular-nums}
 
-/* Device / sync list */
 .hi-device{display:flex;align-items:center;gap:var(--space-150);min-height:var(--tap-min);padding:var(--space-100) var(--space-150);border-bottom:1px solid var(--border-subtle)}
 .hi-device:last-child{border-bottom:0}
 .hi-device__main{display:grid;gap:2px;min-width:0;flex:1}

@@ -75,7 +75,6 @@ class PasskeyIT extends AbstractIntegrationTest {
     UUID userId = account("passkey-owner@example.org");
     MockHttpSession session = signInWithPassword("passkey-owner@example.org");
 
-    // Nothing yet, and the login is one call.
     mockMvc
         .perform(get("/api/v1/auth/mfa/enrolment").session(session))
         .andExpect(jsonPath("$.passkeys.length()").value(0));
@@ -86,10 +85,8 @@ class PasskeyIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/auth/mfa/enrolment").session(session))
         .andExpect(jsonPath("$.passkeys.length()").value(1))
         .andExpect(jsonPath("$.passkeys[0].label").value("The test's key"))
-        // A passkey counts as a second factor even with no authenticator app.
         .andExpect(jsonPath("$.totpConfirmed").value(false));
 
-    // From here the password alone is half a login.
     MockHttpSession pending = new MockHttpSession();
     mockMvc
         .perform(
@@ -101,8 +98,6 @@ class PasskeyIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-required"));
 
-    // The challenge is asked for with no session at all — that is the point of it
-    // being reachable in the middle of a login.
     String assertion = assertPasskey(pending);
     mockMvc
         .perform(
@@ -123,9 +118,6 @@ class PasskeyIT extends AbstractIntegrationTest {
     MockHttpSession session = signInWithPassword("passkey-stepup@example.org");
     registerPasskey(session, "The only factor");
 
-    // Signed in with a password alone and now holding a passkey: the role is
-    // usable — the factor exists (REQ-AUTH-003) — but nothing has been proved in
-    // this session, so a critical operation asks (REQ-AUTH-011).
     mockMvc
         .perform(get("/api/v1/tenants/" + tenantId + "/members").session(session))
         .andExpect(status().isOk());
@@ -179,7 +171,6 @@ class PasskeyIT extends AbstractIntegrationTest {
                 .content(json.writeValueAsString(Map.of("credential", assertion))))
         .andExpect(status().isNoContent());
 
-    // The same response again, against a challenge that has been spent.
     mockMvc
         .perform(
             post("/api/v1/auth/mfa/step-up")
@@ -207,7 +198,6 @@ class PasskeyIT extends AbstractIntegrationTest {
             .getContentAsString();
     String passkeyId = json.readTree(body).get("passkeys").get(0).get("id").asString();
 
-    // Signed in with a password alone: nothing has been proved in this session.
     mockMvc
         .perform(post("/api/v1/auth/mfa/passkeys/" + passkeyId + "/removal")
             .session(session)
@@ -235,11 +225,8 @@ class PasskeyIT extends AbstractIntegrationTest {
         .perform(get("/api/v1/auth/mfa/enrolment").session(session))
         .andExpect(jsonPath("$.passkeys.length()").value(0));
 
-    // And the login is one call again.
     assertThat(passwordOnlyLogin("passkey-removal@example.org")).isEqualTo(200);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Registers a passkey through both calls, with the emulator playing the browser.

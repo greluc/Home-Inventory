@@ -64,7 +64,7 @@ operator's site. The full reasoning:
 
 ## Status
 
-**Fifteen services: the fourteen ports of `REQ-PLG-001` and the health check
+**Sixteen services: the fifteen ports of `REQ-PLG-001` and the health check
 every plugin serves.** `core_api.proto` — what a plugin may call back into
 (09 §9.6) — is the one file above that does not exist yet; it belongs with the
 runtime that enforces it (`REQ-SEC-057`).

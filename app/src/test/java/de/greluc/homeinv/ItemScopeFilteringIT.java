@@ -71,8 +71,6 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
     assertThat(namesOf(fixture, "type:in:tool,book"))
         .containsExactly("Drill", "Hammer", "Refactoring");
 
-    // A key no type is called matches no item. Not a refusal: "show me the
-    // pianos" in a tenant with no piano type is a question with a true answer.
     assertThat(namesOf(fixture, "type:piano")).isEmpty();
   }
 
@@ -84,16 +82,12 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
     assertThat(namesOf(fixture, "tag:broken")).containsExactly("Hammer");
     assertThat(namesOf(fixture, "tag:heavy")).containsExactly("Drill", "Hammer");
 
-    // `in` is an "or" inside one dimension: that is what a multi-select facet
-    // does, and it has to widen rather than narrow.
     assertThat(namesOf(fixture, "tag:in:broken,borrowed"))
         .containsExactly("Hammer", "Refactoring");
 
-    // Two separate filters are an "and", because every filter given must hold.
     assertThat(namesOf(fixture, "tag:heavy", "tag:broken")).containsExactly("Hammer");
     assertThat(namesOf(fixture, "tag:heavy", "tag:borrowed")).isEmpty();
 
-    // Across dimensions, likewise.
     assertThat(namesOf(fixture, "tag:heavy", "type:tool")).containsExactly("Drill", "Hammer");
     assertThat(namesOf(fixture, "tag:heavy", "type:book")).isEmpty();
 
@@ -105,9 +99,6 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
   void aMergedTagStillFinds() throws Exception {
     Fixture fixture = aShed("merged");
 
-    // "broken" becomes "heavy". The merge repoints the assignments and leaves
-    // "broken" as a tombstone pointing at what it became (REQ-CORE-063), so the
-    // hammer is now tagged "heavy" and nothing is tagged "broken" at all.
     mockMvc
         .perform(
             post("/api/v1/tags/" + fixture.broken() + "/merge-into/" + fixture.heavy())
@@ -115,11 +106,6 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
                 .with(csrf()))
         .andExpect(status().isOk());
 
-    // The filter follows that pointer, which is the same redirect a client
-    // holding the old id gets. Somebody who saved "everything broken" as a
-    // filter still finds the hammer, instead of an empty list that looks like an
-    // answer — and it is the drill too now, because that is what the merge
-    // means.
     assertThat(namesOf(fixture, "tag:broken")).containsExactly("Drill", "Hammer");
     assertThat(namesOf(fixture, "tag:heavy")).containsExactly("Drill", "Hammer");
   }
@@ -129,14 +115,11 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
   void byPlace() throws Exception {
     Fixture fixture = aShed("place");
 
-    // The exact shelf, and nothing below it.
     assertThat(namesOf(fixture, "location:" + fixture.shelf())).containsExactly("Hammer");
 
-    // The whole shed, which is two levels up from the hammer.
     assertThat(namesOf(fixture, "location:subtree:" + fixture.shed()))
         .containsExactly("Drill", "Hammer");
 
-    // And a subtree with nothing in it.
     assertThat(namesOf(fixture, "location:subtree:" + fixture.study()))
         .containsExactly("Refactoring");
   }
@@ -146,21 +129,15 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
   void whatIsRefused() throws Exception {
     Fixture fixture = aShed("refusals");
 
-    // A dimension nobody defined. Named rather than ignored: a caller who asked
-    // to narrow by colour and silently got everything has a wrong list.
     refused(fixture, "colour:red");
     refused(fixture, "attribute.manufacturer:Stanley");
 
-    // A location is named by id, and a key that is not one is a mistake worth
-    // saying out loud rather than a subtree of nothing.
     refused(fixture, "location:the-shed");
     refused(fixture, "location:subtree:not-a-uuid");
 
-    // The ordering operators are for attributes: a type is a set, not a scale.
     refused(fixture, "type:gte:tool");
     refused(fixture, "tag:lt:heavy");
 
-    // And a subtree is only a thing a location has.
     refused(fixture, "type:subtree:tool");
   }
 
@@ -178,8 +155,6 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
         .andExpect(status().isBadRequest());
     mockMvc.perform(request(fixture, 1, cursor, "type:tool")).andExpect(status().isOk());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Every name a narrowed list gives, paging to the end.
@@ -231,8 +206,6 @@ class ItemScopeFilteringIT extends AbstractIntegrationTest {
     }
     return cursor == null ? request : request.param("cursor", cursor);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A tenant holding two types, three tags and a shed with a shelf in it.

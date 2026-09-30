@@ -63,8 +63,6 @@ public class DefaultMembershipAdministration implements MembershipAdministration
       rows = memberships.findPageAfter(from.createdAt(), from.id(), Limit.of(size));
     }
 
-    // One lookup for the whole page. A directory call per row is what turns a
-    // page of twenty into twenty round trips, and a member list is read often.
     Map<UUID, AccountRegistry.Account> people =
         accounts.byIds(rows.stream().map(Membership::getUserId).toList());
 
@@ -101,9 +99,6 @@ public class DefaultMembershipAdministration implements MembershipAdministration
     Membership membership = liveMembership(userId);
     RoleRef actorRole = refOf(liveMembership(actor));
 
-    // A definition whose base is not the role being given would be two answers to
-    // what this person may do, and the one that applied would depend on which of
-    // the two a later reader happened to look at.
     String base = role;
     if (roleDefinitionId != null) {
       base =
@@ -114,9 +109,6 @@ public class DefaultMembershipAdministration implements MembershipAdministration
               .name();
     }
 
-    // Both directions are checked: the role being granted, and the role being
-    // taken away. An administrator who could demote an owner could demote every
-    // owner and then be the only person left who may invite.
     grants.requireGrantable(actorRole, new RoleRef(base, roleDefinitionId));
     grants.requireGrantable(actorRole, refOf(membership));
 
@@ -124,12 +116,6 @@ public class DefaultMembershipAdministration implements MembershipAdministration
       throw new LastOwnerException();
     }
 
-    // An administrator who is confined themselves does not confine anybody else.
-    // The obvious escalation is not a subtle one — they would simply hand out a
-    // membership with NO scope — and comparing two subtrees here would mean this
-    // block asking `locations` a question, which would close a cycle: `locations`
-    // already asks this side whether a place still holds anything. Refusing the
-    // whole operation is the answer that needs no dependency and no judgement.
     Membership actorMembership = liveMembership(actor);
     if (actorMembership.getScopeLocationId() != null) {
       throw new RoleEscalationException(
@@ -239,8 +225,6 @@ public class DefaultMembershipAdministration implements MembershipAdministration
     return roles
         .byId(membership.getRoleDefinitionId())
         .map(RoleAdministration.RoleDefinitionView::name)
-        // Removed while somebody still held it: the membership falls back to the
-        // base, which is exactly what their permissions do too.
         .orElse(membership.getRole());
   }
 }

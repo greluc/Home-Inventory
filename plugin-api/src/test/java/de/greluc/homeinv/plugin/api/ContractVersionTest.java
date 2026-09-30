@@ -24,14 +24,11 @@ class ContractVersionTest {
   @Test
   @DisplayName("covers the served version, or does not")
   void theOrdinaryCases() {
-    // 09 §9.3's own example, against the version this core serves.
     assertThat(ContractVersion.covers(">=1.0.0 <2.0.0", "1.0.0")).isTrue();
     assertThat(ContractVersion.covers(">=1.0.0 <2.0.0", "1.7.3")).isTrue();
     assertThat(ContractVersion.covers(">=1.0.0 <2.0.0", "2.0.0")).isFalse();
     assertThat(ContractVersion.covers(">=1.2.0 <2.0.0", "1.1.9")).isFalse();
 
-    // The core's own version is covered by the example, which is the case that
-    // matters: a plugin written against the published example works here.
     assertThat(ContractVersion.covers(">=1.0.0 <2.0.0")).isTrue();
   }
 
@@ -49,8 +46,6 @@ class ContractVersionTest {
   @Test
   @DisplayName("orders by each part and not by the string")
   void ordering() {
-    // "1.10.0" sorts before "1.9.0" as text and after it as a version, which is
-    // the mistake a string comparison makes and this one does not.
     assertThat(ContractVersion.covers(">=1.9.0", "1.10.0")).isTrue();
     assertThat(ContractVersion.covers("<1.9.0", "1.10.0")).isFalse();
   }
@@ -58,8 +53,6 @@ class ContractVersionTest {
   @Test
   @DisplayName("refuses a range it cannot read, rather than assuming it matches")
   void whatIsRefused() {
-    // Assuming a match is how a plugin runs against a contract it was never
-    // built for. The failure of this decision is a plugin that does not start.
     assertThatThrownBy(() -> ContractVersion.covers("^1.0.0", "1.0.0"))
         .isInstanceOf(InvalidManifestException.class);
     assertThatThrownBy(() -> ContractVersion.covers("1.x", "1.0.0"))

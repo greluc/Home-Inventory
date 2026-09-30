@@ -46,8 +46,13 @@ import org.testcontainers.utility.MountableFile;
  *
  * <p>The repository root is about a gigabyte — {@code blobstore/target} alone is 800 MB of
  * incremental Rust artefacts — and Testcontainers tars whatever directory it is given, ignoring
- * {@code .dockerignore}. So the four files and two directories the image actually needs are copied
+ * {@code .dockerignore}. So the five files and two directories the image actually needs are copied
  * into a temporary root, which takes milliseconds instead of minutes.
+ *
+ * <p>The cost of that is a list that has to be kept in step with what the crate compiles, and this
+ * test is what notices: adding {@code include_str!} of the licence notice (REQ-CON-013) broke the
+ * image build here on 2026-09-22 and nowhere else, because every other build has the whole crate
+ * directory.
  */
 @DisplayName("The blob store contract")
 class BlobStoreContractIT {
@@ -72,11 +77,6 @@ class BlobStoreContractIT {
     blobstore =
         new GenericContainer<>(
                 new ImageFromDockerfile("home-inv-blobstore-contract", false)
-                    // The whole assembled tree as the context, with the Dockerfile
-                    // at its root: `withDockerfile` alone would make the
-                    // Dockerfile's own directory the context, and every `COPY
-                    // blobstore/...` in it would then be looking one level too
-                    // deep.
                     .withFileFromPath(".", context))
             .withExposedPorts(8100)
             .withCopyFileToContainer(
@@ -90,9 +90,6 @@ class BlobStoreContractIT {
                 blobstore.getHost() + ":" + blobstore.getMappedPort(8100),
                 serverIdentity.fingerprint(),
                 clientIdentity.bundle().toString(),
-                // The container answers on localhost and its certificate says
-                // `blobstore`. gRPC verifies the name as well as the pin, and the
-                // two answer different questions.
                 "blobstore"));
   }
 
@@ -124,28 +121,23 @@ class BlobStoreContractIT {
   }
 
   @Test
-  @DisplayName("stores a duplicate once, and says so")
+  @DisplayName("stores a duplicate once, and says so (REQ-MED-007)")
   void duplicatesAreStoredOnce() throws IOException {
     byte[] content = "the same file twice".getBytes(StandardCharsets.UTF_8);
     String digest = sha256(content);
 
     assertThat(store.store(TENANT, digest, new ByteArrayInputStream(content))).isTrue();
-    // False means "already there". The caller uses it to skip work, and a store
-    // that always said true would make the same photograph cost a second copy.
     assertThat(store.store(TENANT, digest, new ByteArrayInputStream(content))).isFalse();
   }
 
   @Test
-  @DisplayName("never deduplicates across tenants (ADR-0032)")
+  @DisplayName("never deduplicates across tenants (REQ-MED-007, ADR-0032)")
   void tenantsDoNotShareBlobs() throws IOException {
     byte[] content = "bytes two tenants happen to share".getBytes(StandardCharsets.UTF_8);
     String digest = sha256(content);
     UUID otherTenant = UUID.randomUUID();
 
     assertThat(store.store(TENANT, digest, new ByteArrayInputStream(content))).isTrue();
-    // A global namespace would have made "do you have this file" answerable
-    // across the tenant boundary, and would have let the second tenant inherit
-    // the first one's malware verdict.
     assertThat(store.exists(otherTenant, digest)).isFalse();
     assertThat(store.store(otherTenant, digest, new ByteArrayInputStream(content))).isTrue();
   }
@@ -156,9 +148,6 @@ class BlobStoreContractIT {
     byte[] content = "these bytes".getBytes(StandardCharsets.UTF_8);
     String wrongDigest = sha256("some other bytes".getBytes(StandardCharsets.UTF_8));
 
-    // Believing the caller's hash would make this content-addressed in name
-    // only, and the first corrupted transfer would be indistinguishable from a
-    // different file.
     assertThatThrownBy(() -> store.store(TENANT, wrongDigest, new ByteArrayInputStream(content)))
         .isInstanceOf(IOException.class)
         .hasMessageContaining("does not hash");
@@ -184,18 +173,12 @@ class BlobStoreContractIT {
     store.delete(TENANT, digest);
     assertThat(store.exists(TENANT, digest)).isFalse();
 
-    // Deletion is retried after a partial failure, and a retry that failed
-    // because the work was already done would be a retry nobody could make
-    // succeed.
     store.delete(TENANT, digest);
   }
 
   @Test
   @DisplayName("refuses a client whose certificate the server does not trust")
   void anUntrustedClientIsRefused() throws Exception {
-    // A second authority: a certificate that is perfectly valid and signed by
-    // somebody else. This is the case ADR-0044 is about — reachability on the
-    // internal segment is not authorisation.
     TestPki stranger = TestPki.create();
     TestPki.Identity strangerIdentity = stranger.issue("api");
 
@@ -219,9 +202,6 @@ class BlobStoreContractIT {
   @Test
   @DisplayName("refuses a server whose certificate does not match the pin")
   void aWrongPinIsRefused() throws Exception {
-    // The same running service, a different expected fingerprint. Without the
-    // pin, any holder of a deployment certificate could stand up a service on
-    // the segment and receive every tenant's media (REQ-SEC-056).
     String someoneElsesFingerprint = pki.issue("impostor").fingerprint();
 
     GrpcBlobStore pickyClient =
@@ -241,8 +221,6 @@ class BlobStoreContractIT {
     }
   }
 
-  // -------------------------------------------------------------------------
-
   /**
    * Copies the few files the image needs into a temporary root.
    *
@@ -255,11 +233,11 @@ class BlobStoreContractIT {
 
     copyTree(repository.resolve("proto"), root.resolve("proto"));
     Files.createDirectories(root.resolve("blobstore"));
-    for (String file : new String[] {"Cargo.toml", "Cargo.lock", "build.rs", "Dockerfile"}) {
+    for (String file :
+        new String[] {"Cargo.toml", "Cargo.lock", "build.rs", "Dockerfile", "THIRD-PARTY-NOTICES.txt"}) {
       Files.copy(repository.resolve("blobstore").resolve(file), root.resolve("blobstore").resolve(file));
     }
     copyTree(repository.resolve("blobstore/src"), root.resolve("blobstore/src"));
-    // Also at the context root, which is where the image builder looks for it.
     Files.copy(repository.resolve("blobstore/Dockerfile"), root.resolve("Dockerfile"));
     return root;
   }

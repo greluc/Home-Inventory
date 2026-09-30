@@ -1,10 +1,5 @@
 import React from "react";
 
-/* Lucide SVGs are fetched once from assets/icons and cached. We convert the
-   parsed DOM into React elements rather than using dangerouslySetInnerHTML,
-   which the production client forbids by lint rule.
-   In the shipped app this component reads the same files out of the
-   lucide-static sprite; the markup and the stroke tokens are identical. */
 const cache = new Map();
 const pending = new Map();
 

@@ -1,96 +1,57 @@
-# Every dependency version lives here, never in a build script (CLAUDE.md,
-# ADR-0001, REQ-NFR-029). A version typed into a `build.gradle.kts` is a version
-# Renovate cannot see.
-
 [versions]
-# The language level. Java 25 is an LTS line; leaving it is a decision with an
-# ADR, and renovate.json is configured to hold it (ADR-0001).
 java = "25"
 
 springBoot = "4.1.1"
 springModulith = "2.1.1"
 
 flyway = "13.6.0"
+
+kotlin = "2.4.0"
+ktor = "3.5.1"
+kotlinxSerialization = "1.11.0"
+kotlinxDatetime = "0.8.0"
 postgresql = "42.7.13"
 
 lombok = "1.18.48"
 
-# Spring Security's Argon2PasswordEncoder delegates to BouncyCastle; without it,
-# REQ-SEC-010 cannot be satisfied at all.
 bouncycastle = "1.86"
 
-# gRPC, for the BlobStore contract in `proto/`. The in-core `filesystem` adapter
-# is a client of the in-deployment `blobstore` service (ADR-0043), and the
-# stage-1 `plugin-blobstore-*` adapters speak the same contract.
 grpc = "1.84.0"
 protobuf = "4.36.1"
-# The Gradle plugin that runs protoc. Pinned like everything else: a floating
-# code generator produces a floating API.
 protobufPlugin = "0.10.0"
-# `javax.annotation.Generated`, which grpc-java's generated stubs reference and
-# which left the JDK in 11.
 javaxAnnotation = "1.3.2"
 
-# The OpenAPI document is generated from the implementation and drift-checked
-# (ADR-0049). `-api` and not `-ui`: Swagger UI would be a second HTTP surface on
-# the application, and every surface is one the authorization rules have to cover.
 springdoc = "3.1.1"
 
-# Makes the Javadoc readable at run time, which is what springdoc turns into the
-# document's summaries and field descriptions. Javadoc is mandatory in this
-# project and has to be concrete; without this the contract would carry a second
-# copy of every sentence in an annotation, and the two would drift.
 therapi = "0.15.0"
 
-# SAST for the JVM code (REQ-SEC-076). `find-sec-bugs` is the plugin that turns
-# SpotBugs from a bug finder into a security one.
 spotbugsPlugin = "6.5.11"
+
+cyclonedxPlugin = "3.4.1"
 findSecBugs = "1.14.0"
 
-# The JSON Schema validator of REQ-CORE-027. Draft 2020-12, Apache-2.0, and it
-# resolves nothing over the network in the configuration ADR-0056 fixes.
 jsonSchemaValidator = "3.0.7"
 
-# WebAuthn/passkeys, the second half of REQ-AUTH-002. Apache-2.0, and the one
-# configuration that matters is what it is NOT told to do: no metadata service,
-# no certificate path validation against FIDO's MDS, because the core makes no
-# outbound connection (ADR-0026) and a self-hosted instance attests nothing.
-# From 0.31 it is on Jackson 3, which is what the rest of this application uses:
-# an older line would have brought a second Jackson major along for one library.
 webauthn4j = "0.31.10.RELEASE"
 
-# webauthn4j's API is annotated with JetBrains' @NotNull/@Nullable, which its POM
-# marks provided: javac cannot resolve an annotated signature without them on the
-# compile classpath. Compile-only here for the same reason it is provided there —
-# nothing of it is needed at run time.
 jetbrainsAnnotations = "26.1.0"
 
-# Test-only
-# The OpenSearch client, for the primary `SearchIndex` adapter (ADR-0008). The 3
-# line matches the image `deploy/services.yaml` pins, because a client one major
-# ahead of its server is a compatibility matrix nobody is reading.
 opensearch = "3.3.0"
 
-# The resilience envelope around every plugin call (REQ-PLG-007, ADR-0065).
-# Apache-2.0. The core libraries, not the Spring Boot starter: the starter binds
-# to a Boot version and annotates beans, and what this needs is an instance PER
-# PLUGIN, which is a registry lookup and not an annotation.
 resilience4j = "2.4.0"
 
-# What `plugin-api` is built and tested with. It is Apache-2.0 and depends on
-# nothing in the core (ADR-0018), so it cannot reach the versions Spring Boot's
-# platform pins for `:app` - it names its own, and they are the same ones the
-# platform resolves, so a type does not behave differently on the two sides of
-# the boundary.
 snakeyaml = "2.6"
 junit = "6.0.3"
 assertj = "3.27.7"
+
+nimbusJose = "10.9.1"
+slf4j = "2.0.18"
+logback = "1.5.38"
 
 testcontainers = "2.0.5"
 archunit = "1.5.0"
 
 [libraries]
-# --- Runtime ---------------------------------------------------------------
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
 spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
@@ -98,12 +59,22 @@ spring-boot-starter-validation = { module = "org.springframework.boot:spring-boo
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
-# `org.springframework.boot:...`, not `org.springframework.session:...`. Boot 4
-# moved every auto-configuration out of `spring-boot-autoconfigure` into a module
-# per technology, and the plain Spring Session artefact carries none: with it
-# alone the session filter is never registered, sessions stay in the servlet
-# container's memory and the cookie is Tomcat's JSESSIONID with Tomcat's
-# attributes — which is neither REQ-SEC-017 nor REQ-NFR-018.
+spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-starter-graphql" }
+
+jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api" }
+spring-boot-micrometer-tracing-opentelemetry = { module = "org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry" }
+micrometer-tracing-bridge-otel = { module = "io.micrometer:micrometer-tracing-bridge-otel" }
+opentelemetry-exporter-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+aspectjweaver = { module = "org.aspectj:aspectjweaver" }
+context-propagation = { module = "io.micrometer:context-propagation" }
+
+jackson-dataformat-csv = { module = "tools.jackson.dataformat:jackson-dataformat-csv" }
 spring-boot-session-data-redis = { module = "org.springframework.boot:spring-boot-session-data-redis" }
 
 spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "springModulith" }
@@ -111,31 +82,19 @@ spring-modulith-starter-core = { module = "org.springframework.modulith:spring-m
 spring-modulith-starter-jpa = { module = "org.springframework.modulith:spring-modulith-starter-jpa" }
 spring-modulith-actuator = { module = "org.springframework.modulith:spring-modulith-actuator" }
 spring-modulith-observability = { module = "org.springframework.modulith:spring-modulith-observability" }
-# Externalises a domain event onto RabbitMQ. The outbox in `event_publication`
-# is the source of truth; this is the delivery (ADR-0051, REQ-NFR-013).
 spring-modulith-events-amqp = { module = "org.springframework.modulith:spring-modulith-events-amqp" }
 
-# Spring Boot 4 split its auto-configurations into per-technology modules:
-# `flyway-core` gives you the library, this gives you Boot's integration. Without
-# it Flyway is on the classpath and simply never runs - which looks exactly like
-# a broken migration and is not one.
 spring-boot-starter-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
-# Validates an attribute set against the JSON Schema the type version generated -
-# the same document the clients get, which is what REQ-CORE-027's acceptance
-# ("a client validates offline with the same result as the server") asks for.
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "jsonSchemaValidator" }
 webauthn4j-core = { module = "com.webauthn4j:webauthn4j-core", version.ref = "webauthn4j" }
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrainsAnnotations" }
 webauthn4j-test = { module = "com.webauthn4j:webauthn4j-test", version.ref = "webauthn4j" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
-# Test-only: certificate generation. The deployment's PKI is made by
-# deploy/setup.sh with openssl; the tests make a throwaway one in memory, so no
-# private key is ever written into this repository.
 bouncycastle-pkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
 
 grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
@@ -145,8 +104,10 @@ protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "p
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
 grpc-protoc-gen-java = { module = "io.grpc:protoc-gen-grpc-java", version.ref = "grpc" }
 javax-annotation-api = { module = "javax.annotation:javax.annotation-api", version.ref = "javaxAnnotation" }
+nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbusJose" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
-# --- Test ------------------------------------------------------------------
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test" }
@@ -157,16 +118,12 @@ resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-ci
 resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
 resilience4j-micrometer = { module = "io.github.resilience4j:resilience4j-micrometer", version.ref = "resilience4j" }
 
-# `plugin-api`'s own three. Apache-2.0 (SnakeYAML, AssertJ) and EPL-2.0 (JUnit,
-# a test dependency that ships with nothing).
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 assertj = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
-# Testcontainers 2.x renamed every module to a `testcontainers-` prefix; the old
-# coordinates resolve to nothing rather than to an old version.
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
 testcontainers-rabbitmq = { module = "org.testcontainers:testcontainers-rabbitmq" }
@@ -182,3 +139,6 @@ protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugsPlugin" }
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedxPlugin" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

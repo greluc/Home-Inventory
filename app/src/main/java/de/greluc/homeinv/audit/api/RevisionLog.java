@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.audit.api;
 
+import jakarta.annotation.Nullable;
 import de.greluc.homeinv.platform.Page;
 import java.time.Instant;
 import java.util.List;
@@ -121,6 +122,6 @@ public interface RevisionLog {
    * @param changedAt when
    * @param changedBy who, or {@code null} where a system process made the change
    */
-  record RevisionView(long revision, ChangeKind kind, String snapshot, Instant changedAt, UUID changedBy) {}
+  record RevisionView(long revision, ChangeKind kind, String snapshot, Instant changedAt, @Nullable UUID changedBy) {}
 
 }

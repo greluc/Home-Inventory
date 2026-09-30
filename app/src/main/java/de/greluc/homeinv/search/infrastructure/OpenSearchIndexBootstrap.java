@@ -102,17 +102,10 @@ public class OpenSearchIndexBootstrap {
               request ->
                   request
                       .index(INDEX)
-                      // One shard and no replica: a household's inventory is not
-                      // a cluster's problem, and `ha` replicates the deployment
-                      // rather than the index, which is rebuildable anyway.
                       .settings(s -> s.numberOfShards(1).numberOfReplicas(0))
                       .aliases(OpenSearchIndex.ALIAS, alias -> alias)
                       .mappings(
                           m -> {
-                            // Strict: a field nobody mapped is a bug in the
-                            // document, and letting OpenSearch guess its type is
-                            // how two tenants' documents come to disagree about
-                            // what `notes` is.
                             m.dynamic(DynamicMapping.Strict);
                             m.properties("tenantId", p -> p.keyword(k -> k));
                             m.properties("itemId", p -> p.keyword(k -> k));
@@ -131,9 +124,6 @@ public class OpenSearchIndexBootstrap {
                           }));
       log.info("Created the search index {} and pointed {} at it.", INDEX, OpenSearchIndex.ALIAS);
     } catch (IOException | RuntimeException unreachable) {
-      // Not fatal. The engine will report itself unavailable and every search is
-      // answered by PostgreSQL with `meta.degraded` (REQ-SRCH-006), which is the
-      // documented behaviour for an index that is not there.
       log.warn(
           "The search index {} could not be created; searches will be answered by PostgreSQL",
           INDEX,

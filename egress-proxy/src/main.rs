@@ -55,6 +55,11 @@ const MAX_HEAD_BYTES: usize = 16 * 1024;
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    if std::env::args().any(|argument| argument == "--licences") {
+        print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
+        return ExitCode::SUCCESS;
+    }
+
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -62,8 +67,6 @@ async fn main() -> ExitCode {
         )
         .init();
 
-    // The health check, for a `scratch` image that has no shell to run a script
-    // in. The same shape the blob store uses, and for the same reason.
     if std::env::args().any(|argument| argument == "--health") {
         return match TcpStream::connect(("127.0.0.1", PORT)).await {
             Ok(_) => ExitCode::SUCCESS,
@@ -78,10 +81,6 @@ async fn main() -> ExitCode {
     let list = match tokio::fs::read_to_string(&path).await {
         Ok(text) => Allowlist::parse(&text),
         Err(failure) => {
-            // Fail to start rather than start permitting nothing. An empty
-            // allowlist and a missing one look identical from the outside — every
-            // fetch refused — and the second is a deployment mistake somebody
-            // needs to be told about (REQ-NFR-046's reasoning, applied here).
             error!(path = %path, error = %failure, "the allowlist could not be read");
             return ExitCode::FAILURE;
         }
@@ -106,8 +105,9 @@ async fn main() -> ExitCode {
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, peer)) => {
+                    let arrival = stream.local_addr().map(|address| address.ip()).ok();
                     let list = Arc::clone(&list);
-                    tokio::spawn(async move { serve(stream, peer, list).await });
+                    tokio::spawn(async move { serve(stream, peer, arrival, list).await });
                 }
                 Err(failure) => warn!(error = %failure, "a connection could not be accepted"),
             },
@@ -124,17 +124,20 @@ async fn main() -> ExitCode {
 /// Every outcome is logged with the caller, the target and what happened: that
 /// log is the source for the per-resolver disclosure REQ-ENR-009 asks for, and
 /// for the cause behind a stale-signature alert (REQ-SEC-093).
-async fn serve(stream: TcpStream, peer: SocketAddr, list: Arc<Allowlist>) {
+async fn serve(
+    stream: TcpStream,
+    peer: SocketAddr,
+    arrival: Option<std::net::IpAddr>,
+    list: Arc<Allowlist>,
+) {
+    let arrival = arrival.unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+    let plugin = list.caller_on(arrival).unwrap_or("-").to_string();
     let mut reader = BufReader::new(stream);
 
     let mut line = String::new();
     let read = tokio::time::timeout(REQUEST_TIMEOUT, reader.read_line(&mut line)).await;
     match read {
         Ok(Ok(count)) if count > 0 && count <= MAX_HEAD_BYTES => {}
-        // A connection that opens and closes without sending anything is the
-        // health check, every interval, in every deployment. Saying WARN about it
-        // would fill the log with the one line that is always fine, which is how
-        // a log stops being read.
         Ok(Ok(0)) => debug!(caller = %peer.ip(), "a connection that sent nothing"),
         _ => {
             warn!(caller = %peer.ip(), "no usable request line");
@@ -156,10 +159,8 @@ async fn serve(stream: TcpStream, peer: SocketAddr, list: Arc<Allowlist>) {
         Destination::Fetch { host, port, .. } => (host.clone(), *port),
     };
 
-    if !list.permits(&host) {
-        // The refusal is the product, not an error: a caller reaching for a host
-        // nobody declared is exactly what this exists to stop.
-        warn!(caller = %peer.ip(), host = %host, port, outcome = "refused",
+    if !list.permits(&host, port, arrival) {
+        warn!(caller = %peer.ip(), plugin = %plugin, host = %host, port, outcome = "refused",
               "not on the allowlist");
         let _ = refuse(reader.get_mut(), "403 Forbidden").await;
         return;
@@ -175,9 +176,6 @@ async fn serve(stream: TcpStream, peer: SocketAddr, list: Arc<Allowlist>) {
         }
     };
 
-    // Resolved here rather than trusted from the caller, and every answer is
-    // checked: an allowlisted name whose DNS points at 169.254.169.254 is the
-    // way a name check alone is defeated (REQ-SEC-034).
     let permitted: Vec<SocketAddr> = addresses
         .into_iter()
         .filter(|address| !allowlist::is_forbidden(address.ip()))
@@ -203,9 +201,6 @@ async fn serve(stream: TcpStream, peer: SocketAddr, list: Arc<Allowlist>) {
         Destination::Fetch { rewritten, .. } => fetch(reader, upstream, &rewritten).await,
     };
     if let Err(failure) = result {
-        // A copy that ends early is ordinary — a client closing a connection
-        // looks exactly like this — so it is DEBUG-shaped information at INFO's
-        // level of importance: the outcome above already said what mattered.
         info!(caller = %peer.ip(), host = %host, error = %failure, "the exchange ended");
     }
 }
@@ -224,8 +219,6 @@ async fn connect(addresses: &[SocketAddr]) -> Option<TcpStream> {
 
 /// Answers a caller that is not getting what it asked for.
 async fn refuse(stream: &mut TcpStream, status: &str) -> std::io::Result<()> {
-    // No body. A proxy error page is a page an attacker can read, and the status
-    // line says everything a client needs.
     stream
         .write_all(format!("HTTP/1.1 {status}\r\nConnection: close\r\n\r\n").as_bytes())
         .await?;
@@ -234,9 +227,6 @@ async fn refuse(stream: &mut TcpStream, status: &str) -> std::io::Result<()> {
 
 /// A `CONNECT` tunnel: say yes, then copy in both directions until one side ends.
 async fn tunnel(mut reader: BufReader<TcpStream>, mut upstream: TcpStream) -> std::io::Result<()> {
-    // The caller's remaining headers are read and discarded: a CONNECT carries
-    // none this proxy acts on, and leaving them in the buffer would prepend them
-    // to the TLS handshake.
     discard_headers(&mut reader).await?;
 
     reader
@@ -257,11 +247,6 @@ async fn fetch(
 ) -> std::io::Result<()> {
     upstream.write_all(rewritten.as_bytes()).await?;
 
-    // The caller's headers, forwarded as they stand except for the hop-by-hop
-    // ones a proxy must not pass on (RFC 9110 §7.6.1). `Connection: close` is
-    // added because this handles one request per connection: the next request on
-    // the same connection could name a different host, and forwarding it to this
-    // target without checking would be the allowlist bypassed.
     let mut head = Vec::new();
     loop {
         let mut line = String::new();
@@ -299,5 +284,24 @@ async fn discard_headers(reader: &mut BufReader<TcpStream>) -> std::io::Result<(
         if read > MAX_HEAD_BYTES {
             return Err(std::io::Error::other("the header block is too large"));
         }
+    }
+}
+
+#[cfg(test)]
+mod licences {
+    /// The notice is compiled into the binary rather than read from a file
+    /// (`REQ-CON-013`). A `scratch` image has no filesystem to read one from,
+    /// so an absent notice would be a link error here and a licence breach in
+    /// production; this makes it the former.
+    #[test]
+    fn the_notice_travels_with_the_binary() {
+        let notice = include_str!("../THIRD-PARTY-NOTICES.txt");
+
+        assert!(notice.starts_with("THIRD-PARTY LICENCE NOTICES"));
+        assert!(notice.contains("tokio"));
+        assert!(
+            notice.len() > 10_000,
+            "a notice this short is a generator that failed"
+        );
     }
 }

@@ -10,6 +10,7 @@ import de.greluc.homeinv.plugin.api.PluginManifest;
 import de.greluc.homeinv.plugin.api.PluginManifestReader;
 import de.greluc.homeinv.plugins.api.PluginRegistry;
 import de.greluc.homeinv.plugins.application.DefaultPluginRegistry;
+import de.greluc.homeinv.plugins.domain.ManifestSignature;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -53,8 +54,16 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 @RequiredArgsConstructor
 public class InstalledPlugins {
 
-  /** How large the list may be. Beyond this it is not a list of plugins. */
-  private static final int MAX_BYTES = 64 * 1024;
+  /**
+   * How large the list may be. Beyond this it is not a list of plugins.
+   *
+   * <p>256 KiB since 2026-09-22, and 64 KiB before it. Each entry now carries its manifest <b>as its
+   * publisher wrote it</b> rather than a re-serialised copy, because that is what a signature can be
+   * over (ADR-0085) — comments included, which roughly tripled an entry. Five plugins came to 20 KiB
+   * against the old cap of 64, so a deployment with sixteen of them would have been refused for
+   * being a list of plugins.
+   */
+  private static final int MAX_BYTES = 256 * 1024;
 
   private final DefaultPluginRegistry registry;
 
@@ -67,6 +76,20 @@ public class InstalledPlugins {
    */
   @Value("${homeinv.plugins.file:}")
   private String listFile;
+
+  /**
+   * Whether this deployment runs plugins nobody signed (REQ-PLG-004).
+   *
+   * <p>Off. An unsigned plugin is permitted only where an operator said so deliberately, and saying
+   * so is this one value -- which is why it is a value and not, say, a per-entry field in a
+   * generated file: a decision about trust should be taken once, in the open, for the whole
+   * deployment, rather than one line at a time where a copied entry carries it along.
+   *
+   * <p>It has no effect on a signature that is present and does not verify. That is not an unsigned
+   * plugin; it is an altered document, and nothing here turns it into one.
+   */
+  @Value("${homeinv.plugins.allow-unsigned:false}")
+  private boolean allowUnsigned;
 
   /**
    * Reads the list and registers what is in it.
@@ -116,14 +139,18 @@ public class InstalledPlugins {
    */
   private boolean register(Entry entry) {
     byte[] manifest;
-    try {
-      manifest = Files.readAllBytes(Path.of(entry.manifest()));
-    } catch (IOException unreadable) {
-      log.warn(
-          "The manifest of {} at {} could not be read; it is not registered",
-          entry.id(),
-          entry.manifest());
-      return false;
+    if (entry.manifestInline() != null) {
+      manifest = entry.manifestInline().getBytes(StandardCharsets.UTF_8);
+    } else {
+      try {
+        manifest = Files.readAllBytes(Path.of(entry.manifest()));
+      } catch (IOException unreadable) {
+        log.warn(
+            "The manifest of {} at {} could not be read; it is not registered",
+            entry.id(),
+            entry.manifest());
+        return false;
+      }
     }
 
     PluginManifest parsed;
@@ -135,9 +162,6 @@ public class InstalledPlugins {
     }
 
     if (!parsed.metadata().id().equals(entry.id())) {
-      // The list and the manifest disagree about which plugin this is. Refused
-      // rather than reconciled: a grant is recorded against the id, so taking
-      // the wrong one would attach somebody's consent to the wrong plugin.
       log.warn(
           "The list calls this plugin {} and its manifest calls it {}; it is not registered",
           entry.id(),
@@ -147,7 +171,6 @@ public class InstalledPlugins {
 
     try {
       if (!ContractVersion.covers(parsed.spec().contract())) {
-        // Disabled and reported, and the core carries on (09 §9.11).
         log.warn(
             "Plugin {} supports contract {} and this core serves {}; it is not registered",
             entry.id(),
@@ -160,9 +183,19 @@ public class InstalledPlugins {
       return false;
     }
 
+    ManifestSignature.Result signature =
+        ManifestSignature.verify(manifest, entry.signature(), entry.publicKey());
+    if (signature.state() == ManifestSignature.State.UNSIGNED && allowUnsigned) {
+      log.warn(
+          "Plugin {} is UNSIGNED and this deployment permits unsigned plugins ({}).",
+          entry.id(),
+          signature.reason());
+    }
+
     try {
       PluginRegistry.Registration registration =
-          registry.register(manifest, entry.endpoint(), entry.fingerprint(), entry.signed());
+          registry.register(
+              manifest, entry.endpoint(), entry.fingerprint(), signature, allowUnsigned);
       log.info(
           "Plugin {} {} is installed and asks for {}",
           registration.pluginId(),
@@ -210,13 +243,22 @@ public class InstalledPlugins {
       if (!(element instanceof Map<?, ?> entry)) {
         throw new IllegalArgumentException("Every entry of `plugins` is a mapping");
       }
+      String path = optional(entry, "manifest");
+      String inline = optional(entry, "manifestInline");
+      if ((path == null) == (inline == null)) {
+        throw new IllegalArgumentException(
+            "A plugin entry carries either `manifest` (a path) or `manifestInline` (the document"
+                + " itself), and exactly one of them");
+      }
       entries.add(
           new Entry(
               required(entry, "id"),
-              required(entry, "manifest"),
+              path,
+              inline,
               optional(entry, "endpoint"),
               optional(entry, "fingerprint"),
-              Boolean.TRUE.equals(entry.get("signed"))));
+              optional(entry, "signature"),
+              optional(entry, "publicKey")));
     }
     return List.copyOf(entries);
   }
@@ -238,12 +280,30 @@ public class InstalledPlugins {
    * One installed plugin, as the operator's list names it.
    *
    * @param id the reverse-domain id, which must match the manifest's
-   * @param manifest where the manifest file is, inside this container
+   * @param manifest where the manifest file is, inside this container, or {@code null} when the
+   *     entry carries the document itself
+   * @param manifestInline the manifest document, or {@code null} when the entry names a file. The
+   *     generated list carries it this way: one file for the deployment rather than one per plugin
+   *     plus a path in each entry, and a path is a thing that can be right in the list and wrong in
+   *     the mount
    * @param endpoint where the plugin listens, or {@code null} for an in-process one
    * @param fingerprint the certificate that may answer there, pinned like every in-deployment peer
    *     (REQ-SEC-056, ADR-0044)
-   * @param signed whether the operator has verified the signature. Not verified here: {@code
-   *     cosign} is the operator's tool and this is what they report having run (REQ-PLG-004)
+   * @param signature the base64 detached signature over the manifest, as {@code cosign sign-blob}
+   *     printed it, or {@code null} when the publisher signed nothing
+   * @param publicKey the publisher's key this deployment checks that signature against, PEM or the
+   *     bare base64 of its DER, or {@code null} when the operator installed none. It comes from the
+   *     deployment's own secret for this plugin and never from the manifest, which could otherwise
+   *     bring the key that approves it (REQ-PLG-004, ADR-0085). *Until 2026-09-22 this entry carried
+   *     a `signed` boolean instead -- what the operator reported having checked with `cosign`, which
+   *     was a claim nothing here could confirm or contradict.*
    */
-  record Entry(String id, String manifest, String endpoint, String fingerprint, boolean signed) {}
+  record Entry(
+      String id,
+      String manifest,
+      String manifestInline,
+      String endpoint,
+      String fingerprint,
+      String signature,
+      String publicKey) {}
 }

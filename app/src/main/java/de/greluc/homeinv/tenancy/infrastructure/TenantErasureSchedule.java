@@ -52,9 +52,6 @@ public class TenantErasureSchedule {
     try {
       runner.eraseDueTenants();
     } catch (RuntimeException failed) {
-      // The scheduler stops calling a task that throws. An erasure sweep that
-      // stopped after one bad hour would leave every later request unhonoured,
-      // and nothing would say so until somebody asked.
       log.error("The tenant erasure sweep failed; it will run again.", failed);
     }
   }

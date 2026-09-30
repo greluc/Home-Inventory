@@ -47,8 +47,6 @@ public class CsrfCookieFilter extends OncePerRequestFilter {
 
     Object token = request.getAttribute(CsrfToken.class.getName());
     if (token instanceof CsrfToken csrf) {
-      // The call is the point, not the value: it is what forces the deferred
-      // token to load and the repository to write the cookie.
       csrf.getToken();
     }
     chain.doFilter(request, response);

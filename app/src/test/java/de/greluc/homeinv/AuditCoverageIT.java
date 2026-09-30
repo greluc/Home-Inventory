@@ -55,8 +55,6 @@ class AuditCoverageIT extends AbstractIntegrationTest {
   void theBoundaryRecordsWhatNobodyElseDid() throws Exception {
     Session session = anAdministrator("fallback");
 
-    // A tag: a small mutating endpoint whose service does not record an entry of
-    // its own yet. Exactly the case the boundary exists for.
     mockMvc
         .perform(
             post("/api/v1/tags")
@@ -73,9 +71,6 @@ class AuditCoverageIT extends AbstractIntegrationTest {
     assertThat(entry.actorKind()).isEqualTo(AuditLog.ActorKind.USER);
     assertThat(entry.actorId()).isEqualTo(session.userId());
     assertThat(entry.action()).isEqualTo("post /api/v1/tags");
-    // The pattern and not the concrete path, and no body: the request carries
-    // `sensitive` values and an audit log that held them would be a way to read
-    // them (REQ-SEC-027).
     assertThat(entry.diff()).isEqualTo("{}");
     assertThat(entry.client()).isEqualTo("homeinv-web/1.0");
   }
@@ -87,8 +82,6 @@ class AuditCoverageIT extends AbstractIntegrationTest {
 
     mockMvc.perform(get("/api/v1/tags").session(session.session())).andExpect(status().isOk());
 
-    // A log that recorded reads would bury the entries an incident looks for,
-    // and REQ-SEC-068 asks for mutating actions.
     assertThat(entriesOf(session.tenantId())).isEmpty();
   }
 
@@ -106,12 +99,8 @@ class AuditCoverageIT extends AbstractIntegrationTest {
                 .content("{\"name\":\"\"}"))
         .andExpect(status().is4xxClientError());
 
-    // Nothing changed, so there is nothing to record. An entry here would be a
-    // record of something that did not happen.
     assertThat(entriesOf(session.tenantId())).isEmpty();
   }
-
-  // -------------------------------------------------------------------------
 
   private List<AuditLog.AuditView> entriesOf(UUID tenant) {
     Page<AuditLog.AuditView> page =

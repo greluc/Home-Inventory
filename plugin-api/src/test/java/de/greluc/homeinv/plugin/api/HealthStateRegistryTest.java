@@ -49,10 +49,6 @@ class HealthStateRegistryTest {
   @Test
   @DisplayName("agree with the reference about which of them is a fault")
   void faultsMatchTheReference() {
-    // Not decoration: `fault` decides whether the operator UI raises the state
-    // and whether an alert fires. NOT_CONFIGURED is the one that costs if it is
-    // wrong here - a `minimal` installation runs without plugin-smtp by design
-    // (ADR-0028), and an alert for that is an alert an operator learns to ignore.
     Map<String, Boolean> documented =
         entries().stream()
             .collect(
@@ -70,9 +66,6 @@ class HealthStateRegistryTest {
   @Test
   @DisplayName("refuse to serve where the reference says the plugin accepts nothing")
   void provisioningIncompleteIsFailClosed() {
-    // REQ-PLG-015 in one assertion. A half-provisioned target that kept serving
-    // would accept writes the other half cannot read back, which is the failure
-    // this state exists to prevent.
     assertThat(HealthState.PROVISIONING_INCOMPLETE.servable()).isFalse();
     assertThat(HealthState.CONTRACT_MISMATCH.servable()).isFalse();
 

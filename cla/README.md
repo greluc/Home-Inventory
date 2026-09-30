@@ -43,16 +43,28 @@ project. What you grant is a licence, not ownership.
 
 ## How to sign
 
-On your first pull request a bot will comment with a link. Signing is a click
-through GitHub — you do not need to print, scan or e-mail anything. The signature
-is recorded against your GitHub account and covers every later contribution.
+On your first pull request a check reports that no signature is on file and says
+what to do. You read the applicable document and write one comment on the pull
+request:
 
-Until that automation is in place, say in your pull request that you have read
-and agree to the applicable document, and the maintainer will record it.
+```
+I have read the CLA Document and I hereby sign the CLA
+```
+
+That is the whole ceremony — nothing to print, scan or e-mail. The signature is
+recorded against your GitHub account in `signatures/version1/cla.json` on the
+`cla-signatures` branch of this repository, where anybody can read it and where
+it outlives whatever tooling collected it. It covers every later contribution.
+
+**The check blocks the merge; the comment is what clears it.** If you are
+contributing on behalf of an employer, the [entity agreement](entity-cla.md) is
+the one that applies, and many people need both.
 
 ## A necessary caveat
 
 > **These documents are drafts and have not been reviewed by a lawyer.**
+>
+> They were written on 2026-09-16 and are version 1.0 of each.
 >
 > They follow the structure of the widely used Apache Software Foundation CLAs,
 > adapted for this project. They have not been checked by anyone qualified to

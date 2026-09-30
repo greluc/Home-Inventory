@@ -29,6 +29,11 @@ DropCapability=ALL
 NoNewPrivileges=true
 Network=homeinv-internal.network:alias=worker,alias=worker-internal
 Network=homeinv-scanner.network:alias=worker
+Network=homeinv-plugin-webhook.network:alias=worker
+Network=homeinv-plugin-smtp.network:alias=worker
+Network=homeinv-plugin-blobstore-s3.network:alias=worker
+Network=homeinv-plugin-blobstore-nextcloud.network:alias=worker
+Network=homeinv-plugin-oidc.network:alias=worker
 Tmpfs=/tmp:mode=1777
 EnvironmentFile=%h/.config/homeinv/homeinv.env
 Environment=SPRING_PROFILES_ACTIVE=worker
@@ -60,6 +65,7 @@ Secret=valkey-password,type=mount
 Secret=mq-password,type=mount
 Secret=search-password,type=mount
 Secret=mtls-core,type=mount
+Secret=worker-plugins.yaml,type=mount,target=/run/secrets/plugins.yaml
 HealthCmd=["/usr/bin/healthcheck"]
 HealthInterval=15s
 HealthStartPeriod=90s

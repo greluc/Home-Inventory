@@ -63,8 +63,6 @@ class ItemSortingIT extends AbstractIntegrationTest {
     assertThat(namesOf(session, "name", 50)).containsExactly("Anvil", "Ladder", "Mallet");
     assertThat(namesOf(session, "-name", 50)).containsExactly("Mallet", "Ladder", "Anvil");
 
-    // The same order, read two at a time. Three rows over two pages is where a
-    // boundary bug shows: the second page either repeats "Ladder" or skips it.
     assertThat(namesOf(session, "name", 2)).containsExactly("Anvil", "Ladder", "Mallet");
     assertThat(namesOf(session, "-name", 2)).containsExactly("Mallet", "Ladder", "Anvil");
   }
@@ -74,25 +72,18 @@ class ItemSortingIT extends AbstractIntegrationTest {
   void whatIsRefused() throws Exception {
     MockHttpSession session = tenantSession("refusals");
 
-    // Several keys. 08 §8.2 once showed two; one is what REQ-SRCH-004 asks for,
-    // and a caller who asked for two and silently got one has a list that is
-    // wrong in a way nothing tells them about.
     mockMvc
         .perform(get(ITEMS).param("sort", "-updatedAt,name").session(session))
         .andExpect(status().isUnprocessableContent());
 
-    // A column that is not a field of an item.
     mockMvc
         .perform(get(ITEMS).param("sort", "tenantId").session(session))
         .andExpect(status().isUnprocessableContent());
 
-    // An attribute no published type marks sortable. Named rather than ignored:
-    // the tenant configures which fields are sortable, so somebody can act on it.
     mockMvc
         .perform(get(ITEMS).param("sort", "attr.nothingLikeThis").session(session))
         .andExpect(status().isUnprocessableContent());
 
-    // A direction with no field.
     mockMvc
         .perform(get(ITEMS).param("sort", "-").session(session))
         .andExpect(status().isUnprocessableContent());
@@ -110,24 +101,16 @@ class ItemSortingIT extends AbstractIntegrationTest {
     String cursor = first.get("page").get("nextCursor").asString();
     assertThat(cursor).isNotBlank();
 
-    // Same query, other order. Resuming it would page through a sequence that
-    // never existed, so the cursor is refused rather than honoured. A malformed
-    // request and not a validation failure: the cursor is well formed in itself
-    // and simply does not belong to this query, which is what the established
-    // answer for an invalid cursor already says.
     mockMvc
         .perform(get(ITEMS).param("sort", "-name").param("limit", "2").param("cursor", cursor)
             .session(session))
         .andExpect(status().isBadRequest());
 
-    // And with the order it was taken from, it resumes.
     mockMvc
         .perform(get(ITEMS).param("sort", "name").param("limit", "2").param("cursor", cursor)
             .session(session))
         .andExpect(status().isOk());
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Every name the list gives, paging to the end.

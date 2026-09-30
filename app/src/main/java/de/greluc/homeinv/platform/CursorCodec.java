@@ -71,10 +71,6 @@ public class CursorCodec {
    * @return the cursor, safe to put in a URL
    */
   public String encode(Position position, String queryFingerprint) {
-    // The sort value is base64'd rather than written as it stands. It is a value
-    // out of a row -- a name, a manufacturer -- and one containing the separator
-    // would split the payload into the wrong pieces. Encoding it means the
-    // separator can only ever come from here.
     String payload =
         position.createdAt().toString()
             + '|'
@@ -116,8 +112,6 @@ public class CursorCodec {
       throw new InvalidCursorException();
     }
 
-    // Constant-time: a byte-by-byte comparison that returns early leaks, through
-    // timing, how much of a forged signature was correct.
     if (!MessageDigest.isEqual(presented, sign(payload))) {
       log.info("Rejected a cursor whose signature did not match");
       throw new InvalidCursorException();
@@ -125,8 +119,6 @@ public class CursorCodec {
 
     String[] parts = payload.split("\\|", 4);
     if (parts.length != 4 || !parts[3].equals(queryFingerprint)) {
-      // Valid signature, wrong query: the client is paging one search with
-      // another search's cursor, and any answer would be wrong (REQ-SRCH-009).
       throw new InvalidCursorException();
     }
 
@@ -145,7 +137,6 @@ public class CursorCodec {
       mac.init(key);
       return mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
     } catch (java.security.GeneralSecurityException impossible) {
-      // HmacSHA256 is required of every JVM, and the key was validated at startup.
       throw new IllegalStateException("Cursor signing is unavailable", impossible);
     }
   }

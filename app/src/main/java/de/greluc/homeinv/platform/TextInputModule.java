@@ -86,9 +86,6 @@ public class TextInputModule {
                 cleaned.appendCodePoint(codePoint);
                 return;
               }
-              // Cc: the C0 and C1 control blocks. Cf: format characters, which is
-              // where the bidirectional overrides live - the ones that make a
-              // filename render as something other than what it is.
               int type = Character.getType(codePoint);
               if (type == Character.CONTROL || type == Character.FORMAT) {
                 return;

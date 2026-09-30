@@ -303,6 +303,10 @@ templates:
         labels: { en: Expires on, de: Läuft ab am }
         dataType: date
         sortable: true
+        # REQ-LIFE-013 collects what runs out into one overview, and this flag is
+        # what puts a date there. Set on the template so the feature works for a
+        # tenant that never opens the type editor.
+        expiry: true
       - key: seats
         labels: { en: Seats, de: Sitzplätze }
         dataType: integer
@@ -393,6 +397,10 @@ templates:
         labels: { en: Best before, de: Mindestens haltbar bis }
         dataType: date
         sortable: true
+        # The other half of REQ-LIFE-013's list. `openedOn` below is deliberately
+        # NOT marked: when a jar was opened is a fact about the past, and an
+        # overview of what runs out is a list of the future.
+        expiry: true
       - key: openedOn
         labels: { en: Opened on, de: Geöffnet am }
         dataType: date

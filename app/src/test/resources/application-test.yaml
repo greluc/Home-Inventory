@@ -1,38 +1,22 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Test profile. The URLs come from Testcontainers at runtime; what is fixed here
-# is the separation of roles, which is the whole point of testing against a real
-# PostgreSQL rather than a substitute.
 
 spring:
   datasource:
-    # The application runs as the application role, NOBYPASSRLS and without DDL
-    # rights. Running tests as the owner would make every isolation test pass for
-    # the wrong reason.
     username: homeinv_app
     password: test-app
 
   data:
     redis:
-      # No ACL on the test Valkey: the container runs the stock image, and the
-      # deployment's credential is created by setup.sh, which no test runs. Empty
-      # rather than absent, so that the deployment defaults in application.yaml
-      # do not reach a server that would refuse them.
       username: ""
       password: ""
 
   rabbitmq:
-    # The container runs the stock image, whose `guest` account works from any
-    # host inside the container network. The deployment's own credential is
-    # created by setup.sh, which no test runs.
     username: guest
     password: guest
 
   flyway:
     enabled: true
-    # Migrations run as the migrator, exactly as the one-shot migrate service
-    # does in production (ADR-0041).
     user: homeinv_migrator
     password: test-migrator
     locations: classpath:db/migration
@@ -41,51 +25,30 @@ spring:
     hibernate:
       ddl-auto: validate
 
-# No password-cost override. The floor in REQ-SEC-010 is validated at startup, so
-# a lowered cost here would simply fail to boot - which is the point. Argon2id at
-# 19 MiB costs tens of milliseconds, and a test class that logs in a dozen times
-# spends less on it than on starting the container it logs in to.
-
 homeinv:
+  rate-limit:
+    per-user-per-minute: 1000000
+    per-tenant-per-minute: 1000000
+    per-address-per-minute: 1000000
+    auth-per-minute: 1000000
+  graphql:
+    free-form: ANYONE
   security:
-    # A fixed key file for the tests. It signs cursors, and it is a test key in a
-    # container that is destroyed with the suite - it is not a secret and it is
-    # not one anywhere else either.
     url-signing-key-file: build/resources/test/db/test-url-signing.key
     credential-key-file: build/resources/test/db/test-credential.key
-    # Version 2 active with version 1 mounted beside it, which is the state a
-    # deployment is in DURING a rotation (REQ-SEC-049). The tests run in it
-    # permanently so that the rotation path is the tested path.
     data-encryption-master-key-file: build/resources/test/db/test-data-encryption.key
     data-encryption-master-key-version: 2
     data-encryption-previous-master-key-file: build/resources/test/db/test-data-encryption-previous.key
 
-  # A dedicated media host, distinct from the application host and same-site with
-  # it. Both properties are stated rather than defaulted, because the check that
-  # compares them is one of the things under test.
   public-base-url: "http://app.localhost:8080"
   media-base-url: "http://media.localhost:8080"
 
-  # TrustedProxies has no default and must not get one: a deployment without this
-  # list produces no error at all, only wrong numbers (06 §6.7). The tests
-  # therefore state it, and state something narrow.
   trusted-proxies: "127.0.0.1/32,::1/128"
 
-  # Deliberately a name that does not resolve here. The startup check then says
-  # so and continues, which is what a laptop and a CI runner need and what the
-  # class documents.
   ingress-host: "web.invalid"
 
 springdoc:
   api-docs:
-    # On here and nowhere else. `OpenApiDocumentIT` reads the document from the
-    # running context and compares it with the committed one; in a deployment the
-    # endpoint does not exist.
     enabled: true
   cache:
-    # The customiser in `OpenApiConfiguration` runs at the end of a build; a
-    # cached document is re-served through the server-filling step without
-    # passing it again, so the second fetch in a run would carry a `servers`
-    # entry the first one does not. Rebuilding costs a second here and makes the
-    # document a function of the code alone.
     disabled: true

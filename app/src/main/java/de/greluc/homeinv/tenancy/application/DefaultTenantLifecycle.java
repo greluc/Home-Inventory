@@ -81,9 +81,6 @@ public class DefaultTenantLifecycle implements TenantLifecycle {
     Instant now = Instant.now(clock);
 
     if (tenant.isPendingDeletion()) {
-      // Not a second token. Two live revocations would be two ways to withdraw
-      // one request, and withdrawing with the one somebody remembers would leave
-      // the other working.
       throw new AlreadyPendingDeletionException(
           tenant.getDeletionRequestedAt().plus(grace()));
     }
@@ -101,9 +98,6 @@ public class DefaultTenantLifecycle implements TenantLifecycle {
 
   @Override
   public UUID revokeDeletion(String revocationToken) {
-    // The one lookup that runs with no tenant set: whoever follows the link
-    // cannot sign in, because signing in is exactly what the pending deletion
-    // stopped.
     UUID tenantId =
         revocations.locate(hash(revocationToken)).orElseThrow(RevocationUnusableException::new);
     return TenantContext.callAs(tenantId, () -> revocation.revoke(tenantId, grace()));

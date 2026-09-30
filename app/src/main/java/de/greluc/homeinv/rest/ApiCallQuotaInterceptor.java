@@ -57,8 +57,6 @@ public class ApiCallQuotaInterceptor implements HandlerInterceptor {
 
     if (!(handler instanceof HandlerMethod method)
         || !method.getBeanType().getPackageName().startsWith(ACCESS_LAYER)) {
-      // The actuator, the document resource, the error dispatcher. None of them
-      // is a tenant's use of the API.
       return true;
     }
 

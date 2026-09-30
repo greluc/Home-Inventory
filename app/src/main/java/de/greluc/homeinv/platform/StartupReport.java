@@ -110,9 +110,6 @@ public class StartupReport {
         if (INTERESTING.stream().noneMatch(key::startsWith)) {
           continue;
         }
-        // Resolved through the environment, not read from this source: the value
-        // that matters is the one that wins, and placeholders have to be expanded
-        // or the report shows `${…}` where the interesting part is.
         settings.putIfAbsent(key, present(key, environment.getProperty(key)));
       }
     }

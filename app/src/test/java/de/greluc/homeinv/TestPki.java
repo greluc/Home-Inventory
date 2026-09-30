@@ -127,10 +127,6 @@ final class TestPki {
   }
 
   private static KeyPair keyPair() throws Exception {
-    // RSA rather than Ed25519: `grpc-netty-shaded` negotiates it everywhere, and
-    // what is under test is the pinning, not the signature algorithm. 2048 bits
-    // is a second of CPU per run and nobody is attacking a key that lives for
-    // the length of a test.
     KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
     generator.initialize(2048, new SecureRandom());
     return generator.generateKeyPair();
@@ -158,10 +154,6 @@ final class TestPki {
 
     builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(ca));
     if (!ca) {
-      // The hostname a client would verify. The pinned trust manager does not
-      // check it — pinning answers a different question — but a certificate
-      // without a SAN is one that no ordinary TLS client would accept, and a
-      // fixture that could not be used normally is a fixture that hides problems.
       builder.addExtension(
           Extension.subjectAlternativeName,
           false,

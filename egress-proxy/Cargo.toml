@@ -12,17 +12,11 @@ repository = "https://github.com/greluc/Home-Inventory"
 publish = false
 
 [dependencies]
-# Everything this needs is a socket, a copy loop and a clock. No HTTP library:
-# the two shapes it handles are a CONNECT line and an absolute-form request line,
-# and a parser for those is forty lines — against a dependency tree that would be
-# the largest thing in a container limited to 32 MiB.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "signal", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [profile.release]
-# The same budget as the blob store, for the same reason (ADR-0050): the matrix
-# gives this container 32 MiB and every byte of the image is also attack surface.
 lto = true
 codegen-units = 1
 strip = true

@@ -1,0 +1,24 @@
+// SPDX-FileCopyrightText: Lucas Greuloch
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package home_inv.plugin.v1;
+
+import "home_inv/plugin/v1/document_renderer.proto";
+
+option java_multiple_files = true;
+option java_package = "de.greluc.homeinv.plugin.v1";
+option java_outer_classname = "HostProto";
+
+// What the core offers to the plugins it runs.
+service HostServices {
+  // Renders a document the caller describes.
+  //
+  // The same document model a DocumentRenderer receives, so a plugin describing
+  // one describes it once whether the core asked for it or the plugin did. The
+  // core picks the renderer; the caller does not name one, because which
+  // renderer is installed is the operator's decision and not the caller's.
+  rpc RenderDocument(stream DocumentRendererRenderRequest)
+      returns (stream DocumentRendererRenderResponse);
+}

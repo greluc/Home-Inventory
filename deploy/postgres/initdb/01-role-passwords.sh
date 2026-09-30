@@ -1,17 +1,6 @@
 #!/bin/sh
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# Gives the two roles that log in their passwords, from the mounted secrets.
-#
-# `00-roles.sql` deliberately sets none: a password in a checked-in file is a
-# password in every clone of the repository. It is therefore also a script that
-# leaves the cluster in a state nothing can connect to, which is why this one
-# exists and runs straight after it.
-#
-# Both values are read from files and passed to psql as *variables*, never
-# interpolated into SQL text here — a password containing a quote would
-# otherwise end the string and change the statement.
 set -eu
 
 require() {
@@ -38,7 +27,4 @@ ALTER ROLE homeinv_app      WITH PASSWORD :'app_password';
 ALTER ROLE homeinv_migrator WITH PASSWORD :'migration_password';
 SQL
 
-# homeinv_readonly, homeinv_housekeeping and homeinv_bootstrap deliberately keep
-# no password. The first two are for a human or a job that brings its own
-# credential; the third is NOLOGIN and exists only to own one function.
 echo "Role passwords set for homeinv_app and homeinv_migrator."

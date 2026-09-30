@@ -52,9 +52,6 @@ public class JsonbType implements UserType<String> {
 
   @Override
   public boolean equals(String first, String second) {
-    // Textual equality, not semantic: two documents differing only in key order are
-    // different text, and this type is not a JSON comparator. Hibernate uses this to
-    // decide whether a field is dirty, and a false "unchanged" would lose a write.
     return Objects.equals(first, second);
   }
 
@@ -83,7 +80,7 @@ public class JsonbType implements UserType<String> {
 
   @Override
   public String deepCopy(String value) {
-    return value; // Strings are immutable; a copy would be the same object anyway.
+    return value;
   }
 
   @Override

@@ -148,6 +148,48 @@ public interface ItemService {
   void delete(UUID id, OptionalLong expectedVersion, UUID actor);
 
   /**
+   * Records that an item was sold or otherwise parted with (REQ-LIFE-007).
+   *
+   * <p><b>Not a deletion.</b> The item stays in the inventory and stays readable — that is the
+   * point of recording it: "what did we have, and what became of it" is the question an inventory
+   * exists to answer, and an item that vanished when it was sold would answer half of it. What
+   * changes is its {@link ItemState}, which takes it out of the everyday lists.
+   *
+   * <p><b>Terminal.</b> Unlike trashing there is no way back, because what is gone is the thing
+   * rather than the record of it. Recording the wrong disposal is corrected by the audit trail and
+   * a revision, not by an undo.
+   *
+   * @param id the item
+   * @param disposal what became of it
+   * @param expectedVersion the version the caller acted on, from the {@code ETag} of its last read;
+   *     empty skips the check (REQ-API-004)
+   * @param actor the authenticated user
+   * @return the item in its new state
+   * @throws de.greluc.homeinv.platform.NotFoundException when this tenant has no such item
+   * @throws ItemStateException when the item is not one the tenant still holds
+   * @throws de.greluc.homeinv.platform.StaleVersionException when somebody else changed it first
+   */
+  ItemView dispose(UUID id, Disposal disposal, OptionalLong expectedVersion, UUID actor);
+
+  /**
+   * What became of an item (REQ-LIFE-007).
+   *
+   * @param state {@link ItemState#SOLD} or {@link ItemState#DISPOSED} — the two ways an item leaves
+   * @param price what it fetched, or {@code null}. Only a sale has one: an amount against a
+   *     disposal would be a row saying both. Null rather than zero for something given away,
+   *     because "nothing was paid" and "0.00 was paid" are different claims
+   * @param on when it went
+   * @param recipient who to, in the seller's own words, or {@code null}
+   * @param note anything else worth knowing, or {@code null}
+   */
+  record Disposal(
+      ItemState state,
+      de.greluc.homeinv.platform.Money price,
+      java.time.LocalDate on,
+      String recipient,
+      String note) {}
+
+  /**
    * The outcome of a creation.
    *
    * @param item the item, whether just created or found already present
@@ -260,6 +302,10 @@ public interface ItemService {
    *     (REQ-LIFE-001/002/014). Replaced whole: a figure left out is one deliberately
    *     cleared, which is the same rule the attributes follow and the only one under which
    *     "remove the purchase price" is sayable at all
+   * @param maintenanceIntervalDays how often this needs servicing, in days, or {@code null} for
+   *     nothing to remind about (REQ-LIFE-004). Days and not months, because "every 3 months from
+   *     31 January" has no answer that is not a surprise to somebody; a surface offers months and
+   *     multiplies
    */
   record CreateItemCommand(
       UUID id,
@@ -273,7 +319,58 @@ public interface ItemService {
       String attributes,
       String notes,
       BigDecimal minimumStock,
-      Valuation valuation) {}
+      Valuation valuation,
+      Integer maintenanceIntervalDays) {
+
+    /**
+     * The command without a servicing interval.
+     *
+     * <p>Here so that the callers written before REQ-LIFE-004 keep saying what they meant rather
+     * than gaining a {@code null} apiece. An item with no interval is the ordinary case: most
+     * things are never serviced.
+     *
+     * @param id the client-generated id, or {@code null}
+     * @param itemTypeVersionId the type version
+     * @param name the name
+     * @param description the description, or {@code null}
+     * @param kind physical or digital
+     * @param locationId where it is, or {@code null} for a digital item
+     * @param quantity how many
+     * @param quantityUnit the unit, or {@code null}
+     * @param attributes the type-defined attributes as JSON
+     * @param notes the free note, or {@code null}
+     * @param minimumStock the restocking level, or {@code null}
+     * @param valuation what it cost, what covers it and what it is worth
+     */
+    public CreateItemCommand(
+        UUID id,
+        UUID itemTypeVersionId,
+        String name,
+        String description,
+        ItemKind kind,
+        UUID locationId,
+        BigDecimal quantity,
+        String quantityUnit,
+        String attributes,
+        String notes,
+        BigDecimal minimumStock,
+        Valuation valuation) {
+      this(
+          id,
+          itemTypeVersionId,
+          name,
+          description,
+          kind,
+          locationId,
+          quantity,
+          quantityUnit,
+          attributes,
+          notes,
+          minimumStock,
+          valuation,
+          null);
+    }
+  }
 
   /**
    * What may be changed about an item. {@code kind} is absent: a physical item does not become a
@@ -289,6 +386,8 @@ public interface ItemService {
    * @param minimumStock the new restocking level, or {@code null} to stop tracking one
    * @param valuation what it cost, what covers it and what replacing it would cost
    *     (REQ-LIFE-001/002/014); replaced whole, so a figure left out is one cleared
+   * @param maintenanceIntervalDays the new servicing interval in days, or {@code null} to
+   *     stop reminding about it (REQ-LIFE-004)
    */
   record UpdateItemCommand(
       String name,
@@ -299,5 +398,46 @@ public interface ItemService {
       String attributes,
       String notes,
       BigDecimal minimumStock,
-      Valuation valuation) {}
+      Valuation valuation,
+      Integer maintenanceIntervalDays) {
+
+    /**
+     * The command without a servicing interval.
+     *
+     * <p>{@link CreateItemCommand}'s reason: an edit that says nothing about servicing should not
+     * have to say {@code null} about it.
+     *
+     * @param name the name
+     * @param description the description, or {@code null}
+     * @param locationId where it is
+     * @param quantity how many
+     * @param quantityUnit the unit, or {@code null}
+     * @param attributes the type-defined attributes as JSON
+     * @param notes the free note, or {@code null}
+     * @param minimumStock the restocking level, or {@code null}
+     * @param valuation what it cost, what covers it and what it is worth
+     */
+    public UpdateItemCommand(
+        String name,
+        String description,
+        UUID locationId,
+        BigDecimal quantity,
+        String quantityUnit,
+        String attributes,
+        String notes,
+        BigDecimal minimumStock,
+        Valuation valuation) {
+      this(
+          name,
+          description,
+          locationId,
+          quantity,
+          quantityUnit,
+          attributes,
+          notes,
+          minimumStock,
+          valuation,
+          null);
+    }
+  }
 }

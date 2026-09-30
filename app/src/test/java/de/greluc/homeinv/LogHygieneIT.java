@@ -82,9 +82,6 @@ class LogHygieneIT extends AbstractIntegrationTest {
   void captureEverything() {
     root = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(Logger.ROOT_LOGGER_NAME);
     previous = root.getLevel();
-    // DEBUG, not INFO: a secret that only appears when somebody turns debugging
-    // on is still a secret in a log file, and turning it on is what an operator
-    // does when something is wrong.
     root.setLevel(Level.DEBUG);
 
     captured = new ListAppender<>();
@@ -106,9 +103,6 @@ class LogHygieneIT extends AbstractIntegrationTest {
     String hash = passwordEncoder.encode(PASSWORD);
     provisioning.provision("Log hygiene", createUser(email, hash));
 
-    // A failed attempt, a successful one, and a request that carries the session.
-    // Each is a place where a value the caller supplied passes through code that
-    // logs.
     mockMvc.perform(
         post("/api/v1/auth/login")
             .contentType(MediaType.APPLICATION_JSON)
@@ -137,8 +131,6 @@ class LogHygieneIT extends AbstractIntegrationTest {
         .as("no signing key: with it, media URLs and pagination cursors can be forged")
         .doesNotContain(signingKey());
   }
-
-  // -------------------------------------------------------------------------
 
   private String capturedLog() {
     StringBuilder text = new StringBuilder();

@@ -1,0 +1,30 @@
+; GENERATED FROM ../services.yaml — DO NOT EDIT.
+;
+; Run `python deploy/generate.py` after changing the matrix. CI regenerates
+; this file and fails on any difference, so an edit here is lost and noticed
+; rather than lost and not (REQ-NFR-063).
+
+
+[Unit]
+Description=Home Inventory plugin-smtp
+
+[Container]
+ContainerName=homeinv-plugin-smtp
+Image=ghcr.io/greluc/home-inv-plugin-smtp:latest
+User=10001:10001
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+Network=homeinv-plugin-smtp.network:alias=plugin-smtp
+EnvironmentFile=%h/.config/homeinv/homeinv.env
+Environment=HOMEINV_PLUGIN_PORT=8201
+Environment=HOMEINV_MTLS_PLUGIN_FILE=/run/secrets/mtls-plugin-smtp
+Environment=HOMEINV_EGRESS_PROXY=egress-proxy:8118
+Environment=HOMEINV_SMTP_TIMEOUT_SECONDS=30
+Secret=mtls-plugin-smtp,type=mount
+Secret=plugin-smtp-password,type=mount
+
+[Service]
+MemoryMax=128M
+MemoryLow=32M
+Restart=on-failure

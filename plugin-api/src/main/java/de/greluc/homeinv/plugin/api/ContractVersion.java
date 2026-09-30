@@ -39,7 +39,6 @@ public final class ContractVersion {
   public static final String SERVED = "1.0.0";
 
   private ContractVersion() {
-    // Constants and one question.
   }
 
   /**

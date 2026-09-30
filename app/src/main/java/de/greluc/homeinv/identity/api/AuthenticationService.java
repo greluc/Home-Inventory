@@ -4,6 +4,8 @@
  */
 package de.greluc.homeinv.identity.api;
 
+import java.util.UUID;
+
 /**
  * Verifying a login.
  *
@@ -28,4 +30,26 @@ public interface AuthenticationService {
    * @throws InvalidCredentialsException for every other failure, indistinguishably
    */
   AuthenticatedUser login(String email, String password, String clientIp);
+
+  /**
+   * The principal a VERIFIED foreign identity signs in as (REQ-AUTH-005).
+   *
+   * <p>No password and no throttle: there is no secret to guess here. The provider authenticated
+   * the person and the core verified the token that says so, which is the step a password
+   * replaces. Everything after it is shared with {@link #login} — the account has to be one
+   * that may authenticate at all, and the membership is resolved the same way, so a federated
+   * session is the same session through a different door.
+   *
+   * <p>It establishes nothing, and it does not answer the second factor. That is asked for
+   * where a password login asks for it: a provider proved who somebody is, not that they hold
+   * the authenticator this instance knows about.
+   *
+   * @param userId the account the verified identity is linked to
+   * @param clientIp the caller's address, for the log
+   * @return the authenticated principal, carrying the user and the tenant
+   * @throws InvalidCredentialsException when the account may not authenticate — locked,
+   *     disabled or gone. The same exception a password login raises, because what the
+   *     caller is told has to be the same
+   */
+  AuthenticatedUser signInFederated(UUID userId, String clientIp);
 }

@@ -97,9 +97,6 @@ public class SchemaVersion {
       if (!rows.next()) {
         return 0;
       }
-      // Flyway stores the version as text ("9", and "1.1" if anyone ever uses a
-      // minor). Only the major part is compared, because that is what the file
-      // names in this project carry.
       String version = rows.getString(1);
       int dot = version.indexOf('.');
       return Integer.parseInt(dot < 0 ? version : version.substring(0, dot));

@@ -76,9 +76,6 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
 
     UUID mediaObjectId = uploadJpeg(tenantId, userId);
 
-    // The upload returned before the derivatives existed - that is the point of
-    // moving them off the request thread - so the assertion waits for the
-    // consumer rather than assuming it has already run.
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
@@ -89,8 +86,6 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
               assertThat(object.get().getDerivedAt()).isNotNull();
               assertThat(object.get().getThumbSha256()).isNotNull().hasSize(64);
               assertThat(object.get().getPreviewSha256()).isNotNull().hasSize(64);
-              // Each derivative is its own content, so its address differs from
-              // the full variant's and from the other derivative's.
               assertThat(object.get().getThumbSha256())
                   .isNotEqualTo(object.get().getPreviewSha256())
                   .isNotEqualTo(object.get().getSha256());
@@ -112,10 +107,6 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
 
     MediaObject first = loadAs(tenantId, mediaObjectId).orElseThrow();
 
-    // Delivery is at-least-once, so this happens as a matter of course after a
-    // broker outage. Running it again must not produce a second set of blobs or
-    // move the timestamp - a client polling `derivedAt` would otherwise see the
-    // work appear to restart.
     TenantContext.runAs(tenantId, () -> generator.derive(tenantId, mediaObjectId));
 
     MediaObject second = loadAs(tenantId, mediaObjectId).orElseThrow();
@@ -137,7 +128,7 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
             () -> {
               try {
                 return media
-                    .upload(new ByteArrayInputStream(pdf()), "ITEM", UUID.randomUUID(), false, userId)
+                    .upload(new ByteArrayInputStream(pdf()), "ITEM", UUID.randomUUID(), false, "PHOTO", userId)
                     .id();
               } catch (IOException unreadable) {
                 throw new UncheckedIOException(unreadable);
@@ -149,19 +140,12 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
         .untilAsserted(
             () -> {
               MediaObject object = loadAs(tenantId, mediaObjectId).orElseThrow();
-              // Finished, with nothing produced. Without the timestamp the worker
-              // would claim this row again on every redelivery for the life of
-              // the object.
               assertThat(object.getDerivedAt()).isNotNull();
               assertThat(object.getThumbSha256()).isNull();
               assertThat(object.getPreviewSha256()).isNull();
-              // And the document is stored as it arrived: there is no re-encoding
-              // that makes a PDF safer without making it a different document.
               assertThat(object.getMediaType()).isEqualTo("application/pdf");
             });
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * A stand-in for libvips.
@@ -225,7 +209,8 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
         () -> {
           try {
             return media
-                .upload(new ByteArrayInputStream(jpeg()), "ITEM", UUID.randomUUID(), false, userId)
+                .upload(
+                    new ByteArrayInputStream(jpeg()), "ITEM", UUID.randomUUID(), false, "PHOTO", userId)
                 .id();
           } catch (IOException unreadable) {
             throw new UncheckedIOException(unreadable);
@@ -245,9 +230,6 @@ class DerivativeGenerationIT extends AbstractIntegrationTest {
                     "de",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

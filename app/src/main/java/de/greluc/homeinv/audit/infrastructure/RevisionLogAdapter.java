@@ -60,11 +60,6 @@ public class RevisionLogAdapter implements RevisionLog {
   public long record(
       EntityType entityType, UUID entityId, ChangeKind kind, String snapshot, UUID actor) {
     UUID tenantId = TenantContext.require();
-    // The number is read and written in one statement, so two concurrent writers
-    // cannot both read the same maximum. They would collide on the unique key
-    // rather than silently sharing a number — and concurrent writes to one entity
-    // are already serialised by its optimistic lock, so this is the belt to that
-    // brace.
     Long assigned =
         jdbc.sql(
                 """
@@ -106,9 +101,6 @@ public class RevisionLogAdapter implements RevisionLog {
               .query(this::revisionOf)
               .list();
     } else {
-      // The position is a revision number, which is already an ordered key of its
-      // own — the cursor still carries the pair, so a tampered one is refused by
-      // the same code path as everywhere else (REQ-SEC-106).
       CursorCodec.Position from = cursors.decode(cursor, CURSOR);
       rows =
           jdbc.sql(PAGE_AFTER)

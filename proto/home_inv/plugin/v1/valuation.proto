@@ -1,16 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// ESTIMATING WHAT AN ITEM IS WORTH NOW, AND WHAT REPLACING IT WOULD COST.
-//
-// Straight-line depreciation is in the core image — it is arithmetic and opens
-// nothing. Declining balance is the same. Market-price and dealer services are
-// plugins, because they call out.
-//
-// Both numbers are ESTIMATES and the core presents them as estimates. A current
-// value is what the thing is worth today; a replacement value is what buying it
-// again would cost, and an insurance conversation needs the second. `basis` is
-// what makes that visible rather than implied.
 
 syntax = "proto3";
 
@@ -72,7 +61,7 @@ message ValuationValueRequest {
   // The item's attributes, so that a market-price provider can find the model.
   //
   // Only the fields the tenant made visible to plugins are in here: a
-  // `sensitive` field never leaves the core (REQ-SEC-011).
+  // `sensitive` field never leaves the core (REQ-SEC-027, 09 §9.4).
   map<string, string> attributes = 7;
 }
 

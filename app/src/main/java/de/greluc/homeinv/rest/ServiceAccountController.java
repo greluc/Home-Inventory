@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
 import de.greluc.homeinv.authorization.api.RequiresRecentSecondFactor;
@@ -47,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
  * tenant a request acts for comes from the principal (REQ-SEC-004), and a path that could choose it
  * would be the second place it is decided.
  */
+@Tag(name = "Service accounts", description = "Machine tokens, for the integrations a person does not drive (REQ-AUTH-010).")
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/service-accounts")
 @RequiredArgsConstructor
@@ -130,6 +132,48 @@ public class ServiceAccountController {
     requireOwnTenant(tenantId, user);
     serviceAccounts.revoke(id, user.userId());
   }
+
+  /**
+   * Revokes every one of this tenant's tokens (REQ-SEC-082).
+   *
+   * <p>The immediate measure, and deliberately a different URL from revoking one rather than a
+   * flag on it: {@code DELETE} on the collection is what "all of them" means in HTTP, and a
+   * parameter that turned a single revocation into a mass one is the kind of call somebody makes
+   * by accident.
+   *
+   * <p>It answers with the count rather than {@code 204}, because "how many did that stop" is the
+   * first question afterwards and the operator is unlikely to know.
+   *
+   * @param tenantId the tenant, which must be the session's own
+   * @param user who is taking the measure
+   * @return how many were revoked
+   */
+  @DeleteMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequiresPermission(Permission.SERVICE_ACCOUNT_ADMINISTER)
+  @RequiresRecentSecondFactor
+  @CanFail({
+    ProblemType.UNAUTHENTICATED,
+    ProblemType.FORBIDDEN,
+    ProblemType.SECOND_FACTOR_STALE,
+    ProblemType.NOT_FOUND
+  })
+  public TokensRevokedView revokeAll(
+      @PathVariable UUID tenantId, @AuthenticationPrincipal AuthenticatedUser user) {
+    requireOwnTenant(tenantId, user);
+    return new TokensRevokedView(serviceAccounts.revokeAll(user.userId()));
+  }
+
+  /**
+   * What a mass revocation did.
+   *
+   * <p>Not {@code RevokedView}: springdoc names a schema after the simple class name, and
+   * {@code TenantRevocationController} already publishes one under that name — two types with one
+   * name publish one shape and lose the other, silently, in the document every generated client is
+   * built from ({@code SchemaNameTest}, ADR-0080).
+   *
+   * @param revoked how many tokens stopped working
+   */
+  public record TokensRevokedView(int revoked) {}
 
   /**
    * Refuses a path naming a tenant the session is not acting for.

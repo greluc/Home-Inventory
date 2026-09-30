@@ -59,8 +59,6 @@ public class ServiceAccountAuthenticationFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
 
     String header = request.getHeader("Authorization");
-    // Read once: two calls could answer differently, and the second would be the
-    // one dereferenced.
     Authentication established = SecurityContextHolder.getContext().getAuthentication();
     boolean alreadySomebody =
         established != null
@@ -85,8 +83,6 @@ public class ServiceAccountAuthenticationFilter extends OncePerRequestFilter {
     try {
       chain.doFilter(request, response);
     } finally {
-      // Cleared here rather than left to the container: the thread is pooled, and
-      // a principal left behind is the next request's caller.
       SecurityContextHolder.clearContext();
     }
   }

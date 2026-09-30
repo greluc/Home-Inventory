@@ -65,7 +65,6 @@ class SecondFactorStepUpIT extends AbstractIntegrationTest {
     UUID member = memberOf(tenantId, "stepup-member@example.org");
     MockHttpSession session = signIn("stepup-owner@example.org", PASSWORD);
 
-    // Freshly signed in: the factor was proved a moment ago.
     mockMvc
         .perform(
             put("/api/v1/tenants/" + tenantId + "/members/" + member)
@@ -77,7 +76,6 @@ class SecondFactorStepUpIT extends AbstractIntegrationTest {
 
     goStale(session);
 
-    // Granting a role is one of the operations 12 §12.4 names.
     mockMvc
         .perform(
             put("/api/v1/tenants/" + tenantId + "/members/" + member)
@@ -89,7 +87,6 @@ class SecondFactorStepUpIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-stale"));
 
-    // Reading is untouched: the re-confirmation guards what changes something.
     mockMvc
         .perform(get("/api/v1/tenants/" + tenantId + "/members").session(session))
         .andExpect(status().isOk());
@@ -144,8 +141,6 @@ class SecondFactorStepUpIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-stale"));
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Moves the session's proof out of the window.

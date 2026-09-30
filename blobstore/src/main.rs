@@ -22,6 +22,13 @@ mod store;
 mod tls;
 
 /// The generated contract from `proto/home_inv/plugin/v1/blob_store.proto`.
+///
+/// `dead_code` is allowed here and nowhere else. The contract gained a `CallContext`
+/// on 2026-09-21, which pulled `common.proto` into this module with every message
+/// it carries — `Money`, `Check`, `Problem` and the rest, none of which this service
+/// constructs and all of which a plugin does. The alternative would be a second
+/// generated module per service, which is a build that knows what each consumer uses.
+#[allow(dead_code)]
 mod proto {
     tonic::include_proto!("home_inv.plugin.v1");
 }
@@ -46,9 +53,11 @@ const DEFAULT_IDENTITY: &str = "/run/secrets/mtls-blobstore";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // JSON lines, like every other service in the deployment (REQ-NFR-041). An
-    // operator reading one log format is an operator who can grep across
-    // services.
+    if std::env::args().any(|argument| argument == "--licences") {
+        print!("{}", include_str!("../THIRD-PARTY-NOTICES.txt"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .json()
         .with_env_filter(
@@ -60,14 +69,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity_path = PathBuf::from(env_or(DEFAULT_IDENTITY, "HOMEINV_MTLS_BLOBSTORE_FILE"));
 
     if std::env::args().any(|argument| argument == "--health") {
-        // The health command the service matrix names. The image is `scratch`:
-        // there is no shell to run a script and no curl to call, so the binary
-        // answers the question about itself.
-        //
-        // It asks whether the volume is writable, which is the failure this
-        // service actually has: a read-only mount, a full disk, or a UID mapping
-        // that changed under it. "The process is running" is not worth reporting
-        // — the runtime already knows that.
         return match health(&root).await {
             Ok(()) => Ok(()),
             Err(failure) => {
@@ -91,9 +92,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Server::builder()
         .tls_config(identity)?
         .add_service(BlobStoreServer::new(FilesystemBlobStore::new(root)))
-        // The runtime stops a container with SIGTERM. Without this the process
-        // is killed after the grace period instead of finishing the transfer it
-        // is in the middle of.
         .serve_with_shutdown(address, async {
             let _ = tokio::signal::ctrl_c().await;
         })
@@ -118,4 +116,23 @@ fn env_port() -> u16 {
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_PORT)
+}
+
+#[cfg(test)]
+mod licences {
+    /// The notice is compiled into the binary rather than read from a file
+    /// (`REQ-CON-013`). A `scratch` image has no filesystem to read one from,
+    /// so an absent notice would be a link error here and a licence breach in
+    /// production; this makes it the former.
+    #[test]
+    fn the_notice_travels_with_the_binary() {
+        let notice = include_str!("../THIRD-PARTY-NOTICES.txt");
+
+        assert!(notice.starts_with("THIRD-PARTY LICENCE NOTICES"));
+        assert!(notice.contains("tonic"));
+        assert!(
+            notice.len() > 10_000,
+            "a notice this short is a generator that failed"
+        );
+    }
 }

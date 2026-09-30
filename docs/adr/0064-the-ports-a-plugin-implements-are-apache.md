@@ -4,6 +4,16 @@
 
 **Depends on:** [ADR-0018](0018-licensing.md), [ADR-0028](0028-plugin-runtime-stage-1.md)
 
+> **Amended by [ADR-0067](0067-breached-passwords-from-a-shipped-list.md)**: a fifteenth port,
+> `PasswordBreachCheck`, joins the fourteen this record was written about. Nothing here
+> changes — it is Apache-2.0, it lives in `plugin-api`, and it depends on no core module —
+> and the counts in the body are left as the record of what was true on 2026-09-14.
+
+> **Amended by [ADR-0070](0070-documents-are-described-not-programmed.md)**: a sixteenth
+> port, `DocumentRenderer`, joins the fifteen this record was written about. Nothing here
+> changes — it is Apache-2.0, it lives in `plugin-api`, and it depends on no core module —
+> and the counts in the body are left as the record of what was true on 2026-09-14.
+
 ## Context
 
 `REQ-PLG-001` requires the **fourteen extension points to exist** at stage 1 —

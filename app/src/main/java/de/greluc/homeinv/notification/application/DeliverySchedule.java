@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 public class DeliverySchedule {
 
   private final DeliveryDispatcher dispatcher;
+  private final SecurityDeliveryDispatcher securityDispatcher;
 
   /**
    * Delivers everything due.
@@ -40,10 +41,16 @@ public class DeliverySchedule {
     try {
       dispatcher.deliverDue(Instant.now());
     } catch (RuntimeException failed) {
-      // Logged and swallowed: a scheduled task that throws stops being scheduled
-      // in some runtimes, and notifications that silently stopped going out is
-      // the failure this whole block is against.
       log.error("The notification delivery run failed; the next one will pick it up", failed);
+    }
+
+    try {
+      securityDispatcher.deliverDue(Instant.now());
+    } catch (RuntimeException failed) {
+      log.error(
+          "The account notification run failed; the next one will pick it up. Nobody is told"
+              + " about their own account while this keeps happening",
+          failed);
     }
   }
 }

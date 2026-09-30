@@ -69,8 +69,6 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
   void anAlteredEntry() throws Exception {
     UUID tenant = aTenantWithEntries("altered", 4);
 
-    // The attacker this exists for: somebody with database access rewriting what
-    // an action was. The application cannot do this at all.
     asSuperuser(
         "update audit.audit_entry set action = 'item.read' where tenant_id = '"
             + tenant
@@ -92,8 +90,6 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
     asSuperuser(
         "delete from audit.audit_entry where tenant_id = '" + tenant + "' and seq = 2");
 
-    // Nothing was forged: entries 1, 3 and 4 still hash to what they say. What
-    // gives it away is that 3 names a predecessor that is no longer there.
     ChainVerification.ChainResult result =
         TenantContext.callAs(tenant, verification::verifyChain);
 
@@ -104,13 +100,8 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("calls a recorded truncation truncated, not broken")
   void aRecordedTruncation() throws Exception {
-    // REQ-SEC-107 in one test. The same deletion as above, with the marker a
-    // retention run writes — and the outcome has to be a different word, or
-    // honouring REQ-PRIV-010 would look exactly like an attack.
     UUID tenant = aTenantWithEntries("truncated", 5);
 
-    // The retention run's two steps, as `homeinv_housekeeping` performs them:
-    // remove the oldest entries and record where the chain now begins.
     asSuperuser(
         "insert into audit.chain_truncation"
             + " (tenant_id, oldest_seq, oldest_hash, removed_count, reason)"
@@ -133,9 +124,6 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
     forgetEveryAnchor();
     aTenantWithEntries("anchored", 3);
 
-    // The windows up to two hours from now, so that the hour the entries were
-    // written in counts as closed. The current hour is never anchored: entries
-    // are still going into it.
     assertThat(anchors.anchorDueWindows(Instant.now().plus(2, ChronoUnit.HOURS)))
         .as("the hour the entries were written in is now closed and had no anchor")
         .isGreaterThanOrEqualTo(1);
@@ -155,9 +143,6 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
     UUID tenant = aTenantWithEntries("anchor-removal", 3);
     anchors.anchorDueWindows(Instant.now().plus(2, ChronoUnit.HOURS));
 
-    // The chain alone can be recomputed by whoever can rewrite the rows. The
-    // anchor cannot: it spans every tenant and chains to its predecessor
-    // (ADR-0031). Removing an entry leaves the window's root unreproducible.
     asSuperuser(
         "delete from audit.audit_entry where tenant_id = '" + tenant + "' and seq = 2");
 
@@ -181,8 +166,6 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
     asSuperuser(
         "update audit.chain_anchor set pruned = true where window_start = '" + window + "'");
 
-    // The row and its place in the anchor chain stay; what stops is expecting a
-    // recomputation over contents a retention run removed on purpose.
     ChainVerification.AnchorResult result =
         verification.verifyAnchors(
             Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(2, ChronoUnit.HOURS));
@@ -190,8 +173,6 @@ class AuditChainVerificationIT extends AbstractIntegrationTest {
     assertThat(result.outcome()).isEqualTo(ChainVerification.Outcome.INTACT);
     assertThat(result.pruned()).isGreaterThanOrEqualTo(1);
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Removes every anchor, so that a test's assertions are about what that test anchored.

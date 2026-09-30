@@ -110,6 +110,24 @@ public final class TenantContext {
   }
 
   /**
+   * Binds the tenant on this thread, for context propagation only.
+   *
+   * <p>Package-private and used by exactly one caller: {@link ContextPropagation}, which restores a
+   * snapshot on a thread the request did not start on. Everything else uses {@link #runAs} or
+   * {@link #callAs}, which put back what was there before — a public setter would be the mechanism
+   * by which one tenant's work quietly continues under another's id.
+   *
+   * @param tenantId the tenant, or {@code null} to bind nothing
+   */
+  static void bind(UUID tenantId) {
+    if (tenantId == null) {
+      CURRENT.remove();
+    } else {
+      CURRENT.set(tenantId);
+    }
+  }
+
+  /**
    * Clears the tenant of the current thread.
    *
    * <p>Called when a request ends. A thread handing back to the pool with a tenant still set would

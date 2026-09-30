@@ -67,6 +67,7 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
   @Autowired private TransactionTemplate transactions;
   @Autowired private ObjectMapper json;
   @Autowired private List<SearchIndex> engines;
+  @Autowired private de.greluc.homeinv.search.application.SearchIndexer indexer;
 
   @Test
   @DisplayName("is the engine an installation that asked for it gets")
@@ -82,8 +83,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
   void findsTheWholeDocument() throws Exception {
     Tenant tenant = aTenant("fields");
 
-    // Each word appears in exactly one field, so a hit proves which field was
-    // searched. Nonsense words, because a real one might stem into another.
     UUID hammer =
         anItem(
             tenant,
@@ -105,9 +104,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     Tenant tenant = aTenant("stemming");
     anItem(tenant, "Bohrmaschine", null, null, null);
 
-    // The German analyser, because the session's language is `de`. The same
-    // property REQ-SRCH-001 asks of the PostgreSQL vectors (ADR-0047), so a
-    // search does not change meaning when the fallback answers.
     awaitFound(tenant, "Bohrmaschinen", "Bohrmaschine");
   }
 
@@ -120,9 +116,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     anItem(theirs, "Zarquonhammer", null, null, null);
     awaitFound(theirs, "Zarquonhammer", "Zarquonhammer");
 
-    // The document is in the same index, under the same word, and is not mine.
-    // One index for every tenant is ADR-0008's decision; this filter is what
-    // makes it a boundary rather than a shared bucket.
     assertThat(namesFound(mine, "Zarquonhammer")).isEmpty();
   }
 
@@ -133,8 +126,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     UUID id = anItem(tenant, "Blorptidhammer", null, null, null);
     awaitFound(tenant, "Blorptidhammer", "Blorptidhammer");
 
-    // The current version, read rather than assumed: every write on a single
-    // resource requires `If-Match`, and a guessed one is a 412 (08 §8.2).
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
@@ -144,13 +135,33 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
                 .header("If-Match", eTagOf(tenant.session(), ITEMS + "/" + id)))
         .andExpect(status().isNoContent());
 
-    // A trashed item must stop being findable at once, for the whole retention
-    // period (REQ-CORE-013) - a deletion that leaves the thing searchable did
-    // not happen as far as anybody can tell.
     await().atMost(INDEXED).untilAsserted(() -> assertThat(namesFound(tenant, "Blorptidhammer")).isEmpty());
   }
 
-  // -------------------------------------------------------------------------
+  @Test
+  @DisplayName("is unchanged by a second delivery of the same event (REQ-NFR-016)")
+  void aDuplicateDeliveryChangesNothing() throws Exception {
+    Tenant tenant = aTenant("duplicate");
+    UUID hammer = anItem(tenant, "Zarquonhammer", null, null, null);
+    awaitFound(tenant, "Zarquonhammer", "Zarquonhammer");
+
+    List<String> afterOne = namesFound(tenant, "Zarquonhammer");
+    indexer.reindex(tenant.tenantId(), hammer);
+    indexer.reindex(tenant.tenantId(), hammer);
+
+    await()
+        .atMost(INDEXED)
+        .untilAsserted(
+            () ->
+                assertThat(namesFound(tenant, "Zarquonhammer")).isEqualTo(afterOne));
+
+    indexer.forget(tenant.tenantId(), hammer);
+    indexer.forget(tenant.tenantId(), hammer);
+    await()
+        .atMost(INDEXED)
+        .untilAsserted(
+            () -> assertThat(namesFound(tenant, "Zarquonhammer")).doesNotContain("Zarquonhammer"));
+  }
 
   private void awaitFound(Tenant tenant, String text, String expected) {
     await()
@@ -158,8 +169,6 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
         .untilAsserted(
             () ->
                 assertThat(namesFound(tenant, text))
-                    // Named, so a failure says which field went missing rather
-                    // than which line it was asserted on.
                     .as("searching for '%s'", text)
                     .contains(expected));
   }
@@ -239,7 +248,7 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
     enrolSecondFactor(userId);
     UUID tenantId = provisioning.provision("Searching " + name, userId);
     UUID typeId = TenantContext.callAs(tenantId, () -> aType(userId));
-    return new Tenant(signIn(email, PASSWORD), typeId);
+    return new Tenant(signIn(email, PASSWORD), typeId, tenantId);
   }
 
   /**
@@ -282,5 +291,5 @@ class OpenSearchEngineIT extends AbstractSearchIntegrationTest {
    * @param session the authenticated caller
    * @param typeId the published type its items are written against
    */
-  private record Tenant(MockHttpSession session, UUID typeId) {}
+  private record Tenant(MockHttpSession session, UUID typeId, UUID tenantId) {}
 }

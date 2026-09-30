@@ -81,9 +81,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
     UUID box = inOwnTransaction(tenant, () -> create(boxes, cellar, "Box 7").id());
     UUID tray = inOwnTransaction(tenant, () -> create(boxes, box, "Tray").id());
 
-    // Eight items in the box and its tray. Not two hundred, because the assertion
-    // is that the count of events does not depend on the count of items at all,
-    // and eight proves that as well as two hundred does in a fifth of the time.
     for (int index = 0; index < 8; index++) {
       String name = "Thing " + index;
       UUID where = index % 2 == 0 ? box : tray;
@@ -95,7 +92,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
 
     LocationView moved = inOwnTransaction(tenant, () -> locations.move(box, attic, OptionalLong.empty(), tenant.userId()));
 
-    // One event for the lot. Anything that walked the contents would publish nine.
     List<LocationMoved> published = events.stream(LocationMoved.class).toList();
     assertThat(published).hasSize(1);
     assertThat(published.getFirst().locationId()).isEqualTo(box);
@@ -108,7 +104,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
         .as("the move published exactly one event of this application's own")
         .isEqualTo(1);
 
-    // The subtree followed, in the paths and in the depths.
     assertThat(moved.parentId()).isEqualTo(attic);
     assertThat(moved.ancestors()).containsExactly("House", "Attic", "Box 7");
     assertThat(inOwnTransaction(tenant, () -> rawPath(box))).isNotEqualTo(boxPathBefore);
@@ -118,8 +113,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
     assertThat(inOwnTransaction(tenant, () -> locations.get(tray)).ancestors())
         .containsExactly("House", "Attic", "Box 7", "Tray");
 
-    // And the items are where they were, because an item names its location and
-    // that location is the same location.
     assertThat(inOwnTransaction(tenant, () -> itemsIn(box))).isEqualTo(4);
     assertThat(inOwnTransaction(tenant, () -> itemsIn(tray))).isEqualTo(4);
   }
@@ -134,8 +127,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
     UUID cellar = inOwnTransaction(tenant, () -> create(room, house, "Cellar").id());
     String pathBefore = inOwnTransaction(tenant, () -> rawPath(cellar));
 
-    // A client retrying a request whose answer it never saw. The same reason
-    // deleting twice is not an error.
     LocationView same =
         inOwnTransaction(tenant, () -> locations.move(cellar, house, OptionalLong.empty(), tenant.userId()));
 
@@ -154,20 +145,15 @@ class LocationMoveIT extends AbstractIntegrationTest {
     UUID cellar = inOwnTransaction(tenant, () -> create(room, house, "Cellar").id());
     UUID shelf = inOwnTransaction(tenant, () -> create(room, cellar, "Shelf").id());
 
-    // REQ-CORE-045, now that it is a check rather than a structural guarantee:
-    // until a move existed, a parent was fixed at creation and a cycle could not
-    // be expressed at all.
     assertThatThrownBy(
             () -> inOwnTransaction(tenant, () -> locations.move(house, shelf, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class)
         .hasMessageContaining("itself");
 
-    // Its own child, which is the acceptance criterion in as many words.
     assertThatThrownBy(
             () -> inOwnTransaction(tenant, () -> locations.move(house, cellar, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class);
 
-    // And into itself.
     assertThatThrownBy(
             () -> inOwnTransaction(tenant, () -> locations.move(house, house, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(InvalidMoveException.class);
@@ -181,7 +167,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
     Tenant tenant = newTenant("move-depth@example.org");
     UUID room = category(tenant, "room");
 
-    // A chain as deep as the tree may go.
     UUID deepest =
         inOwnTransaction(
             tenant,
@@ -194,21 +179,16 @@ class LocationMoveIT extends AbstractIntegrationTest {
             });
     UUID oneAbove = inOwnTransaction(tenant, () -> locations.get(deepest).parentId());
 
-    // A two-level subtree elsewhere.
     UUID crate = inOwnTransaction(tenant, () -> create(room, null, "Crate").id());
     UUID inside = inOwnTransaction(tenant, () -> create(room, crate, "Inside").id());
 
-    // The crate alone would fit under the second-deepest level; what does not fit
-    // is the thing inside it, which is the whole point of measuring the subtree.
     assertThatThrownBy(
             () -> inOwnTransaction(tenant, () -> locations.move(crate, oneAbove, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(TooDeepException.class);
 
-    // Nothing moved, and the refusal happened before a single path was rewritten.
     assertThat(inOwnTransaction(tenant, () -> locations.get(crate)).parentId()).isNull();
     assertThat(inOwnTransaction(tenant, () -> locations.get(inside)).depth()).isEqualTo(1);
 
-    // One level higher there is room for both.
     UUID twoAbove = inOwnTransaction(tenant, () -> locations.get(oneAbove).parentId());
     inOwnTransaction(tenant, () -> locations.move(crate, twoAbove, OptionalLong.empty(), tenant.userId()));
     assertThat(inOwnTransaction(tenant, () -> locations.get(inside)).depth())
@@ -226,7 +206,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
     inOwnTransaction(tenant, () -> create(room, house, "Store"));
     UUID store = inOwnTransaction(tenant, () -> create(room, cellar, "Store").id());
 
-    // REQ-CORE-064 is about siblings, and a move changes who the siblings are.
     assertThatThrownBy(
             () -> inOwnTransaction(tenant, () -> locations.move(store, house, OptionalLong.empty(), tenant.userId())))
         .isInstanceOf(NameTakenException.class);
@@ -243,14 +222,10 @@ class LocationMoveIT extends AbstractIntegrationTest {
     UUID hall = inOwnTransaction(tenant, () -> create(room, null, "Hall").id());
     UUID box = inOwnTransaction(tenant, () -> create(boxes, null, "Box 1").id());
 
-    // No rule at all means everything is permitted, which is the state every
-    // shipped category starts in and the reason this can be switched on in a
-    // tenant whose tree already exists.
     assertThat(inOwnTransaction(tenant, () -> types.childCategories(room)).permitted()).isEmpty();
     inOwnTransaction(tenant, () -> locations.move(box, hall, OptionalLong.empty(), tenant.userId()));
     inOwnTransaction(tenant, () -> locations.move(box, null, OptionalLong.empty(), tenant.userId()));
 
-    // A rule that names shelves and nothing else.
     TypeAdministration.ChildCategoryRuleView rule =
         inOwnTransaction(
             tenant, () -> types.setChildCategories(room, List.of(shelves), tenant.userId()));
@@ -261,16 +236,12 @@ class LocationMoveIT extends AbstractIntegrationTest {
         .isInstanceOf(InvalidMoveException.class)
         .hasMessageContaining("does not take");
 
-    // Widened, and the same move goes through — "settable and effective", both
-    // halves, in one test.
     inOwnTransaction(
         tenant, () -> types.setChildCategories(room, List.of(shelves, boxes), tenant.userId()));
     LocationView moved =
         inOwnTransaction(tenant, () -> locations.move(box, hall, OptionalLong.empty(), tenant.userId()));
     assertThat(moved.parentId()).isEqualTo(hall);
 
-    // Withdrawn: an empty set is no restriction, not a restriction permitting
-    // nothing. The difference decides whether the feature can be turned off again.
     inOwnTransaction(tenant, () -> types.setChildCategories(room, List.of(), tenant.userId()));
     assertThat(inOwnTransaction(tenant, () -> types.childCategories(room)).permitted()).isEmpty();
     inOwnTransaction(tenant, () -> locations.move(box, null, OptionalLong.empty(), tenant.userId()));
@@ -312,7 +283,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.type")
                 .value("https://home-inv.example/problems/invalid-move"));
 
-    // And the move that is legal goes through the same endpoint.
     mockMvc
         .perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
@@ -330,8 +300,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.depth")
                 .value(0));
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * How many events this application published so far in this test.
@@ -451,8 +419,6 @@ class LocationMoveIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003 refuses an OWNER every request until a factor is enrolled, and
-    // the REST test below signs in as one.
     enrolSecondFactor(userId);
     return userId;
   }

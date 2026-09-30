@@ -1,22 +1,10 @@
 # SPDX-FileCopyrightText: Lucas Greuloch
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# gitleaks runs in CI (.github/workflows/security.yml) and as a pre-commit hook.
-# Nothing secret ever lands in this repository — it is public, and every file in
-# it is world-readable from the moment it is pushed.
-#
-# This file does one thing: it stops the scanner reporting the deliberately fake
-# password the integration tests share. It does NOT relax the rules anywhere a
-# real credential could appear.
 
 [extend]
-# Every default rule stays on. This file adds an allowlist; it replaces nothing.
 useDefault = true
 
 [[rules]]
-# A rule of our own, so the allowlist below has something to hang on that is not
-# one of the defaults. It never matches: the default `generic-api-key` rule is
-# what fires on the test password, and `[[allowlists]]` below applies globally.
 id = "homeinv-placeholder"
 description = "Unused; present so this file is a valid rule set rather than only an allowlist."
 regex = '''homeinv-this-pattern-matches-nothing-[0-9a-f]{64}'''
@@ -109,3 +97,34 @@ CI only scans the commits a push carries, so this one did not fire on 2026-09-12
 diagnosed under time pressure later.
 """
 paths = ['''design-system/.*\.prompt\.md$''']
+
+[[allowlists]]
+description = """
+The routing keys the RabbitMQ listeners bind to.
+
+`ItemIndexListener` and `MediaDerivationListener` declare their bindings with
+`key = "item-purged.v1"` and nine siblings of the same shape. The generic-api-key
+rule fires on the adjacency — a field literally called `key`, assigned a quoted
+string — and the string is a broker binding pattern that every consumer of this
+exchange has to know. A routing key is addressed to, not authenticated with:
+the broker authenticates its caller by RabbitMQ user (`12 §12.2`, ADR-0044,
+REQ-SEC-104), so knowing the name of a binding buys nothing without one.
+
+Allowlisted by SHAPE rather than by value, deliberately. Only `item-purged.v1`
+tripped the entropy threshold on 2026-09-16; the other nine are the same
+construct and differ from it by luck. Allowlisting the one that fired is how the
+same finding returns under a different name the day an event is added — the
+lesson the test passphrase above already taught this file once.
+
+`regexTarget = "line"` because the prefix is what makes this narrow: the pattern
+matches an annotation element assigned a versioned event name, not any string in
+these files. A real credential in a listener would not end in `.v<digits>`, and
+one that did would still be a finding anywhere outside these two paths.
+"""
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''app/src/main/java/de/greluc/homeinv/search/infrastructure/ItemIndexListener\.java$''',
+  '''app/src/main/java/de/greluc/homeinv/media/infrastructure/MediaDerivationListener\.java$''',
+]
+regexes = ['''key = "[a-z][a-z0-9-]*\.v[0-9]+"''']

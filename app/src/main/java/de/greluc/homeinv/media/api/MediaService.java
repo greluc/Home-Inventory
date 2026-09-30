@@ -32,12 +32,21 @@ public interface MediaService {
    * @param targetKind {@code ITEM} or {@code LOCATION}
    * @param targetId what to attach it to
    * @param primaryImage whether this becomes the image lists show (REQ-MED-002)
+   * @param role what the attachment is for — {@code PHOTO}, {@code RECEIPT}, {@code
+   *     WARRANTY_PROOF} or {@code OTHER}, defaulting to {@code PHOTO} when null. It is what lets
+   *     the insurance report of REQ-LIFE-016 attach the receipt rather than offering a list and
+   *     leaving the reader to find it
    * @param actor the uploader
    * @return the accepted file, in {@code PENDING_SCAN} and with no URLs yet
    * @throws IOException when spooling or storing fails
    */
   MediaView upload(
-      InputStream content, String targetKind, UUID targetId, boolean primaryImage, UUID actor)
+      InputStream content,
+      String targetKind,
+      UUID targetId,
+      boolean primaryImage,
+      String role,
+      UUID actor)
       throws IOException;
 
   /**

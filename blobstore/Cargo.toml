@@ -12,8 +12,6 @@ repository = "https://github.com/greluc/Home-Inventory"
 publish = false
 
 [dependencies]
-# gRPC. `tls-ring` rather than the aws-lc backend: ring builds without a C
-# toolchain, which keeps the container image a compiler and a linker smaller.
 tonic = { version = "0.14", features = ["tls-ring"] }
 tonic-prost = "0.14"
 prost = "0.14"
@@ -22,29 +20,17 @@ tokio-stream = "0.1"
 futures-core = "0.3"
 sha2 = "0.11"
 hex = "0.4"
-# PEM parsing. `rustls-pemfile` did this until 2026-09-12 and is unmaintained
-# (RUSTSEC advisory, caught by `cargo deny`); `rustls-pki-types` is its documented
-# successor and was already in the tree as a dependency of rustls, so this removes
-# a crate rather than adding one.
 rustls-pki-types = { version = "1", features = ["std"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["std", "v7"] }
-# `async_stream::stream!` for the read side: a generator reads far better
-# than a hand-written Stream implementation for something whose whole body is
-# "read a chunk, yield it, repeat".
 async-stream = "0.3"
 
 [build-dependencies]
 tonic-prost-build = "0.14"
-# The protobuf compiler as a pure-Rust library. Without it the build needs a
-# `protoc` binary on PATH, which is one more thing to install on every machine
-# and in every CI image — and one more version to keep in step.
 protox = "0.9"
 
 [profile.release]
-# A file server has no business being large. Both settings cost build time and
-# buy a smaller image, which is the budget ADR-0050 is written around.
 lto = true
 codegen-units = 1
 strip = true

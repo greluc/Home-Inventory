@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.RequiresPermission;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
  * controller because they are one block's surface; a reader looking for "how does a tag get onto an
  * item" finds both here rather than in whichever controller happened to own the noun.
  */
+@Tag(name = "Tags", description = "Free labels and the groups they belong to.")
 @RestController
 @RequiredArgsConstructor
 public class TagController {

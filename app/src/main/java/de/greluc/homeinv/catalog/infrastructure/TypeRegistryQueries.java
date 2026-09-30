@@ -43,6 +43,48 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public java.util.Optional<UUID> itemTypeByKey(String key) {
+    return jdbc
+        .sql(
+            """
+            select id from catalog.item_type
+            where tenant_id = ? and key = ? and archived_at is null
+            """)
+        .param(TenantContext.require())
+        .param(key)
+        .query(UUID.class)
+        .optional();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public java.util.Map<UUID, Integer> usefulLivesOfVersions(
+      java.util.Collection<UUID> versionIds) {
+    if (versionIds.isEmpty()) {
+      return java.util.Map.of();
+    }
+    java.util.Map<UUID, Integer> lives = new java.util.HashMap<>();
+    jdbc.sql(
+            """
+            select v.id as version_id, t.useful_life_months as months
+            from catalog.item_type_version v
+            join catalog.item_type t
+              on t.tenant_id = v.tenant_id and t.id = v.item_type_id
+            where v.tenant_id = ?
+              and v.id = any(?::uuid[])
+              and t.useful_life_months is not null
+            """)
+        .param(TenantContext.require())
+        .param(versionIds.stream().map(UUID::toString).toArray(String[]::new))
+        .query(
+            (rs, rowNum) ->
+                lives.put(rs.getObject("version_id", UUID.class), rs.getInt("months")))
+        .list();
+    return java.util.Map.copyOf(lives);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public UUID publishedItemTypeVersion(UUID itemTypeId) {
     UUID tenantId = TenantContext.require();
     return jdbc
@@ -92,10 +134,6 @@ public class TypeRegistryQueries implements TypeRegistry {
   @Transactional(readOnly = true)
   public boolean permitsChildCategory(UUID parentCategoryId, UUID childCategoryId) {
     UUID tenantId = TenantContext.require();
-    // Two questions in one statement, and the order matters: a category with no
-    // rule at all takes everything (REQ-CORE-047's "optional"), so the absence of
-    // rows is a yes rather than a no. Asked the other way round, adding the
-    // feature would have closed every tree that had not been configured yet.
     Boolean permitted =
         jdbc.sql(
                 """
@@ -202,7 +240,7 @@ public class TypeRegistryQueries implements TypeRegistry {
             """
             select id, key, data_type, labels, help_texts, required, default_value,
                    constraints, value_list_id, visibility, field_group, display_order,
-                   searchable, sortable, facetable, sensitive, deprecated_at
+                   searchable, sortable, facetable, sensitive, expiry, deprecated_at
             from catalog.field_definition
             where tenant_id = ?
               and (item_type_version_id = ? or location_category_version_id = ?)
@@ -220,10 +258,6 @@ public class TypeRegistryQueries implements TypeRegistry {
       return List.of();
     }
     UUID tenantId = TenantContext.require();
-    // Every version of every named type. `published_at` is deliberately not in
-    // the predicate: an item is written against the version that was current
-    // when it was written, so restricting to the newest one would hide most of
-    // a type's items rather than narrow to them.
     return jdbc
         .sql(
             """
@@ -270,16 +304,33 @@ public class TypeRegistryQueries implements TypeRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public List<TypeRegistry.ExpiryField> expiryFields() {
+    UUID tenantId = TenantContext.require();
+    return jdbc
+        .sql(
+            """
+            select f.key as key, min(f.labels::text) as labels
+            from catalog.field_definition f
+            join catalog.item_type_version v
+              on v.tenant_id = f.tenant_id and v.id = f.item_type_version_id
+            where f.tenant_id = ?
+              and v.published_at is not null
+              and f.deprecated_at is null
+              and f.expiry
+            group by f.key
+            order by f.key
+            """)
+        .param(tenantId)
+        .query(
+            (rs, rowNum) ->
+                new TypeRegistry.ExpiryField(rs.getString("key"), strings(rs.getString("labels"))))
+        .list();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<TypeRegistry.QueryableField> queryableFields() {
     UUID tenantId = TenantContext.require();
-    // Grouped by key across every PUBLISHED version, because a query spans types.
-    // `count(distinct data_type) = 1` is the rule that keeps a key out when two
-    // types disagree about what it holds: `item_attr_index` keeps one column per
-    // storage class, so such a key lives in two at once and no single predicate
-    // over it means anything. Rare, and left out rather than guessed at.
-    //
-    // A draft's fields are not queryable: nothing references an unpublished
-    // version, so nothing is indexed under it either.
     return jdbc
         .sql(
             """
@@ -376,7 +427,8 @@ public class TypeRegistryQueries implements TypeRegistry {
         rs.getBoolean("sortable"),
         rs.getBoolean("facetable"),
         rs.getBoolean("sensitive"),
-        rs.getTimestamp("deprecated_at") != null);
+        rs.getTimestamp("deprecated_at") != null,
+        rs.getBoolean("expiry"));
   }
 
   /**

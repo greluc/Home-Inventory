@@ -72,8 +72,6 @@ class WideFullTextIT extends AbstractIntegrationTest {
 
     assertThat(found(fixture, "Hammer")).containsExactly("Hammer");
     assertThat(found(fixture, "zarquon")).containsExactly("Hammer");
-    // The one that was missing until V45: `notes` arrived at stage 1 and nothing
-    // widened the generated vectors to take it in.
     assertThat(found(fixture, "blorptid")).containsExactly("Hammer");
   }
 
@@ -92,7 +90,6 @@ class WideFullTextIT extends AbstractIntegrationTest {
 
     assertThat(found(fixture, "grunnel")).containsExactly("Hammer");
 
-    // And not by a tag somebody else's item carries.
     assertThat(found(fixture, "flimbert")).containsExactly("Drill");
   }
 
@@ -101,11 +98,8 @@ class WideFullTextIT extends AbstractIntegrationTest {
   void byTheLocationPath() throws Exception {
     Fixture fixture = aShed("places");
 
-    // The shelf the hammer is on.
     assertThat(found(fixture, "Zarquonregal")).containsExactly("Hammer");
 
-    // And the shed the shelf is in, which is what makes it a *path*: a person
-    // looking for something in the shed does not know which shelf.
     assertThat(found(fixture, "Blorptidschuppen")).containsExactlyInAnyOrder("Hammer", "Drill");
   }
 
@@ -114,14 +108,9 @@ class WideFullTextIT extends AbstractIntegrationTest {
   void stemsEverywhere() throws Exception {
     Fixture fixture = aShed("stemming");
 
-    // German plurals, in the tag and in the place. The configuration is the
-    // caller's language in every one of the four sources, so a word does not
-    // stem differently depending on which field it was found in.
     assertThat(found(fixture, "Blorptidschuppens"))
         .containsExactlyInAnyOrder("Hammer", "Drill");
   }
-
-  // -------------------------------------------------------------------------
 
   private List<String> found(Fixture fixture, String text) throws Exception {
     String body =

@@ -112,8 +112,6 @@ class TagTargetsIT extends AbstractIntegrationTest {
     UUID theirItem = aPhysicalItem(theirs, "Their mower", theirPlace);
     UUID myTag = aTag(mine, "Mine");
 
-    // 404 and not 403: a 403 would confirm the item exists, which is the one fact
-    // a caller from another tenant must not learn (REQ-SEC-025).
     mockMvc
         .perform(put("/api/v1/items/" + theirItem + "/tags/" + myTag).session(mine).with(csrf()))
         .andExpect(status().isNotFound())
@@ -148,9 +146,6 @@ class TagTargetsIT extends AbstractIntegrationTest {
                 .header("If-Match", eTagOf(session, "/api/v1/items/" + mug)))
         .andExpect(status().isNoContent());
 
-    // The item endpoint says it is gone, and so, now, does the tag endpoint. A
-    // target one path accepts and another denies is a row somebody can tag and
-    // then not find.
     mockMvc
         .perform(get("/api/v1/items/" + mug).session(session))
         .andExpect(status().isNotFound());
@@ -171,8 +166,6 @@ class TagTargetsIT extends AbstractIntegrationTest {
     UUID tag = aTag(session, "Crockery");
     String path = "/api/v1/items/" + plate + "/tags/" + tag;
 
-    // Twice, and twice 204: a client retrying a request it never saw the answer to
-    // must not be told it failed for succeeding.
     mockMvc.perform(put(path).session(session).with(csrf())).andExpect(status().isNoContent());
     mockMvc.perform(put(path).session(session).with(csrf())).andExpect(status().isNoContent());
 
@@ -181,9 +174,6 @@ class TagTargetsIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].name").value("Crockery"));
 
-    // And taking it off twice is still fine. What the port refuses is a target
-    // that is not there, which is a different question from an assignment that is
-    // not there.
     mockMvc.perform(delete(path).session(session).with(csrf())).andExpect(status().isNoContent());
     mockMvc.perform(delete(path).session(session).with(csrf())).andExpect(status().isNoContent());
 
@@ -192,8 +182,6 @@ class TagTargetsIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.length()").value(0));
   }
-
-  // -------------------------------------------------------------------------
 
   private UUID aTag(MockHttpSession session, String name) throws Exception {
     return created(session, "/api/v1/tags", Map.of("name", name));

@@ -73,10 +73,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("is problem+json for a path that does not exist (REQ-API-003)")
   void anUnknownPathIsAProblemDocument() throws Exception {
-    // Signed in, because an anonymous request to an unknown path is a 401 and
-    // that is deliberate: `anyRequest().authenticated()` decides before routing
-    // does, so a stranger cannot map the surface by watching which paths answer
-    // 404 and which 401.
     MockHttpSession session = tenantSession("unknown-path");
 
     MvcResult result =
@@ -88,7 +84,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
     JsonNode problem = problemOf(result);
     assertThat(problem.get("type").asString())
         .isEqualTo("https://home-inv.example/problems/not-found");
-    // The occurrence, not the dispatch target. `/error` here would identify nothing.
     assertThat(problem.get("instance").asString()).isEqualTo("/api/v1/nothing-here");
   }
 
@@ -97,10 +92,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
   void anUnknownCatalogueReferenceIsNotFound() throws Exception {
     MockHttpSession session = tenantSession("unknown-catalogue");
 
-    // `catalog` raises `UnknownTypeException` rather than `NotFoundException`,
-    // and nothing in the advice named it until 2026-09-14: twelve endpoints
-    // declared NOT_FOUND and answered 500. Found by driving every endpoint with
-    // an id nothing has -- see `EndpointNegativeCoverageIT`.
     MvcResult result =
         mockMvc
             .perform(get("/api/v1/catalog/versions/" + java.util.UUID.randomUUID()).session(session))
@@ -117,9 +108,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
   void anUnconvertiblePathVariableIsAMalformedRequest() throws Exception {
     MockHttpSession session = tenantSession("unconvertible");
 
-    // A mistyped id is the caller's mistake and not this application's. It was a
-    // 500 until 2026-09-14, logged at ERROR with a stack trace, which put every
-    // typo in the world into the channel an operator watches for real faults.
     MvcResult result =
         mockMvc
             .perform(get("/api/v1/items/not-a-uuid").session(session))
@@ -129,8 +117,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
     JsonNode problem = problemOf(result);
     assertThat(problem.get("type").asString())
         .isEqualTo("https://home-inv.example/problems/malformed-request");
-    // The framework's own detail quotes the value and names the converter it
-    // tried; neither belongs in an answer (08 §8.2).
     assertThat(problem.get("detail").asString())
         .doesNotContain("not-a-uuid")
         .doesNotContain("UUID");
@@ -177,9 +163,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
             .andReturn();
 
     String traceId = problemOf(result).get("traceId").asString();
-    // The W3C shape, because an OpenTelemetry agent will supply the same field at
-    // stage 1 (REQ-NFR-044) and a client that learned to quote a 16-character id
-    // would have to learn again.
     assertThat(traceId).matches("[0-9a-f]{32}");
   }
 
@@ -202,8 +185,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("refuses a JSON body over one megabyte, as problem+json (REQ-SEC-065)")
   void anOversizedJsonBodyIsRefused() throws Exception {
-    // Well-formed JSON, and far past the limit: the point is that it is refused
-    // for its size rather than parsed and then rejected for its content.
     String body =
         "{\"email\":\"someone@example.org\",\"password\":\"" + "x".repeat(1_200_000) + "\"}";
 
@@ -243,9 +224,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
   void noErrorRevealsInternals() throws Exception {
     MockHttpSession session = tenantSession("internals");
 
-    // Four failures reached by four different routes, so the assertion is about
-    // the contract rather than about one handler: a bad body, an unknown path, a
-    // method the path does not serve, and a rejected permission.
     List<MvcResult> failures =
         List.of(
             mockMvc
@@ -266,9 +244,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
           .as("the request was meant to fail: %s", body)
           .isGreaterThanOrEqualTo(400);
 
-      // Each of these is something an exception message carries by default and a
-      // caller must never receive (REQ-SEC-067, REQ-NFR-042). The traceId is what
-      // connects their report to the log line that has all of it.
       assertThat(body)
           .as("a class or package name reached the caller: %s", body)
           .doesNotContain("de.greluc.homeinv")
@@ -293,8 +268,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
           .isNotEmpty();
     }
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * The body of a failed response, checked to be a problem document first.
@@ -339,9 +312,6 @@ class ErrorContractIT extends AbstractIntegrationTest {
                     "en",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

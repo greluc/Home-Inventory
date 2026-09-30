@@ -59,6 +59,21 @@ public enum Permission {
   SAVED_SEARCH_DELETE("search:saved-search:delete"),
 
   /**
+   * Create or change a reminder rule (REQ-NOTI-001).
+   *
+   * <p>A member's, exactly as {@link #SAVED_SEARCH_WRITE} is and for the same reason: a rule is the
+   * tenant's and everybody in it is reminded by it, so writing one changes what everybody sees.
+   * Reading them needs only {@link #SEARCH_QUERY} — a list of rules is not more sensitive than the
+   * things it watches.
+   */
+  REMINDER_RULE_WRITE("notification:reminder-rule:write"),
+  /**
+   * Delete a reminder rule. An administrator's, because it takes a reminder away from everybody and
+   * the person who notices is the one who was relying on it.
+   */
+  REMINDER_RULE_DELETE("notification:reminder-rule:delete"),
+
+  /**
    * See which plugins the operator installed, and what this tenant has permitted them
    * (REQ-PLG-005).
    *
@@ -75,6 +90,20 @@ public enum Permission {
    * foreign code touch this tenant's data at all.
    */
   PLUGIN_CONSENT("plugins:capability:consent"),
+  /**
+   * Configure an installed plugin, for this tenant (REQ-PLG-017, ADR-0073).
+   *
+   * <p>An administrator's, and separate from {@link #PLUGIN_CONSENT} because the two decisions are
+   * different: consenting says foreign code may touch this tenant's data at all, configuring says
+   * what it should do once it may. A value set here can be a <b>secret</b> the tenant holds with
+   * somebody else — a webhook signing key, an account token — which is the other reason the two
+   * are not one permission.
+   *
+   * <p>It grants nothing over the <i>operator's</i> configuration of a plugin container: the SMTP
+   * host, the S3 keys and the OIDC client secret are the container's own environment and never pass
+   * through the core (ADR-0073).
+   */
+  PLUGIN_CONFIGURE("plugins:setting:write"),
 
   /** Read a media object's metadata and obtain a signed URL for it. */
   MEDIA_READ("media:object:read"),
@@ -158,12 +187,90 @@ public enum Permission {
    * the block that owns the notion owns the permission. Held by {@code ADMIN} and {@code OWNER}
    * alone — a token carries a role, so whoever may hand one out may hand out that role.
    */
-  SERVICE_ACCOUNT_ADMINISTER("identity:service-account:administer");
+  SERVICE_ACCOUNT_ADMINISTER("identity:service-account:administer"),
+
+  /**
+   * Move a whole tenant, in either direction (REQ-PORT-003, REQ-PORT-005, REQ-PORT-007).
+   *
+   * <p>Asking for an export and downloading the archive, and uploading one to be read back in.
+   * One permission for both because it is one act: whoever may take the inventory out may put one
+   * in, and the second half is the more consequential — it writes, and the archive wins wherever
+   * it and the tenant disagree.
+   *
+   * <p>Its own permission rather than {@code TENANT_READ}, because taking a copy of everything is
+   * not the same act as reading things one at a time. The endpoints asked for {@code TENANT_READ}
+   * until 2026-09-20, which meant a {@code VIEWER} — including one confined to a single shelf —
+   * could download an archive of the whole inventory (ADR-0068, open point O27).
+   *
+   * <p><b>Whole-tenant.</b> An export is of the tenant and cannot be of a subtree, so a membership
+   * confined to one (REQ-TEN-007) does not hold this however senior its role is. See {@link
+   * #wholeTenant()}.
+   */
+  TENANT_EXPORT("portability:export:request", true),
+
+  /**
+   * See the tenant's webhook targets and what has been delivered to them (REQ-API-010).
+   *
+   * <p>An administrator's, and deliberately not a member's the way {@link #PLUGIN_READ} is. What a
+   * plugin may reach is a fact about the deployment that everybody working here has an interest in;
+   * a webhook target is an integration with a system outside it, and its delivery log says which of
+   * this tenant's changes reached a stranger's server and when.
+   *
+   * <p><b>Whole-tenant.</b> A target receives every change of the tenant and cannot receive the
+   * changes of a subtree, so a membership confined to one (REQ-TEN-007) does not hold this however
+   * senior its role is — the argument {@link #TENANT_EXPORT} makes about an archive.
+   */
+  WEBHOOK_READ("notification:webhook:read", true),
+
+  /**
+   * Add, change or remove a webhook target (REQ-API-010).
+   *
+   * <p>One permission for all three, which is a departure from {@link #REMINDER_RULE_WRITE} and
+   * {@link #REMINDER_RULE_DELETE} beside it. Those are split because they are held by different
+   * roles — a member writes a rule, an administrator takes one away from everybody. Here both are
+   * an administrator's already, so a second permission would draw a line no role sits on.
+   *
+   * <p><b>Whole-tenant</b>, for the reason {@link #WEBHOOK_READ} is: configuring where every change
+   * in the tenant is sent is not an act inside a subtree.
+   */
+  WEBHOOK_WRITE("notification:webhook:write", true);
 
   private final String id;
 
+  /** Whether a membership confined to part of the tree is excluded from this. */
+  private final boolean wholeTenant;
+
   Permission(String id) {
+    this(id, false);
+  }
+
+  /**
+   * A permission that is about the tenant as a whole.
+   *
+   * @param id the stable identifier
+   * @param wholeTenant whether a scoped membership is excluded from it
+   */
+  Permission(String id, boolean wholeTenant) {
     this.id = id;
+    this.wholeTenant = wholeTenant;
+  }
+
+  /**
+   * Whether this permission is about the whole tenant rather than about things in it.
+   *
+   * <p>A membership may be confined to part of the location tree (REQ-TEN-007), and such a
+   * membership never holds one of these — not because of its role, but because the act has no
+   * meaning inside a subtree. An export is the first: there is no archive of a shelf, so somebody
+   * who may only see a shelf cannot ask for one and must not receive one of everything instead.
+   *
+   * <p>Deliberately a property of the <b>permission</b> rather than a check in one endpoint. The
+   * next tenant-wide act — a bulk erase, an instance-wide report — is then one flag rather than a
+   * rule somebody has to remember.
+   *
+   * @return {@code true} when a scoped membership is excluded from it
+   */
+  public boolean wholeTenant() {
+    return wholeTenant;
   }
 
   /**

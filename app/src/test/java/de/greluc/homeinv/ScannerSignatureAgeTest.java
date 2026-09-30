@@ -39,8 +39,6 @@ class ScannerSignatureAgeTest {
   @Test
   @DisplayName("copes with the space-padded day clamd prints before the tenth")
   void aPaddedDayIsRead() {
-    // "Sep  1" with two spaces. A `dd` pattern refuses it and a `d` pattern
-    // refuses the two spaces, which is why the format string uses `ppd`.
     Optional<Instant> dated =
         ClamAvScanner.parseSignatureDate("ClamAV 1.4.3/27400/Tue Sep  1 04:15:07 2026");
 

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.rest;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import de.greluc.homeinv.platform.Page;
 import de.greluc.homeinv.authorization.api.Permission;
 import de.greluc.homeinv.authorization.api.PublicEndpoint;
@@ -52,6 +53,7 @@ import org.springframework.web.multipart.MultipartFile;
  *       anyway ({@code REQ-MED-010}).
  * </ul>
  */
+@Tag(name = "Media", description = "Photographs and documents, their derivatives and the signed URLs that serve them.")
 @RestController
 @RequiredArgsConstructor
 public class MediaController {
@@ -66,18 +68,16 @@ public class MediaController {
    * @param targetKind {@code ITEM} or {@code LOCATION}
    * @param targetId what to attach it to
    * @param primary whether it becomes the image lists show
+   * @param role what the attachment is for — {@code PHOTO}, {@code RECEIPT}, {@code
+   *     WARRANTY_PROOF} or {@code OTHER}. It is what lets the insurance report of REQ-LIFE-016
+   *     attach the receipt rather than offering a list of files and leaving the reader to find it
+   *     (REQ-LIFE-001 was amended for this on 2026-09-20)
    * @param user the authenticated caller
    * @return {@code 202} with the accepted file, its state, and a {@code Location} pointing at it
    * @throws IOException when the upload cannot be read or stored
    */
   @PostMapping(value = "/api/v1/media", produces = MediaType.APPLICATION_JSON_VALUE)
   @RequiresPermission(Permission.MEDIA_CREATE)
-  // 202 and not 201: the file has been accepted and stored, and it is not yet a
-  // retrievable resource, because the scan runs in the worker (ADR-0024,
-  // ADR-0054). The `Location` header names the resource that will say when it
-  // is. Redundant at run time — the method sets the same status — and needed in
-  // the document, which would otherwise describe the 200 springdoc infers from
-  // the return type for an endpoint that never answers one.
   @ResponseStatus(HttpStatus.ACCEPTED)
   @CanFail({
     ProblemType.PAYLOAD_TOO_LARGE,
@@ -89,11 +89,15 @@ public class MediaController {
       @RequestParam @Pattern(regexp = "ITEM|LOCATION") String targetKind,
       @RequestParam UUID targetId,
       @RequestParam(defaultValue = "false") boolean primary,
+      @RequestParam(defaultValue = "PHOTO")
+          @Pattern(regexp = "PHOTO|RECEIPT|WARRANTY_PROOF|OTHER")
+          String role,
       @AuthenticationPrincipal AuthenticatedUser user)
       throws IOException {
 
     try (InputStream content = file.getInputStream()) {
-      MediaView view = media.upload(content, targetKind, targetId, primary, user.userId());
+      MediaView view =
+          media.upload(content, targetKind, targetId, primary, role, user.userId());
       return ResponseEntity.accepted()
           .location(URI.create("/api/v1/media/" + view.id()))
           .body(view);
@@ -202,37 +206,16 @@ public class MediaController {
       throws IOException {
 
     if (!signer.verify(tenantId, issuedTo, sha256, variant, expires, signature)) {
-      // 404 and not 403: a 403 would confirm that this blob exists for this
-      // tenant, which is exactly what an unsigned request must not learn.
-      //
-      // Thrown rather than returned as an empty 404, so the answer is the same
-      // RFC 9457 document every other failure in this API is (REQ-API-003). It
-      // says nothing a valid signature would not have revealed.
       throw new NotFoundException("media", (UUID) null);
     }
 
     InputStream bytes = media.openVerified(tenantId, sha256);
     return ResponseEntity.ok()
-        // Never inline, whatever the file is. A PDF displayed inline runs in a
-        // viewer with the origin's privileges, and REQ-SEC-045 says never; the
-        // same header makes the answer the same for every type rather than a
-        // list of exceptions somebody has to keep right.
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
         .header("X-Content-Type-Options", "nosniff")
-        // A sandbox with no allowances (REQ-SEC-043). Belt and braces next to
-        // `attachment`: if a browser ever renders one of these anyway, it does so
-        // in an opaque origin with no scripts, no forms and no popups.
         .header("Content-Security-Policy", "sandbox; default-src 'none'")
-        // Foreign sites cannot embed a tenant's media. Same-site rather than
-        // same-origin, because the media host is deliberately a different host
-        // from the application's (MediaHostCheck, 12 §12.9).
         .header("Cross-Origin-Resource-Policy", "same-site")
-        // Private: a shared cache must not keep a tenant's photo and hand it to
-        // the next holder of the same URL after the signature has expired.
         .header(HttpHeaders.CACHE_CONTROL, "private, max-age=60")
-        // Deliberately not the file's own type. `application/octet-stream` with
-        // `nosniff` is the pair that stops a browser deciding for itself what a
-        // response is, and nothing here needs a browser to render it.
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
         .body(new InputStreamResource(bytes));
   }

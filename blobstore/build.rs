@@ -1,13 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// Compiles the BlobStore contract from `proto/`.
-//
-// `protox` parses the `.proto` files in pure Rust, so no `protoc` binary has to
-// exist on the machine doing the build. That matters more than it looks:
-// `protoc` is a version-pinned native dependency, and the alternative is either
-// vendoring a binary per platform or asking every contributor and every CI image
-// to install one that matches.
 
 use std::path::PathBuf;
 

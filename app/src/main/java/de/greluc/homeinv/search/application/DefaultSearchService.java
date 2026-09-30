@@ -93,7 +93,6 @@ public class DefaultSearchService implements SearchService {
   @Transactional(readOnly = true)
   public Page<de.greluc.homeinv.inventory.api.ItemView> query(SearchRequest request) {
     int limit = request.limit() <= 0 ? DEFAULT_LIMIT : Math.min(request.limit(), MAX_LIMIT);
-    // Folded once, here, so that every engine below can compare it exactly.
     String language =
         request.language() == null
             ? "de"
@@ -108,16 +107,10 @@ public class DefaultSearchService implements SearchService {
     Optional<CursorCodec.Position> after =
         request.cursor() == null || request.cursor().isBlank()
             ? Optional.empty()
-            // Throws when the cursor was tampered with or belongs to another
-            // query. Rejecting is the point: an unverified cursor silently
-            // resumes somewhere else (REQ-SEC-106, REQ-SRCH-009).
             : Optional.of(cursors.decode(request.cursor(), fingerprint));
 
     SortOrder sort = allowed(request.sort());
 
-    // Attributes are the only dimension an engine answers itself. Every other one
-    // belongs to another block, is resolved here through that block's port, and
-    // reaches the engine as a set of ids.
     List<QueryFilter> all = request.filters() == null ? List.of() : request.filters();
     List<QueryFilter> filters =
         allowed(all.stream().filter(one -> one.dimension() == QueryFilter.Dimension.ATTRIBUTE)
@@ -129,11 +122,6 @@ public class DefaultSearchService implements SearchService {
 
     Page<de.greluc.homeinv.inventory.api.ItemView> page;
     if (scope.empty()) {
-      // A type nobody uses, a tag nothing carries, a subtree that is empty: the
-      // answer is no rows, and asking an engine for the rows in an empty set of
-      // ids would be a query whose answer is already known. The facets below are
-      // still counted, because each drops its own filter and the sidebar is how
-      // somebody gets out of a combination that matched nothing.
       page = Page.of(List.of(), null);
     } else {
       SearchIndex.Query engineQuery =
@@ -152,19 +140,11 @@ public class DefaultSearchService implements SearchService {
       try {
         hits = chosen.engine().find(engineQuery);
       } catch (RuntimeException failed) {
-        // The chosen engine went down between the availability check and the
-        // query. Falling back here rather than failing: the results are correct
-        // either way and only the ranking is poorer (REQ-SRCH-006).
         log.warn("The {} engine failed; answering from PostgreSQL", chosen.engine().name(), failed);
         chosen = new Chosen(fallback(), true);
         hits = chosen.engine().find(engineQuery);
       }
 
-      // The ids become rows here, through the ordinary read: row-level security
-      // and the field visibility rules apply on the way out, which is what makes
-      // a derived index safe to run at all (REQ-SRCH-007). An id that named a row
-      // this tenant cannot see is simply absent, so a stale index costs a shorter
-      // page and never somebody else's item.
       List<de.greluc.homeinv.inventory.api.ItemView> rows = items.byIds(hits.itemIds());
 
       String nextCursor =
@@ -173,9 +153,6 @@ public class DefaultSearchService implements SearchService {
     }
 
     if (chosen.degraded()) {
-      // A stable token from docs/reference/degraded-reasons.yaml, never prose: a
-      // client branches on it the way it branches on a problem type
-      // (REQ-API-012, ADR-0039).
       page = page.degraded("search-fallback");
     }
 
@@ -397,18 +374,10 @@ public class DefaultSearchService implements SearchService {
       List<QueryFilter> filters) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      // The separator matters: without it, ("ab", "c") and ("a", "bc") would
-      // hash alike, and a cursor from one search would be accepted by the other.
-      // The location filter is part of the query, so it is part of what the
-      // cursor is bound to. Without it a cursor from "everything in the cellar"
-      // would resume a search of the whole tenant at the same row.
       String filter =
           locationIds.stream().map(UUID::toString).sorted().collect(Collectors.joining(","));
       byte[] hash =
           digest.digest(
-              // The order is part of the query too. Resuming a list sorted by name
-              // with a cursor taken from one sorted by date would page through a
-              // sequence that never existed, which is what REQ-SRCH-009 refuses.
               (text
                       + " "
                       + language
@@ -417,10 +386,6 @@ public class DefaultSearchService implements SearchService {
                       + " "
                       + (sort == null ? "" : sort.field() + (sort.descending() ? " desc" : " asc"))
                       + " "
-                      // Every filter, in a stable order. REQ-SRCH-009's acceptance is
-                      // "a cursor with changed filters is rejected", and a cursor that
-                      // survived a filter change would resume a list that no longer
-                      // exists at a position taken from one that did.
                       + (filters == null
                           ? ""
                           : filters.stream()
@@ -476,9 +441,6 @@ public class DefaultSearchService implements SearchService {
         types.queryableFields().stream()
             .anyMatch(field -> field.key().equals(key) && field.sortable());
     if (!sortable) {
-      // Named rather than hidden: the tenant configures which fields are
-      // sortable, so somebody can act on this — either by marking the field or
-      // by correcting the request.
       throw new IllegalArgumentException(
           "Cannot sort by " + sort.field() + "; no published type marks it sortable");
     }
@@ -527,7 +489,6 @@ public class DefaultSearchService implements SearchService {
     for (QueryFilter filter : filters) {
       switch (filter.dimension()) {
         case ATTRIBUTE -> {
-          // Answered by the engine, not here.
         }
         case TYPE -> {
           List<UUID> resolved = types.itemTypeVersionsByKeys(filter.values());
@@ -573,8 +534,6 @@ public class DefaultSearchService implements SearchService {
     if (filter.operator() != QueryFilter.Operator.SUBTREE) {
       return named;
     }
-    // `subtreeIds` includes the node itself, and a location this tenant cannot
-    // see raises the ordinary not-found rather than quietly widening the answer.
     List<UUID> withDescendants = new ArrayList<>();
     for (UUID place : named) {
       withDescendants.addAll(locations.subtreeIds(place));

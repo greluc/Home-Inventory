@@ -56,7 +56,6 @@ class SecondFactorIT extends AbstractIntegrationTest {
     UUID userId = account("mfa-enrol@example.org");
     MockHttpSession session = login("mfa-enrol@example.org");
 
-    // Nothing yet.
     mockMvc
         .perform(get("/api/v1/auth/mfa/enrolment").session(session))
         .andExpect(status().isOk())
@@ -65,8 +64,6 @@ class SecondFactorIT extends AbstractIntegrationTest {
 
     String secret = beginEnrolment(session);
 
-    // Unconfirmed, so the login is unaffected: somebody who scanned a QR code and
-    // closed the app is not locked out of their own account.
     mockMvc
         .perform(get("/api/v1/auth/mfa/enrolment").session(session))
         .andExpect(jsonPath("$.totpConfirmed").value(false));
@@ -80,7 +77,6 @@ class SecondFactorIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.totpConfirmed").value(true))
         .andExpect(jsonPath("$.recoveryCodesLeft").value(10));
 
-    // From here the password alone is half a login.
     MockHttpSession pending = new MockHttpSession();
     mockMvc
         .perform(
@@ -93,7 +89,6 @@ class SecondFactorIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-required"));
 
-    // A wrong code spends the pending login rather than allowing another guess.
     mockMvc
         .perform(
             post("/api/v1/auth/mfa")
@@ -134,11 +129,9 @@ class SecondFactorIT extends AbstractIntegrationTest {
 
     assertThat(completeWith("mfa-recovery@example.org", code)).isEqualTo(200);
 
-    // Spent. The answer is the same one a code that never existed gets.
     assertThat(completeWith("mfa-recovery@example.org", code)).isEqualTo(401);
     assertThat(completeWith("mfa-recovery@example.org", "AAAAA-AAAAA")).isEqualTo(401);
 
-    // The rest of the set still works, and the count says how much is left.
     mockMvc
         .perform(
             get("/api/v1/auth/mfa/enrolment")
@@ -157,8 +150,6 @@ class SecondFactorIT extends AbstractIntegrationTest {
     String code = nextCodeFor(secret);
     assertThat(completeWith("mfa-replay@example.org", code)).isEqualTo(200);
 
-    // The same code is still arithmetically valid for the rest of its thirty
-    // seconds. It is refused because the step is spent (RFC 6238 §5.2).
     assertThat(completeWith("mfa-replay@example.org", code)).isEqualTo(401);
   }
 
@@ -170,15 +161,12 @@ class SecondFactorIT extends AbstractIntegrationTest {
     String secret = beginEnrolment(session);
     confirmEnrolment(session, secret);
 
-    // What is stored is not the secret. Reading the column and treating it as one
-    // is exactly the attack the sealing exists for.
     String stored =
         transactions.execute(
             status -> credentials.findTotp(userId).orElseThrow().material());
     assertThat(stored).startsWith("v1:").doesNotContain(secret);
     assertThat(TotpCodes.base32(credentialKey.open(stored))).isEqualTo(secret);
 
-    // An open session is not enough to take the factor off.
     mockMvc
         .perform(
             post("/api/v1/auth/mfa/totp/removal")
@@ -190,7 +178,6 @@ class SecondFactorIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath("$.type").value("https://home-inv.example/problems/second-factor-invalid"));
 
-    // A second enrolment over a confirmed one is a conflict, not a replacement.
     mockMvc
         .perform(post("/api/v1/auth/mfa/totp").session(session).with(csrf()))
         .andExpect(status().isConflict())
@@ -206,15 +193,12 @@ class SecondFactorIT extends AbstractIntegrationTest {
                 .content(json.writeValueAsString(Map.of("code", nextCodeFor(secret)))))
         .andExpect(status().isNoContent());
 
-    // And the login is one call again.
     assertThat(loginResponse("mfa-removal@example.org")).isEqualTo(200);
     mockMvc
         .perform(get("/api/v1/auth/mfa/enrolment").session(login("mfa-removal@example.org")))
         .andExpect(jsonPath("$.totpConfirmed").value(false))
         .andExpect(jsonPath("$.recoveryCodesLeft").value(0));
   }
-
-  // -------------------------------------------------------------------------
 
   /**
    * Begins an enrolment and returns the secret it handed out.

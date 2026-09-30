@@ -27,8 +27,8 @@ Date: YYYY-MM-DD
 | [0003](0003-multi-tenancy.md) | Multi-tenancy from the start, access by invitation | Accepted |
 | [0004](0004-attribute-storage-model.md) | JSONB plus an application-maintained index side table | Accepted |
 | [0005](0005-identity.md) | An own identity core with optional OIDC federation | Accepted |
-| [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted |
-| [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032, 0052 |
+| [0006](0006-plugin-runtime.md) | Two plugin runtimes behind one contract | Accepted , amended by 0085 |
+| [0007](0007-media-storage.md) | A BlobStore port with filesystem, S3 and Nextcloud adapters | Partially superseded by 0026, amended by 0032, 0052, 0074 |
 | [0008](0008-search.md) | OpenSearch as a derived read model | Accepted, amended by 0039, 0047 |
 | [0009](0009-messaging-and-events.md) | RabbitMQ with a transactional outbox | Accepted, extended (O13) |
 | [0010](0010-api-surfaces.md) | REST and read-only GraphQL outward, gRPC for plugins | Accepted |
@@ -55,16 +55,16 @@ Date: YYYY-MM-DD
 | [0031](0031-audit-chain-per-tenant.md) | The audit chain runs per tenant and is anchored in time | Accepted, amended by 0046, 0063 |
 | [0032](0032-per-tenant-blob-addressing.md) | Blobs are content-addressed within a tenant, never across | Accepted |
 | [0033](0033-dark-as-default-appearance.md) | Dark is the default appearance, on every platform | Accepted, amended by 0038 |
-| [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted |
+| [0034](0034-icon-set-and-no-third-party-hosts.md) | Lucide as the icon set, and no third-party host for anything | Accepted, amended by 0083 |
 | [0035](0035-design-system.md) | The delivered design system is binding, and `tokens.json` is its single source | Accepted |
 | [0036](0036-scanner-egress.md) | The malware scanner gets a route out; the egress proxy runs in every profile | Accepted |
-| [0037](0037-per-plugin-network-segments.md) | One network segment per plugin, and the management port out of their reach | Accepted |
+| [0037](0037-per-plugin-network-segments.md) | One network segment per plugin, and the management port out of their reach | Accepted, amended by 0071 |
 | [0038](0038-csp-delivery-and-first-paint.md) | The CSP is delivered by `web` with hashes; the theme is mirrored locally | Accepted, amended by 0040 |
 | [0039](0039-degraded-response-signalling.md) | Degradation is signalled in the payload; the `Warning` header is dropped | Accepted |
 | [0040](0040-no-cross-origin-isolation.md) | `Cross-Origin-Embedder-Policy` is dropped; `COOP` and `CORP` stay | Accepted |
 | [0041](0041-migration-as-its-own-service.md) | Migration is its own one-shot service, on every runtime | Accepted |
 | [0042](0042-edge-is-not-internal.md) | A published port needs a non-internal segment; `web` becomes the ingress | Accepted, amended by 0044 |
-| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044, 0050 |
+| [0043](0043-blobstore-as-its-own-service.md) | The filesystem `BlobStore` gets its own in-deployment service | Accepted, amended by 0044, 0050, 0084 |
 | [0044](0044-internal-is-not-a-trust-boundary.md) | `internal` is not a trust boundary: every datastore authenticates, and `web` leaves it | Accepted |
 | [0045](0045-wal-archive-volume.md) | The WAL archive is a volume of its own, or the recovery point objective is fiction | Accepted |
 | [0046](0046-truncatable-audit-chain.md) | The audit chain is truncatable, and per-tenant retention has a mechanism | Accepted |
@@ -85,5 +85,26 @@ Date: YYYY-MM-DD
 | [0061](0061-second-factor-locks-the-role.md) | A role that requires a second factor is granted, and locked until the factor exists | Accepted |
 | [0062](0062-passkeys-with-webauthn4j.md) | Passkeys are verified by webauthn4j, and no attestation is trusted | Accepted |
 | [0063](0063-bulk-is-a-transaction-per-entry.md) | A bulk operation is a transaction per entry | Accepted |
-| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted |
-| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted |
+| [0064](0064-the-ports-a-plugin-implements-are-apache.md) | The ports a plugin implements live in `plugin-api`, not in the core | Accepted, amended by 0067, 0070 |
+| [0065](0065-the-plugin-call-envelope.md) | A plugin call is resolved to a port instance and wrapped in one envelope | Accepted, amended by 0066, 0071, 0073 |
+| [0066](0066-instance-level-capability-grants.md) | An instance-level capability grant, for what the deployment owes an account | Accepted, amended by 0067 |
+| [0067](0067-breached-passwords-from-a-shipped-list.md) | Breached passwords are checked against a shipped list, and a plugin may add to it | Accepted |
+| [0068](0068-an-export-opens-what-its-requester-may-read.md) | An export opens a sealed value exactly as far as its requester may read it | Accepted |
+| [0069](0069-an-import-merges-by-id-and-writes-no-people.md) | An import merges by id, matches the catalogue by key, and writes no people | Accepted |
+| [0070](0070-documents-are-described-not-programmed.md) | A document is described, not programmed, and rendering it is a plugin's job | Accepted |
+| [0071](0071-the-core-answers-plugins-on-one-channel.md) | The core answers plugins on one narrow channel, and it stays narrow | Accepted, amended by 0073 |
+| [0072](0072-first-party-plugins-live-here.md) | The first-party plugins live in this repository, one language each | Accepted, amended by 0075 |
+
+| [0073](0073-a-plugin-is-configured-twice.md) | A plugin is configured twice: by its operator and by each tenant | Accepted, amended by 0077 |
+| [0074](0074-granting-a-store-routes-and-does-not-move.md) | Granting a storage plugin routes the next bytes and moves none of the old ones | Accepted |
+| [0075](0075-the-one-jvm-plugin-has-its-own-line-in-the-budget.md) | The one JVM plugin gets its own line in the memory budget | Accepted |
+| [0076](0076-a-federated-sign-in-creates-an-account-only-where-a-form-could.md) | A federated sign-in creates an account exactly where a sign-up form could | Accepted |
+| [0077](0077-a-call-may-carry-a-setting-the-tenant-did-not-configure.md) | A call may carry a setting that belongs to the thing being acted on rather than to the tenant | Accepted |
+| [0078](0078-a-webhook-carries-an-id-a-live-nudge-does-not.md) | A webhook carries the type, the moment and the subject id; a live nudge carries neither id nor data | Accepted |
+| [0079](0079-the-graphql-surface-is-registered-weighed-and-checked-per-field.md) | The GraphQL surface is registered by the build, weighed by a schema directive, and checked field by field | Accepted |
+| [0080](0080-a-generated-client-is-committed-and-the-document-must-earn-it.md) | A generated client is committed, and the document has to earn it | Accepted, amended by 0081 |
+| [0081](0081-the-contract-says-which-values-may-be-null.md) | The contract says which values may be null, from an annotation rather than from prose | Accepted |
+| [0082](0082-tracing-is-a-library-and-the-sampling-is-the-operators.md) | Tracing is a library, and the sampling decision belongs to the operator | Accepted |
+| [0083](0083-the-notice-travels-inside-the-artifact.md) | The licence notice travels inside the artifact, and the SBOM is one per artifact | Accepted, amends 0034 |
+| [0084](0084-an-upload-arrives-in-pieces-and-is-staged-where-the-volume-is.md) | An upload arrives in pieces, and is staged where the volume is | Accepted, amends 0043 |
+| [0085](0085-a-manifest-signature-is-checked-offline-and-an-image-is-not.md) | A manifest signature is checked offline, and an image is not checked yet | Accepted, amends 0006 |

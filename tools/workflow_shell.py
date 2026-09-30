@@ -29,8 +29,6 @@ import tempfile
 WORKFLOWS = pathlib.Path(__file__).resolve().parent.parent / ".github" / "workflows"
 EXPRESSION = re.compile(r"\$\{\{[^}]*\}\}")
 
-# A token that is a single shell word wherever an expression can appear: a command name, an
-# argument, part of a string. `x` would collide with a real command; this cannot.
 PLACEHOLDER = "gha_expression_placeholder"
 
 

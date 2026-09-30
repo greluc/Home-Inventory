@@ -78,14 +78,29 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
 
   @Override
   @Transactional(readOnly = true)
+  public <T> Optional<T> lookupForInstance(Class<T> port) {
+    return resolve(port, this::hasInstanceConsent).stream().findFirst();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public <T> List<T> lookupAll(Class<T> port, UUID tenantId) {
     requireTheAmbientTenant(tenantId);
+    return resolve(port, this::hasConsented);
+  }
 
+  /**
+   * Finds every plugin that implements the port and passes the consent test.
+   *
+   * @param port the port
+   * @param consent what counts as permission here — a tenant's grants, or the instance's
+   * @param <T> the port
+   * @return the implementations, highest priority first
+   */
+  private <T> List<T> resolve(
+      Class<T> port, java.util.function.Predicate<PluginRegistry.Registration> consent) {
     PortAdapter<T> adapter = adapterFor(port);
     if (adapter == null) {
-      // Six of the fourteen ports belong to features that ship later and have
-      // no adapter yet (ADR-0064). Answering "nothing implements it" is right
-      // for them, and would also be right for a port whose adapter was removed.
       return List.of();
     }
 
@@ -102,16 +117,12 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
           manifest.spec().implementsPorts().stream()
               .filter(declared -> port.getSimpleName().equals(declared.port()))
               .findFirst();
-      if (binding.isEmpty() || !hasConsented(installed)) {
+      if (binding.isEmpty() || !consent.test(installed)) {
         continue;
       }
       candidates.add(new Candidate(installed, manifest, binding.get().priority()));
     }
 
-    // Highest priority first; ties by plugin id, which is arbitrary and stable.
-    // Arbitrary because the manifests said the same thing, stable because a
-    // resolution that changed between two calls would be a bug nobody could
-    // reproduce.
     candidates.sort(
         Comparator.comparingInt(Candidate::priority)
             .reversed()
@@ -146,9 +157,6 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
       int deadline = properties.deadlineFor(requestedTimeout(candidate.manifest()));
       return Optional.of(resilience.decorate(port, adapter.adapt(channel, deadline), pluginId));
     } catch (RuntimeException unreachable) {
-      // Skipped rather than raised. Another plugin may implement the same port
-      // and be answering, and a caller asking for a notification channel should
-      // get the one that works rather than the failure of the one that does not.
       log.warn(
           "Plugin {} implements {} and cannot be called: {}",
           pluginId,
@@ -191,6 +199,21 @@ public class DefaultExtensionRegistry implements ExtensionRegistry {
    */
   private boolean hasConsented(PluginRegistry.Registration installed) {
     return !plugins.grants(installed.pluginId()).isEmpty();
+  }
+
+  /**
+   * Whether the instance operator has agreed to anything this plugin asked for (ADR-0066).
+   *
+   * <p>The same "at least one grant" rule as {@link #hasConsented}, read from the instance-level
+   * table instead of the tenant's. A plugin every tenant has granted everything is still not
+   * available here: the two levels are separate consents, and the deployment's own obligations are
+   * not somebody else's to permit.
+   *
+   * @param installed the registration
+   * @return {@code true} when at least one instance-level capability is granted
+   */
+  private boolean hasInstanceConsent(PluginRegistry.Registration installed) {
+    return !plugins.instanceGrants(installed.pluginId()).isEmpty();
   }
 
   /**

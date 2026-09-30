@@ -132,16 +132,12 @@ public class SessionEstablisher {
    * @param secondFactorProved whether a second factor was verified as part of this login
    * @return the session view
    */
-  AuthController.SessionView establish(
+  SessionView establish(
       AuthenticatedUser user,
       HttpServletRequest request,
       HttpServletResponse response,
       boolean secondFactorProved) {
 
-    // Rotate the id rather than discarding the session. This is the servlet
-    // container's own fixation defence: the id an attacker may have planted is
-    // replaced, while the session object itself survives — which
-    // invalidate-and-recreate does not.
     if (request.getSession(false) != null) {
       request.changeSessionId();
     } else {
@@ -152,9 +148,6 @@ public class SessionEstablisher {
       request.getSession().setAttribute(SECOND_FACTOR_AT, Instant.now(clock).getEpochSecond());
     }
 
-    // What the session overview of REQ-AUTH-009 shows. Recorded here because this
-    // is where a session begins, and because neither value is available later:
-    // the list is read from the store, not from a request.
     request.getSession().setAttribute(UserSessions.DEVICE_ATTRIBUTE, deviceOf(request));
     request.getSession().setAttribute(UserSessions.ORIGIN_ATTRIBUTE, originOf(request));
 
@@ -164,7 +157,7 @@ public class SessionEstablisher {
     SecurityContextHolder.setContext(context);
     securityContextRepository.saveContext(context, request, response);
 
-    return new AuthController.SessionView(
+    return new SessionView(
         user.userId(), user.tenantId(), user.email(), user.locale(), user.role());
   }
 }

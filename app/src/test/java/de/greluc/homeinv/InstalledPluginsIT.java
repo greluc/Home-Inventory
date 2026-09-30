@@ -60,8 +60,6 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
             entry("de.greluc.homeinv.plugin.future", future),
             entry("de.greluc.homeinv.plugin.good", good));
 
-    // No exception, and the other one is still registered: one plugin built for
-    // another contract is not a reason to have none (09 §9.11).
     assertThatCode(() -> run(list)).doesNotThrowAnyException();
 
     assertThat(registry.installed(200)).extracting(PluginRegistry.Registration::pluginId)
@@ -75,8 +73,6 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
     Path manifest = directory.resolve("claims.yaml");
     Files.writeString(manifest, manifestOf("de.greluc.homeinv.plugin.actual", ">=1.0.0 <2.0.0"));
 
-    // A grant is recorded against the id, so taking the wrong one would attach
-    // somebody's consent to the wrong plugin.
     Path list = list(directory, entry("de.greluc.homeinv.plugin.claimed", manifest));
     run(list);
 
@@ -98,11 +94,48 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
 
     assertThatCode(() -> run(list)).doesNotThrowAnyException();
     assertThatCode(() -> run(directory.resolve("no-such-list.yaml"))).doesNotThrowAnyException();
-    // And an instance with no list at all, which is what `minimal` is.
     assertThatCode(() -> run(null)).doesNotThrowAnyException();
   }
 
-  // -------------------------------------------------------------------------
+  @Test
+  @DisplayName("are registered from a list that carries the manifest itself")
+  void registersWhatIsInlined(@TempDir Path directory) throws Exception {
+    Path list =
+        list(
+            directory,
+            inlineEntry(
+                "de.greluc.homeinv.plugin.inline",
+                manifestOf("de.greluc.homeinv.plugin.inline", ">=1.0.0 <2.0.0")));
+
+    run(list);
+
+    assertThat(registry.installed(200))
+        .extracting(PluginRegistry.Registration::pluginId)
+        .contains("de.greluc.homeinv.plugin.inline");
+  }
+
+  @Test
+  @DisplayName("refuse an entry that carries both a path and a document, or neither")
+  void exactlyOneManifest(@TempDir Path directory) throws Exception {
+    Path both =
+        list(
+            directory,
+            """
+                 - id: de.greluc.homeinv.plugin.both
+                   manifest: "/somewhere/manifest.yaml"
+                   manifestInline: "apiVersion: home-inv.plugin/v1"
+               """);
+    assertThatCode(() -> run(both)).doesNotThrowAnyException();
+    assertThat(registry.installed(200))
+        .extracting(PluginRegistry.Registration::pluginId)
+        .doesNotContain("de.greluc.homeinv.plugin.both");
+
+    Path neither = list(directory, "   - id: de.greluc.homeinv.plugin.neither\n");
+    assertThatCode(() -> run(neither)).doesNotThrowAnyException();
+    assertThat(registry.installed(200))
+        .extracting(PluginRegistry.Registration::pluginId)
+        .doesNotContain("de.greluc.homeinv.plugin.neither");
+  }
 
   /**
    * Points the reader at one list and runs it.
@@ -131,6 +164,29 @@ class InstalledPluginsIT extends AbstractIntegrationTest {
                signed: true
            """
         .formatted(id, manifest.toString().replace("\\", "\\\\"), id);
+  }
+
+  /**
+   * An entry carrying the manifest itself, indented as a YAML block scalar.
+   *
+   * @param id the plugin
+   * @param manifest the document
+   * @return the entry
+   */
+  private static String inlineEntry(String id, String manifest) {
+    String indented =
+        manifest
+            .lines()
+            .map(line -> "       " + line)
+            .collect(java.util.stream.Collectors.joining("\n"));
+    return """
+             - id: %s
+               endpoint: "%s:9000"
+               signed: true
+               manifestInline: |
+           %s
+           """
+        .formatted(id, id, indented);
   }
 
   private static String manifestOf(String id, String contract) {

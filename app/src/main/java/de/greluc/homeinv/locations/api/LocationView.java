@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.locations.api;
 
+import jakarta.annotation.Nullable;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,7 +28,7 @@ public record LocationView(
     UUID id,
     String name,
     UUID categoryId,
-    UUID parentId,
+    @Nullable UUID parentId,
     int depth,
     String attributes,
     List<String> ancestors,

@@ -82,9 +82,6 @@ public final class IdempotencyKeys {
           "Idempotency-Key is longer than " + MAX_LENGTH + " characters.");
     }
     for (int index = 0; index < trimmed.length(); index++) {
-      // Printable ASCII only. Not fussiness: the value is stored, compared and
-      // logged, and a control character in any of those is somebody else's bug
-      // report. A UUID — what a client should send — is well inside this.
       char character = trimmed.charAt(index);
       if (character < 0x21 || character > 0x7e) {
         throw new IllegalArgumentException(
@@ -106,7 +103,6 @@ public final class IdempotencyKeys {
           .formatHex(
               MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException impossible) {
-      // Every JVM ships SHA-256; the checked exception is older than that promise.
       throw new IllegalStateException("SHA-256 is missing from this JVM", impossible);
     }
   }

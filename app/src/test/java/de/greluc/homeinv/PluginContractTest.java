@@ -48,7 +48,7 @@ class PluginContractTest {
   @DisplayName("has a service for every port REQ-PLG-001 names, under the port's own name")
   void everyPortHasAService() throws Exception {
     List<String> ports = portsNamedByTheRequirement();
-    assertThat(ports).as("REQ-PLG-001 names fourteen ports").hasSize(14);
+    assertThat(ports).as("REQ-PLG-001 names sixteen ports").hasSize(16);
 
     List<String> missing = new ArrayList<>();
     List<String> misnamed = new ArrayList<>();
@@ -77,9 +77,6 @@ class PluginContractTest {
   @Test
   @DisplayName("has the health service every plugin serves, whatever ports it implements")
   void healthIsPartOfTheContract() throws Exception {
-    // Not a port and not optional. The core asks once a minute (13 §13.7), and
-    // an outbound plugin reports PROVISIONING_INCOMPLETE through this rather
-    // than by failing calls one at a time (REQ-PLG-015).
     Class<?> stub = Class.forName(GENERATED + "PluginHealthGrpc");
     assertThat(descriptorOf(stub).getName()).isEqualTo(PROTO_PACKAGE + "PluginHealth");
   }
@@ -109,8 +106,6 @@ class PluginContractTest {
             .findFirst()
             .orElseThrow(() -> new AssertionError("REQ-PLG-001 is not in the requirements"));
 
-    // The description cell only; the verification cell names test classes in
-    // backticks too, and those are not ports.
     String[] cells = row.split("\\|");
     String description = cells.length > 2 ? cells[2] : "";
 

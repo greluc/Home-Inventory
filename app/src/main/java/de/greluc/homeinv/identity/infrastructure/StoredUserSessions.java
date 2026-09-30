@@ -82,6 +82,16 @@ public class StoredUserSessions implements UserSessions {
     log.info("Account {} ended one of its sessions remotely.", userId);
   }
 
+  @Override
+  public int endAll(UUID userId) {
+    Map<String, ? extends Session> open = sessions.findByPrincipalName(userId.toString());
+    open.keySet().forEach(sessions::deleteById);
+    if (!open.isEmpty()) {
+      log.info("Every session of account {} was ended ({}).", userId, open.size());
+    }
+    return open.size();
+  }
+
   /**
    * What one stored session looks like to its owner.
    *
@@ -114,8 +124,6 @@ public class StoredUserSessions implements UserSessions {
       System.arraycopy(full, 0, truncated, 0, HANDLE_BYTES);
       return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(truncated);
     } catch (java.security.GeneralSecurityException impossible) {
-      // HmacSHA256 is required of every JVM. Without it no session could be named
-      // at all, and the honest answer is to fail rather than to hand out an id.
       throw new IllegalStateException("HMAC-SHA-256 is unavailable in this runtime.", impossible);
     }
   }

@@ -4,6 +4,7 @@
  */
 package de.greluc.homeinv.catalog.api;
 
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.UUID;
 
@@ -36,4 +37,4 @@ import java.util.UUID;
  *     stationary; the flag marks the relocation case a client offers, not a restriction on moving
  */
 public record LocationCategoryView(
-    UUID id, String key, Map<String, String> labels, String icon, boolean mobile) {}
+    UUID id, String key, Map<String, String> labels, @Nullable String icon, boolean mobile) {}

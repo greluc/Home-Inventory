@@ -61,9 +61,6 @@ public class ProblemErrorController implements ErrorController {
     int status = statusOf(request);
 
     if (status >= 500) {
-      // The exception itself, when the container kept it. ApiExceptionHandler
-      // already logged anything that came through a controller, so this line is
-      // about the failures it never saw — a filter, or the container itself.
       Object failure = request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
       log.error(
           "Error dispatch for {} with status {}",

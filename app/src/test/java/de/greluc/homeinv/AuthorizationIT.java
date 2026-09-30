@@ -75,13 +75,8 @@ class AuthorizationIT extends AbstractIntegrationTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("name", "A thing", "kind", "DIGITAL"))))
-        // 403 and not 404: the caller is a member of this tenant and the fact
-        // that items exist is not a secret from them. Only a resource in another
-        // tenant is a 404 (REQ-SEC-025).
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.type").value("https://home-inv.example/problems/forbidden"))
-        // The detail names no resource and no permission: it is read by a person,
-        // and the permission id belongs in the log, not in a response body.
         .andExpect(jsonPath("$.detail").value("Your role does not permit this operation."));
   }
 
@@ -153,8 +148,6 @@ class AuthorizationIT extends AbstractIntegrationTest {
             delete("/api/v1/items/" + id)
                 .session(session)
                 .with(csrf())
-                // REQ-API-004: every write on a single resource says which version
-                // it acted on, including the ones whose subject is a permission.
                 .header("If-Match", eTagOf(session, "/api/v1/items/" + id)))
         .andExpect(status().isNoContent());
 
@@ -172,8 +165,6 @@ class AuthorizationIT extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.role").value("VIEWER"));
   }
-
-  // -------------------------------------------------------------------------
 
   /** A provisioned tenant and the user who owns it. */
   private record Tenant(UUID tenantId, UUID ownerId) {}
@@ -193,11 +184,6 @@ class AuthorizationIT extends AbstractIntegrationTest {
    */
   private String addMember(Tenant tenant, String email, String role) {
     UUID userId = createUser(email);
-    // The context is set OUTSIDE the transaction, not inside it. The transaction
-    // manager pushes `app.tenant_id` into the database session when the
-    // transaction BEGINS, so a context established inside the callback is set
-    // after the connection has already been configured - and the insert is
-    // refused by the very policy this test depends on.
     TenantContext.runAs(
         tenant.tenantId(),
         () ->
@@ -224,9 +210,6 @@ class AuthorizationIT extends AbstractIntegrationTest {
                     "de",
                     passwordEncoder.encode(PASSWORD),
                     Instant.now())));
-    // REQ-AUTH-003: an OWNER or ADMIN with no second factor is refused every
-    // request in the tenant. The enrolment loop is proved in SecondFactorIT;
-    // here it is a precondition rather than the subject.
     enrolSecondFactor(userId);
     return userId;
   }

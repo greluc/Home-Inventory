@@ -1,9 +1,5 @@
 import React from "react";
 
-/* A deterministic block pattern standing in for the real QR renderer. The
-   product renders an actual QR; what matters here is the invariant — dark
-   modules on a light ground, a quiet zone of 4 modules, and the human-readable
-   code beneath, because a label must still work when the scan fails. */
 function pattern(seed, n) {
   const cells = [];
   let h = 0;

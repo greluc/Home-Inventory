@@ -1,14 +1,5 @@
 // SPDX-FileCopyrightText: Lucas Greuloch
 // SPDX-License-Identifier: Apache-2.0
-//
-// WHERE A SCAN COMES FROM.
-//
-// The browser camera is in the core image; app cameras, HID handheld scanners,
-// Bluetooth ring scanners and clipboard readers are what this port is for.
-//
-// A source PUSHES rather than answers. Nobody polls a scanner, and a scan that
-// arrived two seconds ago is not worth returning to a caller who asked a second
-// ago — so `Open` is a server stream and not a `Poll`.
 
 syntax = "proto3";
 

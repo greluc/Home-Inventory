@@ -70,9 +70,6 @@ public class AuditTrailInterceptor implements HandlerInterceptor {
       @NonNull HttpServletRequest request,
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
-    // Set here and cleared in afterCompletion, which is why this is `establish`
-    // and not the scoped `runWith`: the two halves of a servlet's lifetime are
-    // two methods.
     CallerContext.current()
         .ifPresent(caller -> AuditTrail.establish(originOf(request, caller.userId())));
     return true;

@@ -46,16 +46,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 public class OpenApiConfiguration {
 
   static {
-    // What springdoc would infer from `Money` is the record's shape: an amount as
-    // a JSON number and a currency as an object with six properties. What the
-    // application actually writes is `{"amount":"49.90","currency":"EUR"}`,
-    // because `MoneyModule` says so and REQ-NFR-070 requires the string. A
-    // document that described the inferred shape would be a contract that lies
-    // about every price in the system.
-    //
-    // Replaced here rather than annotated on `Money` itself: the value type lives
-    // in the shared kernel, and a swagger annotation there would put an HTTP
-    // concern into the one package that depends on no framework of any kind.
     org.springdoc.core.utils.SpringDocUtils.getConfig()
         .replaceWithClass(de.greluc.homeinv.platform.Money.class, MoneyJson.class);
   }
@@ -340,8 +330,6 @@ public class OpenApiConfiguration {
             .replace("&quot;", "\"")
             .replace("&amp;", "&");
 
-    // Javadoc indents its continuation lines by one space, which CommonMark keeps
-    // and which turns a wrapped sentence into a differently indented one.
     text = text.lines().map(String::strip).collect(java.util.stream.Collectors.joining("\n"));
     return text.replaceAll("\n{3,}", "\n\n").strip();
   }
@@ -395,14 +383,12 @@ public class OpenApiConfiguration {
                 "The identifier of this request in the server log. Quoting it in a report leads "
                     + "straight to the operation (REQ-NFR-042)."));
     schema.setRequired(List.of("type", "title", "status"));
-    // Some conditions carry more: the field paths of a validation failure, the id
-    // of a conflict, the limit that was exceeded. Each is documented with its type.
     schema.setAdditionalProperties(true);
     return schema;
   }
 
   /**
-   * Removes the two things springdoc infers that this contract must not carry.
+   * Removes the one thing springdoc infers that this contract must not carry.
    *
    * <p><strong>Servers.</strong> springdoc fills in the URL the document was fetched from, which
    * here is a test container's {@code http://localhost}. A base URL belongs to a deployment, not to
@@ -410,14 +396,22 @@ public class OpenApiConfiguration {
    * labels — so a hostname baked in here would be one a client copies from the wrong instance. The
    * {@code homeinv-no-server-urls} rule in {@code api/spectral.yaml} fails the build if one returns.
    *
-   * <p><strong>Tags.</strong> springdoc tags every operation with a slug of the class that handles
-   * it, so the contract would name {@code item-controller} and {@code media-controller} — internal
-   * class names, published, and renaming a class would be a contract change. Twelve endpoints need
-   * no taxonomy; an invented one would be a second thing to maintain.
+   * <p><strong>Tags.</strong> This removed them too until 2026-09-21, for a reason that was right
+   * when it was written and had stopped being right: springdoc tags every operation with a slug of
+   * the class that handles it, so the contract would have named {@code item-controller} and {@code
+   * media-controller} — internal class names, published, and renaming a class would be a contract
+   * change. The sentence beside it read <i>"twelve endpoints need no taxonomy"</i>, and by then
+   * there were a hundred and thirty-three paths.
    *
-   * <p>Both run after springdoc has finished building, which is why the test profile disables
-   * springdoc's document cache: a cached document is re-served through the server-filling step
-   * without passing here again.
+   * <p>So the tags are <b>chosen</b> now rather than inferred or removed: every controller carries
+   * a {@code @Tag} with a name and a sentence, {@code ArchitectureRulesTest} refuses one that does
+   * not, and the generated clients of {@code REQ-API-002} split into one file per area instead of
+   * a single class with a hundred and thirty-three methods. The names are contract — a generated
+   * client's class name derives from them — which is exactly why they are not class slugs.
+   *
+   * <p>The server stripping runs after springdoc has finished building, which is why the test
+   * profile disables springdoc's document cache: a cached document is re-served through the
+   * server-filling step without passing here again.
    *
    * @return the customiser
    */
@@ -425,11 +419,6 @@ public class OpenApiConfiguration {
   public OpenApiCustomizer homeInventoryDocumentShape() {
     return openApi -> {
       openApi.setServers(null);
-      openApi.setTags(null);
-      if (openApi.getPaths() != null) {
-        openApi.getPaths().values().forEach(path -> path.readOperations().forEach(
-            operation -> operation.setTags(null)));
-      }
       if (openApi.getComponents() == null) {
         openApi.setComponents(new Components());
       }

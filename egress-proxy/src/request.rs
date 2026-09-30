@@ -52,7 +52,6 @@ pub fn parse(line: &str) -> Option<Destination> {
         return Some(Destination::Tunnel { host, port });
     }
 
-    // Absolute form: scheme://host[:port]/path
     let rest = target
         .strip_prefix("http://")
         .or_else(|| target.strip_prefix("HTTP://"))?;
@@ -153,10 +152,7 @@ mod tests {
 
     #[test]
     fn anything_else_is_refused_rather_than_guessed_at() {
-        // An origin-form request: somebody is talking to this as if it were the
-        // server rather than the proxy.
         assert_eq!(parse("GET /daily.cvd HTTP/1.1"), None);
-        // https:// absolute form is not a thing a proxy is sent; CONNECT is.
         assert_eq!(parse("GET https://database.clamav.net/x HTTP/1.1"), None);
         assert_eq!(parse("CONNECT database.clamav.net:443 SSH-2.0"), None);
         assert_eq!(parse(""), None);
